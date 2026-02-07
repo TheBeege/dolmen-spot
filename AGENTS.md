@@ -34,6 +34,37 @@ When modifying game data, always verify:
 6. **Equipment prices and weights**: Must match `06-equipment.md` exactly -- weights are in coins (10 coins = 1 pound)
 7. **Save categories**: There are exactly 5 -- Doom, Ray, Hold, Blast, Spell. Some class tables use slightly different column names but map to these 5
 
+## Data Migration Rules
+
+Character data is stored in localStorage and must survive schema changes across deployment phases. The migration system lives in `src/lib/migrations.ts`.
+
+### When modifying the `Character` interface (`src/lib/types.ts`):
+
+1. **Adding a field**: Bump `CURRENT_SCHEMA_VERSION` in `migrations.ts`, add a migration that sets the default value, and add the field to `createDefaultCharacter()` in `gamedata.ts`
+2. **Changing a field type/shape**: Bump version, write a migration that transforms old data to the new shape
+3. **Removing a field**: Bump version, write a migration that deletes the old field
+4. **Renaming a field**: Bump version, write a migration that copies the old key to the new key and deletes the old key
+5. **Never** change a field's meaning without a migration
+6. **Never** assume a field exists on loaded data -- the migration + reconciliation handles missing fields, but be defensive in components
+
+### When modifying nested interfaces (`InventoryItem`, `SpellSlot`, `JournalEntry`, etc.):
+
+- Same rules apply -- these are embedded in `Character` and need migrations too
+- Array fields need migrations that map over each element
+
+### How migrations work:
+
+- Each migration transforms from version N to N+1 (sequential)
+- After all migrations run, `reconcileWithDefaults()` deep-merges saved data over a fresh `createDefaultCharacter()` to fill any missing fields
+- Migrations run on load (`loadCharacters()`) and import (`importCharacter()`)
+- Migrated data is persisted back to localStorage immediately so migration only runs once
+
+### Testing migrations:
+
+- Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
+- Test import/export round-trip with old-format files
+- Verify `npm run build` passes after any schema change
+
 ## Code Conventions
 
 - **Tech stack**: Next.js 15, TypeScript, Tailwind CSS v4 (utility classes only, no `@apply`)

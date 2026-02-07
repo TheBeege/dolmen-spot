@@ -60,6 +60,7 @@ export interface CalendarDate {
 }
 
 export interface Character {
+  schemaVersion: number;
   id: string;
   name: string;
   kindred: KindredId | '';

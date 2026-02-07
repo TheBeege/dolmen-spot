@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Character } from '@/lib/types';
 import { createDefaultCharacter } from '@/lib/gamedata';
+import { migrateCharacter } from '@/lib/migrations';
 
 const STORAGE_KEY = 'dolmenwood-characters';
 const ACTIVE_KEY = 'dolmenwood-active-character';
@@ -11,7 +12,12 @@ function loadCharacters(): Character[] {
   if (typeof window === 'undefined') return [];
   try {
     const data = localStorage.getItem(STORAGE_KEY);
-    return data ? JSON.parse(data) : [];
+    if (!data) return [];
+    const parsed = JSON.parse(data) as unknown[];
+    const migrated = parsed.map(migrateCharacter);
+    // Persist migrated data so migration only runs once per schema change
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    return migrated;
   } catch {
     return [];
   }
@@ -116,7 +122,7 @@ export function useCharacter() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = JSON.parse(e.target?.result as string) as Character;
+        const data = migrateCharacter(JSON.parse(e.target?.result as string));
         data.id = crypto.randomUUID();
         setCharacters(prev => {
           const next = [...prev, data];

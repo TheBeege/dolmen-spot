@@ -1,4 +1,5 @@
 import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId } from './types';
+import { CURRENT_SCHEMA_VERSION } from './migrations';
 
 // Kindred-class restrictions from the Player's Book.
 // 'forbidden' = cannot take this class at all.
@@ -343,6 +344,7 @@ export const OBSCURE_LANGUAGES = [
 
 export function createDefaultCharacter(): Character {
   return {
+    schemaVersion: CURRENT_SCHEMA_VERSION,
     id: crypto.randomUUID(),
     name: '',
     kindred: '',
