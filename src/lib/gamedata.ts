@@ -689,6 +689,30 @@ export function getDetectMagicTarget(classOrKindred: string, level: number): num
 }
 
 // ──────────────────────────────────────────────────────────
+// Phase 4: Skills System
+// ──────────────────────────────────────────────────────────
+
+// Kindred base skill overrides (default is 6 for listen/search/survival)
+export const KINDRED_BASE_SKILL_OVERRIDES: Partial<Record<KindredId, Record<string, number>>> = {
+  elf: { listen: 5, search: 5 },
+  grimalkin: { listen: 5 },
+  mossling: { survival: 5 },
+  woodgrue: { listen: 5 },
+};
+
+// Class base skill overrides
+export const CLASS_BASE_SKILL_OVERRIDES: Partial<Record<ClassId, Record<string, number>>> = {
+  friar: { survival: 5 },
+};
+
+// Expertise points configuration for classes that use them
+export const EXPERTISE_POINTS_CONFIG: Partial<Record<ClassId, { base: number; perLevel: number }>> = {
+  bard: { base: 2, perLevel: 1 },
+  hunter: { base: 2, perLevel: 1 },
+  thief: { base: 4, perLevel: 2 },
+};
+
+// ──────────────────────────────────────────────────────────
 // Spells Per Day
 // Source: docs/rules/03-classes.md, docs/rules/04-kindred-classes.md
 // '-' in the source = 0 here
@@ -1255,6 +1279,127 @@ export function getSpeedByWeight(totalWeight: number): number {
   if (totalWeight <= 600) return 30;
   if (totalWeight <= 800) return 20;
   return 10;
+}
+
+// ──────────────────────────────────────────────────────────
+// Phase 4: Skill Calculation Functions
+// ──────────────────────────────────────────────────────────
+
+// Known skill display names (for keys that don't round-trip cleanly via title-casing)
+const SKILL_DISPLAY_NAMES: Record<string, string> = {
+  'climb_wall': 'Climb Wall',
+  'disarm_mech.': 'Disarm Mech.',
+  'monster_lore': 'Monster Lore',
+  'pick_lock': 'Pick Lock',
+  'detect_magic': 'Detect Magic',
+};
+
+export function skillNameToKey(name: string): string {
+  return name.toLowerCase().replace(/\s+/g, '_');
+}
+
+export function skillKeyToDisplayName(key: string): string {
+  if (SKILL_DISPLAY_NAMES[key]) return SKILL_DISPLAY_NAMES[key];
+  return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+export interface CalculatedSkills {
+  targets: Record<string, number>;
+  autoSkillKeys: Set<string>;
+  expertisePoints: number | null;
+}
+
+export function calculateSkillTargets(
+  kindred: KindredId | '',
+  classId: ClassId | '',
+  level: number,
+): CalculatedSkills {
+  const targets: Record<string, number> = {};
+  const autoSkillKeys = new Set<string>();
+  const clampedLevel = Math.max(1, Math.min(level, 15));
+
+  // Determine if we're in kindred-class mode
+  const isKindredClass = kindred !== '' && kindred !== 'human' && !classId;
+
+  // 1. Start with base skills (default target = 6)
+  targets.listen = 6;
+  targets.search = 6;
+  targets.survival = 6;
+  autoSkillKeys.add('listen');
+  autoSkillKeys.add('search');
+  autoSkillKeys.add('survival');
+
+  // 2. Apply kindred base overrides (e.g., Elf Listen 5)
+  if (kindred) {
+    const kindredOverrides = KINDRED_BASE_SKILL_OVERRIDES[kindred as KindredId];
+    if (kindredOverrides) {
+      for (const [key, value] of Object.entries(kindredOverrides)) {
+        targets[key] = Math.min(targets[key] ?? 6, value);
+        autoSkillKeys.add(key);
+      }
+    }
+  }
+
+  // 3. Apply class base overrides (e.g., Friar Survival 5)
+  if (classId) {
+    const classOverrides = CLASS_BASE_SKILL_OVERRIDES[classId as ClassId];
+    if (classOverrides) {
+      for (const [key, value] of Object.entries(classOverrides)) {
+        targets[key] = Math.min(targets[key] ?? 6, value);
+        autoSkillKeys.add(key);
+      }
+    }
+  }
+
+  // 4. Apply class skill tables (Bard, Hunter, Thief)
+  if (classId) {
+    const classSkillTable = CLASS_SKILL_TABLES[classId as ClassId];
+    if (classSkillTable) {
+      const row = classSkillTable.rows[clampedLevel];
+      if (row) {
+        for (const [name, value] of Object.entries(row)) {
+          const key = skillNameToKey(name);
+          // Use Math.min for overlapping skills (e.g., Bard Listen vs base Listen)
+          targets[key] = Math.min(targets[key] ?? value, value);
+          autoSkillKeys.add(key);
+        }
+      }
+    }
+  }
+
+  // 5. Apply kindred-class skill tables (Grimalkin Pick Lock, Woodgrue Stealth)
+  if (isKindredClass && kindred) {
+    const kindredSkillTable = KINDRED_CLASS_SKILL_TABLES[kindred as KindredId];
+    if (kindredSkillTable) {
+      const row = kindredSkillTable.rows[clampedLevel];
+      if (row) {
+        for (const [name, value] of Object.entries(row)) {
+          const key = skillNameToKey(name);
+          targets[key] = Math.min(targets[key] ?? value, value);
+          autoSkillKeys.add(key);
+        }
+      }
+    }
+  }
+
+  // 6. Detect Magic (Enchanter, Magician, Elf kindred-class)
+  const detectMagicKey = isKindredClass ? (kindred || '') : (classId || '');
+  const detectMagicTarget = getDetectMagicTarget(detectMagicKey, clampedLevel);
+  if (detectMagicTarget !== null) {
+    targets['detect_magic'] = detectMagicTarget;
+    autoSkillKeys.add('detect_magic');
+  }
+
+  // 7. Expertise points
+  let expertisePoints: number | null = null;
+  if (classId) {
+    const config = EXPERTISE_POINTS_CONFIG[classId as ClassId];
+    if (config) {
+      expertisePoints = config.base + config.perLevel * clampedLevel;
+    }
+  }
+
+  return { targets, autoSkillKeys, expertisePoints };
 }
 
 export function createDefaultCharacter(): Character {

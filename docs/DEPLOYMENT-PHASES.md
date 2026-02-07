@@ -69,17 +69,18 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 4: Skills System
+## Phase 4: Skills System ✓
 
 **Goal**: Display and track skill targets with class-specific progression.
 
 **Rule docs**: `03-classes.md`, `02-kindreds.md`, `04-kindred-classes.md`
 
-- [ ] Base skills: Listen (default 6), Search (default 6), Survival (default 6)
-- [ ] Kindred skill overrides: Elf Listen 5/Search 5, Grimalkin Listen 5, Mossling Survival 5, Woodgrue Listen 5
-- [ ] Class skill tables with level progression:
+**Status**: Completed
+
+- [x] Base skills: Listen (default 6), Search (default 6), Survival (default 6)
+- [x] Kindred skill overrides: Elf Listen 5/Search 5, Grimalkin Listen 5, Mossling Survival 5, Woodgrue Listen 5
+- [x] Class skill tables with level progression:
   - Bard: Decipher, Listen, Monster Lore, Legerdemain
-  - Cleric: Exorcism (turning undead)
   - Enchanter: Detect Magic
   - Fighter: none extra
   - Friar: Survival (foraging) 5
@@ -87,8 +88,11 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
   - Knight: none extra
   - Magician: Detect Magic
   - Thief: Climb Wall, Decipher, Disarm Mechanism, Legerdemain, Listen, Pick Lock, Search, Stealth
-- [ ] Kindred-class unique skills: Elf Detect Magic, Grimalkin Pick Lock, Woodgrue Stealth
-- [ ] Expertise points tracking (where applicable)
+- [x] Kindred-class unique skills: Elf Detect Magic, Grimalkin Pick Lock, Woodgrue Stealth
+- [x] Expertise points tracking (Bard, Hunter, Thief)
+- [x] Sync pattern for auto-calculated skills (matching CombatStats pattern)
+- [x] Custom skill add/remove preserved
+- **Note**: Cleric Exorcism (turning undead) is a 2d6 ability, not a skill target -- deferred to Phase 9
 
 ---
 
