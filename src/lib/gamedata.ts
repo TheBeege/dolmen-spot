@@ -1891,6 +1891,94 @@ export function getCharacterMagicProfile(kindred: KindredId | '', classId: Class
   return result;
 }
 
+// ── Adventuring Data ─────────────────────────────────────────────────
+
+export const TERRAIN_TABLE: { terrain: string; tpCost: number; lostChance: string; mountsVehicles: string }[] = [
+  { terrain: 'Road', tpCost: 2, lostChance: 'None', mountsVehicles: 'Both allowed' },
+  { terrain: 'Track', tpCost: 2, lostChance: '1-in-6', mountsVehicles: 'Both allowed' },
+  { terrain: 'Light (farmland, meadow, open forest)', tpCost: 2, lostChance: '1-in-6', mountsVehicles: 'Both allowed' },
+  { terrain: 'Moderate (bog, hilly forest, tangled forest)', tpCost: 3, lostChance: '2-in-6', mountsVehicles: 'Mounts led only, no vehicles' },
+  { terrain: 'Difficult (boggy forest, swamp, thorny forest)', tpCost: 4, lostChance: '3-in-6', mountsVehicles: 'Neither allowed' },
+  { terrain: 'Lake', tpCost: 2, lostChance: 'None', mountsVehicles: 'Boat required' },
+  { terrain: 'River downstream', tpCost: 2, lostChance: 'None', mountsVehicles: 'Boat required' },
+  { terrain: 'River upstream', tpCost: 3, lostChance: 'None', mountsVehicles: 'Boat required' },
+];
+
+type Season = 'Winter' | 'Spring' | 'Summer' | 'Autumn';
+type SleepDifficulty = 'easy' | 'moderate' | 'difficult' | 'impossible';
+
+export const SLEEP_MATRIX: Record<string, Record<string, Record<Season, SleepDifficulty>>> = {
+  none: {
+    none:            { Winter: 'impossible', Spring: 'difficult',  Summer: 'moderate',  Autumn: 'difficult' },
+    bedrollOrTent:   { Winter: 'impossible', Spring: 'moderate',   Summer: 'easy',      Autumn: 'moderate' },
+    bedrollAndTent:  { Winter: 'difficult',  Spring: 'moderate',   Summer: 'easy',      Autumn: 'moderate' },
+  },
+  campfire: {
+    none:            { Winter: 'impossible', Spring: 'difficult',  Summer: 'moderate',  Autumn: 'difficult' },
+    bedrollOrTent:   { Winter: 'difficult',  Spring: 'easy',       Summer: 'easy',      Autumn: 'easy' },
+    bedrollAndTent:  { Winter: 'moderate',   Spring: 'easy',       Summer: 'easy',      Autumn: 'easy' },
+  },
+};
+
+export const SLEEP_DIFFICULTY_DESCRIPTION: Record<SleepDifficulty, string> = {
+  easy: 'Good rest automatically',
+  moderate: 'CON Check required',
+  difficult: 'CON Check at -2',
+  impossible: 'Cannot get good rest',
+};
+
+export const HUNGER_EFFECTS_MORTAL: { days: string; effect: string }[] = [
+  { days: '1', effect: '-1 Attack' },
+  { days: '2', effect: '-1 Attack, -10 Speed' },
+  { days: '3', effect: '-2 Attack, -10 Speed' },
+  { days: '4', effect: '-2 Attack, -20 Speed' },
+  { days: '5', effect: '-3 Attack, -20 Speed' },
+  { days: '6', effect: '-4 Attack, -30 Speed' },
+  { days: '7+', effect: '-4 Attack, -30 Speed, -1 CON/day (death at 0)' },
+];
+
+export const HUNGER_EFFECTS_FAIRY: { days: string; effect: string }[] = [
+  { days: '1', effect: '-1 WIS' },
+  { days: '2', effect: '-2 WIS' },
+  { days: '3', effect: '-4 WIS' },
+  { days: '4', effect: '-6 WIS, Lawful becomes Neutral' },
+  { days: '5', effect: '-8 WIS' },
+  { days: '6', effect: '-10 WIS' },
+  { days: '7+', effect: '-12 WIS, becomes Chaotic (min WIS 3)' },
+];
+
+export const LIGHT_SOURCE_TYPES: Record<string, { label: string; minutes: number }> = {
+  torch:   { label: 'Torch',   minutes: 60 },
+  lantern: { label: 'Lantern', minutes: 240 },
+  candle:  { label: 'Candle',  minutes: 60 },
+};
+
+export const HEALING_RATES: { method: string; amount: string }[] = [
+  { method: 'Good night\'s rest (camping)', amount: '1 HP' },
+  { method: 'Overnight in settlement', amount: '1 HP' },
+  { method: 'Full day of rest in settlement', amount: '1d3 HP' },
+  { method: 'Lesser Healing spell', amount: '1d6+1 HP' },
+  { method: 'Greater Healing spell', amount: '2d6+2 HP' },
+  { method: 'Spirithame herb', amount: '1d2 HP (1 dose/day)' },
+  { method: 'Blood Canker fungus', amount: '1d3 HP (risk: 2-in-6 lose 1 CON)' },
+];
+
+export const FORAGING_YIELDS: Record<Season, string> = {
+  Winter: '1d4',
+  Spring: '1d6',
+  Summer: '1d6',
+  Autumn: '1d8',
+};
+
+export function getHungerEffects(days: number, kindredId: KindredId | ''): string {
+  if (days <= 0) return 'None';
+  const kindred = KINDREDS.find(k => k.id === kindredId);
+  const isFairy = kindred?.creatureType === 'Fairy';
+  const table = isFairy ? HUNGER_EFFECTS_FAIRY : HUNGER_EFFECTS_MORTAL;
+  if (days >= 7) return table[6].effect;
+  return table[days - 1].effect;
+}
+
 export function createDefaultCharacter(): Character {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -1945,5 +2033,14 @@ export function createDefaultCharacter(): Character {
     currentDate: { day: 1, month: 0 },
     currentLocation: '',
     journalEntries: [],
+
+    exhaustionLevel: 0,
+    hungerDays: 0,
+    thirstDays: 0,
+    rations: { fresh: 0, preserved: 0 },
+    activeLightSources: [],
+    travelDaysWithoutRest: 0,
+    forcedMarchActive: false,
+    travelPointsRemaining: 0,
   };
 }

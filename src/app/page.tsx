@@ -8,7 +8,7 @@ import CombatStats from '@/components/CombatStats';
 import Inventory from '@/components/Inventory';
 import SpellsAndMagic from '@/components/SpellsAndMagic';
 import TraitsAndNotes from '@/components/TraitsAndNotes';
-import Calendar from '@/components/Calendar';
+import Adventuring from '@/components/Adventuring';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 
@@ -21,7 +21,7 @@ const TABS: { id: Tab; label: string; shortLabel: string }[] = [
   { id: 'inventory', label: 'Inventory', shortLabel: 'Inv' },
   { id: 'spells', label: 'Spells & Magic', shortLabel: 'Magic' },
   { id: 'traits', label: 'Traits & Notes', shortLabel: 'Traits' },
-  { id: 'calendar', label: 'Calendar & Journal', shortLabel: 'Cal' },
+  { id: 'calendar', label: 'Adventuring', shortLabel: 'Adv' },
   { id: 'map', label: 'Map', shortLabel: 'Map' },
   { id: 'reference', label: 'Reference', shortLabel: 'Ref' },
 ];
@@ -214,7 +214,7 @@ export default function Home() {
           <TraitsAndNotes character={activeCharacter} onChange={updateCharacter} />
         )}
         {activeTab === 'calendar' && (
-          <Calendar character={activeCharacter} onChange={updateCharacter} />
+          <Adventuring character={activeCharacter} onChange={updateCharacter} />
         )}
         {activeTab === 'map' && (
           <HexMap character={activeCharacter} onChange={updateCharacter} />

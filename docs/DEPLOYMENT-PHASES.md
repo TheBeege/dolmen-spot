@@ -150,19 +150,24 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 7: Adventuring Features
+## Phase 7: Adventuring Features ✓
 
 **Goal**: Travel, camping, and survival tracking.
 
 **Rule docs**: `08-adventuring.md`
 
-- [ ] Travel Point calculator (Speed-based, terrain cost lookup)
-- [ ] Camping system (fire + bedding + season = sleep difficulty matrix)
-- [ ] Rest and healing tracker (1 HP/good rest, 1d3 HP/full day in settlement)
-- [ ] Exhaustion counter (cumulative -1 to -4)
-- [ ] Ration tracking (fresh vs preserved, duration by conditions)
-- [ ] Light source duration tracking (torch 1hr, lantern 4hr/flask, candle 1hr)
-- [ ] Hunger/thirst day counter with effect lookup
+**Status**: Completed
+
+- [x] Calendar tab renamed to Adventuring tab (Calendar.tsx -> Adventuring.tsx)
+- [x] Condition trackers: Exhaustion (0-4, shows -N Attack & Damage), Hunger Days, Thirst Days, Travel Days w/o Rest (0-6 with warning and Rest Day button)
+- [x] Hunger/thirst effects auto-lookup by creature type (Mortal/Demi-Fey vs Fairy tables)
+- [x] Ration tracking: Fresh and Preserved counters with season-aware foraging yield reference
+- [x] Travel Point tracker: +/- counter with Reset button, forced march toggle (1.5x TP), collapsible terrain cost reference table (8 terrain types)
+- [x] Light source tracking: Add Torch (60min)/Lantern (240min)/Candle (60min), per-source timer with -10/-1/+1/+10 controls, burned-out sources highlighted in red
+- [x] Camping calculator: ephemeral fire/bedding radio buttons, auto-calculated sleep difficulty from 24-combo matrix (2 fire x 3 bedding x 4 season), color-coded result (green/yellow/orange/red), camp activities reference, collapsible full sleep matrix
+- [x] Reference tables: collapsible healing rates (7 methods) and hunger/thirst effect tables (mortal + fairy)
+- [x] Schema migration v5→v6 for 8 new Character fields (exhaustionLevel, hungerDays, thirstDays, rations, activeLightSources, travelDaysWithoutRest, forcedMarchActive, travelPointsRemaining)
+- **Design decisions**: No auto-advancing (manual counters match HP/spell slot pattern), no dice roller (reference only), camping state ephemeral (not persisted)
 
 ---
 

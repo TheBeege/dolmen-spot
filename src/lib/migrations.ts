@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 5;
+export const CURRENT_SCHEMA_VERSION = 6;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -37,6 +37,18 @@ const migrations: Record<number, (data: any) => any> = {
   // v4 -> v5: Add containers array for inventory container tracking.
   4: (data) => {
     if (data.containers === undefined) data.containers = [];
+    return data;
+  },
+  // v5 -> v6: Add adventuring fields (exhaustion, hunger, thirst, rations, light sources, travel).
+  5: (data) => {
+    if (data.exhaustionLevel === undefined) data.exhaustionLevel = 0;
+    if (data.hungerDays === undefined) data.hungerDays = 0;
+    if (data.thirstDays === undefined) data.thirstDays = 0;
+    if (data.rations === undefined) data.rations = { fresh: 0, preserved: 0 };
+    if (data.activeLightSources === undefined) data.activeLightSources = [];
+    if (data.travelDaysWithoutRest === undefined) data.travelDaysWithoutRest = 0;
+    if (data.forcedMarchActive === undefined) data.forcedMarchActive = false;
+    if (data.travelPointsRemaining === undefined) data.travelPointsRemaining = 0;
     return data;
   },
 };

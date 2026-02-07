@@ -83,6 +83,12 @@ export interface Coins {
   pellucidium: number;
 }
 
+export interface ActiveLightSource {
+  id: string;
+  type: 'torch' | 'lantern' | 'candle';
+  minutesRemaining: number;
+}
+
 export interface CalendarDate {
   day: number;
   month: number; // 0-11
@@ -142,6 +148,15 @@ export interface Character {
   currentDate: CalendarDate;
   currentLocation: string;
   journalEntries: JournalEntry[];
+
+  exhaustionLevel: number;
+  hungerDays: number;
+  thirstDays: number;
+  rations: { fresh: number; preserved: number };
+  activeLightSources: ActiveLightSource[];
+  travelDaysWithoutRest: number;
+  forcedMarchActive: boolean;
+  travelPointsRemaining: number;
 }
 
 export interface JournalEntry {
