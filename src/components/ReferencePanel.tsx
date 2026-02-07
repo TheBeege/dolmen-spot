@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ARMOUR_TABLE, WEAPONS_TABLE, ADVENTURING_GEAR, COMMON_LANGUAGES, OBSCURE_LANGUAGES } from '@/lib/gamedata';
+import { ARMOUR_TABLE, WEAPONS_TABLE, EQUIPMENT_CATALOG, EQUIPMENT_CATEGORIES, COMMON_LANGUAGES, OBSCURE_LANGUAGES } from '@/lib/gamedata';
 
 type RefTab = 'armour' | 'weapons' | 'gear' | 'languages';
 
@@ -45,6 +45,7 @@ export default function ReferencePanel() {
                 <th className="text-left py-1 pr-2">Armour</th>
                 <th className="text-center py-1 px-1">AC</th>
                 <th className="text-center py-1 px-1">Cost</th>
+                <th className="text-center py-1 px-1">Wt</th>
                 <th className="text-center py-1 px-1">Slots</th>
                 <th className="text-left py-1 px-1">Bulk</th>
               </tr>
@@ -55,6 +56,7 @@ export default function ReferencePanel() {
                   <td className="py-1 pr-2">{a.name}</td>
                   <td className="text-center py-1 px-1">{a.name === 'Shield' ? '+1' : a.ac}</td>
                   <td className="text-center py-1 px-1">{a.cost}gp</td>
+                  <td className="text-center py-1 px-1">{a.weight}</td>
                   <td className="text-center py-1 px-1">{a.slots}</td>
                   <td className="py-1 px-1">{a.bulk}</td>
                 </tr>
@@ -72,6 +74,8 @@ export default function ReferencePanel() {
                 <th className="text-left py-1 pr-2">Weapon</th>
                 <th className="text-center py-1 px-1">Dmg</th>
                 <th className="text-center py-1 px-1">Cost</th>
+                <th className="text-center py-1 px-1">Wt</th>
+                <th className="text-center py-1 px-1">Slots</th>
                 <th className="text-center py-1 px-1">Size</th>
               </tr>
             </thead>
@@ -81,6 +85,8 @@ export default function ReferencePanel() {
                   <td className="py-1 pr-2">{w.name}</td>
                   <td className="text-center py-1 px-1">{w.damage}</td>
                   <td className="text-center py-1 px-1">{w.cost}gp</td>
+                  <td className="text-center py-1 px-1">{w.weight}</td>
+                  <td className="text-center py-1 px-1">{w.slots}</td>
                   <td className="text-center py-1 px-1">{w.size}</td>
                 </tr>
               ))}
@@ -91,22 +97,50 @@ export default function ReferencePanel() {
 
       {tab === 'gear' && (
         <div className="overflow-x-auto">
-          <table className="w-full text-xs text-[#f5e6c8]">
-            <thead>
-              <tr className="text-[#c4a35a] border-b border-[#5a3a28]">
-                <th className="text-left py-1 pr-2">Item</th>
-                <th className="text-center py-1 px-1">Cost</th>
-              </tr>
-            </thead>
-            <tbody>
-              {ADVENTURING_GEAR.map(g => (
-                <tr key={g.name} className="border-b border-[#5a3a28]/30">
-                  <td className="py-1 pr-2">{g.name}</td>
-                  <td className="text-center py-1 px-1">{g.cost}gp</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          {EQUIPMENT_CATEGORIES.map(cat => {
+            const items = EQUIPMENT_CATALOG.filter(e => e.category === cat.id);
+            if (items.length === 0) return null;
+            return (
+              <div key={cat.id} className="mb-3">
+                <h3 className="text-[#c4a35a] text-xs font-semibold mb-1 uppercase tracking-wider">
+                  {cat.label}
+                </h3>
+                <table className="w-full text-xs text-[#f5e6c8] mb-2">
+                  <thead>
+                    <tr className="text-[#c4a35a]/70 border-b border-[#5a3a28]">
+                      <th className="text-left py-1 pr-2">Item</th>
+                      <th className="text-center py-1 px-1">Cost</th>
+                      <th className="text-center py-1 px-1">Wt</th>
+                      <th className="text-center py-1 px-1">Slots</th>
+                      {cat.id === 'container' && (
+                        <th className="text-center py-1 px-1">Cap</th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map(g => (
+                      <tr key={g.name} className="border-b border-[#5a3a28]/30">
+                        <td className="py-1 pr-2">
+                          {g.name}
+                          {g.notes && (
+                            <span className="text-[#f5e6c8]/40 ml-1">({g.notes})</span>
+                          )}
+                        </td>
+                        <td className="text-center py-1 px-1">
+                          {g.costUnit === 'free' ? 'Free' : `${g.cost}${g.costUnit === 'cp' ? 'cp' : 'gp'}`}
+                        </td>
+                        <td className="text-center py-1 px-1">{g.weight}</td>
+                        <td className="text-center py-1 px-1">{g.slots}</td>
+                        {cat.id === 'container' && (
+                          <td className="text-center py-1 px-1">{g.capacity ?? '-'}</td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            );
+          })}
         </div>
       )}
 

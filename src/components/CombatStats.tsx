@@ -15,6 +15,8 @@ import {
   getArmourRestrictionWarning,
   getSpeedBySlots,
   getSpeedByWeight,
+  getCoinWeight,
+  getCoinSlots,
 } from '@/lib/gamedata';
 
 interface CombatStatsProps {
@@ -84,12 +86,14 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
   const calcMR = calculateMagicResistance(character.abilityScores.wisdom, character.kindred);
   const mrOutOfSync = calcMR.value !== character.magicResistance;
 
-  // --- Speed ---
+  // --- Speed (includes coin weight/slots) ---
   const totalEquippedSlots = character.equippedItems.reduce((sum, item) => sum + item.slots, 0);
-  const totalStowedSlots = character.stowedItems.reduce((sum, item) => sum + item.slots, 0);
+  const itemStowedSlots = character.stowedItems.reduce((sum, item) => sum + item.slots, 0);
+  const totalStowedSlots = itemStowedSlots + getCoinSlots(character.coins);
   const totalWeight =
     character.equippedItems.reduce((sum, item) => sum + item.weight, 0) +
-    character.stowedItems.reduce((sum, item) => sum + item.weight, 0);
+    character.stowedItems.reduce((sum, item) => sum + item.weight, 0) +
+    getCoinWeight(character.coins);
   const calcSpeed = character.encumbranceMethod === 'slots'
     ? getSpeedBySlots(totalEquippedSlots, totalStowedSlots)
     : getSpeedByWeight(totalWeight);

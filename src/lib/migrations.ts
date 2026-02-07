@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 4;
+export const CURRENT_SCHEMA_VERSION = 5;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -32,6 +32,11 @@ const migrations: Record<number, (data: any) => any> = {
     if (data.runes === undefined) data.runes = [];
     if (data.knack === undefined) data.knack = null;
     if (data.startingSpellBook === undefined) data.startingSpellBook = '';
+    return data;
+  },
+  // v4 -> v5: Add containers array for inventory container tracking.
+  4: (data) => {
+    if (data.containers === undefined) data.containers = [];
     return data;
   },
 };

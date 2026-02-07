@@ -122,20 +122,31 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 6: Inventory & Encumbrance
+## Phase 6: Inventory & Encumbrance ✓
 
 **Goal**: Full equipment management with dual encumbrance systems.
 
 **Rule docs**: `06-equipment.md`, `08-adventuring.md`
 
-- [ ] Full equipment catalog with prices and weights (from `06-equipment.md`)
-- [ ] Dual encumbrance system toggle (Weight-based vs Slot-based)
-- [ ] Weight system: auto-calculate total coins weight, Speed lookup
-- [ ] Slot system: equipped slots (max 10) vs stowed slots (max 16), Speed lookup
-- [ ] Coin management (4 types with conversion rates: 1pp=5gp=50sp=500cp)
-- [ ] Container capacity tracking (backpack 400 coins, sack 600 coins, belt pouch 50 coins)
-- [ ] Auto-calculate Speed from encumbrance
-- [ ] Auto-calculate Travel Points from Speed
+**Status**: Completed
+
+- [x] Full equipment catalog (`EQUIPMENT_CATALOG`) with ~70 items across 8 categories (containers, light, camping, tools, clothing, holy, ammunition, herbs) with weight, slots, capacity, and notes
+- [x] Equipment catalog browser in Inventory tab with search and category filter pills (includes armour, weapons, and all gear)
+- [x] Dual encumbrance system toggle (Weight-based vs Slot-based) — already existed, now with coin fix
+- [x] Bug fix: coin weight/slots now included in encumbrance calculations (both Inventory and CombatStats)
+- [x] Weight system: item weight + coin weight = total weight, Speed lookup
+- [x] Slot system: equipped slots (max 10) vs stowed slots + coin slots (max 16), Speed lookup
+- [x] Coin management with exchange reference (1pp = 5gp = 50sp = 500cp) and gp-equivalent summary
+- [x] Container tracking UI: add containers from catalog dropdown, capacity bars (weight mode), over-capacity warnings
+- [x] Stowed items grouped by container with collapsible groups and move-between-containers dropdown
+- [x] "Add from Catalog" buttons on equipped items and per-container stowed sections
+- [x] Slots added to `WEAPONS_TABLE` (1-handed=1, 2-handed=2)
+- [x] Weight column added to armour and weapons reference tables
+- [x] Reference panel gear tab updated with category-grouped tables showing weight, slots, and container capacity
+- [x] Data corrections: Rope 50' (1gp→50gp), Holy symbol wooden (5gp→10gp)
+- [x] Schema migration v4→v5 for `containers: []` field
+- **Deferred**: Interactive coin exchange (convert between denominations) — exchange rates shown as reference only
+- **Deferred**: Horses, hounds, vehicles, services — reference data for a later phase
 
 ---
 

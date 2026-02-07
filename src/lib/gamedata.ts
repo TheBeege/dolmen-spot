@@ -1,4 +1,4 @@
-import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable } from './types';
+import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 
 // Kindred-class restrictions from the Player's Book.
@@ -300,39 +300,199 @@ export const ARMOUR_TABLE = [
 ];
 
 export const WEAPONS_TABLE = [
-  { name: 'Battle axe', damage: '1d8', cost: 7, weight: 100, size: 'M' },
-  { name: 'Club', damage: '1d4', cost: 3, weight: 20, size: 'M' },
-  { name: 'Crossbow', damage: '1d8', cost: 30, weight: 50, size: 'M' },
-  { name: 'Dagger', damage: '1d4', cost: 3, weight: 10, size: 'S' },
-  { name: 'Hand axe', damage: '1d6', cost: 4, weight: 20, size: 'S' },
-  { name: 'Lance', damage: '1d6', cost: 5, weight: 100, size: 'L' },
-  { name: 'Longbow', damage: '1d6', cost: 40, weight: 40, size: 'L' },
-  { name: 'Longsword', damage: '1d8', cost: 10, weight: 30, size: 'M' },
-  { name: 'Mace', damage: '1d6', cost: 5, weight: 40, size: 'M' },
-  { name: 'Polearm', damage: '1d10', cost: 7, weight: 140, size: 'L' },
-  { name: 'Shortbow', damage: '1d6', cost: 25, weight: 20, size: 'M' },
-  { name: 'Shortsword', damage: '1d6', cost: 7, weight: 20, size: 'M' },
-  { name: 'Sling', damage: '1d4', cost: 2, weight: 10, size: 'S' },
-  { name: 'Spear', damage: '1d6', cost: 3, weight: 30, size: 'M' },
-  { name: 'Staff', damage: '1d4', cost: 2, weight: 40, size: 'M' },
-  { name: 'Two-handed sword', damage: '1d10', cost: 15, weight: 140, size: 'L' },
-  { name: 'War hammer', damage: '1d6', cost: 5, weight: 40, size: 'M' },
+  { name: 'Battle axe', damage: '1d8', cost: 7, weight: 100, size: 'M', slots: 1 },
+  { name: 'Club', damage: '1d4', cost: 3, weight: 20, size: 'M', slots: 1 },
+  { name: 'Crossbow', damage: '1d8', cost: 30, weight: 50, size: 'M', slots: 1 },
+  { name: 'Dagger', damage: '1d4', cost: 3, weight: 10, size: 'S', slots: 1 },
+  { name: 'Hand axe', damage: '1d6', cost: 4, weight: 20, size: 'S', slots: 1 },
+  { name: 'Lance', damage: '1d6', cost: 5, weight: 100, size: 'L', slots: 2 },
+  { name: 'Longbow', damage: '1d6', cost: 40, weight: 40, size: 'L', slots: 1 },
+  { name: 'Longsword', damage: '1d8', cost: 10, weight: 30, size: 'M', slots: 1 },
+  { name: 'Mace', damage: '1d6', cost: 5, weight: 40, size: 'M', slots: 1 },
+  { name: 'Polearm', damage: '1d10', cost: 7, weight: 140, size: 'L', slots: 2 },
+  { name: 'Shortbow', damage: '1d6', cost: 25, weight: 20, size: 'M', slots: 1 },
+  { name: 'Shortsword', damage: '1d6', cost: 7, weight: 20, size: 'M', slots: 1 },
+  { name: 'Sling', damage: '1d4', cost: 2, weight: 10, size: 'S', slots: 1 },
+  { name: 'Spear', damage: '1d6', cost: 3, weight: 30, size: 'M', slots: 1 },
+  { name: 'Staff', damage: '1d4', cost: 2, weight: 40, size: 'M', slots: 2 },
+  { name: 'Two-handed sword', damage: '1d10', cost: 15, weight: 140, size: 'L', slots: 2 },
+  { name: 'War hammer', damage: '1d6', cost: 5, weight: 40, size: 'M', slots: 1 },
 ];
 
+// Legacy alias – kept for backwards compatibility during transition
 export const ADVENTURING_GEAR = [
   { name: 'Backpack', cost: 4 }, { name: 'Bedroll', cost: 2 },
   { name: 'Belt pouch', cost: 1 }, { name: 'Candles (10)', cost: 1 },
   { name: 'Cooking pots', cost: 3 }, { name: 'Crowbar', cost: 10 },
   { name: 'Grappling hook', cost: 20 }, { name: 'Hammer (small)', cost: 2 },
-  { name: 'Holy symbol (wooden)', cost: 5 }, { name: 'Holy water (vial)', cost: 25 },
+  { name: 'Holy symbol (wooden)', cost: 10 }, { name: 'Holy water (vial)', cost: 20 },
   { name: 'Iron spikes (12)', cost: 1 }, { name: 'Lantern (hooded)', cost: 5 },
   { name: 'Lantern (bullseye)', cost: 10 }, { name: 'Oil (flask)', cost: 1 },
   { name: 'Rations (fresh, 1 day)', cost: 1 }, { name: 'Rations (preserved, 1 day)', cost: 2 },
-  { name: 'Rope (50\')', cost: 1 }, { name: 'Sack', cost: 1 },
+  { name: 'Rope (50\')', cost: 50 }, { name: 'Sack', cost: 1 },
   { name: 'Tinder box', cost: 3 }, { name: 'Torches (3)', cost: 1 },
   { name: 'Waterskin', cost: 1 }, { name: 'Thieves\' tools', cost: 25 },
   { name: 'Tent', cost: 20 }, { name: 'Fishing rod and tackle', cost: 4 },
 ];
+
+// ──────────────────────────────────────────────────────────
+// Equipment Catalog (full data with weight/slots)
+// Source: docs/rules/06-equipment.md, docs/rules/08-adventuring.md
+// ──────────────────────────────────────────────────────────
+
+export interface EquipmentEntry {
+  name: string;
+  cost: number;          // in gp unless costUnit says otherwise
+  costUnit?: string;     // 'cp' or 'free' for sub-gp items, default 'gp'
+  weight: number;        // in coins (10 coins = 1 pound)
+  slots: number;         // for slot-based encumbrance
+  category: 'container' | 'light' | 'camping' | 'tool' | 'clothing' | 'holy' | 'ammunition' | 'herb';
+  capacity?: number;     // containers only, max weight in coins
+  notes?: string;
+}
+
+export const EQUIPMENT_CATALOG: EquipmentEntry[] = [
+  // ── Containers ──
+  { name: 'Backpack', cost: 4, weight: 100, slots: 0, category: 'container', capacity: 400 },
+  { name: 'Barrel', cost: 1, weight: 25, slots: 2, category: 'container', capacity: 3200, notes: '320 pints' },
+  { name: 'Belt pouch', cost: 1, weight: 5, slots: 0, category: 'container', capacity: 50 },
+  { name: 'Bucket', cost: 1, weight: 25, slots: 1, category: 'container', capacity: 400, notes: '40 pints' },
+  { name: 'Casket (iron, large)', cost: 30, weight: 400, slots: 2, category: 'container', capacity: 800 },
+  { name: 'Casket (iron, small)', cost: 10, weight: 100, slots: 2, category: 'container', capacity: 250 },
+  { name: 'Chest (wooden, large)', cost: 5, weight: 200, slots: 2, category: 'container', capacity: 1000 },
+  { name: 'Chest (wooden, small)', cost: 1, weight: 50, slots: 2, category: 'container', capacity: 300 },
+  { name: 'Sack', cost: 1, weight: 50, slots: 0, category: 'container', capacity: 600, notes: 'Weight when full' },
+  { name: 'Scroll case', cost: 1, weight: 5, slots: 0, category: 'container', capacity: 1, notes: '1 scroll' },
+  { name: 'Vial (glass)', cost: 1, weight: 1, slots: 0, category: 'container', capacity: 5, notes: '1/2 pint' },
+  { name: 'Waterskin', cost: 1, weight: 5, slots: 1, category: 'container', capacity: 20, notes: '2 pints, weight when empty' },
+
+  // ── Light Sources ──
+  { name: 'Candles (10)', cost: 1, weight: 20, slots: 1, category: 'light', notes: '5\' dim light, 1 hour each' },
+  { name: 'Lantern (hooded)', cost: 5, weight: 20, slots: 1, category: 'light', notes: '30\' light, 4 hours/flask' },
+  { name: 'Lantern (bullseye)', cost: 10, weight: 20, slots: 1, category: 'light', notes: '60\' beam, 4 hours/flask' },
+  { name: 'Oil (flask)', cost: 1, weight: 10, slots: 1, category: 'light', notes: 'Fuel or weapon (3\' area, 1d8, 1 Turn)' },
+  { name: 'Tinder box', cost: 3, weight: 10, slots: 1, category: 'light', notes: '2-in-6 in peril' },
+  { name: 'Torches (3)', cost: 1, weight: 30, slots: 1, category: 'light', notes: '30\' light, 1 hour, usable in combat' },
+
+  // ── Camping & Travel ──
+  { name: 'Bedroll', cost: 2, weight: 70, slots: 1, category: 'camping' },
+  { name: 'Cooking pots', cost: 3, weight: 100, slots: 1, category: 'camping' },
+  { name: 'Firewood (bundle, 8hr)', cost: 1, weight: 200, slots: 2, category: 'camping' },
+  { name: 'Fishing rod and tackle', cost: 4, weight: 50, slots: 1, category: 'camping' },
+  { name: 'Rations (preserved, 1 day)', cost: 2, weight: 20, slots: 1, category: 'camping', notes: 'Lasts 2 months (1 week dank)' },
+  { name: 'Rations (fresh, 1 day)', cost: 1, weight: 20, slots: 1, category: 'camping', notes: 'Lasts 1 week (1 day dank)' },
+  { name: 'Tent', cost: 20, weight: 20, slots: 1, category: 'camping' },
+
+  // ── Miscellaneous Tools ──
+  { name: 'Bell (miniature)', cost: 1, weight: 1, slots: 0, category: 'tool' },
+  { name: 'Block and tackle', cost: 5, weight: 50, slots: 1, category: 'tool' },
+  { name: 'Caltrops (20)', cost: 1, weight: 20, slots: 1, category: 'tool', notes: 'Bundle of 20' },
+  { name: 'Chain (10\')', cost: 30, weight: 100, slots: 1, category: 'tool' },
+  { name: 'Chalk (10)', cost: 1, weight: 10, slots: 1, category: 'tool', notes: 'Bundle of 10' },
+  { name: 'Chisel', cost: 2, weight: 10, slots: 1, category: 'tool' },
+  { name: 'Crowbar', cost: 10, weight: 20, slots: 1, category: 'tool' },
+  { name: 'Grappling hook', cost: 20, weight: 50, slots: 1, category: 'tool' },
+  { name: 'Hammer (small)', cost: 2, weight: 40, slots: 1, category: 'tool' },
+  { name: 'Hammer (sledge)', cost: 5, weight: 30, slots: 1, category: 'tool' },
+  { name: 'Ink (vial)', cost: 1, weight: 5, slots: 0, category: 'tool' },
+  { name: 'Iron spikes (12)', cost: 1, weight: 60, slots: 1, category: 'tool', notes: 'Bundle of 12' },
+  { name: 'Lock', cost: 20, weight: 100, slots: 1, category: 'tool' },
+  { name: 'Magnifying glass', cost: 3, weight: 20, slots: 1, category: 'tool' },
+  { name: 'Manacles', cost: 15, weight: 100, slots: 1, category: 'tool' },
+  { name: 'Marbles (20)', cost: 1, weight: 50, slots: 1, category: 'tool', notes: 'Bundle of 20' },
+  { name: 'Mining pick', cost: 3, weight: 50, slots: 1, category: 'tool' },
+  { name: 'Mirror (small)', cost: 5, weight: 50, slots: 1, category: 'tool' },
+  { name: 'Musical instrument (stringed)', cost: 20, weight: 20, slots: 1, category: 'tool' },
+  { name: 'Musical instrument (wind)', cost: 5, weight: 0, slots: 0, category: 'tool' },
+  { name: 'Paper/parchment (2 sheets)', cost: 1, weight: 1, slots: 0, category: 'tool' },
+  { name: 'Pole (10\')', cost: 1, weight: 70, slots: 2, category: 'tool' },
+  { name: 'Quill', cost: 1, weight: 1, slots: 0, category: 'tool' },
+  { name: 'Rope (50\')', cost: 50, weight: 200, slots: 1, category: 'tool' },
+  { name: 'Rope ladder (25\')', cost: 25, weight: 20, slots: 1, category: 'tool' },
+  { name: 'Saw', cost: 1, weight: 50, slots: 1, category: 'tool' },
+  { name: 'Shovel', cost: 2, weight: 50, slots: 1, category: 'tool' },
+  { name: 'Spell book (blank)', cost: 100, weight: 10, slots: 1, category: 'tool' },
+  { name: 'Thieves\' tools', cost: 25, weight: 10, slots: 1, category: 'tool' },
+  { name: 'Twine (100\')', cost: 1, weight: 1, slots: 0, category: 'tool' },
+  { name: 'Whistle', cost: 5, weight: 1, slots: 0, category: 'tool' },
+
+  // ── Clothing ──
+  { name: 'Clothes, common', cost: 1, weight: 30, slots: 0, category: 'clothing' },
+  { name: 'Clothes, extravagant', cost: 100, weight: 60, slots: 0, category: 'clothing' },
+  { name: 'Clothes, fine', cost: 20, weight: 40, slots: 0, category: 'clothing' },
+  { name: 'Habit, friar\'s', cost: 2, weight: 30, slots: 0, category: 'clothing' },
+  { name: 'Robes, ritual', cost: 10, weight: 30, slots: 0, category: 'clothing' },
+  { name: 'Winter cloak', cost: 2, weight: 20, slots: 0, category: 'clothing' },
+
+  // ── Holy Items ──
+  { name: 'Holy symbol (wooden)', cost: 10, weight: 5, slots: 0, category: 'holy' },
+  { name: 'Holy symbol (silver)', cost: 70, weight: 25, slots: 0, category: 'holy', notes: '+1 to 2d6 turning roll' },
+  { name: 'Holy symbol (gold)', cost: 50, weight: 100, slots: 1, category: 'holy', notes: '+1 to 2d4 undead affected' },
+  { name: 'Holy water (vial)', cost: 20, weight: 25, slots: 1, category: 'holy', notes: '1d8 vs undead' },
+
+  // ── Ammunition ──
+  { name: 'Arrows (20)', cost: 5, weight: 20, slots: 1, category: 'ammunition' },
+  { name: 'Quarrels (20)', cost: 10, weight: 20, slots: 1, category: 'ammunition' },
+  { name: 'Sling stones (20)', cost: 0, costUnit: 'free', weight: 20, slots: 1, category: 'ammunition' },
+
+  // ── Herbs & Fungi ──
+  { name: 'Arrowhame', cost: 100, weight: 4, slots: 0, category: 'herb', notes: 'Save vs Doom to cure magical disease' },
+  { name: 'Blood Canker', cost: 50, weight: 4, slots: 0, category: 'herb', notes: 'Heal 1d3 HP; 2-in-6 lose 1 CON' },
+  { name: 'Bosun\'s Balm', cost: 50, weight: 4, slots: 0, category: 'herb', notes: 'Halve armour encumbrance for 1 day' },
+  { name: 'Fenob', cost: 40, weight: 4, slots: 0, category: 'herb', notes: '+1 HP overnight healing' },
+  { name: 'Gillywort', cost: 50, weight: 4, slots: 0, category: 'herb', notes: 'Detect poison in liquid (3-in-6)' },
+  { name: 'Grue\'s Ear', cost: 200, weight: 4, slots: 0, category: 'herb', notes: 'Enhanced alertness (3-in-6 act in surprise)' },
+  { name: 'Hogscap', cost: 125, weight: 4, slots: 0, category: 'herb', notes: 'Detect magic by touch for 1 Turn' },
+  { name: 'Lankswith', cost: 15, weight: 4, slots: 0, category: 'herb', notes: 'Cure common ailments overnight' },
+  { name: 'Lilywhite', cost: 25, weight: 4, slots: 0, category: 'herb', notes: '+1 to sleep CON check' },
+  { name: 'Marshwick', cost: 200, weight: 4, slots: 0, category: 'herb', notes: 'Save vs Doom to neutralise animal venom' },
+  { name: 'Moonhaw', cost: 100, weight: 4, slots: 0, category: 'herb', notes: 'See 10\' in total darkness for 3 Turns' },
+  { name: 'Ofteritch', cost: 150, weight: 4, slots: 0, category: 'herb', notes: 'Save vs Doom to neutralise plant poison' },
+  { name: 'Sallow Parsley', cost: 80, weight: 4, slots: 0, category: 'herb', notes: '+2 HP on rest day' },
+  { name: 'Smottlebread', cost: 25, weight: 4, slots: 0, category: 'herb', notes: '+2 to saves vs magic (1d6 Turns)' },
+  { name: 'Spirithame', cost: 80, weight: 4, slots: 0, category: 'herb', notes: 'Heal 1d2 HP (1 dose/day)' },
+  { name: 'Tom-a-Merry', cost: 150, weight: 4, slots: 0, category: 'herb', notes: 'See invisible (1d6 Turns, -2 Attack/saves)' },
+  { name: 'Wallowmost', cost: 150, weight: 4, slots: 0, category: 'herb', notes: 'Save vs Doom to neutralise fungal poison' },
+  { name: 'Wayfarrow', cost: 100, weight: 4, slots: 0, category: 'herb', notes: '3-in-6 no forced march penalty' },
+  { name: 'Witch\'s Oyster', cost: 50, weight: 4, slots: 0, category: 'herb', notes: 'Oracular vision (accuracy varies)' },
+  { name: 'Wolfsbane', cost: 25, weight: 4, slots: 0, category: 'herb', notes: 'Werewolves Save vs Doom to attack bearer' },
+];
+
+// Equipment category display labels
+export const EQUIPMENT_CATEGORIES: { id: EquipmentEntry['category']; label: string }[] = [
+  { id: 'container', label: 'Containers' },
+  { id: 'light', label: 'Light' },
+  { id: 'camping', label: 'Camping' },
+  { id: 'tool', label: 'Tools' },
+  { id: 'clothing', label: 'Clothing' },
+  { id: 'holy', label: 'Holy' },
+  { id: 'ammunition', label: 'Ammo' },
+  { id: 'herb', label: 'Herbs' },
+];
+
+// ──────────────────────────────────────────────────────────
+// Coin Constants & Helpers
+// ──────────────────────────────────────────────────────────
+
+export const COIN_EXCHANGE = { copperPerSilver: 10, silverPerGold: 10, goldPerPellucidium: 5 };
+export const COINS_PER_SLOT = 100;
+
+export function getTotalCoinCount(coins: Coins): number {
+  return coins.copper + coins.silver + coins.gold + coins.pellucidium;
+}
+
+export function getCoinWeight(coins: Coins): number {
+  return getTotalCoinCount(coins);
+}
+
+export function getCoinSlots(coins: Coins): number {
+  const total = getTotalCoinCount(coins);
+  return total > 0 ? Math.ceil(total / COINS_PER_SLOT) : 0;
+}
+
+export function getCoinGpEquivalent(coins: Coins): number {
+  return coins.pellucidium * 5 + coins.gold + coins.silver / 10 + coins.copper / 100;
+}
 
 export const COMMON_LANGUAGES = [
   'Woldish', 'Old Woldish', 'Caprice', 'Gaffe', 'Liturgic', 'Sylvan',
@@ -1765,6 +1925,7 @@ export function createDefaultCharacter(): Character {
     skillTargets: { listen: 6, search: 6, survival: 6 },
     equippedItems: [],
     stowedItems: [],
+    containers: [],
     tinyItems: '',
     coins: { copper: 0, silver: 0, gold: 10, pellucidium: 0 },
     encumbranceMethod: 'slots',

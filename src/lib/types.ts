@@ -36,6 +36,13 @@ export interface InventoryItem {
   weight: number;
   notes: string;
   equipped: boolean;
+  containerId?: string;  // links stowed item to a CharacterContainer
+}
+
+export interface CharacterContainer {
+  id: string;         // UUID
+  name: string;       // "Backpack", "Sack", "Belt Pouch", etc.
+  capacity: number;   // max weight in coins
 }
 
 export interface SpellSlot {
@@ -111,6 +118,7 @@ export interface Character {
 
   equippedItems: InventoryItem[];
   stowedItems: InventoryItem[];
+  containers: CharacterContainer[];
   tinyItems: string;
   coins: Coins;
 
