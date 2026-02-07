@@ -1402,6 +1402,335 @@ export function calculateSkillTargets(
   return { targets, autoSkillKeys, expertisePoints };
 }
 
+// ──────────────────────────────────────────────────────────
+// Phase 5: Magic System Data
+// Source: docs/rules/05-magic.md
+// ──────────────────────────────────────────────────────────
+
+// 5A: Arcane Spell List (72 spells, 12 per rank)
+export const ARCANE_SPELLS: { name: string; rank: number }[] = [
+  // Rank 1
+  { name: 'Crystal Resonance', rank: 1 }, { name: 'Decipher', rank: 1 }, { name: 'Fairy Servant', rank: 1 },
+  { name: 'Firelight', rank: 1 }, { name: 'Floating Disc', rank: 1 }, { name: 'Glyph of Sealing', rank: 1 },
+  { name: 'Ignite/Extinguish', rank: 1 }, { name: 'Ingratiate', rank: 1 }, { name: 'Ioun Shard', rank: 1 },
+  { name: 'Shield of Force', rank: 1 }, { name: 'Vapours of Dream', rank: 1 }, { name: 'Ventriloquism', rank: 1 },
+  // Rank 2
+  { name: 'Arcane Cypher', rank: 2 }, { name: 'Dweomerlight', rank: 2 }, { name: 'Flaming Spirit', rank: 2 },
+  { name: 'Glyph of Locking', rank: 2 }, { name: 'Invisibility', rank: 2 }, { name: 'Knock', rank: 2 },
+  { name: 'Levitate', rank: 2 }, { name: 'Mind Crystal', rank: 2 }, { name: 'Mirror Image', rank: 2 },
+  { name: 'Perceive the Invisible', rank: 2 }, { name: 'Phantasm', rank: 2 }, { name: 'Web', rank: 2 },
+  // Rank 3
+  { name: 'Circle of Invisibility', rank: 3 }, { name: 'Crystal Vision', rank: 3 }, { name: 'Dark Sight', rank: 3 },
+  { name: 'Dispel Magic', rank: 3 }, { name: 'Fireball', rank: 3 }, { name: 'Fly', rank: 3 },
+  { name: 'Haste', rank: 3 }, { name: 'Lightning Bolt', rank: 3 }, { name: 'Missile Ward', rank: 3 },
+  { name: 'Paralysation', rank: 3 }, { name: 'Serpent Glyph', rank: 3 }, { name: 'Water Breathing', rank: 3 },
+  // Rank 4
+  { name: 'Acid Globe', rank: 4 }, { name: 'Arcane Eye', rank: 4 }, { name: 'Confusion', rank: 4 },
+  { name: 'Dimension Door', rank: 4 }, { name: 'Dominate', rank: 4 }, { name: 'Hallucinatory Terrain', rank: 4 },
+  { name: 'Hex Weaving', rank: 4 }, { name: 'Plant Growth', rank: 4 }, { name: 'Polymorph', rank: 4 },
+  { name: 'Wall of Fire', rank: 4 }, { name: 'Wall of Ice', rank: 4 }, { name: 'Woodland Veil', rank: 4 },
+  // Rank 5
+  { name: 'Air Sphere', rank: 5 }, { name: 'Animate Dead', rank: 5 }, { name: 'Cloudkill', rank: 5 },
+  { name: 'Conjure Elemental', rank: 5 }, { name: 'Fabricate', rank: 5 }, { name: 'Feeblemind', rank: 5 },
+  { name: 'Mire', rank: 5 }, { name: 'Passwall', rank: 5 }, { name: 'Sending', rank: 5 },
+  { name: 'Telekinesis', rank: 5 }, { name: 'Teleport', rank: 5 }, { name: 'Wall of Stone', rank: 5 },
+  // Rank 6
+  { name: 'Anti-Magic Ward', rank: 6 }, { name: 'Control Weather', rank: 6 }, { name: 'Disintegrate', rank: 6 },
+  { name: 'Dweomerfire', rank: 6 }, { name: 'Geas', rank: 6 }, { name: 'Invisible Stalker', rank: 6 },
+  { name: 'Move Terrain', rank: 6 }, { name: 'Oracle', rank: 6 }, { name: 'Petrification', rank: 6 },
+  { name: 'Project Image', rank: 6 }, { name: 'Wave of Force', rank: 6 }, { name: 'Word of Doom', rank: 6 },
+];
+
+// 5B: Holy Spell List (34 spells with saint associations)
+export const HOLY_SPELLS: { name: string; rank: number; saint: string }[] = [
+  // Rank 1
+  { name: 'Detect Evil', rank: 1, saint: 'St Whittery' },
+  { name: 'Detect Magic', rank: 1, saint: 'St Thorm' },
+  { name: 'Frost Ward', rank: 1, saint: 'St Abthius' },
+  { name: 'Lesser Healing', rank: 1, saint: 'St Lillibeth' },
+  { name: 'Light', rank: 1, saint: 'St Foggarty' },
+  { name: 'Mantle of Protection', rank: 1, saint: 'St Benester' },
+  { name: 'Purify Food and Drink', rank: 1, saint: 'St Gretchen' },
+  { name: 'Rally', rank: 1, saint: 'St Jorrael' },
+  // Rank 2
+  { name: 'Bless', rank: 2, saint: 'St Gondyw' },
+  { name: 'Charm Serpents', rank: 2, saint: 'St Dank' },
+  { name: 'Find Traps', rank: 2, saint: 'St Gripe' },
+  { name: 'Flame Ward', rank: 2, saint: 'St Hollyhock' },
+  { name: 'Hold Person', rank: 2, saint: 'St Waylaine' },
+  { name: 'Reveal Alignment', rank: 2, saint: 'St Willofrith' },
+  { name: 'Silence', rank: 2, saint: 'St Signis' },
+  { name: 'Speak With Animals', rank: 2, saint: 'St Hamfast' },
+  // Rank 3
+  { name: 'Animal Growth', rank: 3, saint: 'St Vinicus' },
+  { name: 'Bless Weapon', rank: 3, saint: 'St Sedge' },
+  { name: 'Cure Affliction', rank: 3, saint: 'St Pastery' },
+  { name: 'Holy Light', rank: 3, saint: 'St Eggort' },
+  { name: 'Locate Object', rank: 3, saint: 'St Keye' },
+  { name: 'Remove Curse', rank: 3, saint: 'St Primula' },
+  // Rank 4
+  { name: 'Circle of Protection', rank: 4, saint: 'St Faxis' },
+  { name: 'Create Water', rank: 4, saint: 'St Quister' },
+  { name: 'Greater Healing', rank: 4, saint: 'St Wick' },
+  { name: 'Remove Poison', rank: 4, saint: 'St Torphia' },
+  { name: 'Speak With Plants', rank: 4, saint: 'St Wort' },
+  { name: 'Serpent Transformation', rank: 4, saint: 'St Horace' },
+  // Rank 5
+  { name: 'Communion', rank: 5, saint: 'St Elsa' },
+  { name: 'Create Food', rank: 5, saint: 'St Ponch' },
+  { name: 'Holy Fire', rank: 5, saint: 'St Goodenough' },
+  { name: 'Holy Quest', rank: 5, saint: 'St Galaunt' },
+  { name: 'Insect Plague', rank: 5, saint: 'St Cornice' },
+  { name: 'Raise Dead', rank: 5, saint: 'St Clewyd' },
+];
+
+// 5C: Glamour List (20 glamours)
+export const GLAMOURS: { id: number; name: string; description: string }[] = [
+  { id: 1, name: 'Awe', description: 'Unnerve creatures (30\', total levels up to caster\'s level flee, 1d4 Rounds)' },
+  { id: 2, name: 'Beguilement', description: 'Mortal believes caster\'s words (30\', Save vs Spell, 1d4 Rounds, 1x/day/subject)' },
+  { id: 3, name: 'Breath of the Wind', description: 'Move silently (30\', 1d4 Rounds, 1x/Turn)' },
+  { id: 4, name: 'Cloak of Darkness', description: 'Hide from mundane sight (Concentration/1 Round, 1x/Turn)' },
+  { id: 5, name: 'Conjure Treats', description: 'Create favourite treat (permanent but not sustaining, 1x/day/subject)' },
+  { id: 6, name: 'Dancing Flame', description: 'Command flame to float/move (60\', Concentration, 2d6 Rounds)' },
+  { id: 7, name: 'Disguise Object', description: 'Object appears different (until touched)' },
+  { id: 8, name: 'Fairy Dust', description: 'Reveal invisible creatures (30\', 1 Round, 1x/day)' },
+  { id: 9, name: 'Flame Charm', description: 'Conjure/extinguish small flame' },
+  { id: 10, name: 'Fool\'s Gold', description: 'Copper appears as gold (touch, 1d6 min, 20 coins/level/day)' },
+  { id: 11, name: 'Forgetting', description: 'Target forgets witnessed event (30\', Save vs Spell, 1x/day/subject)' },
+  { id: 12, name: 'Masquerade', description: 'Disguise facial features (permanent until dismissed)' },
+  { id: 13, name: 'Mirth and Malice', description: 'Impart emotion to group (30\', 1 Turn effect, 1x/day/group)' },
+  { id: 14, name: 'Moon Sight', description: 'See in darkness 60\' (always active, no fine detail)' },
+  { id: 15, name: 'Seeming', description: 'Garb appears as wished (permanent until touched, visual only)' },
+  { id: 16, name: 'Silver Tongue', description: 'Communicate with any being/animal (1 day, 1 language/day)' },
+  { id: 17, name: 'Subtle Sight', description: 'Spot invisible creatures (always active, 3-in-6 chance)' },
+  { id: 18, name: 'Through the Keyhole', description: 'Step through small aperture (1x/day/door)' },
+  { id: 19, name: 'Vanishing', description: 'Disappear from one creature\'s sight (60\', 1d3 Rounds, 1x/day/subject)' },
+  { id: 20, name: 'Walk in Shadows', description: 'Travel between shadows (2-in-6 in 10\'x10\' darkness, reappear within 60\')' },
+];
+
+// 5D: Fairy Runes (18 runes across 3 magnitudes)
+export type RuneMagnitude = 'lesser' | 'greater' | 'mighty';
+
+export const FAIRY_RUNES: { id: number; name: string; magnitude: RuneMagnitude; description: string }[] = [
+  // Lesser (6)
+  { id: 1, name: 'Deathly Blossom', magnitude: 'lesser', description: 'White rose causes deep faint (Save vs Doom, 1d6 Turns)' },
+  { id: 2, name: 'Fog Cloud', magnitude: 'lesser', description: '20\' vapor blocks vision (1 Turn)' },
+  { id: 3, name: 'Gust of Wind', magnitude: 'lesser', description: '10\'x60\' blast, pushes creatures (1 Round)' },
+  { id: 4, name: 'Proof Against Deadly Harm', magnitude: 'lesser', description: 'Immune to 1 weapon type (2d6 Rounds)' },
+  { id: 5, name: 'Rune of Vanishing', magnitude: 'lesser', description: 'Invisible to mortals/animals (1 Turn, breaks on attack)' },
+  { id: 6, name: 'Sway the Mortal Mind', magnitude: 'lesser', description: 'Charm mortal (1 day, Save vs Spell)' },
+  // Greater (6)
+  { id: 7, name: 'Arcane Unbinding', magnitude: 'greater', description: 'Negate arcane/fairy magic in 20\' cube (120\')' },
+  { id: 8, name: 'Fairy Gold', magnitude: 'greater', description: 'Conjure 2d100gp (1d6 hours, then coins vanish)' },
+  { id: 9, name: 'Fairy Steed', magnitude: 'greater', description: 'Summon fairy horse (until dawn)' },
+  { id: 10, name: 'Ice Storm', magnitude: 'greater', description: '30\' hail, 3d8 damage (120\')' },
+  { id: 11, name: 'Rune of Invisibility', magnitude: 'greater', description: 'Invisible to all (1 day, breaks on attack)' },
+  { id: 12, name: 'Sway the Mind', magnitude: 'greater', description: 'Charm any creature (1 day, Save vs Spell, fairies +4)' },
+  // Mighty (6)
+  { id: 13, name: 'Dream Ship', magnitude: 'mighty', description: 'Phantom galleon, 13 passengers, travel to destination' },
+  { id: 14, name: 'Eternal Slumber', magnitude: 'mighty', description: 'Permanent magical sleep on mortal' },
+  { id: 15, name: 'Rune of Death', magnitude: 'mighty', description: 'Kill mortals/animals in 30\' area (up to 4d8 levels, Save vs Doom)' },
+  { id: 16, name: 'Rune of Wishing', magnitude: 'mighty', description: 'Alter reality (costs 1d3 permanent CON)' },
+  { id: 17, name: 'Summon Wild Hunt', magnitude: 'mighty', description: 'Summon fairy hunting host (4d6 hounds, 4d20 foot + 4d20 mounted elves, 1d6 goblins)' },
+  { id: 18, name: 'Unravel Death', magnitude: 'mighty', description: 'Restore dead to life (7 days max, 2 weeks recovery)' },
+];
+
+// Rune usage frequency by magnitude and level bracket
+export function getRuneUsageFrequency(magnitude: RuneMagnitude, level: number): string {
+  if (magnitude === 'lesser') {
+    if (level <= 4) return '1x/day';
+    if (level <= 9) return '2x/day';
+    return '3x/day';
+  }
+  if (magnitude === 'greater') {
+    if (level <= 4) return '1x/level';
+    if (level <= 9) return '1x/week';
+    return '1x/day';
+  }
+  // mighty
+  if (level <= 9) return '1x ever';
+  return '1x/year';
+}
+
+// Rune roll modifier by level
+export function getRuneRollModifier(level: number): number {
+  if (level <= 2) return 0;
+  if (level <= 5) return 1;
+  if (level <= 9) return 2;
+  return 3;
+}
+
+// 5E: Mossling Knacks (6 knacks, 4 tiers each)
+export const MOSSLING_KNACKS: { id: number; name: string; tiers: { level: number; description: string }[] }[] = [
+  {
+    id: 1, name: 'Bird Friend', tiers: [
+      { level: 1, description: 'Converse with birds' },
+      { level: 3, description: 'Charm Level 1- bird companion' },
+      { level: 5, description: '1x/day, birds relay 10-word message at 12 miles/hour' },
+      { level: 7, description: '1x/day, summon flock (L3, AC 13, HP 13, 1d6 pecks, Fly 40, 1d4 Turns)' },
+    ],
+  },
+  {
+    id: 2, name: 'Lock Singer', tiers: [
+      { level: 1, description: 'Sing to simple lock, 2-in-6 chance/Turn to open' },
+      { level: 3, description: 'Lock reveals key location' },
+      { level: 5, description: 'Simple locks within 30\' snap shut (1 Round song)' },
+      { level: 7, description: 'Song opens any lock (2-in-6/Turn, magical locks 1-in-6 backfire chance)' },
+    ],
+  },
+  {
+    id: 3, name: 'Root Friend', tiers: [
+      { level: 1, description: '1x/day, ask root 1 question (truthful, 1d6 words)' },
+      { level: 3, description: '1x/day, summon 1d4 fresh rations from ground' },
+      { level: 5, description: '1x/day, shelter in tree roots up to 1 hour (hidden)' },
+      { level: 7, description: '1x/day, summon root thing (L3, AC 13, HP 13, 2 claws 1d4 + entangle, 1d6 Turns)' },
+    ],
+  },
+  {
+    id: 4, name: 'Thread Whistling', tiers: [
+      { level: 1, description: 'Tie/untie/unravel textiles in 30\' (1 Round)' },
+      { level: 3, description: 'Animate threads to move 5\'/round (Concentration)' },
+      { level: 5, description: 'Rope mastery: animate rope to bind, trip, or swing (30\', 1d4 Rounds)' },
+      { level: 7, description: 'Animate rope to attack (Level 1 construct, AC 13, HP 4, entangle on hit, 1d6 Turns)' },
+    ],
+  },
+  {
+    id: 5, name: 'Wood Kenning', tiers: [
+      { level: 1, description: 'Sense wooden item\'s creator or last person who touched it (touch, 1x/item/day)' },
+      { level: 3, description: 'Sense most recent strong emotion from wood (touch)' },
+      { level: 5, description: 'Momentary image through wooden barrier (door, wall, tree trunk)' },
+      { level: 7, description: 'Learn a tree\'s true name; 1x/day scry surroundings through that tree' },
+    ],
+  },
+  {
+    id: 6, name: 'Yeast Master', tiers: [
+      { level: 1, description: 'Ferment sweet liquids, 1 pint/Turn (2-in-6 palatable to others)' },
+      { level: 3, description: 'Commune with yeast in drinks to learn drinker\'s name' },
+      { level: 5, description: 'Yeasty belch 1x/day (10\' cone, Save vs Blast or faint 1d6 Rounds)' },
+      { level: 7, description: 'Conjure 1d6 fresh rations of yeast feast 1x/day' },
+    ],
+  },
+];
+
+// 5F: Magician Starting Spell Books
+export const MAGICIAN_STARTING_SPELL_BOOKS: { roll: number; name: string; spells: string[] }[] = [
+  { roll: 1, name: 'Charms of the Fey Court', spells: ['Fairy Servant', 'Ingratiate', 'Ventriloquism'] },
+  { roll: 2, name: 'Hogbrand\'s Incandescence', spells: ['Firelight', 'Ignite/Extinguish', 'Shield of Force'] },
+  { roll: 3, name: 'Lord Oberon\'s Seals', spells: ['Decipher', 'Glyph of Sealing', 'Vapours of Dream'] },
+  { roll: 4, name: 'Oliphan\'s Folio', spells: ['Crystal Resonance', 'Ioun Shard', 'Shield of Force'] },
+  { roll: 5, name: 'Smythe\'s Illuminations', spells: ['Decipher', 'Ignite/Extinguish', 'Ioun Shard'] },
+  { roll: 6, name: 'The Treatise on Force and Dissolution', spells: ['Crystal Resonance', 'Floating Disc', 'Vapours of Dream'] },
+];
+
+// 5G: Magic Profile Helper
+export type MagicSystem = 'arcane' | 'holy' | 'glamours' | 'runes' | 'knacks' | 'none';
+
+export interface MagicProfile {
+  systems: MagicSystem[];
+  spellsPerDay: number[] | null;
+  maxSpellRank: number;
+  glamourCount: number;
+  hasRunes: boolean;
+  hasKnacks: boolean;
+  hasDivineResistance: boolean;
+  spellType: 'arcane' | 'holy' | null;
+}
+
+export function getCharacterMagicProfile(kindred: KindredId | '', classId: ClassId | '', level: number): MagicProfile {
+  const result: MagicProfile = {
+    systems: [],
+    spellsPerDay: null,
+    maxSpellRank: 0,
+    glamourCount: 0,
+    hasRunes: false,
+    hasKnacks: false,
+    hasDivineResistance: false,
+    spellType: null,
+  };
+
+  const clampedLevel = Math.max(1, Math.min(level, 15));
+  const isKindredClass = kindred !== '' && kindred !== 'human' && !classId;
+
+  if (isKindredClass) {
+    switch (kindred) {
+      case 'breggle': {
+        result.systems = ['arcane'];
+        result.spellType = 'arcane';
+        result.spellsPerDay = getSpellsPerDay('breggle', clampedLevel);
+        result.maxSpellRank = 5;
+        break;
+      }
+      case 'elf': {
+        result.systems = ['glamours', 'runes'];
+        result.hasDivineResistance = true;
+        result.hasRunes = true;
+        const kindredGlamours = KINDRED_GLAMOUR_COUNT['elf']?.[clampedLevel] ?? 0;
+        result.glamourCount = kindredGlamours;
+        break;
+      }
+      case 'grimalkin': {
+        result.systems = ['glamours'];
+        const kindredGlamours = KINDRED_GLAMOUR_COUNT['grimalkin']?.[clampedLevel] ?? 0;
+        result.glamourCount = kindredGlamours;
+        break;
+      }
+      case 'mossling': {
+        result.systems = ['knacks'];
+        result.hasKnacks = true;
+        break;
+      }
+      case 'woodgrue': {
+        result.systems = ['none'];
+        break;
+      }
+    }
+  } else if (classId) {
+    switch (classId) {
+      case 'magician': {
+        result.systems = ['arcane'];
+        result.spellType = 'arcane';
+        result.spellsPerDay = getSpellsPerDay('magician', clampedLevel);
+        result.maxSpellRank = 6;
+        break;
+      }
+      case 'cleric': {
+        result.systems = ['holy'];
+        result.spellType = 'holy';
+        result.spellsPerDay = getSpellsPerDay('cleric', clampedLevel);
+        result.maxSpellRank = 5;
+        break;
+      }
+      case 'friar': {
+        result.systems = ['holy'];
+        result.spellType = 'holy';
+        result.spellsPerDay = getSpellsPerDay('friar', clampedLevel);
+        result.maxSpellRank = 5;
+        break;
+      }
+      case 'enchanter': {
+        result.systems = ['glamours', 'runes'];
+        result.hasDivineResistance = true;
+        result.hasRunes = true;
+        let glamourCount = ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0;
+        // Elf enchanters get kindred glamours stacked on top
+        if (kindred === 'elf') {
+          glamourCount += KINDRED_GLAMOUR_COUNT['elf']?.[clampedLevel] ?? 0;
+        }
+        result.glamourCount = glamourCount;
+        break;
+      }
+      default: {
+        result.systems = ['none'];
+        break;
+      }
+    }
+  } else {
+    result.systems = ['none'];
+  }
+
+  return result;
+}
+
 export function createDefaultCharacter(): Character {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -1443,6 +1772,10 @@ export function createDefaultCharacter(): Character {
     hasShield: false,
     spells: [],
     spellNotes: '',
+    glamours: [],
+    runes: [],
+    knack: null,
+    startingSpellBook: '',
     classTraits: '',
     kindredTraits: '',
     languages: 'Woldish',

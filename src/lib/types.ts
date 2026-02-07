@@ -47,6 +47,28 @@ export interface SpellSlot {
   notes: string;
 }
 
+export interface CharacterGlamour {
+  id: string;          // UUID
+  glamourId: number;   // References GLAMOURS[].id (1-20)
+  name: string;        // Denormalized for display
+  notes: string;
+}
+
+export interface CharacterRune {
+  id: string;          // UUID
+  runeId: number;      // References FAIRY_RUNES[].id
+  name: string;
+  magnitude: 'lesser' | 'greater' | 'mighty';
+  usesRemaining: number;
+  notes: string;
+}
+
+export interface CharacterKnack {
+  knackId: number;     // References MOSSLING_KNACKS[].id (1-6)
+  name: string;
+  notes: string;
+}
+
 export interface Coins {
   copper: number;
   silver: number;
@@ -98,6 +120,10 @@ export interface Character {
 
   spells: SpellSlot[];
   spellNotes: string;
+  glamours: CharacterGlamour[];
+  runes: CharacterRune[];
+  knack: CharacterKnack | null;
+  startingSpellBook: string;
 
   classTraits: string;
   kindredTraits: string;

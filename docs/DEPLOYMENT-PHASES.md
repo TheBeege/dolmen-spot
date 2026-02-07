@@ -96,23 +96,29 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 5: Magic System
+## Phase 5: Magic System ✓
 
 **Goal**: Track spell slots, memorization, glamours, runes, and knacks.
 
 **Rule docs**: `05-magic.md`, `03-classes.md`, `04-kindred-classes.md`
 
-- [ ] Spells per day tracking by class and level (Cleric R1-5, Friar R1-5, Magician R1-6, Breggle R1-5)
-- [ ] Spell memorization slots display
-- [ ] Spell list reference (72 arcane, 34 holy -- names and ranks)
-- [ ] Glamour tracking: count by class/kindred level, randomly determined
-- [ ] Glamour list reference (20 glamours with descriptions)
-- [ ] Fairy Rune tracking: lesser/greater/mighty with usage frequency by level range
-- [ ] Rune list reference (18 runes across 3 magnitudes)
-- [ ] Mossling Knack system: 1 knack, 4 advancement tiers at L1/3/5/7
-- [ ] Holy spell saint associations (for reference)
-- [ ] Magician starting spell book selection (6 options, 3 Rank 1 spells each)
-- [ ] Enchanter/Elf resistance to divine aid (2-in-6 flag)
+**Status**: Completed
+
+- [x] Spells per day tracking by class and level (Cleric R1-5, Friar R1-5, Magician R1-6, Breggle R1-5)
+- [x] Spell memorization slots display with prepared/cast tracking and "Reset All Cast" button
+- [x] Spell list reference (72 arcane, 34 holy -- collapsible panels with names, ranks, and saint associations)
+- [x] Glamour tracking: count by class/kindred level, add/remove from filtered dropdown, over-max warning
+- [x] Glamour list reference (20 glamours with descriptions, collapsible panel)
+- [x] Fairy Rune tracking: lesser/greater/mighty with usage frequency by level range, +/- uses counter
+- [x] Rune list reference (18 runes across 3 magnitudes, collapsible panel with roll table and modifiers)
+- [x] Mossling Knack system: 1 knack picker, 4 advancement tiers at L1/3/5/7 with active/dimmed display
+- [x] Holy spell saint associations (shown in reference panel)
+- [x] Magician starting spell book selection (6 options, 3 Rank 1 spells each)
+- [x] Enchanter/Elf divine resistance flag display
+- [x] Context-aware Spells & Magic tab via `getCharacterMagicProfile()` helper
+- [x] Breggle L1-3 "arcane magic unlocks at Level 4" message
+- [x] Knacks 4-6 (Thread Whistling, Wood Kenning, Yeast Master) data completed in rules doc
+- [x] Schema migration v3→v4 for new glamours/runes/knack/startingSpellBook fields
 
 ---
 

@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 3;
+export const CURRENT_SCHEMA_VERSION = 4;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -24,6 +24,14 @@ const migrations: Record<number, (data: any) => any> = {
   2: (data) => {
     if (data.equippedArmourName === undefined) data.equippedArmourName = '';
     if (data.hasShield === undefined) data.hasShield = false;
+    return data;
+  },
+  // v3 -> v4: Add magic system fields (glamours, runes, knack, startingSpellBook).
+  3: (data) => {
+    if (data.glamours === undefined) data.glamours = [];
+    if (data.runes === undefined) data.runes = [];
+    if (data.knack === undefined) data.knack = null;
+    if (data.startingSpellBook === undefined) data.startingSpellBook = '';
     return data;
   },
 };
