@@ -9,9 +9,10 @@ import Inventory from '@/components/Inventory';
 import SpellsAndMagic from '@/components/SpellsAndMagic';
 import TraitsAndNotes from '@/components/TraitsAndNotes';
 import Calendar from '@/components/Calendar';
+import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 
-type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'reference';
+type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'map' | 'reference';
 
 const TABS: { id: Tab; label: string; shortLabel: string }[] = [
   { id: 'character', label: 'Character', shortLabel: 'Char' },
@@ -21,6 +22,7 @@ const TABS: { id: Tab; label: string; shortLabel: string }[] = [
   { id: 'spells', label: 'Spells & Magic', shortLabel: 'Magic' },
   { id: 'traits', label: 'Traits & Notes', shortLabel: 'Traits' },
   { id: 'calendar', label: 'Calendar & Journal', shortLabel: 'Cal' },
+  { id: 'map', label: 'Map', shortLabel: 'Map' },
   { id: 'reference', label: 'Reference', shortLabel: 'Ref' },
 ];
 
@@ -213,6 +215,9 @@ export default function Home() {
         )}
         {activeTab === 'calendar' && (
           <Calendar character={activeCharacter} onChange={updateCharacter} />
+        )}
+        {activeTab === 'map' && (
+          <HexMap character={activeCharacter} onChange={updateCharacter} />
         )}
         {activeTab === 'reference' && (
           <ReferencePanel />
