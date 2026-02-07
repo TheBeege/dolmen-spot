@@ -1,4 +1,4 @@
-import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AdvancementRow, ClassAdvancementTable, SkillProgressionTable } from './types';
+import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 
 // Kindred-class restrictions from the Player's Book.
@@ -808,6 +808,276 @@ export function getBregggleHornData(level: number): { length: string; damage: st
   if (level >= 10) return { length: '16"', damage: '1d6+2' };
   const entry = BREGGLE_HORN_PROGRESSION.find(h => h.level === level);
   return entry ? { length: entry.length, damage: entry.damage } : { length: '1"', damage: '1d4' };
+}
+
+// ──────────────────────────────────────────────────────────
+// Phase 2: Character Creation Accuracy
+// ──────────────────────────────────────────────────────────
+
+// 1a. Prime Ability Mapping
+export const CLASS_PRIME_ABILITIES: Record<ClassId, (keyof AbilityScoresType)[]> = {
+  bard: ['charisma', 'dexterity'],
+  cleric: ['wisdom'],
+  enchanter: ['charisma', 'intelligence'],
+  fighter: ['strength'],
+  friar: ['intelligence', 'wisdom'],
+  hunter: ['constitution', 'dexterity'],
+  knight: ['charisma', 'strength'],
+  magician: ['intelligence'],
+  thief: ['dexterity'],
+};
+
+// 1b. XP Modifier Calculation
+export function getPrimeAbilityXpModifier(score: number): number {
+  if (score <= 5) return -20;
+  if (score <= 8) return -10;
+  if (score <= 12) return 0;
+  if (score <= 15) return 5;
+  return 10;
+}
+
+export function calculateXpModifier(
+  classId: ClassId | '',
+  kindredId: KindredId | '',
+  abilityScores: AbilityScoresType,
+): { primeBonus: number; humanBonus: number; total: number } {
+  if (!classId) return { primeBonus: 0, humanBonus: 0, total: 0 };
+
+  const primeKeys = CLASS_PRIME_ABILITIES[classId];
+  const lowestPrime = Math.min(...primeKeys.map(k => abilityScores[k]));
+  const primeBonus = getPrimeAbilityXpModifier(lowestPrime);
+  const humanBonus = kindredId === 'human' ? 10 : 0;
+
+  return { primeBonus, humanBonus, total: primeBonus + humanBonus };
+}
+
+// 1c. Starting Equipment Tables
+export interface StartingEquipmentEntry {
+  roll: number[];
+  result: string;
+}
+
+export interface StartingEquipmentTable {
+  armour: StartingEquipmentEntry[];
+  weapons: StartingEquipmentEntry[];
+  weaponRolls: number; // how many d6 to roll for weapons
+  classItems: string[];
+  smallKindredNotes?: string;
+}
+
+export const STARTING_EQUIPMENT: Record<ClassId, StartingEquipmentTable> = {
+  bard: {
+    armour: [
+      { roll: [1, 2], result: 'None' },
+      { roll: [3, 4], result: 'Leather' },
+      { roll: [5, 6], result: 'Chainmail' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Club' },
+      { roll: [2], result: '3 daggers' },
+      { roll: [3], result: 'Longsword' },
+      { roll: [4], result: 'Sling + 20 stones' },
+      { roll: [5], result: 'Shortbow + 20 arrows' },
+      { roll: [6], result: 'Shortsword' },
+    ],
+    weaponRolls: 2,
+    classItems: ['Musical instrument (stringed or wind)'],
+  },
+  cleric: {
+    armour: [
+      { roll: [1], result: 'Leather' },
+      { roll: [2], result: 'Leather + shield' },
+      { roll: [3], result: 'Chainmail' },
+      { roll: [4], result: 'Chainmail + shield' },
+      { roll: [5], result: 'Plate mail' },
+      { roll: [6], result: 'Plate mail + shield' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Dagger' },
+      { roll: [2], result: 'Longsword' },
+      { roll: [3], result: 'Mace' },
+      { roll: [4], result: 'Shortbow + 20 arrows' },
+      { roll: [5], result: 'Shortsword' },
+      { roll: [6], result: 'Warhammer' },
+    ],
+    weaponRolls: 2,
+    classItems: ['Wooden holy symbol'],
+  },
+  enchanter: {
+    armour: [
+      { roll: [1, 2], result: 'None' },
+      { roll: [3, 4], result: 'Leather' },
+      { roll: [5, 6], result: 'Chainmail' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Club' },
+      { roll: [2], result: 'Dagger' },
+      { roll: [3], result: 'Longsword' },
+      { roll: [4], result: 'Shortbow + 20 arrows' },
+      { roll: [5], result: 'Spear' },
+      { roll: [6], result: 'Staff' },
+    ],
+    weaponRolls: 2,
+    classItems: [],
+  },
+  fighter: {
+    armour: [
+      { roll: [1], result: 'Leather' },
+      { roll: [2], result: 'Leather + shield' },
+      { roll: [3], result: 'Chainmail' },
+      { roll: [4], result: 'Chainmail + shield' },
+      { roll: [5], result: 'Plate mail' },
+      { roll: [6], result: 'Plate mail + shield' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Crossbow + 20 quarrels' },
+      { roll: [2], result: 'Dagger' },
+      { roll: [3], result: 'Longsword' },
+      { roll: [4], result: 'Mace' },
+      { roll: [5], result: 'Shortsword' },
+      { roll: [6], result: 'Spear' },
+    ],
+    weaponRolls: 2,
+    classItems: [],
+  },
+  friar: {
+    armour: [
+      { roll: [1, 2, 3, 4, 5, 6], result: 'None' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Club' },
+      { roll: [2], result: 'Dagger' },
+      { roll: [3, 4], result: 'Sling + 20 stones' },
+      { roll: [5, 6], result: 'Staff' },
+    ],
+    weaponRolls: 1,
+    classItems: ["Friar's habit", 'Wooden holy symbol'],
+  },
+  hunter: {
+    armour: [
+      { roll: [1, 2, 3], result: 'Leather' },
+      { roll: [4, 5, 6], result: 'Leather + shield' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Dagger' },
+      { roll: [2], result: 'Longsword' },
+      { roll: [3, 4], result: 'Longbow + 20 arrows' },
+      { roll: [5], result: 'Shortsword' },
+      { roll: [6], result: 'Sling + 20 stones' },
+    ],
+    weaponRolls: 2,
+    classItems: [],
+    smallKindredNotes: 'Small kindreds use shortbow instead of longbow',
+  },
+  knight: {
+    armour: [
+      { roll: [1], result: 'Chainmail' },
+      { roll: [2, 3], result: 'Chainmail + shield' },
+      { roll: [4], result: 'Plate mail' },
+      { roll: [5, 6], result: 'Plate mail + shield' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Dagger' },
+      { roll: [2, 3, 4], result: 'Lance' },
+      { roll: [5], result: 'Longsword' },
+      { roll: [6], result: 'Mace' },
+    ],
+    weaponRolls: 2,
+    classItems: [],
+    smallKindredNotes: 'Small kindreds use spear instead of lance',
+  },
+  magician: {
+    armour: [
+      { roll: [1, 2, 3, 4, 5, 6], result: 'None' },
+    ],
+    weapons: [
+      { roll: [1, 2, 3], result: 'Dagger' },
+      { roll: [4, 5, 6], result: 'Staff' },
+    ],
+    weaponRolls: 1,
+    classItems: ['Ritual robes', 'Starting spell book'],
+  },
+  thief: {
+    armour: [
+      { roll: [1, 2, 3], result: 'None' },
+      { roll: [4, 5, 6], result: 'Leather' },
+    ],
+    weapons: [
+      { roll: [1], result: 'Club' },
+      { roll: [2], result: '3 daggers' },
+      { roll: [3], result: 'Longsword' },
+      { roll: [4], result: 'Shortbow + 20 arrows' },
+      { roll: [5], result: 'Shortsword' },
+      { roll: [6], result: 'Sling + 20 stones' },
+    ],
+    weaponRolls: 2,
+    classItems: ["Thieves' tools"],
+  },
+};
+
+export function rollD6(): number {
+  return Math.floor(Math.random() * 6) + 1;
+}
+
+export function rollStartingEquipment(classId: ClassId, category: 'armour' | 'weapons'): { roll: number; result: string } {
+  const table = STARTING_EQUIPMENT[classId][category];
+  const roll = rollD6();
+  const entry = table.find(e => e.roll.includes(roll));
+  return { roll, result: entry?.result ?? 'Unknown' };
+}
+
+// 1d. Language Helpers
+export const CLASS_LANGUAGES: Partial<Record<ClassId, string[]>> = {
+  cleric: ['Liturgic'],
+  friar: ['Liturgic'],
+  thief: ["Thieves' Cant"],
+};
+
+export function getCharacterLanguages(
+  kindredId: KindredId | '',
+  classId: ClassId | '',
+  intScore: number,
+): {
+  nativeLanguages: string[];
+  classLanguages: string[];
+  bonusSlots: number;
+  availableCommon: string[];
+  availableObscure: string[];
+} {
+  const kindred = KINDREDS.find(k => k.id === kindredId);
+  const nativeLanguages = kindred?.nativeLanguages ?? ['Woldish'];
+  const classLanguages: string[] = (classId ? CLASS_LANGUAGES[classId] : undefined) ?? [];
+  const intMod = getAbilityModifier(intScore);
+  const bonusSlots = Math.max(0, intMod);
+
+  const allKnown = new Set([...nativeLanguages, ...classLanguages]);
+
+  const availableCommon = COMMON_LANGUAGES.filter(l => !allKnown.has(l));
+  const availableObscure = OBSCURE_LANGUAGES.filter(l => !allKnown.has(l));
+
+  return { nativeLanguages, classLanguages, bonusSlots, availableCommon, availableObscure };
+}
+
+// 1e. Alignment Validation
+export function getAlignmentWarning(classId: ClassId | '', alignment: string): { text: string; severity: 'warning' | 'info' } | null {
+  if (!classId || !alignment) return null;
+
+  if ((classId === 'cleric' || classId === 'friar') && alignment === 'Chaotic') {
+    return { text: `${classId === 'cleric' ? 'Clerics' : 'Friars'} must be Lawful or Neutral.`, severity: 'warning' };
+  }
+
+  if (classId === 'knight') {
+    return { text: "Knights must match their liege's alignment.", severity: 'info' };
+  }
+
+  return null;
+}
+
+// 1f. Moon Sign Validation
+export function canHaveMoonSign(kindredId: KindredId | ''): boolean {
+  if (!kindredId) return true;
+  const kindred = KINDREDS.find(k => k.id === kindredId);
+  return kindred?.creatureType !== 'Fairy';
 }
 
 export function createDefaultCharacter(): Character {

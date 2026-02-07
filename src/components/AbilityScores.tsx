@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Character, AbilityScores as AbilityScoresType, SaveTargets, SkillTargets } from '@/lib/types';
-import { getAbilityModifier, formatModifier } from '@/lib/gamedata';
+import { getAbilityModifier, formatModifier, calculateXpModifier } from '@/lib/gamedata';
 
 interface AbilityScoresProps {
   character: Character;
@@ -42,26 +42,22 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
   const [newSkillName, setNewSkillName] = useState('');
 
   const handleAbilityChange = (key: keyof AbilityScoresType, value: string) => {
+    const newScores = { ...character.abilityScores };
     if (value === '') {
-      onChange({
-        abilityScores: {
-          ...character.abilityScores,
-          [key]: 0,
-        },
-      });
-      return;
+      newScores[key] = 0;
+    } else {
+      const parsed = parseInt(value, 10);
+      if (isNaN(parsed)) return;
+      // Only clamp at the upper bound while typing; allow low values
+      // so the user can type multi-digit numbers without the intermediate
+      // single digit being forced to 3.
+      newScores[key] = Math.min(18, Math.max(0, parsed));
     }
-    const parsed = parseInt(value, 10);
-    if (isNaN(parsed)) return;
-    // Only clamp at the upper bound while typing; allow low values
-    // so the user can type multi-digit numbers without the intermediate
-    // single digit being forced to 3.
-    const clamped = Math.min(18, Math.max(0, parsed));
+
+    const xpMod = calculateXpModifier(character.class, character.kindred, newScores);
     onChange({
-      abilityScores: {
-        ...character.abilityScores,
-        [key]: clamped,
-      },
+      abilityScores: newScores,
+      xpModifier: xpMod.total,
     });
   };
 

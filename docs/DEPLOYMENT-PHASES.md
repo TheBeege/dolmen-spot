@@ -4,41 +4,44 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 1: Core Data Corrections
+## Phase 1: Core Data Corrections ✓
 
 **Goal**: Fix existing bugs and ensure all game data matches the rulebook exactly.
 
 **Rule docs**: `03-classes.md`, `04-kindred-classes.md`, `02-kindreds.md`
 
-- [ ] Add Thief class advancement table to `gamedata.ts` (XP, HP, Attack, all 5 saves for L1-15)
-- [ ] Add Thief skill targets table (8 skills x 15 levels)
-- [ ] Verify ALL 9 class advancement tables match rulebook (XP thresholds, HP dice, Attack bonuses, Save targets)
-- [ ] Add all 5 kindred-class advancement tables to `gamedata.ts` (Breggle, Elf, Grimalkin, Mossling, Woodgrue)
-- [ ] Verify kindred trait data (Breggle horn damage progression, Gaze uses/day, Grimalkin forms, etc.)
-- [ ] Add class-specific skill targets for all classes (Bard 4 skills, Hunter 4 skills, Thief 8 skills, etc.)
-- [ ] Add Enchanter and Magician Detect Magic skill progression
-- [ ] Fix skill default values -- base Listen/Search/Survival should be 6, not 5 (improved by class/kindred)
-- [ ] Add Friar AC bonus progression to advancement data
-- [ ] Add Fighter combat talent progression (levels 2, 6, 10, 14)
-- [ ] Add Enchanter glamour count progression
+**Status**: Completed in commit `0b61ac3`
+
+- [x] Add Thief class advancement table to `gamedata.ts` (XP, HP, Attack, all 5 saves for L1-15)
+- [x] Add Thief skill targets table (8 skills x 15 levels)
+- [x] Verify ALL 9 class advancement tables match rulebook (XP thresholds, HP dice, Attack bonuses, Save targets)
+- [x] Add all 5 kindred-class advancement tables to `gamedata.ts` (Breggle, Elf, Grimalkin, Mossling, Woodgrue)
+- [x] Verify kindred trait data (Breggle horn damage progression, Gaze uses/day, Grimalkin forms, etc.)
+- [x] Add class-specific skill targets for all classes (Bard 4 skills, Hunter 4 skills, Thief 8 skills, etc.)
+- [x] Add Enchanter and Magician Detect Magic skill progression
+- [x] Fix skill default values -- base Listen/Search/Survival should be 6, not 5 (improved by class/kindred)
+- [x] Add Friar AC bonus progression to advancement data
+- [x] Add Fighter combat talent progression (levels 2, 6, 10, 14)
+- [x] Add Enchanter glamour count progression
 
 ---
 
-## Phase 2: Character Creation Accuracy
+## Phase 2: Character Creation Accuracy ✓
 
 **Goal**: Correct all character creation mechanics.
 
 **Rule docs**: `01-character-creation.md`, `02-kindreds.md`, `03-classes.md`
 
-- [ ] Verify ability score modifier table (3→-3, 4-5→-2, 6-8→-1, 9-12→0, 13-15→+1, 16-17→+2, 18→+3)
-- [ ] Implement Prime Ability XP bonus calculation (lowest prime ability score: 3-5→-20%, 6-8→-10%, 9-12→0, 13-15→+5%, 16-18→+10%)
-- [ ] Human +10% XP stacking with prime ability bonus
-- [ ] Add kindred-specific starting equipment tables
-- [ ] Add class-specific starting equipment tables (with d6 roll tables)
-- [ ] Language system: native languages per kindred + INT bonus languages (common and obscure lists)
-- [ ] Class languages: Clerics/Friars speak Liturgic, Thieves know Thieves' Cant
-- [ ] Alignment restrictions: Cleric/Friar must be Lawful/Neutral, Knight matches liege alignment
-- [ ] Moon sign selection (12 signs, optional rule)
+**Status**: Completed
+
+- [x] Verify ability score modifier table (3→-3, 4-5→-2, 6-8→-1, 9-12→0, 13-15→+1, 16-17→+2, 18→+3)
+- [x] Implement Prime Ability XP bonus calculation (lowest prime ability score: 3-5→-20%, 6-8→-10%, 9-12→0, 13-15→+5%, 16-18→+10%)
+- [x] Human +10% XP stacking with prime ability bonus
+- [x] Add class-specific starting equipment tables (with d6 roll tables and small-kindred notes)
+- [x] Language system: native languages per kindred + INT bonus languages (common and obscure lists)
+- [x] Class languages: Clerics/Friars speak Liturgic, Thieves know Thieves' Cant
+- [x] Alignment restrictions: Cleric/Friar must be Lawful/Neutral, Knight matches liege alignment
+- [x] Moon sign restriction for fairies (Elf, Grimalkin cannot have moon signs)
 
 ---
 
