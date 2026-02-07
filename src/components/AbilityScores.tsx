@@ -42,7 +42,6 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
   const [newSkillName, setNewSkillName] = useState('');
 
   const handleAbilityChange = (key: keyof AbilityScoresType, value: string) => {
-    const parsed = parseInt(value, 10);
     if (value === '') {
       onChange({
         abilityScores: {
@@ -52,14 +51,30 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
       });
       return;
     }
+    const parsed = parseInt(value, 10);
     if (isNaN(parsed)) return;
-    const clamped = Math.max(3, Math.min(18, parsed));
+    // Only clamp at the upper bound while typing; allow low values
+    // so the user can type multi-digit numbers without the intermediate
+    // single digit being forced to 3.
+    const clamped = Math.min(18, Math.max(0, parsed));
     onChange({
       abilityScores: {
         ...character.abilityScores,
         [key]: clamped,
       },
     });
+  };
+
+  const handleAbilityBlur = (key: keyof AbilityScoresType) => {
+    const current = character.abilityScores[key];
+    if (current < 3) {
+      onChange({
+        abilityScores: {
+          ...character.abilityScores,
+          [key]: 3,
+        },
+      });
+    }
   };
 
   const handleSaveChange = (key: keyof SaveTargets, value: string) => {
@@ -158,6 +173,7 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
                     max={18}
                     value={score || ''}
                     onChange={(e) => handleAbilityChange(ability.key, e.target.value)}
+                    onBlur={() => handleAbilityBlur(ability.key)}
                     className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 w-14 text-center text-xl font-bold focus:outline-none focus:border-[#c4a35a] transition-colors"
                     aria-label={`${ability.label} score`}
                   />

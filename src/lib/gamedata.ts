@@ -1,4 +1,47 @@
-import { KindredInfo, ClassInfo, Character, CalendarDate } from './types';
+import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId } from './types';
+
+// Kindred-class restrictions from the Player's Book.
+// 'forbidden' = cannot take this class at all.
+// 'rare' = unusual but allowed (no mechanical restriction, just flavour).
+// Classes not listed for a kindred are freely available.
+export const KINDRED_CLASS_RESTRICTIONS: Record<KindredId, Partial<Record<ClassId, 'forbidden' | 'rare'>>> = {
+  breggle: {
+    cleric: 'rare',
+    friar: 'rare',
+    enchanter: 'rare',
+  },
+  elf: {
+    cleric: 'forbidden',
+    friar: 'forbidden',
+    knight: 'rare',
+  },
+  grimalkin: {
+    cleric: 'forbidden',
+    friar: 'forbidden',
+    knight: 'rare',
+  },
+  human: {
+    enchanter: 'rare',
+  },
+  mossling: {
+    cleric: 'rare',
+    friar: 'rare',
+    knight: 'rare',
+    enchanter: 'rare',
+  },
+  woodgrue: {
+    cleric: 'forbidden',
+    friar: 'forbidden',
+    knight: 'rare',
+  },
+};
+
+export function getAvailableClasses(kindred: KindredId | ''): { class: ClassInfo; restriction?: 'rare' }[] {
+  if (!kindred) return CLASSES.map(c => ({ class: c }));
+  const restrictions = KINDRED_CLASS_RESTRICTIONS[kindred] || {};
+  return CLASSES.filter(c => restrictions[c.id] !== 'forbidden')
+    .map(c => ({ class: c, restriction: restrictions[c.id] === 'rare' ? 'rare' as const : undefined }));
+}
 
 export const KINDREDS: KindredInfo[] = [
   {

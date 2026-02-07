@@ -1,7 +1,7 @@
 'use client';
 
 import { Character } from '@/lib/types';
-import { KINDREDS, CLASSES, MOON_SIGNS, ALIGNMENTS } from '@/lib/gamedata';
+import { KINDREDS, MOON_SIGNS, ALIGNMENTS, getAvailableClasses } from '@/lib/gamedata';
 
 interface CharacterInfoProps {
   character: Character;
@@ -15,7 +15,18 @@ const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
 
 export default function CharacterInfo({ character, onChange }: CharacterInfoProps) {
   const selectedKindred = KINDREDS.find((k) => k.id === character.kindred);
-  const selectedClass = CLASSES.find((c) => c.id === character.class);
+  const availableClasses = getAvailableClasses(character.kindred);
+  const selectedClassEntry = availableClasses.find((c) => c.class.id === character.class);
+
+  // If the selected kindred changes and the current class is now forbidden, clear it
+  const handleKindredChange = (kindred: Character['kindred']) => {
+    const newAvailable = getAvailableClasses(kindred);
+    const classStillValid = !character.class || newAvailable.some(c => c.class.id === character.class);
+    onChange({
+      kindred,
+      ...(classStillValid ? {} : { class: '' }),
+    });
+  };
 
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
@@ -42,7 +53,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
           <input
             type="number"
             min={1}
-            max={14}
+            max={15}
             value={character.level}
             onChange={(e) => onChange({ level: parseInt(e.target.value) || 1 })}
             className={inputClasses}
@@ -54,7 +65,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
           <label className={labelClasses}>Kindred</label>
           <select
             value={character.kindred}
-            onChange={(e) => onChange({ kindred: e.target.value as Character['kindred'] })}
+            onChange={(e) => handleKindredChange(e.target.value as Character['kindred'])}
             className={inputClasses}
           >
             <option value="">-- Select Kindred --</option>
@@ -71,26 +82,36 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
           )}
         </div>
 
-        {/* Class */}
+        {/* Class (optional) */}
         <div>
-          <label className={labelClasses}>Class</label>
+          <label className={labelClasses}>
+            Class
+            <span className="text-[#f5e6c8]/40 font-normal ml-1">(optional)</span>
+          </label>
           <select
             value={character.class}
             onChange={(e) => onChange({ class: e.target.value as Character['class'] })}
             className={inputClasses}
           >
-            <option value="">-- Select Class --</option>
-            {CLASSES.map((c) => (
+            <option value="">-- Kindred-Class (no separate class) --</option>
+            {availableClasses.map(({ class: c, restriction }) => (
               <option key={c.id} value={c.id}>
-                {c.name}
+                {c.name}{restriction === 'rare' ? ' (rare)' : ''}
               </option>
             ))}
           </select>
-          {selectedClass && (
+          {selectedClassEntry ? (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
-              {selectedClass.description}
+              {selectedClassEntry.class.description}
+              {selectedClassEntry.restriction === 'rare' && (
+                <span className="text-[#c4a35a]"> — Unusual combination for this kindred.</span>
+              )}
             </p>
-          )}
+          ) : character.kindred && !character.class ? (
+            <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
+              Playing as a {selectedKindred?.name} kindred-class (see appendix).
+            </p>
+          ) : null}
         </div>
 
         {/* Background */}
