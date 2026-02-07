@@ -1,6 +1,9 @@
 .claude
 source_materials
 
+# Copyrighted game rules (extracted from Dolmenwood Player's Book)
+docs/rules/
+
 # Logs
 logs
 *.log
