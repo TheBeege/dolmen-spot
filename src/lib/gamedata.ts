@@ -1080,6 +1080,183 @@ export function canHaveMoonSign(kindredId: KindredId | ''): boolean {
   return kindred?.creatureType !== 'Fairy';
 }
 
+// ──────────────────────────────────────────────────────────
+// Phase 3: Combat & Derived Stats
+// ──────────────────────────────────────────────────────────
+
+// Class Armour Restrictions
+export const CLASS_ARMOUR_RESTRICTIONS: Record<ClassId, { light: boolean; medium: boolean; heavy: boolean; shield: boolean }> = {
+  bard:      { light: true,  medium: true,  heavy: false, shield: false },
+  cleric:    { light: true,  medium: true,  heavy: true,  shield: true },
+  enchanter: { light: true,  medium: true,  heavy: false, shield: false },
+  fighter:   { light: true,  medium: true,  heavy: true,  shield: true },
+  friar:     { light: false, medium: false, heavy: false, shield: false },
+  hunter:    { light: true,  medium: false, heavy: false, shield: true },
+  knight:    { light: false, medium: true,  heavy: true,  shield: true },
+  magician:  { light: false, medium: false, heavy: false, shield: false },
+  thief:     { light: true,  medium: false, heavy: false, shield: false },
+};
+
+function getArmourBulkCategory(bulk: string): 'light' | 'medium' | 'heavy' | null {
+  if (bulk === 'Light') return 'light';
+  if (bulk === 'Medium') return 'medium';
+  if (bulk === 'Heavy') return 'heavy';
+  return null;
+}
+
+export function getArmourRestrictionWarning(classId: ClassId | '', armourName: string, hasShield: boolean): string | null {
+  if (!classId) return null;
+  const restrictions = CLASS_ARMOUR_RESTRICTIONS[classId];
+
+  if (hasShield && !restrictions.shield) {
+    const classInfo = CLASSES.find(c => c.id === classId);
+    return `${classInfo?.name ?? classId} cannot use shields.`;
+  }
+
+  if (!armourName) return null;
+  const armour = ARMOUR_TABLE.find(a => a.name === armourName);
+  if (!armour || armour.name === 'Unarmoured') return null;
+
+  const bulkCat = getArmourBulkCategory(armour.bulk);
+  if (bulkCat && !restrictions[bulkCat]) {
+    const classInfo = CLASSES.find(c => c.id === classId);
+    return `${classInfo?.name ?? classId} cannot wear ${armour.bulk.toLowerCase()} armour.`;
+  }
+
+  return null;
+}
+
+// 2a. AC Calculation
+export function calculateAC(
+  equippedArmourName: string,
+  hasShield: boolean,
+  dexScore: number,
+  kindred: KindredId | '',
+  classId: ClassId | '',
+  level: number,
+): { ac: number; notes: string[] } {
+  const armour = ARMOUR_TABLE.find(a => a.name === equippedArmourName);
+  let ac = armour ? armour.ac : 10; // Unarmoured = 10
+  const notes: string[] = [];
+
+  if (hasShield) {
+    ac += 1;
+    notes.push('+1 shield');
+  }
+
+  const dexMod = getAbilityModifier(dexScore);
+  if (dexMod !== 0) {
+    ac += dexMod;
+    notes.push(`${formatModifier(dexMod)} DEX`);
+  }
+
+  // Breggle fur: +1 if unarmoured or light armour
+  if (kindred === 'breggle') {
+    const bulk = armour?.bulk ?? 'None';
+    if (bulk === 'None' || bulk === 'Light') {
+      ac += 1;
+      notes.push('+1 Breggle Fur');
+    }
+  }
+
+  // Friar Armour of Faith: bonus when unarmoured
+  if (classId === 'friar') {
+    const isUnarmoured = !equippedArmourName || equippedArmourName === 'Unarmoured' || !armour;
+    if (isUnarmoured) {
+      const friarBonus = FRIAR_AC_BONUS[Math.max(1, Math.min(level, 15))] ?? 0;
+      if (friarBonus > 0) {
+        ac += friarBonus;
+        notes.push(`+${friarBonus} Armour of Faith`);
+      }
+    }
+  }
+
+  // Small kindreds: situational note (not added to number)
+  if (kindred === 'grimalkin' || kindred === 'mossling' || kindred === 'woodgrue') {
+    notes.push('+2 AC vs Large creatures (situational)');
+  }
+
+  return { ac, notes };
+}
+
+// 2b. Attack Bonus
+export function calculateAttackBonus(kindred: KindredId | '', classId: ClassId | '', level: number): number | null {
+  const row = getAdvancementRow(kindred, classId, level);
+  return row ? row.attackBonus : null;
+}
+
+// 2c. Save Targets
+export function calculateSaveTargets(kindred: KindredId | '', classId: ClassId | '', level: number): { doom: number; ray: number; hold: number; blast: number; spell: number } | null {
+  const row = getAdvancementRow(kindred, classId, level);
+  return row ? { ...row.saves } : null;
+}
+
+// 2d. Magic Resistance
+export function calculateMagicResistance(wisScore: number, kindred: KindredId | ''): { value: number; notes: string[] } {
+  let value = getAbilityModifier(wisScore);
+  const notes: string[] = [];
+
+  if (value !== 0) notes.push(`${formatModifier(value)} WIS`);
+
+  if (kindred === 'elf' || kindred === 'grimalkin') {
+    value += 2;
+    notes.push('+2 Fairy magic resistance');
+  }
+
+  if (kindred === 'mossling') {
+    notes.push('+2 to all saves (+4 vs fungal) — applied to saves, not here');
+  }
+
+  return { value, notes };
+}
+
+// 2e. Melee modifier
+export function calculateMeleeModifier(attackBonus: number, strScore: number): number {
+  return attackBonus + getAbilityModifier(strScore);
+}
+
+// 2f. Missile modifier
+export function calculateMissileModifier(attackBonus: number, dexScore: number, classId: ClassId | ''): number {
+  let mod = attackBonus + getAbilityModifier(dexScore);
+  if (classId === 'hunter') mod += 1;
+  return mod;
+}
+
+// 2g. XP to Next Level
+export function calculateXpToNextLevel(kindred: KindredId | '', classId: ClassId | '', level: number): number | null {
+  if (level >= 15) return null;
+  const table = getAdvancementTable(kindred, classId);
+  if (!table) return null;
+  const nextRow = table.rows.find(r => r.level === level + 1);
+  return nextRow ? nextRow.xp : null;
+}
+
+// 2h. Speed Functions (shared between CombatStats and Inventory)
+export function getSpeedByEquippedSlots(equippedSlots: number): number {
+  if (equippedSlots <= 3) return 40;
+  if (equippedSlots <= 5) return 30;
+  if (equippedSlots <= 7) return 20;
+  return 10;
+}
+
+export function getSpeedByStowedSlots(stowedSlots: number): number {
+  if (stowedSlots <= 10) return 40;
+  if (stowedSlots <= 12) return 30;
+  if (stowedSlots <= 14) return 20;
+  return 10;
+}
+
+export function getSpeedBySlots(equippedSlots: number, stowedSlots: number): number {
+  return Math.min(getSpeedByEquippedSlots(equippedSlots), getSpeedByStowedSlots(stowedSlots));
+}
+
+export function getSpeedByWeight(totalWeight: number): number {
+  if (totalWeight <= 400) return 40;
+  if (totalWeight <= 600) return 30;
+  if (totalWeight <= 800) return 20;
+  return 10;
+}
+
 export function createDefaultCharacter(): Character {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -1117,6 +1294,8 @@ export function createDefaultCharacter(): Character {
     tinyItems: '',
     coins: { copper: 0, silver: 0, gold: 10, pellucidium: 0 },
     encumbranceMethod: 'slots',
+    equippedArmourName: '',
+    hasShield: false,
     spells: [],
     spellNotes: '',
     classTraits: '',

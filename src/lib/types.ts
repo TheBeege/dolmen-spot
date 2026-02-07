@@ -93,6 +93,8 @@ export interface Character {
   coins: Coins;
 
   encumbranceMethod: 'weight' | 'slots';
+  equippedArmourName: string;  // Maps to ARMOUR_TABLE[].name, '' = Unarmoured
+  hasShield: boolean;
 
   spells: SpellSlot[];
   spellNotes: string;

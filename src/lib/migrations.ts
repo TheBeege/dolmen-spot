@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 2;
+export const CURRENT_SCHEMA_VERSION = 3;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -18,6 +18,12 @@ const migrations: Record<number, (data: any) => any> = {
         }
       }
     }
+    return data;
+  },
+  // v2 -> v3: Add equippedArmourName and hasShield fields for combat auto-calc.
+  2: (data) => {
+    if (data.equippedArmourName === undefined) data.equippedArmourName = '';
+    if (data.hasShield === undefined) data.hasShield = false;
     return data;
   },
 };

@@ -1,6 +1,7 @@
 'use client';
 
 import { Character, InventoryItem, Coins } from '@/lib/types';
+import { getSpeedBySlots, getSpeedByWeight } from '@/lib/gamedata';
 
 interface InventoryProps {
   character: Character;
@@ -11,20 +12,6 @@ const inputClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
-
-function getSpeedBySlots(equippedSlots: number): number {
-  if (equippedSlots <= 3) return 40;
-  if (equippedSlots <= 5) return 30;
-  if (equippedSlots <= 7) return 20;
-  return 10;
-}
-
-function getSpeedByWeight(totalWeight: number): number {
-  if (totalWeight <= 400) return 40;
-  if (totalWeight <= 600) return 30;
-  if (totalWeight <= 800) return 20;
-  return 10;
-}
 
 export default function Inventory({ character, onChange }: InventoryProps) {
   const { equippedItems, stowedItems, tinyItems, coins, encumbranceMethod } = character;
@@ -37,7 +24,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   const calculatedSpeed =
     encumbranceMethod === 'slots'
-      ? getSpeedBySlots(totalEquippedSlots)
+      ? getSpeedBySlots(totalEquippedSlots, totalStowedSlots)
       : getSpeedByWeight(totalWeight);
 
   const handleAddItem = (equipped: boolean) => {

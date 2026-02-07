@@ -45,21 +45,27 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 3: Combat & Derived Stats
+## Phase 3: Combat & Derived Stats ✓
 
 **Goal**: Auto-calculate combat-relevant values from character data.
 
 **Rule docs**: `07-combat.md`, `03-classes.md`, `08-adventuring.md`
 
-- [ ] AC calculation: base 10 + armour + shield + DEX mod + kindred bonuses (Breggle fur +1, Small +2 vs Large) + class bonuses (Friar Armour of Faith)
-- [ ] Attack bonus from class advancement table (auto-lookup by class + level)
-- [ ] All 5 save targets from class advancement table (auto-lookup by class + level)
-- [ ] Magic Resistance display (WIS mod + kindred MR: Elf +2, Grimalkin +2)
-- [ ] Speed calculation from encumbrance method (weight-based or slot-based)
-- [ ] Travel Points display (Speed / 5)
-- [ ] Melee attack modifier display (Attack bonus + STR mod)
-- [ ] Missile attack modifier display (Attack bonus + DEX mod + Hunter +1)
-- [ ] XP to next level from advancement table
+**Status**: Completed
+
+- [x] AC calculation: base 10 + armour + shield + DEX mod + kindred bonuses (Breggle fur +1, Small +2 vs Large) + class bonuses (Friar Armour of Faith)
+- [x] Attack bonus from class advancement table (auto-lookup by class + level)
+- [x] All 5 save targets from class advancement table (auto-lookup by class + level)
+- [x] Magic Resistance display (WIS mod + kindred MR: Elf +2, Grimalkin +2)
+- [x] Speed calculation from encumbrance method (weight-based or slot-based) — fixed slot-based bug (now uses slower of equipped vs stowed)
+- [x] Travel Points display (Speed / 5)
+- [x] Melee attack modifier display (Attack bonus + STR mod)
+- [x] Missile attack modifier display (Attack bonus + DEX mod + Hunter +1)
+- [x] XP to next level from advancement table
+- [x] Armour picker dropdown with class restriction warnings
+- [x] Sync pattern for all auto-calculated stats (AC, attack bonus, saves, magic resistance, speed, XP-to-next)
+- [x] XP progress bar
+- [x] Schema migration v2→v3 for new equippedArmourName/hasShield fields
 
 ---
 
