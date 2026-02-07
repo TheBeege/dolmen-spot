@@ -1,14 +1,25 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const migrations: Record<number, (data: any) => any> = {
-  // Future migrations go here:
-  // 1: (data) => { data.newField = 'default'; return data; },
+  // v1 -> v2: Fix default skill targets from 5 to 6.
+  // Only updates the 3 base skills if they're still at the old default of 5.
+  1: (data) => {
+    if (data.skillTargets) {
+      const base = ['listen', 'search', 'survival'];
+      for (const skill of base) {
+        if (data.skillTargets[skill] === 5) {
+          data.skillTargets[skill] = 6;
+        }
+      }
+    }
+    return data;
+  },
 };
 
 /**

@@ -115,6 +115,25 @@ export interface JournalEntry {
   text: string;
 }
 
+export interface AdvancementRow {
+  level: number;
+  xp: number;
+  hpDice: string;
+  attackBonus: number;
+  saves: SaveTargets;
+}
+
+export interface ClassAdvancementTable {
+  classId: ClassId | KindredId;
+  rows: AdvancementRow[];
+  hpAfterTen: number;
+}
+
+export interface SkillProgressionTable {
+  skills: string[];
+  rows: Record<number, Record<string, number>>;
+}
+
 export interface KindredInfo {
   id: KindredId;
   name: string;
