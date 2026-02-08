@@ -171,19 +171,32 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 8: Reference & Flavor
+## Phase 8: Reference & Flavor ✓
 
 **Goal**: In-app reference panels for game world information.
 
 **Rule docs**: `09-appendices.md`, `06-equipment.md`
 
-- [ ] Calendar display with month names, festivals, moon phases, and Wysenday tracking
-- [ ] Noble houses reference (for Knights -- alignment, seat, head)
-- [ ] Religion reference (4 faiths with brief descriptions)
-- [ ] Beverage catalog with effects and prices
-- [ ] Herb/fungi catalog with effects, prices, and availability
-- [ ] Pipeleaf catalog with effects and prices
-- [ ] Food menu reference (poor/common/fancy)
+**Status**: Completed
+
+- [x] MONTHS enhanced with moonName and wysendays fields for all 12 months
+- [x] Fixed 2 missing festivals: Feast of Cats (2 Symswald) and Feast of St Clewyd (25 Reedwryme)
+- [x] Festival descriptions for 4 notable festivals (Green Man, Winter Hart, Feast of Cats, Feast of St Clewyd)
+- [x] Moon phase calculator (29⅓ day cycle: 13 waxing / 3 full / 13 waning) with display in Adventuring tab
+- [x] Wysenday badge shown on festival days in Adventuring tab calendar
+- [x] Festival alert banner shown prominently when current date falls on a festival day
+- [x] Noble houses reference: House Brackenwold (ruling) + 8 lower houses with alignment, head, seat, character
+- [x] Religion reference: 4 faiths (Pluritine Church, Gwyrae, Aud Frengd Hlerr, Mogba) with collapsible details
+- [x] Beverage catalog: 37 beverages across 3 rarity tiers (8 common + 16 uncommon + 13 rare) with inebriation rules
+- [x] Herb/fungi catalog: 20 herbs/fungi with type (herb/fungus), cost, and effect descriptions
+- [x] Pipeleaf catalog: 20 varieties with cost, availability, and effects + 4 pipe types
+- [x] Food menu reference: Poor/Common/Fancy tiers with mains, sides, desserts, lodging, and services pricing
+- [x] Reference Panel expanded from 4 to 7 tabs: Armour | Weapons | Gear | Calendar | World | Consumables | Languages
+- [x] Calendar tab: Full year overview table, all festivals list, notable festival descriptions, moon phase rules
+- [x] World tab: Noble houses table + collapsible religions
+- [x] Consumables tab: Beverages by rarity, inebriation rules, herbs table, pipeleaf table, food & lodgings
+- [x] PDF extraction: Full beverage list, pipeleaf varieties, food menu from Player's Book pages 124-129
+- **No schema migration needed** (no new Character fields)
 
 ---
 

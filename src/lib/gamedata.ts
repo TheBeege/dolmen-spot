@@ -221,18 +221,18 @@ export function formatModifier(mod: number): string {
 
 // Dolmenwood Calendar
 export const MONTHS = [
-  { name: 'Grimvold', season: 'Winter', days: 30, description: 'The Onset of Winter' },
-  { name: 'Lymewald', season: 'Winter', days: 28, description: 'Deep Winter' },
-  { name: 'Haggryme', season: 'Winter', days: 30, description: 'The Fading of Winter' },
-  { name: 'Symswald', season: 'Spring', days: 29, description: 'The Onset of Spring' },
-  { name: 'Harchment', season: 'Spring', days: 29, description: 'High Spring' },
-  { name: 'Iggwyld', season: 'Spring', days: 30, description: 'The Fading of Spring' },
-  { name: 'Chysting', season: 'Summer', days: 31, description: 'The Onset of Summer' },
-  { name: 'Lillipythe', season: 'Summer', days: 29, description: 'High Summer' },
-  { name: 'Haelhold', season: 'Summer', days: 28, description: 'The Fading of Summer' },
-  { name: 'Reedwryme', season: 'Autumn', days: 30, description: 'The Onset of Autumn' },
-  { name: 'Obthryme', season: 'Autumn', days: 28, description: 'Deep Autumn' },
-  { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn' },
+  { name: 'Grimvold', season: 'Winter', days: 30, description: 'The Onset of Winter', moonName: 'Grinning moon', wysendays: ['Hanglemas', "Dyboll's Day"] },
+  { name: 'Lymewald', season: 'Winter', days: 28, description: 'Deep Winter', moonName: 'Dead moon', wysendays: [] as string[] },
+  { name: 'Haggryme', season: 'Winter', days: 30, description: 'The Fading of Winter', moonName: 'Beast moon', wysendays: ["Yarl's Day", 'Day of Virgins'] },
+  { name: 'Symswald', season: 'Spring', days: 29, description: 'The Onset of Spring', moonName: 'Squamous moon', wysendays: ['Hopfast'] },
+  { name: 'Harchment', season: 'Spring', days: 29, description: 'High Spring', moonName: "Knight's moon", wysendays: ['Smithing'] },
+  { name: 'Iggwyld', season: 'Spring', days: 30, description: 'The Fading of Spring', moonName: 'Rotting moon', wysendays: ['Shortening', "Longshank's Day"] },
+  { name: 'Chysting', season: 'Summer', days: 31, description: 'The Onset of Summer', moonName: "Maiden's moon", wysendays: ['Bradging', 'Copsewallow', 'Chalice'] },
+  { name: 'Lillipythe', season: 'Summer', days: 29, description: 'High Summer', moonName: "Witch's moon", wysendays: ["Old Dobey's Day"] },
+  { name: 'Haelhold', season: 'Summer', days: 28, description: 'The Fading of Summer', moonName: "Robber's moon", wysendays: [] as string[] },
+  { name: 'Reedwryme', season: 'Autumn', days: 30, description: 'The Onset of Autumn', moonName: 'Goat moon', wysendays: ["Shub's Eve", 'Druden Day'] },
+  { name: 'Obthryme', season: 'Autumn', days: 28, description: 'Deep Autumn', moonName: 'Narrow moon', wysendays: [] as string[] },
+  { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn', moonName: 'Black moon', wysendays: ['Day of Doors', 'Dolmenday'] },
 ];
 
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
@@ -265,6 +265,7 @@ export const FESTIVALS: Record<string, { month: number; day: number; name: strin
     { month: 0, day: 30, name: "Dyboll's Day" },
     { month: 2, day: 29, name: "Yarl's Day" },
     { month: 2, day: 30, name: 'Day of Virgins' },
+    { month: 3, day: 2, name: 'Feast of Cats' },
     { month: 3, day: 29, name: 'Hopfast' },
     { month: 4, day: 29, name: 'Smithing' },
     { month: 5, day: 29, name: 'Shortening' },
@@ -273,6 +274,7 @@ export const FESTIVALS: Record<string, { month: number; day: number; name: strin
     { month: 6, day: 30, name: 'Copsewallow' },
     { month: 6, day: 31, name: 'Chalice' },
     { month: 7, day: 29, name: "Old Dobey's Day" },
+    { month: 9, day: 25, name: 'Feast of St Clewyd' },
     { month: 9, day: 29, name: "Shub's Eve" },
     { month: 9, day: 30, name: 'Druden Day / Festival of the Green Man' },
     { month: 11, day: 29, name: 'Day of Doors' },
@@ -280,11 +282,360 @@ export const FESTIVALS: Record<string, { month: number; day: number; name: strin
   ],
 };
 
+export const FESTIVAL_DESCRIPTIONS: Record<string, string> = {
+  'Festival of the Green Man': 'Ancient worship relic. Manikins of moss and wood are hung by their ankles from branches in every village.',
+  'The Hunting of the Winter Hart': 'A white fairy stag rushes through Dolmenwood. If caught, winter is banished for a year.',
+  'Feast of Cats': 'Spring dances and fiddle tunes. All participants wear cat masks.',
+  'Feast of St Clewyd': 'Patron saint of Dolmenwood. Unicorn-effigy bonfires and spiced pies.',
+};
+
 export const CELESTIAL_EVENTS: { month: number; day: number; name: string }[] = [
   { month: 0, day: 19, name: 'Winter Solstice' },
   { month: 3, day: 20, name: 'Vernal Equinox' },
   { month: 6, day: 18, name: 'Summer Solstice' },
   { month: 9, day: 19, name: 'Autumnal Equinox' },
+];
+
+// ──────────────────────────────────────────────────────────
+// Moon Phase Calculator
+// Lunar cycle: 29⅓ days (13 waxing / 3 full / 13 waning)
+// ──────────────────────────────────────────────────────────
+
+export function getDayOfYear(date: CalendarDate): number {
+  let total = 0;
+  for (let i = 0; i < date.month; i++) {
+    total += MONTHS[i].days;
+  }
+  return total + date.day;
+}
+
+export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; dayInCycle: number } {
+  const doy = getDayOfYear(date);
+  // 29⅓ day cycle — use 88/3 for precision
+  const cycleDay = ((doy - 1) % 29) + 1; // 1–29 within cycle (simplified from 29⅓)
+  if (cycleDay <= 13) return { phase: 'waxing', dayInCycle: cycleDay };
+  if (cycleDay <= 16) return { phase: 'full', dayInCycle: cycleDay };
+  return { phase: 'waning', dayInCycle: cycleDay };
+}
+
+export function getMoonPhaseLabel(date: CalendarDate): string {
+  const { phase } = getMoonPhase(date);
+  switch (phase) {
+    case 'waxing': return 'Waxing';
+    case 'full': return 'Full';
+    case 'waning': return 'Waning';
+  }
+}
+
+// ──────────────────────────────────────────────────────────
+// Noble Houses of Dolmenwood
+// Source: docs/rules/09-appendices.md
+// ──────────────────────────────────────────────────────────
+
+export interface NobleHouse {
+  name: string;
+  alignment: 'Lawful' | 'Neutral' | 'Chaotic';
+  head: string;
+  seat: string;
+  character: string;
+  ruling?: boolean;
+}
+
+export const NOBLE_HOUSES: NobleHouse[] = [
+  { name: 'House Brackenwold', alignment: 'Lawful', head: 'Duke Thespian III', seat: 'Castle Brackenwold', character: 'Ruling house of the Duchy', ruling: true },
+  { name: 'House Guillefer', alignment: 'Neutral', head: 'Edwin Guillefer', seat: 'Hall of Sleep', character: 'Dreamy, poet, harpist' },
+  { name: 'House Harrowmoor', alignment: 'Lawful', head: 'Lady Theatrice', seat: 'Harrowmoor Keep', character: 'Famed intellect, cool-headed' },
+  { name: 'House Hogwarsh', alignment: 'Neutral', head: 'Baron Sagewine', seat: 'High-Hankle', character: 'Lax, debauched' },
+  { name: 'House Malbleat', alignment: 'Chaotic', head: 'Lord Gryphius (breggle)', seat: 'Redwraith Manor', character: 'Cruel aesthete' },
+  { name: 'House Mulbreck', alignment: 'Lawful', head: 'Lady Pulsephine', seat: 'Bogwitt Manor', character: 'Reclusive, mourning' },
+  { name: 'House Murkin', alignment: 'Chaotic', head: 'Lord Simeone (breggle/human)', seat: 'Kolstoke Keep', character: 'Boorish, conquest-driven' },
+  { name: 'House Nodlock', alignment: 'Neutral', head: 'Lord Harald', seat: 'Nodding Castle', character: 'Slovenly, volatile' },
+  { name: 'House Ramius', alignment: 'Neutral', head: 'Lord Shadgore (breggle)', seat: 'Castle Everdusk', character: 'Brilliant, ambitious' },
+];
+
+// ──────────────────────────────────────────────────────────
+// Religions of Dolmenwood
+// Source: docs/rules/09-appendices.md
+// ──────────────────────────────────────────────────────────
+
+export interface Religion {
+  name: string;
+  type: string;
+  deity: string;
+  holySymbol: string;
+  holyText: string;
+  notes: string;
+}
+
+export const RELIGIONS: Religion[] = [
+  {
+    name: 'Pluritine Church',
+    type: 'Monotheistic, evangelistic',
+    deity: 'Nameless "One True God"',
+    holySymbol: 'The Chapes (circle with 5 rays)',
+    holyText: 'Pragmaphon',
+    notes: 'Veneration of saints as intermediaries. Hierarchy: Archbishop > Bishop > Abbot > Commander > Vicar > Curate. Holy Orders: St Faxis (seekers), St Sedge (defenders), St Signis (lichwards).',
+  },
+  {
+    name: 'Gwyrae (Old Religion)',
+    type: 'Polytheistic nature worship (mostly dead)',
+    deity: 'Dozens of "Wood Gods" — only the Green Man remains in memory',
+    holySymbol: 'Cruciform oak',
+    holyText: '—',
+    notes: 'Suppressed by the Pluritine Church, survives in folk practices and witch covens.',
+  },
+  {
+    name: 'Aud Frengd Hlerr',
+    type: 'Ancestor veneration (Breggle)',
+    deity: 'Semi-mythical ancestor Hraigl',
+    holySymbol: 'Ring of horns',
+    holyText: 'The Hlerrllaindr',
+    notes: 'Compatible with other religions. More philosophy than religion.',
+  },
+  {
+    name: 'Mogba',
+    type: 'Polytheistic, nature/decay (Mossling)',
+    deity: 'Mbombre, Blosquom, Splobgra',
+    holySymbol: 'Toadstool with one or more eyes',
+    holyText: 'Hwogm (oral tradition)',
+    notes: 'World sits on cosmic puffball on back of toad Hwogra. Mould oracles serve as hermit-priests.',
+  },
+];
+
+// ──────────────────────────────────────────────────────────
+// Beverages & Inebriation
+// Source: docs/rules/09-appendices.md
+// ──────────────────────────────────────────────────────────
+
+export interface Beverage {
+  name: string;
+  type: 'Beer' | 'Cider' | 'Mead' | 'Spirit' | 'Tea' | 'Wine';
+  cost: string;
+  alcoholic: boolean;
+}
+
+export const BEVERAGES: Beverage[] = [
+  // Common (d8)
+  { name: 'Barrowblaster', type: 'Beer', cost: '9cp', alcoholic: true },
+  { name: "Keye's Balm", type: 'Beer', cost: '1sp', alcoholic: true },
+  { name: 'Marrowhyte Dark', type: 'Beer', cost: '2sp', alcoholic: true },
+  { name: "Pilston's Heartbreaker", type: 'Beer', cost: '4cp', alcoholic: true },
+  { name: "Bard's Cordial", type: 'Spirit', cost: '2sp', alcoholic: true },
+  { name: 'Old Swythener', type: 'Spirit', cost: '5cp', alcoholic: true },
+  { name: 'Prigwort Tipple', type: 'Spirit', cost: '3sp', alcoholic: true },
+  { name: "Mason's", type: 'Tea', cost: '1cp', alcoholic: false },
+  // Uncommon (d20)
+  { name: 'Cobsworth Pale', type: 'Beer', cost: '5sp', alcoholic: true },
+  { name: "Halthwidden's", type: 'Beer', cost: '3sp', alcoholic: true },
+  { name: 'Merryweather', type: 'Beer', cost: '4sp', alcoholic: true },
+  { name: 'Tithelands Cider', type: 'Cider', cost: '2sp', alcoholic: true },
+  { name: 'Glubwob', type: 'Mead', cost: '2sp', alcoholic: true },
+  { name: 'Mead', type: 'Mead', cost: '12sp', alcoholic: true },
+  { name: 'Distillation of Dusk', type: 'Spirit', cost: '7sp', alcoholic: true },
+  { name: 'Ether of Blue', type: 'Spirit', cost: '5sp', alcoholic: true },
+  { name: 'Pokey Nog', type: 'Spirit', cost: '5sp', alcoholic: true },
+  { name: "Porrid's Full Moon", type: 'Spirit', cost: '1sp', alcoholic: true },
+  { name: 'The Night Liqueur', type: 'Spirit', cost: '6sp', alcoholic: true },
+  { name: "Wakelyke's Scarlet", type: 'Spirit', cost: '4cp', alcoholic: true },
+  { name: 'Earl Yellow', type: 'Tea', cost: '5cp', alcoholic: false },
+  { name: 'Buckston Fizz', type: 'Wine', cost: '12sp', alcoholic: true },
+  { name: "Faggley's Iced", type: 'Wine', cost: '14sp', alcoholic: true },
+  { name: 'Inkling Wine', type: 'Wine', cost: '11sp', alcoholic: true },
+  // Rare (d12)
+  { name: "Moon's Milk", type: 'Mead', cost: '2sp', alcoholic: true },
+  { name: 'Nippers', type: 'Mead', cost: '5sp', alcoholic: true },
+  { name: "Lord Oberon's Ambrosial", type: 'Spirit', cost: '1gp', alcoholic: true },
+  { name: 'Prigwort Pure', type: 'Spirit', cost: '7sp', alcoholic: true },
+  { name: 'Purple Aspintheon', type: 'Spirit', cost: '1gp', alcoholic: true },
+  { name: "Tomfoy's", type: 'Tea', cost: '1sp', alcoholic: false },
+  { name: 'Lady Mauve', type: 'Wine', cost: '3gp', alcoholic: true },
+  { name: 'The Cold Prince', type: 'Wine', cost: '35sp', alcoholic: true },
+  { name: "Underbrood's Vintage", type: 'Wine', cost: '5gp', alcoholic: true },
+];
+
+export const BEVERAGE_RARITY = {
+  common: BEVERAGES.slice(0, 8),
+  uncommon: BEVERAGES.slice(8, 24),
+  rare: BEVERAGES.slice(24),
+};
+
+export const INEBRIATION_LEVELS = [
+  { level: 'Tipsy', effect: 'Beverage effect noticeable. -1 Attack' },
+  { level: 'Drunk', effect: 'Full beverage effect. -1 Attack/saves. +1d4 bonus HP' },
+  { level: 'Groggy', effect: 'Full effect. -2 Attack/saves. Bonus HP remain' },
+  { level: 'Unconscious', effect: 'Pass out' },
+];
+
+// ──────────────────────────────────────────────────────────
+// Herbs & Fungi Catalog (detailed)
+// Source: docs/rules/09-appendices.md, 06-equipment.md
+// ──────────────────────────────────────────────────────────
+
+export interface HerbEntry {
+  name: string;
+  cost: string;
+  type: 'Herb' | 'Fungus';
+  weight: number;
+  effect: string;
+}
+
+export const HERBS_CATALOG: HerbEntry[] = [
+  { name: 'Arrowhame', cost: '100gp', type: 'Herb', weight: 4, effect: 'Save vs Doom to cure magical disease' },
+  { name: 'Blood Canker', cost: '50gp', type: 'Fungus', weight: 4, effect: 'Heal 1d3 HP; 2-in-6 lose 1 CON' },
+  { name: "Bosun's Balm", cost: '50gp', type: 'Herb', weight: 4, effect: 'Halve armour encumbrance for 1 day' },
+  { name: 'Fenob', cost: '40gp', type: 'Herb', weight: 4, effect: '+1 HP overnight healing' },
+  { name: 'Gillywort', cost: '50gp', type: 'Herb', weight: 4, effect: 'Detect poison in liquid (3-in-6)' },
+  { name: "Grue's Ear", cost: '200gp', type: 'Fungus', weight: 4, effect: 'Enhanced alertness (3-in-6 act in surprise)' },
+  { name: 'Hogscap', cost: '125gp', type: 'Fungus', weight: 4, effect: 'Detect magic by touch for 1 Turn' },
+  { name: 'Lankswith', cost: '15gp', type: 'Herb', weight: 4, effect: 'Cure common ailments overnight' },
+  { name: 'Lilywhite', cost: '25gp', type: 'Herb', weight: 4, effect: '+1 to sleep CON check' },
+  { name: 'Marshwick', cost: '200gp', type: 'Herb', weight: 4, effect: 'Save vs Doom to neutralise animal venom' },
+  { name: 'Moonhaw', cost: '100gp', type: 'Fungus', weight: 4, effect: "See 10' in total darkness for 3 Turns" },
+  { name: 'Ofteritch', cost: '150gp', type: 'Herb', weight: 4, effect: 'Save vs Doom to neutralise plant poison' },
+  { name: 'Sallow Parsley', cost: '80gp', type: 'Herb', weight: 4, effect: '+2 HP on rest day' },
+  { name: 'Smottlebread', cost: '25gp', type: 'Fungus', weight: 4, effect: '+2 to saves vs magic (1d6 Turns)' },
+  { name: 'Spirithame', cost: '80gp', type: 'Herb', weight: 4, effect: 'Heal 1d2 HP (1 dose/day)' },
+  { name: 'Tom-a-Merry', cost: '150gp', type: 'Fungus', weight: 4, effect: 'See invisible (1d6 Turns, -2 Attack/saves)' },
+  { name: 'Wallowmost', cost: '150gp', type: 'Fungus', weight: 4, effect: 'Save vs Doom to neutralise fungal poison' },
+  { name: 'Wayfarrow', cost: '100gp', type: 'Herb', weight: 4, effect: '3-in-6 no forced march penalty' },
+  { name: "Witch's Oyster", cost: '50gp', type: 'Fungus', weight: 4, effect: 'Oracular vision (accuracy varies)' },
+  { name: 'Wolfsbane', cost: '25gp', type: 'Herb', weight: 4, effect: 'Werewolves Save vs Doom to attack bearer' },
+];
+
+// ──────────────────────────────────────────────────────────
+// Pipeleaf
+// Source: Player's Book pages 128-129
+// ──────────────────────────────────────────────────────────
+
+export interface PipeleafEntry {
+  name: string;
+  cost: string;
+  availability: string;
+  effect: string;
+}
+
+export const PIPELEAF: PipeleafEntry[] = [
+  { name: 'Barley Blend', cost: '4cp', availability: 'Always', effect: 'Aids digestion after a heavy meal' },
+  { name: "Burglar's Blend", cost: '3cp', availability: '3-in-6', effect: 'Keeps one awake in the dead of night' },
+  { name: "Crofter's Daughter", cost: '5cp', availability: 'Always', effect: "Makes one feel happy with one's lot" },
+  { name: 'Dusty Abbot', cost: '2sp', availability: '1-in-6', effect: 'Elicits a state of jovial eloquence' },
+  { name: 'Fatty Lumper', cost: '7cp', availability: '3-in-6', effect: 'Brings on a ravenous appetite' },
+  { name: 'Flufftop', cost: '1sp', availability: '3-in-6', effect: 'Brings on a state of light-hearted whimsy' },
+  { name: 'Gamgy Weed', cost: '5cp', availability: 'Always', effect: 'Causes a heavy sleepiness' },
+  { name: "The Gibbet's Gift", cost: '7cp', availability: '3-in-6', effect: 'Aids following through with unpleasant decisions' },
+  { name: 'Green Jenny', cost: '8cp', availability: '3-in-6', effect: 'Vision takes on a green tinge (excessive use)' },
+  { name: 'Lanksbottom Leaf', cost: '6cp', availability: 'Always', effect: 'Brings on a state of merry arrogance' },
+  { name: 'Mogglemoss', cost: '18cp', availability: '3-in-6', effect: 'Introspective state; obscure may become clear' },
+  { name: "Mummer's Farce", cost: '8cp', availability: 'Always', effect: 'Inspires jollity and hijinks' },
+  { name: 'Old Doby', cost: '6cp', availability: 'Always', effect: 'Calms the nerves and lightens the spirit' },
+  { name: 'Pedlar Puff', cost: '7cp', availability: 'Always', effect: 'Enhances determination of foot-travellers' },
+  { name: 'Shaggy Pony', cost: '7cp', availability: 'Always', effect: 'Aids deep and restful sleep' },
+  { name: 'Special Shag', cost: '3sp', availability: '3-in-6', effect: 'Enhances good judgement in trying times' },
+  { name: 'Speckled Wyrm', cost: '25cp', availability: '3-in-6', effect: 'Brings about a state of intent concentration' },
+  { name: 'Wayside Wisp', cost: '25cp', availability: '1-in-6', effect: 'Brings on a state of wonder and glee' },
+  { name: "Westling's Weed", cost: '2sp', availability: '1-in-6', effect: 'Inspires dreams of travel and adventure' },
+  { name: "Witch's Shag", cost: '8cp', availability: '3-in-6', effect: 'Inspires a pleasant dizziness' },
+];
+
+export const PIPES = [
+  { name: 'Bog-oak pipe', cost: '15gp', weight: 10 },
+  { name: 'Cherry-wood pipe', cost: '5gp', weight: 10 },
+  { name: 'Clay pipe', cost: '1gp', weight: 10 },
+  { name: 'Gourd pipe (mossling style)', cost: '2gp', weight: 10 },
+];
+
+// ──────────────────────────────────────────────────────────
+// Food & Lodgings Menu
+// Source: Player's Book pages 124-125
+// ──────────────────────────────────────────────────────────
+
+export interface FoodMenuItem {
+  name: string;
+  cost: string;
+  category: 'main' | 'side' | 'dessert' | 'lodging' | 'service';
+}
+
+export interface FoodMenuTier {
+  tier: 'Poor' | 'Common' | 'Fancy';
+  dailyAvailability: string;
+  items: FoodMenuItem[];
+}
+
+export const FOOD_MENU: FoodMenuTier[] = [
+  {
+    tier: 'Poor',
+    dailyAvailability: '1-2 mains + 1 side',
+    items: [
+      { name: 'Battered pizzle', cost: '1sp', category: 'main' },
+      { name: 'Blood porridge', cost: '1sp', category: 'main' },
+      { name: 'Bubble and squeak', cost: '1sp', category: 'main' },
+      { name: "Dregger's pie", cost: '1sp', category: 'main' },
+      { name: "Fisher's gruel", cost: '1sp', category: 'main' },
+      { name: 'Roast wellington', cost: '1sp', category: 'main' },
+      { name: 'Special pasty', cost: '1sp', category: 'main' },
+      { name: 'Woad in the hole', cost: '1sp', category: 'main' },
+      { name: 'Codswallop', cost: '5cp', category: 'side' },
+      { name: "Pig's ear", cost: '5cp', category: 'side' },
+      { name: 'Sourcroute', cost: '5cp', category: 'side' },
+      { name: 'Wormskin', cost: '5cp', category: 'side' },
+      { name: 'Common room floor, 1 night', cost: '2cp', category: 'lodging' },
+      { name: 'Shared room (8 beds), 1 night', cost: '1sp', category: 'lodging' },
+      { name: 'Shared room (4 beds), 1 night', cost: '2sp', category: 'lodging' },
+      { name: 'Stabling and fodder, 1 night', cost: '2sp', category: 'service' },
+    ],
+  },
+  {
+    tier: 'Common',
+    dailyAvailability: '2-3 mains + 1-2 sides',
+    items: [
+      { name: 'Mutton roast', cost: '3sp', category: 'main' },
+      { name: 'Onion sandwich', cost: '3sp', category: 'main' },
+      { name: "Pook's pudding", cost: '3sp', category: 'main' },
+      { name: 'Puggle pie', cost: '3sp', category: 'main' },
+      { name: 'Sausage and mash', cost: '3sp', category: 'main' },
+      { name: 'Shanky', cost: '3sp', category: 'main' },
+      { name: 'Snail skewers', cost: '3sp', category: 'main' },
+      { name: 'Trottel mash', cost: '3sp', category: 'main' },
+      { name: 'Pickled eggs', cost: '2sp', category: 'side' },
+      { name: 'Coldlanks', cost: '2sp', category: 'side' },
+      { name: 'Hameth sprats', cost: '2sp', category: 'side' },
+      { name: 'Ruddy chad', cost: '2sp', category: 'side' },
+      { name: 'Common room floor, 1 night', cost: '5cp', category: 'lodging' },
+      { name: 'Shared room (2 beds), 1 night', cost: '4sp', category: 'lodging' },
+      { name: 'Private room, 1 night', cost: '8sp', category: 'lodging' },
+      { name: 'Bath in private room', cost: '5sp', category: 'service' },
+      { name: 'Stabling and fodder, 1 night', cost: '4sp', category: 'service' },
+    ],
+  },
+  {
+    tier: 'Fancy',
+    dailyAvailability: '3-4 mains + 1-2 sides + 1-2 desserts',
+    items: [
+      { name: 'Blackbird pie', cost: '2gp', category: 'main' },
+      { name: 'Brathering', cost: '2gp', category: 'main' },
+      { name: 'Jellied lamprey', cost: '2gp', category: 'main' },
+      { name: 'Longmere pike', cost: '2gp', category: 'main' },
+      { name: 'Maids-o\'-the-lake', cost: '2gp', category: 'main' },
+      { name: 'Roast lurkey', cost: '2gp', category: 'main' },
+      { name: 'Unicorn rump', cost: '2gp', category: 'main' },
+      { name: 'Whole suckling pig', cost: '2gp', category: 'main' },
+      { name: 'Larks\' tongues in aspic', cost: '15sp', category: 'side' },
+      { name: 'Old Shuck', cost: '15sp', category: 'side' },
+      { name: 'Sparrey', cost: '15sp', category: 'side' },
+      { name: 'Vinegared troll moss', cost: '15sp', category: 'side' },
+      { name: 'Fondant pastries', cost: '2gp', category: 'dessert' },
+      { name: 'Sugared plums', cost: '2gp', category: 'dessert' },
+      { name: 'Trifle', cost: '2gp', category: 'dessert' },
+      { name: 'Walnut tarts', cost: '2gp', category: 'dessert' },
+      { name: 'Private room, 1 night', cost: '1gp', category: 'lodging' },
+      { name: 'Double room, 1 night', cost: '2gp', category: 'lodging' },
+      { name: 'Private suite, 1 night', cost: '5gp', category: 'lodging' },
+      { name: 'Bath in private room', cost: '4sp', category: 'service' },
+      { name: 'Personal services', cost: '1gp', category: 'service' },
+      { name: 'Private dining room', cost: '1gp/person', category: 'service' },
+      { name: 'Stabling and fodder, 1 night', cost: '6sp', category: 'service' },
+    ],
+  },
 ];
 
 // Equipment reference data

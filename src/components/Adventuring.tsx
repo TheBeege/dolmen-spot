@@ -6,6 +6,7 @@ import {
   MONTHS,
   formatCalendarDate,
   FESTIVALS,
+  FESTIVAL_DESCRIPTIONS,
   CELESTIAL_EVENTS,
   TERRAIN_TABLE,
   SLEEP_MATRIX,
@@ -16,6 +17,7 @@ import {
   HEALING_RATES,
   FORAGING_YIELDS,
   getHungerEffects,
+  getMoonPhaseLabel,
 } from '@/lib/gamedata';
 
 interface AdventuringProps {
@@ -169,6 +171,18 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const celestialThisMonth = getCelestialEventsForMonth(currentDate.month);
   const foragingYield = FORAGING_YIELDS[season];
 
+  const moonPhaseLabel = getMoonPhaseLabel(currentDate);
+  const todaysFestivals = (FESTIVALS.festivals || []).filter(
+    (f) => f.month === currentDate.month && f.day === currentDate.day
+  );
+  const todaysCelestial = CELESTIAL_EVENTS.filter(
+    (e) => e.month === currentDate.month && e.day === currentDate.day
+  );
+  const isWysenday = currentMonth.wysendays.some((w) => {
+    // Check if today matches a festival that corresponds to a wysenday
+    return todaysFestivals.some((f) => f.name.includes(w) || w.includes(f.name));
+  });
+
   const exhaustionText = character.exhaustionLevel > 0
     ? `-${character.exhaustionLevel} to Attack & Damage`
     : 'None';
@@ -188,6 +202,34 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           Calendar
         </h2>
 
+        {/* Festival alert */}
+        {todaysFestivals.length > 0 && (
+          <div className="bg-[#c4a35a]/15 border border-[#c4a35a]/40 rounded-lg p-3 mb-4 text-center">
+            {todaysFestivals.map((f) => {
+              const descKey = Object.keys(FESTIVAL_DESCRIPTIONS).find(
+                (k) => f.name.includes(k) || k.includes(f.name.split(' / ')[0])
+              );
+              return (
+                <div key={f.name}>
+                  <div className="text-[#c4a35a] font-bold text-lg">{f.name}</div>
+                  {descKey && (
+                    <div className="text-[#f5e6c8]/70 text-sm mt-1">{FESTIVAL_DESCRIPTIONS[descKey]}</div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Celestial event alert */}
+        {todaysCelestial.length > 0 && (
+          <div className="bg-[#a0c4e8]/15 border border-[#a0c4e8]/40 rounded-lg p-3 mb-4 text-center">
+            {todaysCelestial.map((e) => (
+              <div key={e.name} className="text-[#a0c4e8] font-bold">{e.name}</div>
+            ))}
+          </div>
+        )}
+
         <div className="text-center mb-4">
           <div className="text-2xl font-bold text-[#c4a35a]">
             {formatCalendarDate(currentDate)}
@@ -198,6 +240,16 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           <div className="mt-1" style={{ color: seasonColor }}>
             {currentMonth.season}
           </div>
+          {/* Moon info */}
+          <div className="text-[#f5e6c8]/70 text-sm mt-1">
+            {currentMonth.moonName} &middot; {moonPhaseLabel}
+          </div>
+          {/* Wysenday badge */}
+          {isWysenday && (
+            <span className="inline-block mt-2 bg-[#c4a35a]/20 text-[#c4a35a] text-xs font-semibold px-3 py-1 rounded-full border border-[#c4a35a]/40">
+              Wysenday
+            </span>
+          )}
         </div>
 
         <div className="flex items-center justify-center gap-3 mb-4">
@@ -745,6 +797,12 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         </h3>
         <div className="text-[#f5e6c8] text-sm mb-2">
           {currentMonth.days} days &middot; {currentMonth.description}
+        </div>
+        <div className="text-[#f5e6c8]/60 text-sm mb-2">
+          Moon: {currentMonth.moonName}
+          {currentMonth.wysendays.length > 0 && (
+            <span> &middot; Wysendays: {currentMonth.wysendays.join(', ')}</span>
+          )}
         </div>
 
         {festivalsThisMonth.length > 0 && (
