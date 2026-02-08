@@ -1,4 +1,4 @@
-import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins } from './types';
+import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 
 // Kindred-class restrictions from the Player's Book.
@@ -1346,6 +1346,111 @@ export function getBregggleHornData(level: number): { length: string; damage: st
 }
 
 // ──────────────────────────────────────────────────────────
+// Grimalkin Forms
+// Source: docs/rules/02-kindreds.md
+// ──────────────────────────────────────────────────────────
+
+export const GRIMALKIN_FORMS = {
+  estray: { name: 'Estray', description: 'Humanoid cat form (normal)', ac: null, speed: null, attacks: null },
+  chester: { name: 'Chester', description: 'Fat domestic cat', ac: 12, speed: 30, attacks: 'Bite + 2 claws (1 dmg each)' },
+  wilder: { name: 'Wilder', description: 'Fey predator (1x/day, melee + below half HP)', ac: 13, speed: 30, attacks: 'Bite + 2 claws +2 Attack (1d4 each)', notes: 'Heals 2d6 HP on entry. Opponents -2 Attack. Lasts 2d4 Rounds. Cannot distinguish friend from foe.' },
+} as const;
+
+// ──────────────────────────────────────────────────────────
+// Woodgrue Mad Revelry Melodies
+// Source: docs/rules/02-kindreds.md
+// ──────────────────────────────────────────────────────────
+
+export const MAD_REVELRY_MELODIES = [
+  { id: 'confide', name: 'Confide', effect: 'Subjects confess hidden emotions/secrets' },
+  { id: 'dance', name: 'Dance', effect: 'Subjects dance in place (+1 AC, cannot move)' },
+  { id: 'imbibe', name: 'Imbibe', effect: 'Subjects consume any available liquids, act drunk (-2 Attack)' },
+  { id: 'jape', name: 'Jape', effect: 'Subjects mock the preceding occurrence' },
+  { id: 'jubilate', name: 'Jubilate', effect: 'Irrepressible laughter, no speech, 1-in-6 chance of falling each Round' },
+  { id: 'mount', name: 'Mount', effect: 'Subjects try to piggyback ride nearby creatures (Save vs Hold to resist)' },
+  { id: 'revel', name: 'Revel', effect: 'Subjects bark terrible scats, half Speed if not heading toward woodgrue' },
+] as const;
+
+// ──────────────────────────────────────────────────────────
+// Cleric Holy Orders
+// Source: docs/rules/03-classes.md, docs/rules/09-appendices.md
+// ──────────────────────────────────────────────────────────
+
+export const CLERIC_HOLY_ORDERS = [
+  { id: 'faxis', name: 'Order of St Faxis', title: 'Seekers', bonus: '+2 saves vs arcane magic; arcane casters suffer -2 saves vs your spells' },
+  { id: 'sedge', name: 'Order of St Sedge', title: 'Defenders', bonus: 'Lay on hands 1x/day, heal 1 HP per cleric level' },
+  { id: 'signis', name: 'Order of St Signis', title: 'Lichwards', bonus: '+1 Attack vs undead; attacks harm undead immune to non-magic weapons' },
+] as const;
+
+// ──────────────────────────────────────────────────────────
+// Mossling Symbiotic Flesh d20 Table
+// Source: docs/rules/02-kindreds.md
+// ──────────────────────────────────────────────────────────
+
+export const SYMBIOTIC_FLESH_TABLE = [
+  { roll: 1, trait: 'Jelly fungus ears' },
+  { roll: 2, trait: 'Patches of lichen' },
+  { roll: 3, trait: 'Flowers bloom in beard (spring)' },
+  { roll: 4, trait: 'Yeast infections' },
+  { roll: 5, trait: 'Toadstools from joints' },
+  { roll: 6, trait: 'Slimy green jelly coating' },
+  { roll: 7, trait: 'Miniature tree from ear' },
+  { roll: 8, trait: 'Skin riddled with mycelia' },
+  { roll: 9, trait: 'Transparent yellow mould eyes' },
+  { roll: 10, trait: 'Edible toe cheese' },
+  { roll: 11, trait: 'Bracket fungus in armpits' },
+  { roll: 12, trait: 'Mossy feet' },
+  { roll: 13, trait: 'Climbing vines on limbs/torso' },
+  { roll: 14, trait: 'Fern growth around groin' },
+  { roll: 15, trait: 'Mossy biceps' },
+  { roll: 16, trait: 'Puffball growths (buttocks/knees)' },
+  { roll: 17, trait: 'Parsley chest hair' },
+  { roll: 18, trait: 'Blackberry brambles in hair' },
+  { roll: 19, trait: 'Edible mushrooms in hair' },
+  { roll: 20, trait: 'Semi-sentient mushroom on head' },
+] as const;
+
+// ──────────────────────────────────────────────────────────
+// Turning the Undead Reference
+// Source: docs/rules/03-classes.md
+// ──────────────────────────────────────────────────────────
+
+export const TURNING_UNDEAD_TABLE = {
+  results: [
+    { range: '4-', effect: 'No effect' },
+    { range: '5-6', effect: 'Stun 2d4 undead for 1 Round' },
+    { range: '7-12', effect: 'Flee 2d4 undead for 1 Turn' },
+    { range: '13+', effect: 'Destroy 2d4 undead' },
+  ],
+  levelModifier: '+2 per level below cleric (max +6), -2 per level above (max -6)',
+  frequency: '1x per Turn',
+} as const;
+
+// ──────────────────────────────────────────────────────────
+// Feature Profile Helper
+// ──────────────────────────────────────────────────────────
+
+export function getCharacterFeatureProfile(kindred: KindredId | '', classId: ClassId | '', level: number): FeatureProfile {
+  const isKindredClass = kindred !== '' && kindred !== 'human' && !classId;
+
+  return {
+    hasHorns: kindred === 'breggle',
+    hasGaze: kindred === 'breggle' && level >= 4,
+    hasFormShift: kindred === 'grimalkin',
+    hasMadRevelry: kindred === 'woodgrue',
+    hasTrophies: classId === 'hunter' || (isKindredClass && kindred === 'woodgrue'),
+    hasCompanion: classId === 'hunter',
+    hasChivalricCode: classId === 'knight',
+    hasCombatTalents: classId === 'fighter',
+    hasHolyOrder: classId === 'cleric',
+    hasSymbioticFlesh: kindred === 'mossling',
+    hasFungalSymbiosis: kindred === 'mossling' && (isKindredClass || classId !== '') && level >= 4,
+    hasTurning: classId === 'cleric' || classId === 'friar',
+    hasRetainers: true,
+  };
+}
+
+// ──────────────────────────────────────────────────────────
 // Phase 2: Character Creation Accuracy
 // ──────────────────────────────────────────────────────────
 
@@ -2381,6 +2486,18 @@ export function createDefaultCharacter(): Character {
     languages: 'Woldish',
     combatTalents: '',
     otherNotes: '',
+    retainers: [],
+    gazeUsesRemaining: 0,
+    currentForm: 'estray',
+    wilderUsedToday: false,
+    madRevelryUsesRemaining: 0,
+    trophies: [],
+    animalCompanion: null,
+    liegeHouse: '',
+    selectedCombatTalents: [],
+    holyOrder: '',
+    symbioticFleshTraits: [],
+    fungalSymbiosisUsesRemaining: 0,
     currentDate: { day: 1, month: 0 },
     currentLocation: '',
     journalEntries: [],

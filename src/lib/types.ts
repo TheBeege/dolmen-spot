@@ -145,6 +145,19 @@ export interface Character {
   combatTalents: string;
   otherNotes: string;
 
+  retainers: Retainer[];
+  gazeUsesRemaining: number;
+  currentForm: 'estray' | 'chester' | 'wilder';
+  wilderUsedToday: boolean;
+  madRevelryUsesRemaining: number;
+  trophies: Trophy[];
+  animalCompanion: AnimalCompanion | null;
+  liegeHouse: string;
+  selectedCombatTalents: CombatTalentSelection[];
+  holyOrder: string;
+  symbioticFleshTraits: number[];
+  fungalSymbiosisUsesRemaining: number;
+
   currentDate: CalendarDate;
   currentLocation: string;
   journalEntries: JournalEntry[];
@@ -164,6 +177,49 @@ export interface JournalEntry {
   date: CalendarDate;
   location: string;
   text: string;
+}
+
+export interface Retainer {
+  id: string;
+  name: string;
+  class: string;
+  level: number;
+  hp: number;
+  loyalty: number;
+  notes: string;
+}
+
+export interface Trophy {
+  id: string;
+  creatureType: string;
+}
+
+export interface AnimalCompanion {
+  name: string;
+  type: string;
+  hp: number;
+  notes: string;
+}
+
+export interface CombatTalentSelection {
+  talentId: string;
+  specification: string; // For Slayer (creature type) or Weapon Specialist (weapon type)
+}
+
+export interface FeatureProfile {
+  hasHorns: boolean;
+  hasGaze: boolean;
+  hasFormShift: boolean;
+  hasMadRevelry: boolean;
+  hasTrophies: boolean;
+  hasCompanion: boolean;
+  hasChivalricCode: boolean;
+  hasCombatTalents: boolean;
+  hasHolyOrder: boolean;
+  hasSymbioticFlesh: boolean;
+  hasFungalSymbiosis: boolean;
+  hasTurning: boolean;
+  hasRetainers: boolean;
 }
 
 export interface AdvancementRow {

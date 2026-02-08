@@ -200,24 +200,33 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 
 ---
 
-## Phase 9: Advanced Features
+## Phase 9: Advanced Class & Kindred Features ✓
 
-**Goal**: Complex class/kindred-specific mechanics.
+**Goal**: Structured, interactive UI for 12 class/kindred-specific mechanics, replacing free-text areas with context-aware feature panels.
 
 **Rule docs**: `02-kindreds.md`, `03-classes.md`, `04-kindred-classes.md`
 
-- [ ] Retainer management (max from CHA, Loyalty tracking, morale, hiring reactions)
-- [ ] Breggle horn progression display and Gaze tracking (uses/day)
-- [ ] Grimalkin form-shifting state tracking (estray/chester/wilder, wilder 1x/day)
-- [ ] Woodgrue Mad Revelry melody selection and usage tracking (1x/day/level)
-- [ ] Hunter Trophy system (creature type bonuses)
-- [ ] Hunter Animal Companion tracking
-- [ ] Knight Chivalric Code reference and Liege/House selection
-- [ ] Fighter Combat Talent selection (at levels 2, 6, 10, 14)
-- [ ] Cleric Holy Order selection and bonuses (St Faxis, St Sedge, St Signis)
-- [ ] Mossling Symbiotic Flesh trait accumulation (d20 per level)
-- [ ] Mossling Fungal Symbiosis tracking (Level 4+)
-- [ ] Turning the Undead calculator (Clerics and Friars)
+**Status**: Completed
+
+- [x] `getCharacterFeatureProfile()` helper as single source of truth for which features to show (mirrors `getCharacterMagicProfile()`)
+- [x] TraitsAndNotes tab restructured: conditional Class Features / Kindred Features sections, then Retainers, Languages, free-form Notes
+- [x] Fighter Combat Talent picker (dropdown per slot at levels 2, 6, 10, 14; Slayer/Weapon Specialist get specification field)
+- [x] Cleric Holy Order selector (radio-style, Level 2+, shows order bonus for St Faxis, St Sedge, St Signis)
+- [x] Turning the Undead reference panel (Clerics and Friars; 2d6 result table with level modifier notes)
+- [x] Knight Liege House dropdown (filtered by alignment match) with collapsible Chivalric Code reference
+- [x] Hunter Trophy list (add/remove creature types, shows +1 Attack/Save per type)
+- [x] Hunter Animal Companion card (name, type, HP, notes)
+- [x] Breggle Horn Progression display (level-gated table, current level highlighted) and Gaze tracker (uses/day, Level 4+)
+- [x] Grimalkin Form Switcher (Estray/Chester/Wilder buttons with stat summaries, wilder 1x/day tracking with New Day reset)
+- [x] Woodgrue Mad Revelry panel (use counter = level x/day, melody selector dropdown with 7 melodies and effect descriptions)
+- [x] Mossling Symbiotic Flesh trait picker (d20 reference table, add/remove rolled traits)
+- [x] Mossling Fungal Symbiosis tracker (Level 4+, uses = floor(level/2))
+- [x] Retainer management for all characters (CHA-based max = 4 + CHA mod, add/remove cards with name, class, level, HP, loyalty = 7 + CHA mod, notes)
+- [x] Game data added: `GRIMALKIN_FORMS`, `MAD_REVELRY_MELODIES`, `CLERIC_HOLY_ORDERS`, `SYMBIOTIC_FLESH_TABLE` (20 entries), `TURNING_UNDEAD_TABLE`
+- [x] 4 new types: `Retainer`, `Trophy`, `AnimalCompanion`, `CombatTalentSelection`; `FeatureProfile` interface
+- [x] 12 new Character fields for structured feature state
+- [x] Schema migration v6→v7 for all new fields
+- **Design decisions**: Enhanced TraitsAndNotes (no new tab), free-form textareas kept at bottom as supplementary notes, daily-use trackers follow +/- counter pattern from spells/HP
 
 ---
 

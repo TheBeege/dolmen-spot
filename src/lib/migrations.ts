@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 6;
+export const CURRENT_SCHEMA_VERSION = 7;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -49,6 +49,22 @@ const migrations: Record<number, (data: any) => any> = {
     if (data.travelDaysWithoutRest === undefined) data.travelDaysWithoutRest = 0;
     if (data.forcedMarchActive === undefined) data.forcedMarchActive = false;
     if (data.travelPointsRemaining === undefined) data.travelPointsRemaining = 0;
+    return data;
+  },
+  // v6 -> v7: Add class/kindred feature fields (retainers, gaze, forms, revelry, trophies, etc.).
+  6: (data) => {
+    if (data.retainers === undefined) data.retainers = [];
+    if (data.gazeUsesRemaining === undefined) data.gazeUsesRemaining = 0;
+    if (data.currentForm === undefined) data.currentForm = 'estray';
+    if (data.wilderUsedToday === undefined) data.wilderUsedToday = false;
+    if (data.madRevelryUsesRemaining === undefined) data.madRevelryUsesRemaining = 0;
+    if (data.trophies === undefined) data.trophies = [];
+    if (data.animalCompanion === undefined) data.animalCompanion = null;
+    if (data.liegeHouse === undefined) data.liegeHouse = '';
+    if (data.selectedCombatTalents === undefined) data.selectedCombatTalents = [];
+    if (data.holyOrder === undefined) data.holyOrder = '';
+    if (data.symbioticFleshTraits === undefined) data.symbioticFleshTraits = [];
+    if (data.fungalSymbiosisUsesRemaining === undefined) data.fungalSymbiosisUsesRemaining = 0;
     return data;
   },
 };
