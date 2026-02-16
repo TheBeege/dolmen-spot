@@ -256,11 +256,11 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
         <div>
           <label className={labelClasses}>Moon Sign</label>
           {hasMoonSign ? (
-            <div className="flex gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <select
                 value={character.moonSign}
                 onChange={(e) => onChange({ moonSign: e.target.value })}
-                className={`${inputClasses} flex-1`}
+                className={inputClasses}
               >
                 <option value="">-- Sign --</option>
                 {MOON_SIGNS.map((sign) => (
@@ -272,7 +272,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               <select
                 value={character.moonPhase}
                 onChange={(e) => onChange({ moonPhase: e.target.value as Character['moonPhase'] })}
-                className={`${inputClasses} w-28`}
+                className={inputClasses}
               >
                 <option value="">-- Phase --</option>
                 {MOON_PHASES.map((phase) => (
