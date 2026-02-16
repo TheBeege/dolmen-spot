@@ -1314,6 +1314,15 @@ export const KINDRED_GLAMOUR_COUNT: Record<string, Record<number, number>> = {
   grimalkin: { 1:1, 2:2, 3:3, 4:3, 5:4, 6:5, 7:6, 8:6, 9:7, 10:7, 11:8, 12:8, 13:9, 14:9, 15:10 },
 };
 
+// Innate kindred glamours (1 each for Elf and Grimalkin)
+// These are the "kindred glamours" referenced in class descriptions —
+// NOT the kindred-class advancement table above.
+// Source: docs/rules/02-kindreds.md lines 78, 111
+export const INNATE_KINDRED_GLAMOUR_COUNT: Record<string, number> = {
+  elf: 1,
+  grimalkin: 1,
+};
+
 // ──────────────────────────────────────────────────────────
 // Breggle Gaze Per Day
 // Source: docs/rules/04-kindred-classes.md
@@ -2330,10 +2339,8 @@ export function getCharacterMagicProfile(kindred: KindredId | '', classId: Class
         result.hasDivineResistance = true;
         result.hasRunes = true;
         let glamourCount = ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0;
-        // Elf enchanters get kindred glamours stacked on top
-        if (kindred === 'elf') {
-          glamourCount += KINDRED_GLAMOUR_COUNT['elf']?.[clampedLevel] ?? 0;
-        }
+        // Add innate kindred glamours (1 for Elf/Grimalkin) on top of class glamours
+        glamourCount += INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0;
         result.glamourCount = glamourCount;
         break;
       }
