@@ -191,9 +191,9 @@ export const CLASSES: ClassInfo[] = [
 ];
 
 export const MOON_SIGNS = [
-  'The Drune', 'The Witch', 'The Hart', 'The Owl',
-  'The Serpent', 'The Wolf', 'The Toad', 'The Spider',
-  'The Cat', 'The Raven', 'The Fox', 'The Hare',
+  'Grinning moon', 'Dead moon', 'Beast moon', 'Squamous moon',
+  "Knight's moon", 'Rotting moon', "Maiden's moon", "Witch's moon",
+  "Robber's moon", 'Goat moon', 'Narrow moon', 'Black moon',
 ];
 
 export const MOON_PHASES = ['Waxing', 'Full', 'Waning'] as const;
