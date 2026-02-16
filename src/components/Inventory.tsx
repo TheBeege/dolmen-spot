@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Character, InventoryItem, Coins, CharacterContainer } from '@/lib/types';
 import {
   getSpeedBySlots,
@@ -42,6 +42,20 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   // Collapsed container state
   const [collapsedContainers, setCollapsedContainers] = useState<Set<string>>(new Set());
+
+  // Escape key + body scroll lock for catalog modal
+  useEffect(() => {
+    if (!catalogOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setCatalogOpen(false);
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+      document.body.style.overflow = '';
+    };
+  }, [catalogOpen]);
 
   // ── Encumbrance calculations (with coins) ──
   const coinWeight = getCoinWeight(coins);
@@ -445,116 +459,136 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     const filtered = getFilteredCatalog();
 
     return (
-      <div className="bg-[#2a2a3e] rounded-lg p-4 border border-[#c4a35a]/30">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[#c4a35a] text-lg font-bold">Equipment Catalog</h3>
-          <button
-            type="button"
-            onClick={() => setCatalogOpen(false)}
-            className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg px-2"
-          >
-            &times;
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs mb-2">
-          <span className="text-[#f5e6c8]/50">Adding to:</span>
-          <select
-            value={catalogTarget.section === 'equipped' ? 'equipped' : (catalogTarget.containerId ?? 'loose')}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (val === 'equipped') {
-                setCatalogTarget({ section: 'equipped' });
-              } else if (val === 'loose') {
-                setCatalogTarget({ section: 'stowed' });
-              } else {
-                setCatalogTarget({ section: 'stowed', containerId: val });
-              }
-            }}
-            className={`${inputClasses} text-xs`}
-          >
-            <option value="equipped">Equipped Items</option>
-            <option value="loose">Stowed - Loose Items</option>
-            {containers.map((c) => (
-              <option key={c.id} value={c.id}>Stowed - {c.name}</option>
-            ))}
-          </select>
-        </div>
-
-        {/* Search */}
-        <input
-          type="text"
-          value={catalogSearch}
-          onChange={(e) => setCatalogSearch(e.target.value)}
-          placeholder="Search items..."
-          className={`${inputClasses} w-full mb-2`}
+      <div
+        className="fixed inset-0 z-[60] flex items-center justify-center p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Equipment Catalog"
+      >
+        {/* Backdrop */}
+        <div
+          className="absolute inset-0 bg-black/60"
+          onClick={() => setCatalogOpen(false)}
         />
 
-        {/* Category filter pills */}
-        <div className="flex gap-1 mb-3 flex-wrap">
-          {[{ id: 'all', label: 'All' }, { id: 'armour', label: 'Armour' }, { id: 'weapons', label: 'Weapons' }, ...EQUIPMENT_CATEGORIES].map((cat) => (
+        {/* Modal panel */}
+        <div className="relative bg-[#2a2a3e] rounded-lg border border-[#c4a35a]/30 w-full max-w-2xl max-h-[85vh] flex flex-col">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-[#5a3a28] shrink-0">
+            <h3 className="text-[#c4a35a] text-lg font-bold">Equipment Catalog</h3>
             <button
-              key={cat.id}
-              onClick={() => setCatalogCategory(cat.id)}
-              className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
-                catalogCategory === cat.id
-                  ? 'bg-[#c4a35a] text-[#1a1a2e]'
-                  : 'bg-[#1a1a2e] text-[#f5e6c8] hover:bg-[#3a3a5e]'
-              }`}
+              type="button"
+              onClick={() => setCatalogOpen(false)}
+              className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg px-2"
             >
-              {cat.label}
+              &times;
             </button>
-          ))}
-        </div>
+          </div>
 
-        {/* Item list */}
-        <div className="max-h-64 overflow-y-auto overflow-x-auto">
-          <table className="w-full text-xs text-[#f5e6c8] min-w-[320px]">
-            <thead>
-              <tr className="text-[#c4a35a] border-b border-[#5a3a28]">
-                <th className="text-left py-1 pr-2">Item</th>
-                <th className="text-center py-1 px-1">Cost</th>
-                <th className="text-center py-1 px-1">Wt</th>
-                <th className="text-center py-1 px-1">Sl</th>
-                <th className="text-center py-1 px-1" />
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((item) => (
-                <tr key={item.name + item.source} className="border-b border-[#5a3a28]/30">
-                  <td className="py-1 pr-2">{item.name}</td>
-                  <td className="text-center py-1 px-1">
-                    {item.costUnit === 'free' ? 'Free' : `${item.cost}${item.costUnit === 'cp' ? 'cp' : 'gp'}`}
-                  </td>
-                  <td className="text-center py-1 px-1">{item.weight}</td>
-                  <td className="text-center py-1 px-1">{item.slots}</td>
-                  <td className="text-center py-1 px-1">
-                    <button
-                      type="button"
-                      onClick={() => handleAddFromCatalog(item)}
-                      className="text-[#c4a35a] hover:text-[#f5e6c8] font-bold"
-                      title="Add to inventory"
-                    >
-                      +
-                    </button>
-                  </td>
-                </tr>
+          {/* Controls */}
+          <div className="p-4 pb-0 shrink-0">
+            <div className="flex items-center gap-2 text-xs mb-2">
+              <span className="text-[#f5e6c8]/50">Adding to:</span>
+              <select
+                value={catalogTarget.section === 'equipped' ? 'equipped' : (catalogTarget.containerId ?? 'loose')}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val === 'equipped') {
+                    setCatalogTarget({ section: 'equipped' });
+                  } else if (val === 'loose') {
+                    setCatalogTarget({ section: 'stowed' });
+                  } else {
+                    setCatalogTarget({ section: 'stowed', containerId: val });
+                  }
+                }}
+                className={`${inputClasses} text-xs`}
+              >
+                <option value="equipped">Equipped Items</option>
+                <option value="loose">Stowed - Loose Items</option>
+                {containers.map((c) => (
+                  <option key={c.id} value={c.id}>Stowed - {c.name}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Search */}
+            <input
+              type="text"
+              value={catalogSearch}
+              onChange={(e) => setCatalogSearch(e.target.value)}
+              placeholder="Search items..."
+              autoFocus
+              className={`${inputClasses} w-full mb-2`}
+            />
+
+            {/* Category filter pills */}
+            <div className="flex gap-1 mb-3 flex-wrap">
+              {[{ id: 'all', label: 'All' }, { id: 'armour', label: 'Armour' }, { id: 'weapons', label: 'Weapons' }, ...EQUIPMENT_CATEGORIES].map((cat) => (
+                <button
+                  key={cat.id}
+                  onClick={() => setCatalogCategory(cat.id)}
+                  className={`px-2 py-0.5 rounded text-xs font-semibold transition-colors ${
+                    catalogCategory === cat.id
+                      ? 'bg-[#c4a35a] text-[#1a1a2e]'
+                      : 'bg-[#1a1a2e] text-[#f5e6c8] hover:bg-[#3a3a5e]'
+                  }`}
+                >
+                  {cat.label}
+                </button>
               ))}
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={5} className="text-center py-4 text-[#f5e6c8]/40">
-                    No items found
-                  </td>
+            </div>
+          </div>
+
+          {/* Item table */}
+          <div className="flex-1 overflow-y-auto min-h-0 px-4 pb-4">
+            <table className="w-full text-xs text-[#f5e6c8] min-w-[320px]">
+              <thead className="sticky top-0 bg-[#2a2a3e]">
+                <tr className="text-[#c4a35a] border-b border-[#5a3a28]">
+                  <th className="text-left py-1 pr-2">Item</th>
+                  <th className="text-center py-1 px-1">Cost</th>
+                  <th className="text-center py-1 px-1">Wt</th>
+                  <th className="text-center py-1 px-1">Sl</th>
+                  <th className="text-center py-1 px-1" />
                 </tr>
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {filtered.map((item) => (
+                  <tr key={item.name + item.source} className="border-b border-[#5a3a28]/30">
+                    <td className="py-1 pr-2">{item.name}</td>
+                    <td className="text-center py-1 px-1">
+                      {item.costUnit === 'free' ? 'Free' : `${item.cost}${item.costUnit === 'cp' ? 'cp' : 'gp'}`}
+                    </td>
+                    <td className="text-center py-1 px-1">{item.weight}</td>
+                    <td className="text-center py-1 px-1">{item.slots}</td>
+                    <td className="text-center py-1 px-1">
+                      <button
+                        type="button"
+                        onClick={() => handleAddFromCatalog(item)}
+                        className="text-[#c4a35a] hover:text-[#f5e6c8] font-bold"
+                        title="Add to inventory"
+                      >
+                        +
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {filtered.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="text-center py-4 text-[#f5e6c8]/40">
+                      No items found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
     );
   };
 
   return (
+    <>
     <div className="space-y-4">
       {/* Encumbrance Method Toggle */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
@@ -835,8 +869,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         </div>
       </div>
 
-      {/* Equipment Catalog Browser */}
-      {renderCatalogBrowser()}
     </div>
+
+    {/* Equipment Catalog Modal */}
+    {renderCatalogBrowser()}
+    </>
   );
 }
