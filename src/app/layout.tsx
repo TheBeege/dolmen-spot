@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import Script from 'next/script';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -18,6 +19,12 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen antialiased">
         {children}
+        {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+          <Script
+            src="https://accounts.google.com/gsi/client"
+            strategy="lazyOnload"
+          />
+        )}
       </body>
     </html>
   );

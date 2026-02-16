@@ -138,6 +138,24 @@ export function useCharacter() {
     reader.readAsText(file);
   }, []);
 
+  const getCharacterJson = useCallback((): string | null => {
+    if (!activeCharacter) return null;
+    return JSON.stringify(activeCharacter, null, 2);
+  }, [activeCharacter]);
+
+  const importCharacterFromJson = useCallback((json: string): string => {
+    const data = migrateCharacter(JSON.parse(json));
+    data.id = crypto.randomUUID();
+    setCharacters(prev => {
+      const next = [...prev, data];
+      saveCharacters(next);
+      return next;
+    });
+    setActiveId(data.id);
+    saveActiveId(data.id);
+    return data.id;
+  }, []);
+
   return {
     characters,
     activeCharacter,
@@ -149,5 +167,7 @@ export function useCharacter() {
     switchCharacter,
     exportCharacter,
     importCharacter,
+    getCharacterJson,
+    importCharacterFromJson,
   };
 }

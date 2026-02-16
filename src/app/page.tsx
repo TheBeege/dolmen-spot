@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState, useCallback, lazy, Suspense } from 'react';
 import { useCharacter } from '@/hooks/useCharacter';
+import { useCloudStorage } from '@/hooks/useCloudStorage';
 import CharacterInfo from '@/components/CharacterInfo';
 import AbilityScores from '@/components/AbilityScores';
 import CombatStats from '@/components/CombatStats';
@@ -11,6 +12,9 @@ import TraitsAndNotes from '@/components/TraitsAndNotes';
 import Adventuring from '@/components/Adventuring';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
+import CloudStatusBadge from '@/components/CloudStatusBadge';
+
+const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
 type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'map' | 'reference';
 
@@ -37,11 +41,28 @@ export default function Home() {
     switchCharacter,
     exportCharacter,
     importCharacter,
+    getCharacterJson,
+    importCharacterFromJson,
   } = useCharacter();
+
+  const cloud = useCloudStorage();
 
   const [activeTab, setActiveTab] = useState<Tab>('character');
   const [showCharList, setShowCharList] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showCloudModal, setShowCloudModal] = useState(false);
+
+  const handleCloudSave = useCallback(async (providerId: 'google-drive' | 'onedrive') => {
+    if (!activeCharacter) return;
+    const json = getCharacterJson();
+    if (!json) return;
+    await cloud.saveCharacter(providerId, activeCharacter.id, json, activeCharacter.name);
+  }, [activeCharacter, getCharacterJson, cloud]);
+
+  const handleCloudLoad = useCallback(async (providerId: 'google-drive' | 'onedrive', fileId: string, fileName: string) => {
+    const json = await cloud.loadCharacter(providerId, fileId);
+    const newCharId = importCharacterFromJson(json);
+    cloud.setMetadata(newCharId, providerId, fileId, fileName);
+  }, [cloud, importCharacterFromJson]);
 
   if (!loaded || !activeCharacter) {
     return (
@@ -53,6 +74,8 @@ export default function Home() {
       </div>
     );
   }
+
+  const cloudMetadata = cloud.getMetadata(activeCharacter.id);
 
   return (
     <div className="min-h-screen flex flex-col">
@@ -72,6 +95,7 @@ export default function Home() {
                 <span className="font-semibold truncate max-w-[150px]">
                   {activeCharacter.name || 'Unnamed'}
                 </span>
+                <CloudStatusBadge metadata={cloudMetadata} />
                 <span className="text-[#f5e6c8]/40 text-xs">
                   {activeCharacter.kindred && activeCharacter.class
                     ? `${activeCharacter.kindred} ${activeCharacter.class}`
@@ -85,30 +109,15 @@ export default function Home() {
 
             <div className="flex items-center gap-2">
               <button
-                onClick={exportCharacter}
-                className="text-xs px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors"
-                title="Export character"
+                onClick={() => setShowCloudModal(true)}
+                className="text-xs px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
+                title="Save / Load character"
               >
-                Export
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                </svg>
+                <span className="hidden sm:inline">Save / Load</span>
               </button>
-              <button
-                onClick={() => fileInputRef.current?.click()}
-                className="text-xs px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors"
-                title="Import character"
-              >
-                Import
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept=".json"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  if (file) importCharacter(file);
-                  e.target.value = '';
-                }}
-              />
             </div>
           </div>
 
@@ -223,6 +232,30 @@ export default function Home() {
           <ReferencePanel />
         )}
       </main>
+
+      {/* Cloud Storage Modal */}
+      {showCloudModal && (
+        <Suspense fallback={null}>
+          <CloudStorageModal
+            open={showCloudModal}
+            onClose={() => setShowCloudModal(false)}
+            providers={cloud.providers}
+            authStates={cloud.authStates}
+            onConnect={cloud.connect}
+            onDisconnect={cloud.disconnect}
+            onListFiles={cloud.listFiles}
+            onSave={handleCloudSave}
+            onLoad={handleCloudLoad}
+            onDelete={cloud.deleteFile}
+            onExportLocal={exportCharacter}
+            onImportLocal={importCharacter}
+            loading={cloud.loading}
+            error={cloud.error}
+            onClearError={cloud.clearError}
+            characterName={activeCharacter.name}
+          />
+        </Suspense>
+      )}
 
       {/* Footer */}
       <footer className="bg-[#1a1a2e] border-t border-[#5a3a28] py-2 text-center">
