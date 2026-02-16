@@ -104,6 +104,7 @@ export interface Character {
   alignment: Alignment | '';
   affiliation: string;
   moonSign: string;
+  moonPhase: '' | 'waxing' | 'full' | 'waning';
   level: number;
   xp: number;
   xpNextLevel: number;

@@ -10,6 +10,7 @@ import {
   calculateXpModifier,
   getAlignmentWarning,
   canHaveMoonSign,
+  MOON_PHASES,
   STARTING_EQUIPMENT,
   rollD6,
   getCharacterLanguages,
@@ -69,7 +70,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
       kindred,
       ...(classStillValid ? {} : { class: '' as const }),
       xpModifier: newXp.total,
-      ...(fairy ? { moonSign: '' } : {}),
+      ...(fairy ? { moonSign: '', moonPhase: '' as const } : {}),
       languages: newLanguages,
     });
   };
@@ -165,7 +166,11 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
         <div>
           <label className={labelClasses}>
             Class
-            <span className="text-[#f5e6c8]/40 font-normal ml-1">(optional)</span>
+            {character.kindred === 'human' ? (
+              <span className="text-red-400 font-normal ml-1">(required)</span>
+            ) : (
+              <span className="text-[#f5e6c8]/40 font-normal ml-1">(optional)</span>
+            )}
           </label>
           <select
             value={character.class}
@@ -185,6 +190,10 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               {selectedClassEntry.restriction === 'rare' && (
                 <span className="text-[#c4a35a]"> — Unusual combination for this kindred.</span>
               )}
+            </p>
+          ) : character.kindred === 'human' && !character.class ? (
+            <p className="text-red-400 text-xs mt-1">
+              Humans must select a class.
             </p>
           ) : character.kindred && !character.class ? (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
@@ -243,22 +252,36 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
           />
         </div>
 
-        {/* Moon Sign */}
+        {/* Moon Sign & Phase */}
         <div>
           <label className={labelClasses}>Moon Sign</label>
           {hasMoonSign ? (
-            <select
-              value={character.moonSign}
-              onChange={(e) => onChange({ moonSign: e.target.value })}
-              className={inputClasses}
-            >
-              <option value="">-- Select Moon Sign --</option>
-              {MOON_SIGNS.map((sign) => (
-                <option key={sign} value={sign}>
-                  {sign}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={character.moonSign}
+                onChange={(e) => onChange({ moonSign: e.target.value })}
+                className={`${inputClasses} flex-1`}
+              >
+                <option value="">-- Sign --</option>
+                {MOON_SIGNS.map((sign) => (
+                  <option key={sign} value={sign}>
+                    {sign}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={character.moonPhase}
+                onChange={(e) => onChange({ moonPhase: e.target.value as Character['moonPhase'] })}
+                className={`${inputClasses} w-28`}
+              >
+                <option value="">-- Phase --</option>
+                {MOON_PHASES.map((phase) => (
+                  <option key={phase} value={phase.toLowerCase()}>
+                    {phase}
+                  </option>
+                ))}
+              </select>
+            </div>
           ) : (
             <div>
               <select

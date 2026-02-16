@@ -1,22 +1,16 @@
 'use client';
 
-import { Character, SaveTargets } from '@/lib/types';
+import { Character } from '@/lib/types';
 import {
   getAbilityModifier,
   formatModifier,
   ARMOUR_TABLE,
   calculateAC,
   calculateAttackBonus,
-  calculateSaveTargets,
   calculateMagicResistance,
   calculateMeleeModifier,
   calculateMissileModifier,
-  calculateXpToNextLevel,
   getArmourRestrictionWarning,
-  getSpeedBySlots,
-  getSpeedByWeight,
-  getCoinWeight,
-  getCoinSlots,
 } from '@/lib/gamedata';
 
 interface CombatStatsProps {
@@ -26,14 +20,6 @@ interface CombatStatsProps {
 
 const inputClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
-
-const SAVE_LABELS: { key: keyof SaveTargets; label: string }[] = [
-  { key: 'doom', label: 'Doom' },
-  { key: 'ray', label: 'Ray' },
-  { key: 'hold', label: 'Hold' },
-  { key: 'blast', label: 'Blast' },
-  { key: 'spell', label: 'Spell' },
-];
 
 // Armour options for the dropdown (exclude Shield row)
 const ARMOUR_OPTIONS = ARMOUR_TABLE.filter(a => a.name !== 'Shield');
@@ -76,35 +62,9 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
   const meleeModifier = calculateMeleeModifier(character.attackBonus, character.abilityScores.strength);
   const missileModifier = calculateMissileModifier(character.attackBonus, character.abilityScores.dexterity, character.class);
 
-  // --- Saves ---
-  const calcSaves = hasAutoCalcData ? calculateSaveTargets(character.kindred, character.class, character.level) : null;
-  const savesOutOfSync = calcSaves !== null && SAVE_LABELS.some(
-    s => calcSaves[s.key] !== character.saveTargets[s.key]
-  );
-
   // --- Magic Resistance ---
   const calcMR = calculateMagicResistance(character.abilityScores.wisdom, character.kindred);
   const mrOutOfSync = calcMR.value !== character.magicResistance;
-
-  // --- Speed (includes coin weight/slots) ---
-  const totalEquippedSlots = character.equippedItems.reduce((sum, item) => sum + item.slots, 0);
-  const itemStowedSlots = character.stowedItems.reduce((sum, item) => sum + item.slots, 0);
-  const totalStowedSlots = itemStowedSlots + getCoinSlots(character.coins);
-  const totalWeight =
-    character.equippedItems.reduce((sum, item) => sum + item.weight, 0) +
-    character.stowedItems.reduce((sum, item) => sum + item.weight, 0) +
-    getCoinWeight(character.coins);
-  const calcSpeed = character.encumbranceMethod === 'slots'
-    ? getSpeedBySlots(totalEquippedSlots, totalStowedSlots)
-    : getSpeedByWeight(totalWeight);
-  const speedOutOfSync = calcSpeed !== character.speed;
-
-  // --- XP ---
-  const calcXpNext = hasAutoCalcData ? calculateXpToNextLevel(character.kindred, character.class, character.level) : null;
-  const xpNextOutOfSync = calcXpNext !== null && calcXpNext !== character.xpNextLevel;
-  const xpProgress = character.xpNextLevel > 0
-    ? Math.max(0, Math.min(100, (character.xp / character.xpNextLevel) * 100))
-    : 0;
 
   return (
     <div className="space-y-4">
@@ -326,82 +286,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         </details>
       </div>
 
-      {/* Saving Throws */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-[#c4a35a] text-sm font-semibold uppercase tracking-wider">
-            Saving Throws
-          </h3>
-          {calcSaves && savesOutOfSync && (
-            <button
-              type="button"
-              onClick={() => onChange({ saveTargets: calcSaves })}
-              className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors"
-            >
-              Sync All
-            </button>
-          )}
-        </div>
-
-        <div className="grid grid-cols-5 gap-2">
-          {SAVE_LABELS.map(s => {
-            const stored = character.saveTargets[s.key];
-            const calc = calcSaves?.[s.key];
-            const isOff = calc !== undefined && calc !== stored;
-            return (
-              <div key={s.key} className="bg-[#1a1a2e] rounded p-2 text-center">
-                <span className="text-[#8b8b9e] text-xs block">{s.label}</span>
-                <span className={`text-lg font-bold ${isOff ? 'text-[#c4a35a]' : 'text-[#f5e6c8]'}`}>
-                  {stored}
-                </span>
-                {isOff && calc !== undefined && (
-                  <span className="text-[#8b8b9e] text-xs block">{calc}</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* Save-related notes */}
-        {character.kindred && (
-          <div className="text-[#8b8b9e] text-xs mt-2 space-y-1">
-            {(character.kindred === 'elf' || character.kindred === 'grimalkin') && (
-              <p>+2 to saves vs magic (Fairy heritage)</p>
-            )}
-            {character.kindred === 'mossling' && (
-              <p>+2 to all saves (+4 vs fungal effects)</p>
-            )}
-            {calcMR.value !== 0 && (
-              <p>Magic Resistance {formatModifier(calcMR.value)} applies to saves vs magic</p>
-            )}
-          </div>
-        )}
-
-        <details className="mt-2">
-          <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
-            Manual override
-          </summary>
-          <div className="grid grid-cols-5 gap-2 mt-1">
-            {SAVE_LABELS.map(s => (
-              <div key={s.key}>
-                <label className="text-[#8b8b9e] text-xs block text-center">{s.label}</label>
-                <input
-                  type="number"
-                  value={character.saveTargets[s.key]}
-                  onChange={(e) => onChange({
-                    saveTargets: { ...character.saveTargets, [s.key]: parseInt(e.target.value) || 0 }
-                  })}
-                  className={`${inputClasses} w-full text-center text-sm`}
-                />
-              </div>
-            ))}
-          </div>
-        </details>
-      </div>
-
-      {/* Bottom Row: Magic Resistance, Speed, XP */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {/* Magic Resistance */}
+      {/* Magic Resistance */}
         <div className="bg-[#2a2a3e] rounded-lg p-4">
           <h3 className="text-[#c4a35a] text-sm font-semibold uppercase tracking-wider mb-3">
             Magic Resistance
@@ -435,114 +320,6 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             />
           </details>
         </div>
-
-        {/* Speed & Travel */}
-        <div className="bg-[#2a2a3e] rounded-lg p-4">
-          <h3 className="text-[#c4a35a] text-sm font-semibold uppercase tracking-wider mb-3">
-            Speed &amp; Travel
-          </h3>
-          <div className="flex items-center gap-3 mb-2">
-            <span className="text-3xl font-bold text-[#f5e6c8]">{character.speed}</span>
-            <div className="flex-1">
-              <p className="text-[#8b8b9e] text-xs">ft/round ({character.encumbranceMethod})</p>
-              <p className="text-[#8b8b9e] text-xs">
-                Travel: <span className="text-[#f5e6c8] font-semibold">{Math.floor(character.speed / 5)}</span> pts/day
-              </p>
-              {speedOutOfSync && (
-                <button
-                  type="button"
-                  onClick={() => onChange({ speed: calcSpeed, travelPointsPerDay: Math.floor(calcSpeed / 5) })}
-                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors mt-1"
-                >
-                  Sync to {calcSpeed} ft
-                </button>
-              )}
-            </div>
-          </div>
-          <p className="text-[#8b8b9e] text-xs">Speed is calculated from encumbrance on the Inventory tab.</p>
-          <details className="mt-1">
-            <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
-              Manual override
-            </summary>
-            <input
-              type="number"
-              value={character.speed}
-              onChange={(e) => {
-                const speed = parseInt(e.target.value) || 0;
-                onChange({ speed, travelPointsPerDay: Math.floor(speed / 5) });
-              }}
-              step={10}
-              min={0}
-              className={`${inputClasses} w-20 text-center mt-1`}
-            />
-          </details>
-        </div>
-      </div>
-
-      {/* XP Progress */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h3 className="text-[#c4a35a] text-sm font-semibold uppercase tracking-wider mb-3">
-          XP Progress
-        </h3>
-
-        <div className="grid grid-cols-2 gap-4 mb-3">
-          <div>
-            <label className="text-[#8b8b9e] text-xs block mb-1">Current XP</label>
-            <input
-              type="number"
-              value={character.xp}
-              onChange={(e) => onChange({ xp: parseInt(e.target.value) || 0 })}
-              min={0}
-              className={`${inputClasses} w-full text-center`}
-            />
-          </div>
-          <div>
-            <label className="text-[#8b8b9e] text-xs block mb-1">XP to Next Level</label>
-            <div className="flex items-center gap-2">
-              <input
-                type="number"
-                value={character.xpNextLevel}
-                onChange={(e) => onChange({ xpNextLevel: parseInt(e.target.value) || 0 })}
-                min={0}
-                className={`${inputClasses} w-full text-center`}
-              />
-              {calcXpNext !== null && xpNextOutOfSync && (
-                <button
-                  type="button"
-                  onClick={() => onChange({ xpNextLevel: calcXpNext })}
-                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors shrink-0"
-                >
-                  Sync
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* XP Progress Bar */}
-        {character.xpNextLevel > 0 && (
-          <div className="mb-2">
-            <div className="bg-[#1a1a2e] rounded-full h-4 overflow-hidden">
-              <div
-                className="h-full rounded-full transition-all duration-300 bg-[#c4a35a]"
-                style={{ width: `${xpProgress}%` }}
-              />
-            </div>
-            <p className="text-[#8b8b9e] text-xs mt-1 text-center">
-              {character.xp.toLocaleString()} / {character.xpNextLevel.toLocaleString()} XP ({Math.floor(xpProgress)}%)
-            </p>
-          </div>
-        )}
-        {calcXpNext === null && hasAutoCalcData && (
-          <p className="text-[#8b8b9e] text-xs">Maximum level reached.</p>
-        )}
-
-        {character.xpModifier !== 0 && (
-          <p className="text-[#8b8b9e] text-xs">
-            XP modifier: {character.xpModifier > 0 ? '+' : ''}{character.xpModifier}% (set on Character Info tab)
-          </p>
-        )}
-      </div>
     </div>
   );
 }

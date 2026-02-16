@@ -217,49 +217,53 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   // ── Render helpers ──
   const renderItemRow = (item: InventoryItem, equipped: boolean) => (
-    <div key={item.id} className="flex items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
+    <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
       <input
         type="text"
         value={item.name}
         onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
         placeholder="Item name"
-        className={`${inputClasses} flex-1 min-w-0`}
+        className={`${inputClasses} flex-1 min-w-[120px]`}
       />
-      <input
-        type="number"
-        value={item.slots}
-        onChange={(e) =>
-          handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)
-        }
-        min={0}
-        title="Slots"
-        className={`${inputClasses} w-16 text-center`}
-      />
-      <input
-        type="number"
-        value={item.weight}
-        onChange={(e) =>
-          handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)
-        }
-        min={0}
-        title="Weight"
-        className={`${inputClasses} w-20 text-center`}
-      />
-      <input
-        type="text"
-        value={item.notes}
-        onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
-        placeholder="Notes"
-        className={`${inputClasses} w-32 min-w-0`}
-      />
-      <button
-        type="button"
-        onClick={() => handleDeleteItem(equipped, item.id)}
-        className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-        title="Delete item"
-      >
-        &times;
-      </button>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          value={item.slots}
+          onChange={(e) =>
+            handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)
+          }
+          min={0}
+          title="Slots"
+          placeholder="Sl"
+          className={`${inputClasses} w-16 text-center`}
+        />
+        <input
+          type="number"
+          value={item.weight}
+          onChange={(e) =>
+            handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)
+          }
+          min={0}
+          title="Weight"
+          placeholder="Wt"
+          className={`${inputClasses} w-20 text-center`}
+        />
+        <input
+          type="text"
+          value={item.notes}
+          onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+          placeholder="Notes"
+          className={`${inputClasses} w-32 min-w-0`}
+        />
+        <button
+          type="button"
+          onClick={() => handleDeleteItem(equipped, item.id)}
+          className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
+          title="Delete item"
+        >
+          &times;
+        </button>
+      </div>
     </div>
   );
 
@@ -330,8 +334,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           <>
             {containerItems.length > 0 && (
               <div className="ml-4">
-                {/* Column headers */}
-                <div className="flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
+                {/* Column headers (hidden on mobile) */}
+                <div className="hidden sm:flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
                   <span className="flex-1">Name</span>
                   <span className="w-16 text-center">Slots</span>
                   <span className="w-20 text-center">Weight</span>
@@ -339,67 +343,71 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   <span className="w-6" />
                 </div>
                 {containerItems.map((item) => (
-                  <div key={item.id} className="flex items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
+                  <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
                     <input
                       type="text"
                       value={item.name}
                       onChange={(e) => handleUpdateItem(false, item.id, 'name', e.target.value)}
                       placeholder="Item name"
-                      className={`${inputClasses} flex-1 min-w-0`}
+                      className={`${inputClasses} flex-1 min-w-[120px]`}
                     />
-                    <input
-                      type="number"
-                      value={item.slots}
-                      onChange={(e) =>
-                        handleUpdateItem(false, item.id, 'slots', parseInt(e.target.value) || 0)
-                      }
-                      min={0}
-                      title="Slots"
-                      className={`${inputClasses} w-16 text-center`}
-                    />
-                    <input
-                      type="number"
-                      value={item.weight}
-                      onChange={(e) =>
-                        handleUpdateItem(false, item.id, 'weight', parseInt(e.target.value) || 0)
-                      }
-                      min={0}
-                      title="Weight"
-                      className={`${inputClasses} w-20 text-center`}
-                    />
-                    <input
-                      type="text"
-                      value={item.notes}
-                      onChange={(e) => handleUpdateItem(false, item.id, 'notes', e.target.value)}
-                      placeholder="Notes"
-                      className={`${inputClasses} w-32 min-w-0`}
-                    />
-                    {/* Move to container dropdown */}
-                    {containers.length > 0 && (
-                      <select
-                        value={item.containerId ?? ''}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        value={item.slots}
                         onChange={(e) =>
-                          handleMoveToContainer(item.id, e.target.value || undefined)
+                          handleUpdateItem(false, item.id, 'slots', parseInt(e.target.value) || 0)
                         }
-                        className={`${inputClasses} w-10 text-xs p-0.5`}
-                        title="Move to container"
+                        min={0}
+                        title="Slots"
+                        placeholder="Sl"
+                        className={`${inputClasses} w-16 text-center`}
+                      />
+                      <input
+                        type="number"
+                        value={item.weight}
+                        onChange={(e) =>
+                          handleUpdateItem(false, item.id, 'weight', parseInt(e.target.value) || 0)
+                        }
+                        min={0}
+                        title="Weight"
+                        placeholder="Wt"
+                        className={`${inputClasses} w-20 text-center`}
+                      />
+                      <input
+                        type="text"
+                        value={item.notes}
+                        onChange={(e) => handleUpdateItem(false, item.id, 'notes', e.target.value)}
+                        placeholder="Notes"
+                        className={`${inputClasses} w-32 min-w-0`}
+                      />
+                      {/* Move to container dropdown */}
+                      {containers.length > 0 && (
+                        <select
+                          value={item.containerId ?? ''}
+                          onChange={(e) =>
+                            handleMoveToContainer(item.id, e.target.value || undefined)
+                          }
+                          className={`${inputClasses} w-10 text-xs p-0.5`}
+                          title="Move to container"
+                        >
+                          <option value="">Loose</option>
+                          {containers.map((c) => (
+                            <option key={c.id} value={c.id}>
+                              {c.name}
+                            </option>
+                          ))}
+                        </select>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteItem(false, item.id)}
+                        className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
+                        title="Delete item"
                       >
-                        <option value="">Loose</option>
-                        {containers.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.name}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteItem(false, item.id)}
-                      className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-                      title="Delete item"
-                    >
-                      &times;
-                    </button>
+                        &times;
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -449,15 +457,29 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           </button>
         </div>
 
-        <p className="text-[#f5e6c8]/50 text-xs mb-2">
-          Adding to: <span className="text-[#c4a35a]">
-            {catalogTarget.section === 'equipped'
-              ? 'Equipped Items'
-              : catalogTarget.containerId
-                ? containers.find((c) => c.id === catalogTarget.containerId)?.name ?? 'Stowed'
-                : 'Loose Items'}
-          </span>
-        </p>
+        <div className="flex items-center gap-2 text-xs mb-2">
+          <span className="text-[#f5e6c8]/50">Adding to:</span>
+          <select
+            value={catalogTarget.section === 'equipped' ? 'equipped' : (catalogTarget.containerId ?? 'loose')}
+            onChange={(e) => {
+              const val = e.target.value;
+              if (val === 'equipped') {
+                setCatalogTarget({ section: 'equipped' });
+              } else if (val === 'loose') {
+                setCatalogTarget({ section: 'stowed' });
+              } else {
+                setCatalogTarget({ section: 'stowed', containerId: val });
+              }
+            }}
+            className={`${inputClasses} text-xs`}
+          >
+            <option value="equipped">Equipped Items</option>
+            <option value="loose">Stowed - Loose Items</option>
+            {containers.map((c) => (
+              <option key={c.id} value={c.id}>Stowed - {c.name}</option>
+            ))}
+          </select>
+        </div>
 
         {/* Search */}
         <input
@@ -486,8 +508,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         </div>
 
         {/* Item list */}
-        <div className="max-h-64 overflow-y-auto">
-          <table className="w-full text-xs text-[#f5e6c8]">
+        <div className="max-h-64 overflow-y-auto overflow-x-auto">
+          <table className="w-full text-xs text-[#f5e6c8] min-w-[320px]">
             <thead>
               <tr className="text-[#c4a35a] border-b border-[#5a3a28]">
                 <th className="text-left py-1 pr-2">Item</th>
@@ -540,7 +562,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           Inventory &amp; Encumbrance
         </h2>
 
-        <div className="flex items-center gap-4 mb-2">
+        <div className="flex items-center gap-4 mb-3">
           <span className={labelClasses}>Encumbrance Method:</span>
           <label className="flex items-center gap-1 text-[#f5e6c8] cursor-pointer">
             <input
@@ -565,14 +587,25 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             Slots
           </label>
         </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setCatalogTarget({ section: 'equipped' });
+            setCatalogOpen(true);
+          }}
+          className="w-full border-2 border-[#c4a35a] text-[#c4a35a] hover:bg-[#c4a35a]/10 rounded-lg px-4 py-2 font-semibold transition-colors"
+        >
+          Browse Equipment Catalog
+        </button>
       </div>
 
       {/* Equipped Items */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
         <h3 className="text-[#c4a35a] text-lg font-bold mb-3">Equipped Items</h3>
 
-        {/* Column headers */}
-        <div className="flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
+        {/* Column headers (hidden on mobile) */}
+        <div className="hidden sm:flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
           <span className="flex-1">Name</span>
           <span className="w-16 text-center">Slots</span>
           <span className="w-20 text-center">Weight</span>
@@ -662,13 +695,18 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
         {encumbranceMethod === 'slots' ? (
           <div className="space-y-2 text-[#f5e6c8]">
-            <div className="flex justify-between">
-              <span>Equipped Slots:</span>
-              <span
-                className={totalEquippedSlots > 10 ? 'text-[#b33a1a] font-bold' : ''}
-              >
-                {totalEquippedSlots} / 10
-              </span>
+            <div>
+              <div className="flex justify-between">
+                <span>Equipped Slots:</span>
+                <span
+                  className={totalEquippedSlots > 10 ? 'text-[#b33a1a] font-bold' : ''}
+                >
+                  {totalEquippedSlots} / 10
+                </span>
+              </div>
+              {totalEquippedSlots > 10 && (
+                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard equipped limit (10 slots)</p>
+              )}
             </div>
             <div className="flex justify-between">
               <span>Stowed Slots (items):</span>
@@ -680,13 +718,18 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 {coinSlots} ({totalCoinCount} coins)
               </span>
             </div>
-            <div className="flex justify-between">
-              <span>Total Stowed Slots:</span>
-              <span
-                className={totalStowedSlots > 16 ? 'text-[#b33a1a] font-bold' : ''}
-              >
-                {totalStowedSlots} / 16
-              </span>
+            <div>
+              <div className="flex justify-between">
+                <span>Total Stowed Slots:</span>
+                <span
+                  className={totalStowedSlots > 16 ? 'text-[#b33a1a] font-bold' : ''}
+                >
+                  {totalStowedSlots} / 16
+                </span>
+              </div>
+              {totalStowedSlots > 16 && (
+                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard stowed limit (16 slots)</p>
+              )}
             </div>
             <div className="flex justify-between border-t border-[#5a3a28] pt-2 mt-2">
               <span className="font-semibold">Calculated Speed:</span>

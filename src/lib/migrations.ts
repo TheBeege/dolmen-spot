@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 7;
+export const CURRENT_SCHEMA_VERSION = 8;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -65,6 +65,11 @@ const migrations: Record<number, (data: any) => any> = {
     if (data.holyOrder === undefined) data.holyOrder = '';
     if (data.symbioticFleshTraits === undefined) data.symbioticFleshTraits = [];
     if (data.fungalSymbiosisUsesRemaining === undefined) data.fungalSymbiosisUsesRemaining = 0;
+    return data;
+  },
+  // v7 -> v8: Add moonPhase field for moon sign phases (Waxing/Full/Waning).
+  7: (data) => {
+    if (data.moonPhase === undefined) data.moonPhase = '';
     return data;
   },
 };

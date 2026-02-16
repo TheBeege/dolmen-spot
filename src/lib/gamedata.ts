@@ -196,6 +196,8 @@ export const MOON_SIGNS = [
   'The Cat', 'The Raven', 'The Fox', 'The Hare',
 ];
 
+export const MOON_PHASES = ['Waxing', 'Full', 'Waning'] as const;
+
 export const ALIGNMENTS = ['Lawful', 'Neutral', 'Chaotic'] as const;
 
 export const ABILITY_MODIFIER_TABLE: Record<number, number> = {
@@ -2446,6 +2448,7 @@ export function createDefaultCharacter(): Character {
     alignment: '',
     affiliation: '',
     moonSign: '',
+    moonPhase: '',
     level: 1,
     xp: 0,
     xpNextLevel: 0,
