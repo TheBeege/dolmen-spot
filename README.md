@@ -2,7 +2,7 @@
 
 A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collections/dolmenwood) tabletop RPG. Track characters, auto-calculate stats, manage inventory, and reference game data — all in the browser.
 
-**Live app:** [dolmen.shop](https://www.dolmen.shop/)
+**Live app:** [dolmen.stop](https://www.dolmen.spot/)
 
 ![Screenshot](docs/images/screenshot.png)
 
