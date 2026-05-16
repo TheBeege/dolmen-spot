@@ -4,7 +4,6 @@ import React, {
   MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
-  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -20,7 +19,7 @@ import type {
   LaylineDraft,
   MapPOI,
 } from '@/lib/types';
-import { ALL_HEXES, HEX_CELLS } from '@/lib/hex-grid';
+import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
 import { gridBounds, hexCenter, hexVertices, parseCoord, pixelToHex } from '@/lib/hex';
 
 interface HexMapProps {
@@ -143,7 +142,6 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const [view, setView] = useState({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
   const [hoverHex, setHoverHex] = useState<HexCoord | null>(null);
-  const [hoverScreen, setHoverScreen] = useState<{ x: number; y: number } | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
   const [selectedLayline, setSelectedLayline] = useState<string | null>(null);
   const [pendingForm, setPendingForm] = useState<
@@ -152,7 +150,13 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     | null
   >(null);
 
-  const panRef = useRef<{ startX: number; startY: number; viewX: number; viewY: number } | null>(null);
+  const panRef = useRef<{
+    startX: number;
+    startY: number;
+    viewX: number;
+    viewY: number;
+    scale: number;
+  } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   // `updateMap` and `setDraftLayline` route through the functional form of
@@ -195,22 +199,29 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     (clientX: number, clientY: number): { x: number; y: number } | null => {
       const svg = svgRef.current;
       if (!svg) return null;
-      const rect = svg.getBoundingClientRect();
-      const xFrac = (clientX - rect.left) / rect.width;
-      const yFrac = (clientY - rect.top) / rect.height;
-      return { x: view.x + xFrac * view.w, y: view.y + yFrac * view.h };
+      // Use the SVG's own coordinate transform so we account for
+      // preserveAspectRatio="meet" letterboxing. Naive (clientX - rect.left)
+      // / rect.width math would put the cursor at the wrong image coord
+      // whenever the SVG element's aspect ratio doesn't match viewBox.
+      const ctm = svg.getScreenCTM();
+      if (!ctm) return null;
+      const pt = svg.createSVGPoint();
+      pt.x = clientX;
+      pt.y = clientY;
+      const local = pt.matrixTransform(ctm.inverse());
+      return { x: local.x, y: local.y };
     },
-    [view],
+    [],
   );
 
   const handleMouseMove = useCallback(
     (e: ReactMouseEvent<SVGSVGElement>) => {
       if (panRef.current) {
-        const svg = svgRef.current;
-        if (!svg) return;
-        const rect = svg.getBoundingClientRect();
-        const dx = ((e.clientX - panRef.current.startX) / rect.width) * view.w;
-        const dy = ((e.clientY - panRef.current.startY) / rect.height) * view.h;
+        // Convert the screen-pixel drag delta into image units using the
+        // letterbox-aware uniform scale. (Naive view.w / rect.width would
+        // be wrong whenever the SVG's aspect ratio doesn't match viewBox.)
+        const dx = (e.clientX - panRef.current.startX) * panRef.current.scale;
+        const dy = (e.clientY - panRef.current.startY) * panRef.current.scale;
         setView((v) => ({ ...v, x: panRef.current!.viewX - dx, y: panRef.current!.viewY - dy }));
         return;
       }
@@ -218,9 +229,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       if (!img) return;
       const hex = pixelToHex(img.x, img.y);
       setHoverHex(hex);
-      setHoverScreen(hex ? { x: e.clientX, y: e.clientY } : null);
     },
-    [screenToImage, view.w, view.h],
+    [screenToImage],
   );
 
   const handleMouseDown = useCallback(
@@ -232,11 +242,24 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       // separate gesture) — that's accepted as inert overlap rather than
       // adding a movement-threshold heuristic.
       if (e.shiftKey) {
-        panRef.current = { startX: e.clientX, startY: e.clientY, viewX: view.x, viewY: view.y };
+        const svg = svgRef.current;
+        if (!svg) return;
+        const rect = svg.getBoundingClientRect();
+        // Image-units per screen pixel under preserveAspectRatio="meet":
+        // the renderer applies a single uniform scale = min(rw/w, rh/h),
+        // so its reciprocal is the screen→image conversion factor.
+        const scale = 1 / Math.min(rect.width / view.w, rect.height / view.h);
+        panRef.current = {
+          startX: e.clientX,
+          startY: e.clientY,
+          viewX: view.x,
+          viewY: view.y,
+          scale,
+        };
         e.preventDefault();
       }
     },
-    [view.x, view.y],
+    [view.x, view.y, view.w, view.h],
   );
 
   const handleMouseUp = useCallback(() => {
@@ -246,7 +269,6 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const handleMouseLeave = useCallback(() => {
     panRef.current = null;
     setHoverHex(null);
-    setHoverScreen(null);
   }, []);
 
   const handleWheel = useCallback(
@@ -254,19 +276,31 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       e.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
+      // Cursor's image-coord under the CURRENT view; SVG CTM handles
+      // letterboxing so this is the actual point the cursor sits over.
+      const cursorImage = screenToImage(e.clientX, e.clientY);
+      if (!cursorImage) return;
       const rect = svg.getBoundingClientRect();
-      const xFrac = (e.clientX - rect.left) / rect.width;
-      const yFrac = (e.clientY - rect.top) / rect.height;
       const factor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
       setView((v) => {
         const newW = Math.max(baseBounds.w * 0.05, Math.min(baseBounds.w * 1.5, v.w * factor));
         const newH = Math.max(baseBounds.h * 0.05, Math.min(baseBounds.h * 1.5, v.h * factor));
-        const cursorX = v.x + xFrac * v.w;
-        const cursorY = v.y + yFrac * v.h;
-        return { x: cursorX - xFrac * newW, y: cursorY - yFrac * newH, w: newW, h: newH };
+        // Place the new viewBox so cursorImage maps back to the same client
+        // coords under the new CTM. Worked out analytically for
+        // preserveAspectRatio="xMidYMid meet": scale is uniform = min(rw/w, rh/h),
+        // viewBox is centered in the leftover space.
+        const newScale = Math.min(rect.width / newW, rect.height / newH);
+        const offsetX = (rect.width - newW * newScale) / 2;
+        const offsetY = (rect.height - newH * newScale) / 2;
+        return {
+          x: cursorImage.x - (e.clientX - rect.left - offsetX) / newScale,
+          y: cursorImage.y - (e.clientY - rect.top - offsetY) / newScale,
+          w: newW,
+          h: newH,
+        };
       });
     },
-    [baseBounds.w, baseBounds.h],
+    [baseBounds.w, baseBounds.h, screenToImage],
   );
 
   useEffect(() => {
@@ -387,19 +421,19 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             {drawingLayline!.hexes.indexOf(coord) + 1}
           </text>
         )}
-        {view.w < baseBounds.w * 0.5 && (
-          <text
-            x={center.x}
-            y={center.y - 90}
-            textAnchor="middle"
-            fontSize="30"
-            fill="#f5e6c8"
-            opacity={0.6}
-            pointerEvents="none"
-          >
-            {coord}
-          </text>
-        )}
+        {/* Coordinate label near the top of the hex. Always rendered;
+            opacity fades out at low zoom so dense maps don't drown in text. */}
+        <text
+          x={center.x}
+          y={center.y - HEX_GRID_META.hexSize * 0.55}
+          textAnchor="middle"
+          fontSize="30"
+          fill="#f5e6c8"
+          opacity={Math.max(0.15, Math.min(0.7, 1 - view.w / (baseBounds.w * 1.4)))}
+          pointerEvents="none"
+        >
+          {coord}
+        </text>
       </g>
     );
   };
@@ -419,23 +453,25 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     const lines: React.ReactElement[] = [];
     for (const ll of mapData.laylines) {
       if (ll.hexes.length < 2) continue;
+      const notesSnippet = ll.notes ? ` — ${ll.notes.slice(0, 120)}` : '';
       lines.push(
-        <polyline
-          key={ll.id}
-          points={polylinePoints(ll.hexes)}
-          fill="none"
-          stroke={ll.color}
-          strokeWidth={14}
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          opacity={selectedLayline && selectedLayline !== ll.id ? 0.35 : 0.9}
-          style={{ cursor: 'pointer' }}
+        <g key={ll.id} style={{ cursor: 'pointer' }}
           onClick={(e) => {
             e.stopPropagation();
             setSelectedLayline(ll.id);
             setSelectedHex(null);
-          }}
-        />,
+          }}>
+          <title>{`${ll.type || 'Layline'}: ${ll.name || 'Unnamed'}${notesSnippet}`}</title>
+          <polyline
+            points={polylinePoints(ll.hexes)}
+            fill="none"
+            stroke={ll.color}
+            strokeWidth={14}
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={selectedLayline && selectedLayline !== ll.id ? 0.35 : 0.9}
+          />
+        </g>,
       );
     }
     if (drawingLayline && drawingLayline.hexes.length >= 2) {
@@ -560,23 +596,40 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         const mx = x + r * Math.cos(angle);
         const my = y + r * Math.sin(angle);
         if (entry.kind === 'poi') {
+          // SVG <title> renders as a native browser tooltip on hover.
+          // Click selects the hex so the inspector shows this POI.
+          const notesSnippet = entry.item.notes ? ` — ${entry.item.notes.slice(0, 120)}` : '';
           els.push(
-            <circle
-              key={`poi-${entry.item.id}`}
-              cx={mx}
-              cy={my}
-              r={22}
-              fill="#8b2500"
-              stroke="#f5e6c8"
-              strokeWidth={4}
-              pointerEvents="none"
-            />,
+            <g key={`poi-${entry.item.id}`} style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedHex(hex);
+                setSelectedLayline(null);
+                setPendingForm(null);
+              }}>
+              <title>{entry.item.name || 'Unnamed POI'}{notesSnippet}</title>
+              <circle cx={mx} cy={my} r={22} fill="#8b2500" stroke="#f5e6c8" strokeWidth={4} />
+            </g>,
           );
         } else {
+          const door = entry.item;
+          const dest = door.destination;
+          const destLabel = dest.kind === 'wild'
+            ? 'wild → fey realm'
+            : `roaded${dest.roadName ? ` via "${dest.roadName}"` : ''}`;
+          const notesSnippet = door.notes ? ` — ${door.notes.slice(0, 120)}` : '';
           els.push(
-            <g key={`door-${entry.item.id}`} pointerEvents="none">
+            <g key={`door-${door.id}`} style={{ cursor: 'pointer' }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setSelectedHex(hex);
+                setSelectedLayline(null);
+                setPendingForm(null);
+              }}>
+              <title>{`${door.name || 'Unnamed door'} (${destLabel})${notesSnippet}`}</title>
               <circle cx={mx} cy={my} r={26} fill="#a774d6" stroke="#f5e6c8" strokeWidth={4} />
-              <text x={mx} y={my + 12} textAnchor="middle" fontSize="38" fill="#1a1a2e" fontWeight="bold">
+              <text x={mx} y={my + 12} textAnchor="middle" fontSize="38" fill="#1a1a2e" fontWeight="bold"
+                pointerEvents="none">
                 ✦
               </text>
             </g>,
@@ -687,28 +740,6 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           <g>{renderMarkers()}</g>
         </svg>
 
-        {hoverHex && hoverScreen && !drawingLayline && (
-          <HoverChip
-            hex={hoverHex}
-            screen={hoverScreen}
-            terrain={HEX_CELLS[hoverHex].terrain}
-            isCurrent={character.currentLocationHex === hoverHex}
-            hasContent={contentsByHex.has(hoverHex)}
-            onSetCurrent={() => setCurrentLocation(hoverHex)}
-            onAddPOI={() => {
-              setSelectedHex(hoverHex);
-              setPendingForm({ type: 'poi', hex: hoverHex });
-            }}
-            onAddDoor={() => {
-              setSelectedHex(hoverHex);
-              setPendingForm({ type: 'door', hex: hoverHex });
-            }}
-            onInspect={() => {
-              setSelectedHex(hoverHex);
-              setPendingForm(null);
-            }}
-          />
-        )}
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
@@ -732,86 +763,6 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           selectedLayline={selectedLayline}
           setSelectedLayline={setSelectedLayline}
         />
-      </div>
-    </div>
-  );
-}
-
-// --- Hover chip ---
-function HoverChip({
-  hex,
-  screen,
-  terrain,
-  isCurrent,
-  hasContent,
-  onSetCurrent,
-  onAddPOI,
-  onAddDoor,
-  onInspect,
-}: {
-  hex: HexCoord;
-  screen: { x: number; y: number };
-  terrain: string;
-  isCurrent: boolean;
-  hasContent: boolean;
-  onSetCurrent: () => void;
-  onAddPOI: () => void;
-  onAddDoor: () => void;
-  onInspect: () => void;
-}) {
-  // Wrapper is pointer-events-none so the cursor passes through to the
-  // SVG beneath — otherwise the chip blocks the mousemove/mouseleave that
-  // tracks hex hover, and the chip gets stuck anchored at the last position.
-  // Individual buttons re-enable pointer events so they remain clickable.
-  //
-  // Measure the rendered chip and flip its anchor when the default
-  // bottom-right position would clip outside the viewport.
-  const chipRef = useRef<HTMLDivElement>(null);
-  const [chipSize, setChipSize] = useState({ w: 180, h: 160 });
-  useLayoutEffect(() => {
-    if (!chipRef.current) return;
-    const rect = chipRef.current.getBoundingClientRect();
-    if (rect.width && rect.height && (rect.width !== chipSize.w || rect.height !== chipSize.h)) {
-      setChipSize({ w: rect.width, h: rect.height });
-    }
-  });
-  const vw = typeof window === 'undefined' ? Infinity : window.innerWidth;
-  const vh = typeof window === 'undefined' ? Infinity : window.innerHeight;
-  const flipX = screen.x + 14 + chipSize.w > vw;
-  const flipY = screen.y + 14 + chipSize.h > vh;
-  const left = flipX ? Math.max(4, screen.x - 14 - chipSize.w) : screen.x + 14;
-  const top = flipY ? Math.max(4, screen.y - 14 - chipSize.h) : screen.y + 14;
-
-  return (
-    <div
-      ref={chipRef}
-      className="fixed z-50 pointer-events-none bg-[#1a1a2e]/95 border border-[#c4a35a]/50 rounded-md shadow-lg p-2 text-xs text-[#f5e6c8]"
-      style={{ left, top }}
-    >
-      <div className="flex items-center gap-2 mb-1 pb-1 border-b border-[#5a3a28]">
-        <span className="text-[#c4a35a] font-bold">{hex}</span>
-        <span className="text-[#f5e6c8]/60">{terrain}</span>
-        {isCurrent && <span className="text-[#c4a35a]">★ here</span>}
-      </div>
-      <div className="flex flex-col gap-1">
-        <button
-          onClick={onSetCurrent}
-          disabled={isCurrent}
-          className="pointer-events-auto text-left px-2 py-1 rounded hover:bg-[#2d4a2e] disabled:opacity-40 disabled:hover:bg-transparent transition-colors"
-        >
-          📍 Set as current
-        </button>
-        <button onClick={onAddPOI} className="pointer-events-auto text-left px-2 py-1 rounded hover:bg-[#2d4a2e] transition-colors">
-          + POI
-        </button>
-        <button onClick={onAddDoor} className="pointer-events-auto text-left px-2 py-1 rounded hover:bg-[#2d4a2e] transition-colors">
-          ✦ Faye Door
-        </button>
-        {hasContent && (
-          <button onClick={onInspect} className="pointer-events-auto text-left px-2 py-1 rounded hover:bg-[#2d4a2e] transition-colors">
-            🔍 Inspect
-          </button>
-        )}
       </div>
     </div>
   );
@@ -883,15 +834,21 @@ function HexInspectorPanel({
   if (!selectedHex) {
     return (
       <div className="bg-[#2a2a3e] rounded-lg p-4 text-sm text-[#f5e6c8]/50 italic">
-        Hover a hex for quick actions, or click one to inspect.
+        Click a hex on the map to inspect it.
       </div>
     );
   }
-  // Reuse the parent's already-bucketed lookup instead of re-filtering here.
   const bucket = contentsByHex.get(selectedHex);
   const pois = bucket?.pois ?? [];
   const doors = bucket?.doors ?? [];
   const cell = HEX_CELLS[selectedHex];
+  const isCurrent = currentLocationHex === selectedHex;
+
+  // The action area at the top is either:
+  //   - the action button row (default), OR
+  //   - the active form (POI / Door), which takes its place when the user
+  //     picks an action. Submit/Cancel returns to the button row.
+  const activeForm = pendingForm?.hex === selectedHex ? pendingForm.type : null;
 
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4 space-y-3">
@@ -899,130 +856,131 @@ function HexInspectorPanel({
         <div>
           <span className="text-[#c4a35a] font-bold">Hex {selectedHex}</span>
           <span className="text-[#f5e6c8]/60 text-xs ml-2">{cell?.terrain}</span>
-          {currentLocationHex === selectedHex && <span className="text-[#c4a35a] text-xs ml-2">★ current</span>}
+          {isCurrent && <span className="text-[#c4a35a] text-xs ml-2">★ current</span>}
         </div>
-        <div className="flex gap-2 text-xs">
-          {currentLocationHex !== selectedHex && (
-            <button
-              onClick={() => setCurrentLocation(selectedHex)}
-              className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-2 py-1 transition-colors"
-            >
-              📍 Set current
-            </button>
-          )}
-          <button onClick={onClose} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
-            ✕
-          </button>
-        </div>
+        <button onClick={onClose} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] text-xs transition-colors">
+          ✕
+        </button>
       </div>
 
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <h4 className="text-[#c4a35a] text-sm font-semibold">Points of Interest</h4>
+      {activeForm === 'poi' && (
+        <POIForm
+          hex={selectedHex}
+          onSubmit={(poi) => {
+            updateMap((md) => ({ ...md, pois: [...md.pois, poi] }));
+            setPendingForm(null);
+          }}
+          onCancel={() => setPendingForm(null)}
+        />
+      )}
+      {activeForm === 'door' && (
+        <DoorForm
+          hex={selectedHex}
+          existingDoors={mapData.fayeDoors}
+          onSubmit={(door, pairUpdates) => {
+            updateMap((md) => ({
+              ...md,
+              fayeDoors: [
+                ...md.fayeDoors.map((x) => pairUpdates.find((u) => u.id === x.id) ?? x),
+                door,
+              ],
+            }));
+            setPendingForm(null);
+          }}
+          onCancel={() => setPendingForm(null)}
+        />
+      )}
+      {activeForm === null && (
+        <div className="grid grid-cols-3 gap-2 text-sm">
+          <button
+            onClick={() => setCurrentLocation(selectedHex)}
+            disabled={isCurrent}
+            className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 disabled:hover:bg-[#2d4a2e] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
+          >
+            📍 Set Current
+          </button>
           <button
             onClick={() => setPendingForm({ type: 'poi', hex: selectedHex })}
-            className="text-xs bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-0.5 transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
           >
-            + Add POI
+            + POI
           </button>
-        </div>
-        {pendingForm?.type === 'poi' && pendingForm.hex === selectedHex && (
-          <POIForm
-            hex={selectedHex}
-            onSubmit={(poi) => {
-              updateMap((md) => ({ ...md, pois: [...md.pois, poi] }));
-              setPendingForm(null);
-            }}
-            onCancel={() => setPendingForm(null)}
-          />
-        )}
-        {pois.length === 0 ? (
-          <div className="text-xs text-[#f5e6c8]/40 italic">None.</div>
-        ) : (
-          <div className="space-y-2">
-            {pois.map((p) => (
-              <POIEditor
-                key={p.id}
-                poi={p}
-                onSave={(updated) =>
-                  updateMap((md) => ({
-                    ...md,
-                    pois: md.pois.map((x) => (x.id === updated.id ? updated : x)),
-                  }))
-                }
-                onDelete={() =>
-                  updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }))
-                }
-              />
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div>
-        <div className="flex items-center justify-between mb-1">
-          <h4 className="text-[#c4a35a] text-sm font-semibold">Faye Doors</h4>
           <button
             onClick={() => setPendingForm({ type: 'door', hex: selectedHex })}
-            className="text-xs bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-0.5 transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
           >
-            + Add Door
+            ✦ Faye Door
           </button>
         </div>
-        {pendingForm?.type === 'door' && pendingForm.hex === selectedHex && (
-          <DoorForm
-            hex={selectedHex}
-            existingDoors={mapData.fayeDoors}
-            onSubmit={(door, pairUpdates) => {
-              updateMap((md) => ({
-                ...md,
-                fayeDoors: [
-                  ...md.fayeDoors.map((x) => pairUpdates.find((u) => u.id === x.id) ?? x),
-                  door,
-                ],
-              }));
-              setPendingForm(null);
-            }}
-            onCancel={() => setPendingForm(null)}
-          />
-        )}
-        {doors.length === 0 ? (
-          <div className="text-xs text-[#f5e6c8]/40 italic">None.</div>
-        ) : (
-          <div className="space-y-2">
-            {doors.map((d) => (
-              <DoorEditor
-                key={d.id}
-                door={d}
-                allDoors={mapData.fayeDoors}
-                onSave={(updated, pairUpdates) =>
-                  updateMap((md) => ({
-                    ...md,
-                    fayeDoors: md.fayeDoors.map((x) => {
-                      if (x.id === updated.id) return updated;
-                      const u = pairUpdates.find((p) => p.id === x.id);
-                      return u ?? x;
-                    }),
-                  }))
-                }
-                onDelete={() =>
-                  updateMap((md) => ({
-                    ...md,
-                    fayeDoors: md.fayeDoors
-                      .filter((x) => x.id !== d.id)
-                      .map((x) => {
-                        if (x.destination.kind === 'roaded' && x.destination.pairedDoorId === d.id) {
-                          return { ...x, destination: { kind: 'wild' } };
-                        }
-                        return x;
-                      }),
-                  }))
-                }
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      )}
+
+      {(pois.length > 0 || doors.length > 0) && (
+        <div className="space-y-3 pt-1 border-t border-[#5a3a28]">
+          {pois.length > 0 && (
+            <div>
+              <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">
+                Points of Interest
+              </h4>
+              <div className="space-y-2">
+                {pois.map((p) => (
+                  <POIEditor
+                    key={p.id}
+                    poi={p}
+                    onSave={(updated) =>
+                      updateMap((md) => ({
+                        ...md,
+                        pois: md.pois.map((x) => (x.id === updated.id ? updated : x)),
+                      }))
+                    }
+                    onDelete={() =>
+                      updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+          {doors.length > 0 && (
+            <div>
+              <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">
+                Faye Doors
+              </h4>
+              <div className="space-y-2">
+                {doors.map((d) => (
+                  <DoorEditor
+                    key={d.id}
+                    door={d}
+                    allDoors={mapData.fayeDoors}
+                    onSave={(updated, pairUpdates) =>
+                      updateMap((md) => ({
+                        ...md,
+                        fayeDoors: md.fayeDoors.map((x) => {
+                          if (x.id === updated.id) return updated;
+                          const u = pairUpdates.find((p) => p.id === x.id);
+                          return u ?? x;
+                        }),
+                      }))
+                    }
+                    onDelete={() =>
+                      updateMap((md) => ({
+                        ...md,
+                        fayeDoors: md.fayeDoors
+                          .filter((x) => x.id !== d.id)
+                          .map((x) => {
+                            if (x.destination.kind === 'roaded' && x.destination.pairedDoorId === d.id) {
+                              return { ...x, destination: { kind: 'wild' } };
+                            }
+                            return x;
+                          }),
+                      }))
+                    }
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

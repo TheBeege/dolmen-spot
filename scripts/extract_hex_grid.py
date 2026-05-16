@@ -116,6 +116,12 @@ def classify_hex(visited: np.ndarray, cx: float, cy: float, radius: int = 8) -> 
 
 
 def main() -> None:
+    # Import here so the calibration-only modules of detect_drawn_hexes
+    # don't trigger when this is imported elsewhere.
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from detect_drawn_hexes import find_digit_clusters, expected_label_center  # type: ignore
+
     root = Path(__file__).resolve().parent.parent
     img_path = root / "public" / "dolmenwood-map.png"
     out_path = root / "src" / "lib" / "hex-grid.json"
@@ -125,34 +131,78 @@ def main() -> None:
     h, w = arr.shape
     print(f"Loaded {w}x{h} grayscale.")
 
-    # Build the outside mask
+    # Build the outside mask (used only to classify TERRAIN for drawn hexes)
     print("Building outside-mask via flood-fill...")
     outside = build_outside_mask(arr)
     print(f"Outside pixels: {outside.sum()} ({outside.mean()*100:.1f}%)")
 
-    # Determine grid bounds: walk hex centers, keep those whose center is inside the image.
-    # Cols: 1 to some max; rows: 1 to some max.
-    # From measurements: roughly 19 cols and 13 rows fit. We'll be generous and trim later.
+    # Step 1: detect which hexes are actually drawn on the printed map by
+    # finding their 4-digit coordinate labels. Off-map regions (compass
+    # rose, "Dolmenwood" title) have no labels and are excluded automatically.
+    print("Detecting drawn hexes via label clusters...")
+    centroids = find_digit_clusters(arr)
+    print(f"Found {len(centroids)} 4-digit label clusters.")
+
     max_cols = int((w - LABEL_X_COL1) / COL_PITCH) + 2
     max_rows = int((h - LABEL_Y_ROW1_ODD - LABEL_TO_CENTER_DY) / ROW_PITCH) + 2
-    print(f"Scanning up to {max_cols} cols x {max_rows} rows...")
+    candidates: list[tuple[int, int, float, float]] = []
+    for col in range(1, max_cols + 1):
+        for row in range(1, max_rows + 1):
+            lx, ly = expected_label_center(col, row)
+            if lx < 80 or lx > w - 80 or ly < 80 or ly > h - 80:
+                continue
+            candidates.append((col, row, lx, ly))
 
+    drawn: set[tuple[int, int]] = set()
+    for cx, cy in centroids:
+        best: tuple[int, int] | None = None
+        best_d = float("inf")
+        for col, row, lx, ly in candidates:
+            d = (cx - lx) ** 2 + (cy - ly) ** 2
+            if d < best_d:
+                best_d = d
+                best = (col, row)
+        if best is not None and math.sqrt(best_d) <= 100:
+            drawn.add(best)
+    print(f"Direct label matches: {len(drawn)} hexes")
+
+    # Gap-fill: hexes whose label was occluded by dense forest texture get
+    # rescued by having 4+ neighbors already in the drawn set. One pass is
+    # usually enough but we iterate to convergence.
+    def neighbors(c: int, r: int) -> list[tuple[int, int]]:
+        q = c - 1
+        if q % 2 == 0:
+            offsets = [(+1, -1), (+1, 0), (0, +1), (-1, 0), (-1, -1), (0, -1)]
+        else:
+            offsets = [(+1, 0), (+1, +1), (0, +1), (-1, +1), (-1, 0), (0, -1)]
+        return [(c + dq, r + dr) for dq, dr in offsets]
+
+    expected_set = {(c, r) for c, r, _, _ in candidates}
+    added = True
+    while added:
+        added = False
+        for col, row in list(expected_set - drawn):
+            ns = neighbors(col, row)
+            if sum(1 for n in ns if n in drawn) >= 4:
+                drawn.add((col, row))
+                added = True
+    print(f"After gap-fill: {len(drawn)} hexes")
+
+    # Step 2: classify TERRAIN for each drawn hex.
     hexes: dict[str, dict] = {}
     counts = {"woods": 0, "open": 0, "edge": 0}
     cols_present: set[int] = set()
     rows_present: set[int] = set()
-    for col in range(1, max_cols + 1):
-        for row in range(1, max_rows + 1):
-            cx, cy = hex_center(col, row)
-            # Margin so we don't classify hexes whose center is outside the image
-            if cx < 50 or cx > w - 50 or cy < 50 or cy > h - 50:
-                continue
-            terrain = classify_hex(outside, cx, cy)
-            key = f"{col:02d}{row:02d}"
-            hexes[key] = {"col": col, "row": row, "terrain": terrain}
-            counts[terrain] += 1
-            cols_present.add(col)
-            rows_present.add(row)
+    for col, row in sorted(drawn):
+        cx, cy = hex_center(col, row)
+        if cx < 50 or cx > w - 50 or cy < 50 or cy > h - 50:
+            continue
+        terrain = classify_hex(outside, cx, cy)
+        key = f"{col:02d}{row:02d}"
+        hexes[key] = {"col": col, "row": row, "terrain": terrain}
+        counts[terrain] += 1
+        cols_present.add(col)
+        rows_present.add(row)
 
     print(f"Hexes: {len(hexes)} total. Breakdown: {counts}")
     print(f"Cols present: {min(cols_present)}-{max(cols_present)}")
