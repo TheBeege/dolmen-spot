@@ -199,6 +199,15 @@ const migrations: Record<number, (data: any) => any> = {
   },
 };
 
+// Required subkeys for the schema's nullable-object fields. If a saved
+// plain-object value is missing any of these, the field is reset to
+// `null` so the UI's "you must select X" flow handles it cleanly
+// instead of rendering undefined names / NaN counts.
+const NULLABLE_OBJECT_REQUIRED_KEYS: Partial<Record<keyof Character, readonly string[]>> = {
+  knack: ['knackId', 'name', 'notes'],
+  animalCompanion: ['name', 'type', 'hp', 'notes'],
+};
+
 /**
  * Deep-merge saved character data over a fresh default character.
  * Missing fields get safe defaults without overwriting existing player
@@ -226,9 +235,20 @@ function reconcileWithDefaults(data: any): any {
     }
 
     if (defVal === null) {
-      // Nullable-object field (knack, animalCompanion). Anything other
-      // than null or a plain object is malformed → reset to null.
-      if (dataVal !== null && !isPlainObject(dataVal)) data[key] = null;
+      // Nullable-object field (knack, animalCompanion). Three cases:
+      //   - null: legitimate cleared state, leave alone.
+      //   - non-null + non-plain-object: malformed → null.
+      //   - plain object: check required subkeys; if any are missing,
+      //     null it out so the UI re-selection flow handles it cleanly.
+      if (dataVal === null) continue;
+      if (!isPlainObject(dataVal)) {
+        data[key] = null;
+        continue;
+      }
+      const required = NULLABLE_OBJECT_REQUIRED_KEYS[key];
+      if (required && !required.every((k) => k in (dataVal as object))) {
+        data[key] = null;
+      }
       continue;
     }
 
