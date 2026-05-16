@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Character, InventoryItem, Coins, CharacterContainer } from '@/lib/types';
+import { Character, InventoryItem, Coins, CharacterContainer, SpellbookEntry } from '@/lib/types';
 import {
   getSpeedBySlots,
   getSpeedByWeight,
@@ -13,6 +13,8 @@ import {
   EQUIPMENT_CATEGORIES,
   ARMOUR_TABLE,
   WEAPONS_TABLE,
+  ARCANE_SPELLS,
+  findArcaneSpell,
   EquipmentEntry,
 } from '@/lib/gamedata';
 
@@ -42,6 +44,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   // Collapsed container state
   const [collapsedContainers, setCollapsedContainers] = useState<Set<string>>(new Set());
+
+  // Collapsed spellbook state (spellbook items default to expanded)
+  const [collapsedSpellbooks, setCollapsedSpellbooks] = useState<Set<string>>(new Set());
+
+  // Magical-item dropdown ("+ Spellbook" / "+ Scroll") per add-context
+  const [magicalDropdownFor, setMagicalDropdownFor] = useState<string | null>(null);
 
   // Escape key + body scroll lock for catalog modal
   useEffect(() => {
@@ -95,6 +103,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   const handleAddFromCatalog = (entry: EquipmentEntry | { name: string; weight: number; slots: number; notes?: string }) => {
+    // Auto-detect blank spell books from the catalog so they get the spellbook UI.
+    const isSpellbook = /spell\s*book/i.test(entry.name);
     const newItem: InventoryItem = {
       id: crypto.randomUUID(),
       name: entry.name,
@@ -105,6 +115,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
       ...(catalogTarget.section === 'stowed' && catalogTarget.containerId
         ? { containerId: catalogTarget.containerId }
         : {}),
+      ...(isSpellbook ? { kind: 'spellbook' as const, spellbookContents: [] } : {}),
     };
 
     if (catalogTarget.section === 'equipped') {
@@ -112,6 +123,97 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     } else {
       onChange({ stowedItems: [...stowedItems, newItem] });
     }
+  };
+
+  const handleAddSpellbook = (equipped: boolean, containerId?: string) => {
+    const newItem: InventoryItem = {
+      id: crypto.randomUUID(),
+      name: 'Spell Book',
+      slots: 1,
+      weight: 10,
+      notes: '',
+      equipped,
+      kind: 'spellbook',
+      spellbookContents: [],
+      ...(equipped ? {} : { containerId }),
+    };
+    if (equipped) onChange({ equippedItems: [...equippedItems, newItem] });
+    else onChange({ stowedItems: [...stowedItems, newItem] });
+    setMagicalDropdownFor(null);
+  };
+
+  const handleAddScroll = (equipped: boolean, containerId?: string) => {
+    const newItem: InventoryItem = {
+      id: crypto.randomUUID(),
+      name: 'Scroll',
+      slots: 0,
+      weight: 1,
+      notes: '',
+      equipped,
+      kind: 'scroll',
+      scrollSpell: { name: '', rank: 1 },
+      ...(equipped ? {} : { containerId }),
+    };
+    if (equipped) onChange({ equippedItems: [...equippedItems, newItem] });
+    else onChange({ stowedItems: [...stowedItems, newItem] });
+    setMagicalDropdownFor(null);
+  };
+
+  const updateInventoryItem = (equipped: boolean, itemId: string, mutator: (item: InventoryItem) => InventoryItem) => {
+    const items = equipped ? equippedItems : stowedItems;
+    const updated = items.map((item) => (item.id === itemId ? mutator(item) : item));
+    if (equipped) onChange({ equippedItems: updated });
+    else onChange({ stowedItems: updated });
+  };
+
+  const handleSpellbookAddEntry = (equipped: boolean, itemId: string) => {
+    updateInventoryItem(equipped, itemId, (item) => {
+      const contents = item.spellbookContents ?? [];
+      if (contents.length >= 3) return item;
+      return { ...item, spellbookContents: [...contents, { name: '', rank: 1 }] };
+    });
+  };
+
+  const handleSpellbookUpdateEntry = (
+    equipped: boolean,
+    itemId: string,
+    index: number,
+    updates: Partial<SpellbookEntry>,
+  ) => {
+    updateInventoryItem(equipped, itemId, (item) => {
+      const contents = item.spellbookContents ?? [];
+      return {
+        ...item,
+        spellbookContents: contents.map((e, i) => (i === index ? { ...e, ...updates } : e)),
+      };
+    });
+  };
+
+  const handleSpellbookRemoveEntry = (equipped: boolean, itemId: string, index: number) => {
+    updateInventoryItem(equipped, itemId, (item) => ({
+      ...item,
+      spellbookContents: (item.spellbookContents ?? []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleScrollUpdate = (
+    equipped: boolean,
+    itemId: string,
+    updates: Partial<SpellbookEntry>,
+  ) => {
+    updateInventoryItem(equipped, itemId, (item) => ({
+      ...item,
+      scrollSpell: { name: '', rank: 1, ...item.scrollSpell, ...updates },
+    }));
+  };
+
+  const toggleSpellbookCollapse = (id: string) => {
+    setCollapsedSpellbooks((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
   const handleUpdateItem = (
@@ -230,6 +332,254 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   // ── Render helpers ──
+  const renderSpellbookItem = (item: InventoryItem, equipped: boolean) => {
+    const contents = item.spellbookContents ?? [];
+    const isCollapsed = collapsedSpellbooks.has(item.id);
+    const isFull = contents.length >= 3;
+    return (
+      <div key={item.id} className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1">
+        {/* Header */}
+        <div className="flex flex-wrap items-center gap-2 p-2">
+          <button
+            type="button"
+            onClick={() => toggleSpellbookCollapse(item.id)}
+            className="text-[#c4a35a] text-xs shrink-0 w-4"
+            title={isCollapsed ? 'Expand spell book' : 'Collapse spell book'}
+          >
+            {isCollapsed ? '▶' : '▼'}
+          </button>
+          <span className="text-[#c4a35a] text-sm shrink-0" title="Spell book">📕</span>
+          <input
+            type="text"
+            value={item.name}
+            onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
+            placeholder="Spell book title"
+            className={`${inputClasses} flex-1 min-w-[120px]`}
+          />
+          <span className="text-[#f5e6c8]/50 text-xs shrink-0">
+            {contents.length}/3
+          </span>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              value={item.slots}
+              onChange={(e) => handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)}
+              min={0}
+              title="Slots"
+              className={`${inputClasses} w-16 text-center`}
+            />
+            <input
+              type="number"
+              value={item.weight}
+              onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
+              min={0}
+              title="Weight"
+              className={`${inputClasses} w-20 text-center`}
+            />
+            {!equipped && containers.length > 0 && (
+              <select
+                value={item.containerId ?? ''}
+                onChange={(e) => handleMoveToContainer(item.id, e.target.value || undefined)}
+                className={`${inputClasses} w-10 text-xs p-0.5`}
+                title="Move to container"
+              >
+                <option value="">Loose</option>
+                {containers.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDeleteItem(equipped, item.id)}
+              className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
+              title="Delete spell book"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+
+        {/* Spell list */}
+        {!isCollapsed && (
+          <div className="border-t border-[#5a3a28]/40 px-3 py-2 space-y-1">
+            {contents.length === 0 && (
+              <div className="text-[#f5e6c8]/40 text-xs italic">No spells recorded. Up to 3.</div>
+            )}
+            {contents.map((entry, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <select
+                  value={entry.name}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    const matched = findArcaneSpell(value);
+                    handleSpellbookUpdateEntry(equipped, item.id, index, {
+                      name: value,
+                      rank: matched?.rank ?? entry.rank,
+                    });
+                  }}
+                  className={`${inputClasses} flex-1 min-w-[160px] text-sm`}
+                >
+                  <option value="">-- Select spell --</option>
+                  {[1, 2, 3, 4, 5, 6].map((rank) => (
+                    <optgroup key={rank} label={`Rank ${rank}`}>
+                      {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                        <option key={s.name} value={s.name}>{s.name}</option>
+                      ))}
+                    </optgroup>
+                  ))}
+                </select>
+                {entry.name && (
+                  <span className="text-[#c4a35a] text-xs shrink-0">R{entry.rank}</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => handleSpellbookRemoveEntry(equipped, item.id, index)}
+                  className="text-[#8b2500] hover:text-[#b33a1a] text-sm shrink-0 px-1"
+                  title="Remove spell"
+                >
+                  &times;
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => handleSpellbookAddEntry(equipped, item.id)}
+              disabled={isFull}
+              className={`text-xs px-2 py-0.5 rounded mt-1 ${
+                isFull
+                  ? 'bg-[#1a1a2e] text-[#f5e6c8]/30 border border-[#5a3a28]/40 cursor-not-allowed'
+                  : 'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8]'
+              }`}
+            >
+              {isFull ? 'Full (3/3)' : '+ Add spell'}
+            </button>
+            <textarea
+              value={item.notes}
+              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              placeholder="Notes (language, source, etc.)"
+              rows={1}
+              className={`${inputClasses} w-full mt-1 text-xs resize-y`}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderScrollItem = (item: InventoryItem, equipped: boolean) => {
+    const scroll = item.scrollSpell ?? { name: '', rank: 1 };
+    return (
+      <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 p-2 rounded mb-1">
+        <span className="text-[#c4a35a] text-sm shrink-0" title="Scroll">📜</span>
+        <select
+          value={scroll.name}
+          onChange={(e) => {
+            const value = e.target.value;
+            const matched = findArcaneSpell(value);
+            handleScrollUpdate(equipped, item.id, {
+              name: value,
+              rank: matched?.rank ?? scroll.rank,
+            });
+          }}
+          className={`${inputClasses} flex-1 min-w-[160px] text-sm`}
+        >
+          <option value="">-- Select spell --</option>
+          {[1, 2, 3, 4, 5, 6].map((rank) => (
+            <optgroup key={rank} label={`Rank ${rank}`}>
+              {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                <option key={s.name} value={s.name}>{s.name}</option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {scroll.name && (
+          <span className="text-[#c4a35a] text-xs shrink-0">R{scroll.rank}</span>
+        )}
+        <input
+          type="number"
+          value={item.weight}
+          onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
+          min={0}
+          title="Weight"
+          className={`${inputClasses} w-20 text-center text-sm`}
+        />
+        {!equipped && containers.length > 0 && (
+          <select
+            value={item.containerId ?? ''}
+            onChange={(e) => handleMoveToContainer(item.id, e.target.value || undefined)}
+            className={`${inputClasses} w-10 text-xs p-0.5`}
+            title="Move to container"
+          >
+            <option value="">Loose</option>
+            {containers.map((c) => (
+              <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (confirm(`Use the ${scroll.name || 'scroll'}? It will be consumed.`)) {
+              handleDeleteItem(equipped, item.id);
+            }
+          }}
+          className="bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-2 py-1 rounded shrink-0"
+          title="Use scroll (consumes it)"
+        >
+          Use
+        </button>
+        <button
+          type="button"
+          onClick={() => handleDeleteItem(equipped, item.id)}
+          className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
+          title="Delete scroll"
+        >
+          &times;
+        </button>
+      </div>
+    );
+  };
+
+  const renderInventoryItem = (item: InventoryItem, equipped: boolean) => {
+    if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped);
+    if (item.kind === 'scroll') return renderScrollItem(item, equipped);
+    return equipped ? renderItemRow(item, true) : renderStowedItemRow(item);
+  };
+
+  const renderMagicalDropdown = (dropdownKey: string, equipped: boolean, containerId?: string) => {
+    const isOpen = magicalDropdownFor === dropdownKey;
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          onClick={() => setMagicalDropdownFor(isOpen ? null : dropdownKey)}
+          className="bg-[#3a2a4e] hover:bg-[#4a3a6e] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+        >
+          + Magical ▾
+        </button>
+        {isOpen && (
+          <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-10 min-w-40">
+            <button
+              type="button"
+              onClick={() => handleAddSpellbook(equipped, containerId)}
+              className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e] border-b border-[#5a3a28]/30"
+            >
+              📕 Spell Book
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddScroll(equipped, containerId)}
+              className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e]"
+            >
+              📜 Scroll
+            </button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderItemRow = (item: InventoryItem, equipped: boolean) => (
     <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
       <input
@@ -269,6 +619,23 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           placeholder="Notes"
           className={`${inputClasses} w-32 min-w-0`}
         />
+        {!equipped && containers.length > 0 && (
+          <select
+            value={item.containerId ?? ''}
+            onChange={(e) =>
+              handleMoveToContainer(item.id, e.target.value || undefined)
+            }
+            className={`${inputClasses} w-10 text-xs p-0.5`}
+            title="Move to container"
+          >
+            <option value="">Loose</option>
+            {containers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        )}
         <button
           type="button"
           onClick={() => handleDeleteItem(equipped, item.id)}
@@ -280,6 +647,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
       </div>
     </div>
   );
+
+  const renderStowedItemRow = (item: InventoryItem) => renderItemRow(item, false);
 
   const renderContainerGroup = (container: CharacterContainer | null) => {
     const containerId = container?.id;
@@ -356,79 +725,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   <span className="w-32">Notes</span>
                   <span className="w-6" />
                 </div>
-                {containerItems.map((item) => (
-                  <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
-                    <input
-                      type="text"
-                      value={item.name}
-                      onChange={(e) => handleUpdateItem(false, item.id, 'name', e.target.value)}
-                      placeholder="Item name"
-                      className={`${inputClasses} flex-1 min-w-[120px]`}
-                    />
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="number"
-                        value={item.slots}
-                        onChange={(e) =>
-                          handleUpdateItem(false, item.id, 'slots', parseInt(e.target.value) || 0)
-                        }
-                        min={0}
-                        title="Slots"
-                        placeholder="Sl"
-                        className={`${inputClasses} w-16 text-center`}
-                      />
-                      <input
-                        type="number"
-                        value={item.weight}
-                        onChange={(e) =>
-                          handleUpdateItem(false, item.id, 'weight', parseInt(e.target.value) || 0)
-                        }
-                        min={0}
-                        title="Weight"
-                        placeholder="Wt"
-                        className={`${inputClasses} w-20 text-center`}
-                      />
-                      <input
-                        type="text"
-                        value={item.notes}
-                        onChange={(e) => handleUpdateItem(false, item.id, 'notes', e.target.value)}
-                        placeholder="Notes"
-                        className={`${inputClasses} w-32 min-w-0`}
-                      />
-                      {/* Move to container dropdown */}
-                      {containers.length > 0 && (
-                        <select
-                          value={item.containerId ?? ''}
-                          onChange={(e) =>
-                            handleMoveToContainer(item.id, e.target.value || undefined)
-                          }
-                          className={`${inputClasses} w-10 text-xs p-0.5`}
-                          title="Move to container"
-                        >
-                          <option value="">Loose</option>
-                          {containers.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.name}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteItem(false, item.id)}
-                        className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-                        title="Delete item"
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                {containerItems.map((item) => renderInventoryItem(item, false))}
               </div>
             )}
 
             {/* Add buttons */}
-            <div className="flex gap-2 ml-4 mt-1">
+            <div className="flex flex-wrap gap-2 ml-4 mt-1">
               <button
                 type="button"
                 onClick={() => handleAddItem(false, containerId)}
@@ -446,6 +748,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               >
                 + From Catalog
               </button>
+              {renderMagicalDropdown(`stowed-${containerId ?? 'loose'}`, false, containerId)}
             </div>
           </>
         )}
@@ -647,9 +950,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           <span className="w-6" />
         </div>
 
-        {equippedItems.map((item) => renderItemRow(item, true))}
+        {equippedItems.map((item) => renderInventoryItem(item, true))}
 
-        <div className="flex gap-2 mt-2">
+        <div className="flex flex-wrap gap-2 mt-2">
           <button
             type="button"
             onClick={() => handleAddItem(true)}
@@ -667,6 +970,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           >
             + From Catalog
           </button>
+          {renderMagicalDropdown('equipped', true)}
         </div>
       </div>
 
@@ -873,6 +1177,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
     {/* Equipment Catalog Modal */}
     {renderCatalogBrowser()}
+
     </>
   );
 }

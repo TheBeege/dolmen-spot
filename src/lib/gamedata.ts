@@ -311,6 +311,21 @@ export function getDayOfYear(date: CalendarDate): number {
   return total + date.day;
 }
 
+export const DAYS_IN_YEAR = MONTHS.reduce((sum, m) => sum + m.days, 0);
+
+// Calendar has no year field, so a study that wraps past year-end is detected
+// by end-of-year < start-of-year and assumed to be one wrap. Max arcane study
+// per Player's Book p78 is 12 weeks (Rank 6 research), well under one year.
+export function daysBetween(start: CalendarDate, end: CalendarDate): number {
+  const s = getDayOfYear(start);
+  const e = getDayOfYear(end);
+  return e >= s ? e - s : DAYS_IN_YEAR - s + e;
+}
+
+export function weeksElapsed(start: CalendarDate, end: CalendarDate): number {
+  return Math.floor(daysBetween(start, end) / 7);
+}
+
 export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; dayInCycle: number } {
   const doy = getDayOfYear(date);
   // 29⅓ day cycle — use 88/3 for precision
@@ -2068,6 +2083,31 @@ export const ARCANE_SPELLS: { name: string; rank: number }[] = [
   { name: 'Project Image', rank: 6 }, { name: 'Wave of Force', rank: 6 }, { name: 'Word of Doom', rank: 6 },
 ];
 
+export function findArcaneSpell(name: string): { name: string; rank: number } | undefined {
+  const target = name.trim().toLowerCase();
+  return ARCANE_SPELLS.find((s) => s.name.toLowerCase() === target);
+}
+
+// Arcane study costs and durations (Player's Book p78).
+// - Book: 1 week/rank + INT check; on fail, no retry until next level.
+// - Mentor: 1 week flat (mentor must be 3+ levels higher).
+// - Research: 2 weeks + 1,000gp per rank (minimum 1-in-6 failure chance).
+// - Rewrite: 1 week + 1,000gp per rank (replacing a lost book's contents).
+export interface StudyConfig {
+  weeksRequired: number;
+  goldCost: number;
+  requiresIntCheck: boolean;
+}
+
+export function getStudyConfig(source: 'book' | 'mentor' | 'research' | 'rewrite', rank: number): StudyConfig {
+  switch (source) {
+    case 'book':     return { weeksRequired: Math.max(1, rank),     goldCost: 0,         requiresIntCheck: true };
+    case 'mentor':   return { weeksRequired: 1,                      goldCost: 0,         requiresIntCheck: false };
+    case 'research': return { weeksRequired: Math.max(2, rank * 2), goldCost: rank * 1000, requiresIntCheck: false };
+    case 'rewrite':  return { weeksRequired: Math.max(1, rank),     goldCost: rank * 1000, requiresIntCheck: false };
+  }
+}
+
 // 5B: Holy Spell List (34 spells with saint associations)
 export const HOLY_SPELLS: { name: string; rank: number; saint: string }[] = [
   // Rank 1
@@ -2491,6 +2531,9 @@ export function createDefaultCharacter(): Character {
     runes: [],
     knack: null,
     startingSpellBook: '',
+    knownSpells: [],
+    spellStudy: { active: null, queue: [] },
+    failedStudies: [],
     classTraits: '',
     kindredTraits: '',
     languages: 'Woldish',

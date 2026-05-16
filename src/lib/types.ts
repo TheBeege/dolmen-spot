@@ -29,6 +29,13 @@ export interface SkillTargets {
   [key: string]: number;
 }
 
+export type InventoryItemKind = 'spellbook' | 'scroll';
+
+export interface SpellbookEntry {
+  name: string;
+  rank: number;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -37,6 +44,9 @@ export interface InventoryItem {
   notes: string;
   equipped: boolean;
   containerId?: string;  // links stowed item to a CharacterContainer
+  kind?: InventoryItemKind;
+  spellbookContents?: SpellbookEntry[];  // present when kind === 'spellbook'; max 3 (Player's Book p78)
+  scrollSpell?: SpellbookEntry;           // present when kind === 'scroll'
 }
 
 export interface CharacterContainer {
@@ -52,6 +62,45 @@ export interface SpellSlot {
   prepared: boolean;
   cast: boolean;
   notes: string;
+  fromScrollId?: string;   // when set, this memorised slot is sourced from a scroll inventory item
+}
+
+export type KnownSpellSource = 'starting' | 'studied' | 'mentor' | 'research' | 'rewrite' | 'manual';
+
+export interface KnownSpell {
+  id: string;
+  name: string;
+  rank: number;
+  source: KnownSpellSource;
+  learnedAt?: CalendarDate;
+  notes?: string;
+}
+
+export type StudySource = 'book' | 'mentor' | 'research' | 'rewrite';
+
+export interface SpellStudyEntry {
+  id: string;
+  spellName: string;
+  rank: number;
+  source: StudySource;
+  weeksRequired: number;
+  goldCost?: number;
+  targetSpellbookId?: string;   // inventory item id; spell is written here on success
+  notes?: string;
+}
+
+export interface ActiveSpellStudy extends SpellStudyEntry {
+  startedOn: CalendarDate;
+}
+
+export interface SpellStudyState {
+  active: ActiveSpellStudy | null;
+  queue: SpellStudyEntry[];
+}
+
+export interface FailedStudyAttempt {
+  spellName: string;
+  failedAtLevel: number;   // blocks restudy until character level > this
 }
 
 export interface CharacterGlamour {
@@ -139,6 +188,9 @@ export interface Character {
   runes: CharacterRune[];
   knack: CharacterKnack | null;
   startingSpellBook: string;
+  knownSpells: KnownSpell[];
+  spellStudy: SpellStudyState;
+  failedStudies: FailedStudyAttempt[];
 
   classTraits: string;
   kindredTraits: string;

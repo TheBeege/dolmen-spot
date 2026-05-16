@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 9;
+export const CURRENT_SCHEMA_VERSION = 10;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -84,6 +84,14 @@ const migrations: Record<number, (data: any) => any> = {
       data.moonSign = '';
       data.moonPhase = '';
     }
+    return data;
+  },
+  // v9 -> v10: Add knownSpells, spellStudy, and failedStudies fields for the
+  // arcane spellbook/study system (Player's Book p78-79).
+  9: (data) => {
+    if (data.knownSpells === undefined) data.knownSpells = [];
+    if (data.spellStudy === undefined) data.spellStudy = { active: null, queue: [] };
+    if (data.failedStudies === undefined) data.failedStudies = [];
     return data;
   },
 };
