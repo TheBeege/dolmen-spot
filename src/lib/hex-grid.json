@@ -11,9 +11,9 @@
     "orientation": "flat-top",
     "offset": "odd-q",
     "minCol": 1,
-    "maxCol": 20,
+    "maxCol": 19,
     "minRow": 1,
-    "maxRow": 13
+    "maxRow": 12
   },
   "hexes": {
     "0101": {
@@ -65,21 +65,6 @@
       "col": 1,
       "row": 10,
       "terrain": "woods"
-    },
-    "0111": {
-      "col": 1,
-      "row": 11,
-      "terrain": "open"
-    },
-    "0112": {
-      "col": 1,
-      "row": 12,
-      "terrain": "open"
-    },
-    "0113": {
-      "col": 1,
-      "row": 13,
-      "terrain": "open"
     },
     "0201": {
       "col": 2,
@@ -134,11 +119,6 @@
     "0211": {
       "col": 2,
       "row": 11,
-      "terrain": "open"
-    },
-    "0212": {
-      "col": 2,
-      "row": 12,
       "terrain": "open"
     },
     "0301": {
@@ -199,11 +179,6 @@
     "0312": {
       "col": 3,
       "row": 12,
-      "terrain": "open"
-    },
-    "0313": {
-      "col": 3,
-      "row": 13,
       "terrain": "open"
     },
     "0401": {
@@ -326,11 +301,6 @@
       "row": 12,
       "terrain": "open"
     },
-    "0513": {
-      "col": 5,
-      "row": 13,
-      "terrain": "open"
-    },
     "0601": {
       "col": 6,
       "row": 1,
@@ -449,11 +419,6 @@
     "0712": {
       "col": 7,
       "row": 12,
-      "terrain": "open"
-    },
-    "0713": {
-      "col": 7,
-      "row": 13,
       "terrain": "open"
     },
     "0801": {
@@ -576,11 +541,6 @@
       "row": 12,
       "terrain": "open"
     },
-    "0913": {
-      "col": 9,
-      "row": 13,
-      "terrain": "open"
-    },
     "1001": {
       "col": 10,
       "row": 1,
@@ -700,11 +660,6 @@
       "col": 11,
       "row": 12,
       "terrain": "woods"
-    },
-    "1113": {
-      "col": 11,
-      "row": 13,
-      "terrain": "open"
     },
     "1201": {
       "col": 12,
@@ -826,11 +781,6 @@
       "row": 12,
       "terrain": "open"
     },
-    "1313": {
-      "col": 13,
-      "row": 13,
-      "terrain": "open"
-    },
     "1401": {
       "col": 14,
       "row": 1,
@@ -875,21 +825,6 @@
       "col": 14,
       "row": 9,
       "terrain": "woods"
-    },
-    "1410": {
-      "col": 14,
-      "row": 10,
-      "terrain": "open"
-    },
-    "1411": {
-      "col": 14,
-      "row": 11,
-      "terrain": "open"
-    },
-    "1412": {
-      "col": 14,
-      "row": 12,
-      "terrain": "open"
     },
     "1501": {
       "col": 15,
@@ -936,26 +871,6 @@
       "row": 9,
       "terrain": "open"
     },
-    "1510": {
-      "col": 15,
-      "row": 10,
-      "terrain": "open"
-    },
-    "1511": {
-      "col": 15,
-      "row": 11,
-      "terrain": "open"
-    },
-    "1512": {
-      "col": 15,
-      "row": 12,
-      "terrain": "open"
-    },
-    "1513": {
-      "col": 15,
-      "row": 13,
-      "terrain": "open"
-    },
     "1601": {
       "col": 16,
       "row": 1,
@@ -996,26 +911,6 @@
       "row": 8,
       "terrain": "open"
     },
-    "1609": {
-      "col": 16,
-      "row": 9,
-      "terrain": "open"
-    },
-    "1610": {
-      "col": 16,
-      "row": 10,
-      "terrain": "open"
-    },
-    "1611": {
-      "col": 16,
-      "row": 11,
-      "terrain": "open"
-    },
-    "1612": {
-      "col": 16,
-      "row": 12,
-      "terrain": "open"
-    },
     "1701": {
       "col": 17,
       "row": 1,
@@ -1051,36 +946,6 @@
       "row": 7,
       "terrain": "woods"
     },
-    "1708": {
-      "col": 17,
-      "row": 8,
-      "terrain": "open"
-    },
-    "1709": {
-      "col": 17,
-      "row": 9,
-      "terrain": "open"
-    },
-    "1710": {
-      "col": 17,
-      "row": 10,
-      "terrain": "open"
-    },
-    "1711": {
-      "col": 17,
-      "row": 11,
-      "terrain": "open"
-    },
-    "1712": {
-      "col": 17,
-      "row": 12,
-      "terrain": "woods"
-    },
-    "1713": {
-      "col": 17,
-      "row": 13,
-      "terrain": "open"
-    },
     "1801": {
       "col": 18,
       "row": 1,
@@ -1111,36 +976,6 @@
       "row": 6,
       "terrain": "woods"
     },
-    "1807": {
-      "col": 18,
-      "row": 7,
-      "terrain": "open"
-    },
-    "1808": {
-      "col": 18,
-      "row": 8,
-      "terrain": "open"
-    },
-    "1809": {
-      "col": 18,
-      "row": 9,
-      "terrain": "open"
-    },
-    "1810": {
-      "col": 18,
-      "row": 10,
-      "terrain": "open"
-    },
-    "1811": {
-      "col": 18,
-      "row": 11,
-      "terrain": "open"
-    },
-    "1812": {
-      "col": 18,
-      "row": 12,
-      "terrain": "woods"
-    },
     "1901": {
       "col": 19,
       "row": 1,
@@ -1169,101 +1004,6 @@
     "1906": {
       "col": 19,
       "row": 6,
-      "terrain": "woods"
-    },
-    "1907": {
-      "col": 19,
-      "row": 7,
-      "terrain": "open"
-    },
-    "1908": {
-      "col": 19,
-      "row": 8,
-      "terrain": "open"
-    },
-    "1909": {
-      "col": 19,
-      "row": 9,
-      "terrain": "open"
-    },
-    "1910": {
-      "col": 19,
-      "row": 10,
-      "terrain": "open"
-    },
-    "1911": {
-      "col": 19,
-      "row": 11,
-      "terrain": "open"
-    },
-    "1912": {
-      "col": 19,
-      "row": 12,
-      "terrain": "open"
-    },
-    "1913": {
-      "col": 19,
-      "row": 13,
-      "terrain": "open"
-    },
-    "2001": {
-      "col": 20,
-      "row": 1,
-      "terrain": "open"
-    },
-    "2002": {
-      "col": 20,
-      "row": 2,
-      "terrain": "open"
-    },
-    "2003": {
-      "col": 20,
-      "row": 3,
-      "terrain": "open"
-    },
-    "2004": {
-      "col": 20,
-      "row": 4,
-      "terrain": "open"
-    },
-    "2005": {
-      "col": 20,
-      "row": 5,
-      "terrain": "open"
-    },
-    "2006": {
-      "col": 20,
-      "row": 6,
-      "terrain": "open"
-    },
-    "2007": {
-      "col": 20,
-      "row": 7,
-      "terrain": "open"
-    },
-    "2008": {
-      "col": 20,
-      "row": 8,
-      "terrain": "open"
-    },
-    "2009": {
-      "col": 20,
-      "row": 9,
-      "terrain": "open"
-    },
-    "2010": {
-      "col": 20,
-      "row": 10,
-      "terrain": "open"
-    },
-    "2011": {
-      "col": 20,
-      "row": 11,
-      "terrain": "open"
-    },
-    "2012": {
-      "col": 20,
-      "row": 12,
       "terrain": "woods"
     }
   }
