@@ -34,35 +34,61 @@ function sanitizeDate(d: any): { day: number; month: number; year: number } {
  * repair.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isPlainObject(v: any): boolean {
+  return v != null && typeof v === 'object' && !Array.isArray(v);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeCharacterDates(data: any): void {
   // currentDate is a required top-level field; if missing,
   // reconcileWithDefaults will fill it from createDefaultCharacter,
   // so we only sanitize when it's actually present.
   if (data.currentDate !== undefined) data.currentDate = sanitizeDate(data.currentDate);
 
-  // JournalEntry.date is required (types.ts). If an entry exists but
-  // has no date (corrupt save / hand-edited JSON), reconcile doesn't
-  // walk inside the array — sanitize unconditionally so the UI never
-  // sees an undefined date.
+  // journalEntries must be an array of objects with required `date`.
+  // Replace a non-array value (corrupt JSON like `"lol"`) with []; then
+  // drop any non-object entries before sanitizing each entry's date.
+  if (data.journalEntries !== undefined && !Array.isArray(data.journalEntries)) {
+    data.journalEntries = [];
+  }
   if (Array.isArray(data.journalEntries)) {
-    for (const entry of data.journalEntries) {
-      if (entry) entry.date = sanitizeDate(entry.date);
+    data.journalEntries = data.journalEntries.filter(isPlainObject);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const entry of data.journalEntries as any[]) {
+      entry.date = sanitizeDate(entry.date);
     }
   }
 
-  // KnownSpell.learnedAt is optional (`learnedAt?: CalendarDate`);
-  // leave undefined alone, only sanitize values that are actually set.
+  // knownSpells: same shape defense. learnedAt is optional, so we only
+  // sanitize it if it's present (not undefined).
+  if (data.knownSpells !== undefined && !Array.isArray(data.knownSpells)) {
+    data.knownSpells = [];
+  }
   if (Array.isArray(data.knownSpells)) {
-    for (const k of data.knownSpells) {
-      if (k && k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
+    data.knownSpells = data.knownSpells.filter(isPlainObject);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const k of data.knownSpells as any[]) {
+      if (k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
     }
   }
 
-  // ActiveSpellStudy.startedOn is required when active is non-null.
-  // Same rationale as journal entries — sanitize unconditionally so
-  // weeksElapsed can't produce NaN.
-  if (data.spellStudy?.active) {
-    data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
+  // spellStudy shape: must be an object with `active` (object or null)
+  // and `queue` (array). Replace anything malformed with the default.
+  if (data.spellStudy !== undefined && !isPlainObject(data.spellStudy)) {
+    data.spellStudy = { active: null, queue: [] };
+  }
+  if (isPlainObject(data.spellStudy)) {
+    // `active` is allowed to be null; anything else that isn't an object → null
+    if (data.spellStudy.active !== null && data.spellStudy.active !== undefined && !isPlainObject(data.spellStudy.active)) {
+      data.spellStudy.active = null;
+    }
+    if (data.spellStudy.queue !== undefined && !Array.isArray(data.spellStudy.queue)) {
+      data.spellStudy.queue = [];
+    }
+    // ActiveSpellStudy.startedOn is required when active is set.
+    if (isPlainObject(data.spellStudy.active)) {
+      data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
+    }
   }
 }
 
