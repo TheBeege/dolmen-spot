@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Character, SkillTargets } from '@/lib/types';
+import { Character, CharacterUpdater, SkillTargets } from '@/lib/types';
 import {
   skillNameToKey,
   skillKeyToDisplayName,
@@ -10,7 +10,7 @@ import { getSkillTargetLayout, hasClassOrKindredClass, isSkillOutOfSync } from '
 
 interface SkillsPanelProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =
