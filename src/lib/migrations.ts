@@ -164,13 +164,21 @@ function sanitizeMapData(data: any): void {
     if (!isRoaded(d)) continue;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dest = (d as any).destination;
+    const ownId = (d as { id?: unknown }).id;
     const partnerId = typeof dest.pairedDoorId === 'string' ? dest.pairedDoorId : null;
-    const partner = partnerId ? doors.find((x) => (x as { id?: unknown }).id === partnerId) : null;
+    // Self-paired doors (a door whose pairedDoorId is its own id) trivially
+    // "reciprocate" but are nonsense — a door can't be a road to itself.
+    // Reject up-front so they get downgraded to wild.
+    if (partnerId === null || partnerId === ownId) {
+      toDowngrade.add(d);
+      continue;
+    }
+    const partner = doors.find((x) => (x as { id?: unknown }).id === partnerId);
     const reciprocates =
       partner &&
       isRoaded(partner) &&
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (partner as any).destination.pairedDoorId === (d as { id?: unknown }).id;
+      (partner as any).destination.pairedDoorId === ownId;
     if (!reciprocates) {
       toDowngrade.add(d);
     }

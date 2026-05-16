@@ -314,11 +314,13 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       // render-closure variables in the commit path, so a keystroke that
       // lands between render and click can't be lost.
       const fresh = md.draftLayline;
+      // Nothing to commit AND nothing to clear → return the same `md` so
+      // React skips the state update and we don't churn localStorage.
+      if (!fresh) return md;
       const { draftLayline: _omit, ...rest } = md;
       void _omit;
-      // Clear the draft either way. If there's enough to commit, also
-      // append the layline. (Below-2-hex finish behaves like a cancel.)
-      if (!fresh || fresh.hexes.length < 2) return rest;
+      // Below-2-hex finish behaves like a cancel — clear the draft only.
+      if (fresh.hexes.length < 2) return rest;
       const newLine: Layline = {
         id: newLineId,
         type: fresh.type || 'Layline',

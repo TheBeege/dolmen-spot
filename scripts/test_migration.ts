@@ -251,6 +251,23 @@ section('Scenario 11b: v12 save with borked mapData.pois (string)');
   check('schemaVersion stable', migrated.schemaVersion === CURRENT_SCHEMA_VERSION);
 }
 
+// ----- Scenario 11d: self-paired door is downgraded to wild -----
+section('Scenario 11d: self-paired door (pairedDoorId === own id) → wild');
+{
+  const data = baseV10();
+  data.schemaVersion = CURRENT_SCHEMA_VERSION;
+  data.currentDate = { day: 1, month: 0, year: 1 };
+  (data as AnyData).mapData = {
+    pois: [],
+    fayeDoors: [
+      { id: 'S', hex: '0303', name: 'Self', notes: '', destination: { kind: 'roaded', pairedDoorId: 'S', roadName: 'Loop' } },
+    ],
+    laylines: [],
+  };
+  const migrated = migrateCharacter(data as never);
+  check('self-paired downgraded to wild', migrated.mapData.fayeDoors[0].destination.kind === 'wild');
+}
+
 // ----- Scenario 11c: asymmetric door pair in hand-edited v12 save -----
 section('Scenario 11c: asymmetric door pair gets repaired to wild');
 {
