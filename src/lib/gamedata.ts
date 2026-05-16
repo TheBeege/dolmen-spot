@@ -313,10 +313,13 @@ export function getDayOfYear(date: CalendarDate): number {
 
 export const DAYS_IN_YEAR = MONTHS.reduce((sum, m) => sum + m.days, 0);
 
-// Monotonic day count since "year 0, day 0". Lets all date arithmetic
-// be plain subtraction with no wraparound heuristics.
+// Monotonic day count anchored so that Year 1 day 1 = absolute day 1.
+// Using (year - 1) means year-1 saves keep the same day-of-cycle they
+// had before the year field was introduced (no moon-phase jump on
+// upgrade); for later years the cycle simply continues monotonically.
+// Lets all date arithmetic be plain subtraction.
 export function getAbsoluteDay(date: CalendarDate): number {
-  return date.year * DAYS_IN_YEAR + getDayOfYear(date);
+  return (date.year - 1) * DAYS_IN_YEAR + getDayOfYear(date);
 }
 
 export function daysBetween(start: CalendarDate, end: CalendarDate): number {
