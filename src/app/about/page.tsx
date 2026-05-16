@@ -85,7 +85,7 @@ export default function AboutPage() {
               <span className="text-[#f5e6c8]/60">Discord:</span>{' '}
               <code className="text-[#c4a35a] bg-[#1a1a2e] px-1.5 py-0.5 rounded">thebeege</code>
               <span className="text-[#f5e6c8]/60">
-                {' — for bug reports or feature requests if you can’t file an issue on GitHub'}
+                {' — for bug reports or feature requests if you can\'t file an issue on GitHub'}
               </span>
             </li>
           </ul>

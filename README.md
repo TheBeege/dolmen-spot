@@ -1,4 +1,4 @@
-# Dolmenwood Character Sheet
+# Dolmen Spot — Dolmenwood Character Sheet
 
 A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collections/dolmenwood) tabletop RPG. Track characters, auto-calculate stats, manage inventory, and reference game data — all in the browser.
 
@@ -53,8 +53,8 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 ## Getting Started
 
 ```bash
-git clone https://github.com/TheBeege/dolmenwood-character-sheet.git
-cd dolmenwood-character-sheet
+git clone https://github.com/TheBeege/dolmen-spot.git
+cd dolmen-spot
 npm install
 npm run dev
 ```

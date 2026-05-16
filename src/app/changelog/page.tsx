@@ -107,7 +107,7 @@ export default function ChangelogPage() {
                     href={`https://github.com/TheBeege/dolmen-spot/pull/${entry.prNumber}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-xs text-[#c4a35a]/60 hover:text-[#c4a35a] underline transition-colors"
+                    className="text-xs text-[#c4a35a]/80 hover:text-[#c4a35a] underline transition-colors"
                   >
                     PR #{entry.prNumber}
                   </a>
