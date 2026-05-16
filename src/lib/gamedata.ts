@@ -313,11 +313,12 @@ export function getDayOfYear(date: CalendarDate): number {
 
 export const DAYS_IN_YEAR = MONTHS.reduce((sum, m) => sum + m.days, 0);
 
-// Maximum plausible study length (Rank 6 research = 12 weeks = 84 days).
-// Used as the threshold to distinguish a real year-wrap from a backward
-// date edit by the player. Any "wrap" larger than this is treated as a
-// rewind and returns 0.
-const MAX_PLAUSIBLE_STUDY_DAYS = 90;
+// Threshold to distinguish a real year-wrap (a study legitimately
+// continuing across the year boundary) from a backward date edit.
+// Picked at half a year so we accept generous campaign-resume jumps
+// (DM skips a season), but a player rewinding to fix a typo on day 5
+// of the year doesn't suddenly show 350 days of "progress".
+const MAX_PLAUSIBLE_STUDY_DAYS = 180;
 
 // Calendar has no year field. When end-of-year < start-of-year we can't
 // tell from the data alone whether time wrapped forward (real progress)
@@ -2140,6 +2141,10 @@ export function getStudyConfig(source: 'book' | 'mentor' | 'research' | 'rewrite
     case 'mentor':   return { weeksRequired: 1,                     goldCost: 0,         completionCheck: null };
     case 'research': return { weeksRequired: Math.max(2, rank * 2), goldCost: rank * 1000, completionCheck: 'd6' };
     case 'rewrite':  return { weeksRequired: Math.max(1, rank),     goldCost: rank * 1000, completionCheck: null };
+    // Defensive fallback for persisted studies whose source somehow no
+    // longer matches the four valid literals (e.g., a hand-edited JSON
+    // import). Treat as a 1-week auto-complete with no cost.
+    default:         return { weeksRequired: 1,                     goldCost: 0,         completionCheck: null };
   }
 }
 

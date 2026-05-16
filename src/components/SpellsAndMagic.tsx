@@ -976,7 +976,9 @@ function SpellStudyBlock({
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     }
     return ARCANE_SPELLS.filter((s) => s.rank <= maxRank);
-  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, knownNames, maxRank]);
+    // knownNames is a memo of character.knownSpells; depending on
+    // character.knownSpells alone is enough.
+  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, maxRank]);
 
   // Reset selection if it falls outside the new pool when source changes.
   const draftRank = useMemo(() => {
@@ -1081,6 +1083,10 @@ function SpellStudyBlock({
       // Only book studies block retry until next level (RAW p78).
       // Research failure (the 1-in-6 roll) just loses time and money;
       // mentor and rewrite never fail.
+      // Note: we deliberately do not deduct gold for research failure.
+      // The app doesn't auto-track expenses anywhere else, so we surface
+      // the loss in the UI ("time + money lost") and let the player
+      // adjust their coin pouch by hand.
       updatedFailed = [
         ...updatedFailed,
         { spellName: active.spellName, failedAtLevel: character.level },
@@ -1460,7 +1466,9 @@ function MemorisePicker({
             Known · In hand
           </div>
           {knownAvailable.map((k) => {
+            const cap = capFor(k.rank);
             const atCap = isAtCap(k.rank);
+            const hasNoSlots = cap === 0;
             return (
               <button
                 key={k.id}
@@ -1472,13 +1480,19 @@ function MemorisePicker({
                     ? 'text-[#f5e6c8]/30 cursor-not-allowed'
                     : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
                 }`}
-                title={atCap ? `Rank ${k.rank} slots full (${preparedByRank[k.rank] ?? 0}/${capFor(k.rank)})` : ''}
+                title={
+                  hasNoSlots
+                    ? `No Rank ${k.rank} slots at your level yet`
+                    : atCap
+                      ? `Rank ${k.rank} slots full (${preparedByRank[k.rank] ?? 0}/${cap})`
+                      : ''
+                }
               >
                 <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
                 {k.name}
                 {atCap && (
                   <span className="text-[#f5e6c8]/40 text-xs ml-2">
-                    (R{k.rank} full)
+                    {hasNoSlots ? '(no slots yet)' : `(R${k.rank} full)`}
                   </span>
                 )}
               </button>
