@@ -35,18 +35,33 @@ function sanitizeDate(d: any): { day: number; month: number; year: number } {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeCharacterDates(data: any): void {
+  // currentDate is a required top-level field; if missing,
+  // reconcileWithDefaults will fill it from createDefaultCharacter,
+  // so we only sanitize when it's actually present.
   if (data.currentDate !== undefined) data.currentDate = sanitizeDate(data.currentDate);
+
+  // JournalEntry.date is required (types.ts). If an entry exists but
+  // has no date (corrupt save / hand-edited JSON), reconcile doesn't
+  // walk inside the array — sanitize unconditionally so the UI never
+  // sees an undefined date.
   if (Array.isArray(data.journalEntries)) {
     for (const entry of data.journalEntries) {
-      if (entry && entry.date !== undefined) entry.date = sanitizeDate(entry.date);
+      if (entry) entry.date = sanitizeDate(entry.date);
     }
   }
+
+  // KnownSpell.learnedAt is optional (`learnedAt?: CalendarDate`);
+  // leave undefined alone, only sanitize values that are actually set.
   if (Array.isArray(data.knownSpells)) {
     for (const k of data.knownSpells) {
       if (k && k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
     }
   }
-  if (data.spellStudy?.active?.startedOn !== undefined) {
+
+  // ActiveSpellStudy.startedOn is required when active is non-null.
+  // Same rationale as journal entries — sanitize unconditionally so
+  // weeksElapsed can't produce NaN.
+  if (data.spellStudy?.active) {
     data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
   }
 }
