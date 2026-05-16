@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Character,
   SpellSlot,
@@ -27,6 +27,7 @@ import {
   findArcaneSpell,
   getStudyConfig,
   weeksElapsed,
+  addDays,
   formatCalendarDate,
 } from '@/lib/gamedata';
 
@@ -297,19 +298,25 @@ function isSpellOnScroll(c: Character, name: string): boolean {
 
 function isStartingBookApplied(c: Character): boolean {
   if (!c.startingSpellBook) return false;
-  return getAllInventoryItems(c).some(
-    (i) => i.kind === 'spellbook' && i.name === c.startingSpellBook,
-  );
+  // Check the stamped flag rather than name-matching the inventory item.
+  // This means renaming the in-inventory book won't reopen the starter
+  // dropdown and let the player create duplicates.
+  return getAllInventoryItems(c).some((i) => i.kind === 'spellbook' && i.isStartingBook);
 }
 
-const KNOWN_SOURCE_ORDER: Record<KnownSpellSource, number> = {
-  starting: 0,
-  studied: 1,
-  mentor: 2,
-  research: 3,
-  rewrite: 4,
-  manual: 5,
-};
+// Explicit ordering for sort + iteration. Using an array (rather than
+// Object.keys on the label record) so we don't depend on insertion order
+// if the labels are ever alphabetised.
+const KNOWN_SOURCES: KnownSpellSource[] = [
+  'starting',
+  'studied',
+  'mentor',
+  'research',
+  'rewrite',
+  'manual',
+];
+const KNOWN_SOURCE_ORDER: Record<KnownSpellSource, number> = KNOWN_SOURCES
+  .reduce((acc, src, i) => { acc[src] = i; return acc; }, {} as Record<KnownSpellSource, number>);
 const KNOWN_SOURCE_LABEL: Record<KnownSpellSource, string> = {
   starting: 'Starting',
   studied: 'Studied',
@@ -344,7 +351,7 @@ function SpellCasterSection({
   // Count prepared spells by rank
   const preparedByRank: Record<number, number> = {};
   for (const spell of character.spells) {
-    if (spell.prepared && !spell.fromScrollId) {
+    if (spell.prepared) {
       preparedByRank[spell.rank] = (preparedByRank[spell.rank] || 0) + 1;
     }
   }
@@ -414,105 +421,83 @@ function SpellCasterSection({
         </div>
 
         {/* Memorised spell slots */}
-        {character.spells.map((spell) => {
-          // Legacy: scroll-backed slots from before scrolls auto-listed; render the same way.
-          const isScroll = !!spell.fromScrollId;
-          return (
-            <div
-              key={spell.id}
-              className={`flex items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1 ${
-                spell.cast ? 'opacity-50' : ''
-              }`}
-            >
-              {isScroll && (
-                <span className="text-[#c4a35a] text-sm shrink-0" title="One-shot scroll">📜</span>
-              )}
-              {isArcane ? (
-                <>
-                  <span className="text-[#c4a35a] font-semibold shrink-0">R{spell.rank}</span>
-                  <span className="text-[#f5e6c8] flex-1 min-w-[100px]">{spell.name}</span>
-                </>
-              ) : (
-                <>
-                  <input
-                    type="text"
-                    value={spell.name}
-                    onChange={(e) => updateSpell(spell.id, { name: e.target.value })}
-                    placeholder="Spell name"
-                    className={`${inputClasses} flex-1 min-w-0`}
-                  />
-                  <input
-                    type="number"
-                    min={1}
-                    max={maxRank}
-                    value={spell.rank}
-                    onChange={(e) =>
-                      updateSpell(spell.id, {
-                        rank: Math.min(maxRank, Math.max(1, parseInt(e.target.value) || 1)),
-                      })
-                    }
-                    title="Rank"
-                    className={`${inputClasses} w-14 text-center`}
-                  />
-                </>
-              )}
-              {!isScroll && (
-                <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={spell.prepared}
-                    onChange={(e) => updateSpell(spell.id, { prepared: e.target.checked })}
-                    className="accent-[#c4a35a]"
-                  />
-                  Prep
-                </label>
-              )}
-              <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
+        {character.spells.map((spell) => (
+          <div
+            key={spell.id}
+            className={`flex items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1 ${
+              spell.cast ? 'opacity-50' : ''
+            }`}
+          >
+            {isArcane ? (
+              <>
+                <span className="text-[#c4a35a] font-semibold shrink-0">R{spell.rank}</span>
+                <span className="text-[#f5e6c8] flex-1 min-w-[100px]">{spell.name}</span>
+              </>
+            ) : (
+              <>
                 <input
-                  type="checkbox"
-                  checked={spell.cast}
-                  onChange={(e) => {
-                    const cast = e.target.checked;
-                    if (cast && isScroll && spell.fromScrollId) {
-                      const stripScroll = (items: InventoryItem[]) =>
-                        items.filter((i) => i.id !== spell.fromScrollId);
-                      onChange({
-                        equippedItems: stripScroll(character.equippedItems),
-                        stowedItems: stripScroll(character.stowedItems),
-                        spells: character.spells.filter((s) => s.id !== spell.id),
-                      });
-                    } else {
-                      updateSpell(spell.id, { cast });
-                    }
-                  }}
-                  className="accent-[#c4a35a]"
+                  type="text"
+                  value={spell.name}
+                  onChange={(e) => updateSpell(spell.id, { name: e.target.value })}
+                  placeholder="Spell name"
+                  className={`${inputClasses} flex-1 min-w-0`}
                 />
-                Cast
-              </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={maxRank}
+                  value={spell.rank}
+                  onChange={(e) =>
+                    updateSpell(spell.id, {
+                      rank: Math.min(maxRank, Math.max(1, parseInt(e.target.value) || 1)),
+                    })
+                  }
+                  title="Rank"
+                  className={`${inputClasses} w-14 text-center`}
+                />
+              </>
+            )}
+            <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
               <input
-                type="text"
-                value={spell.notes}
-                onChange={(e) => updateSpell(spell.id, { notes: e.target.value })}
-                placeholder="Notes"
-                className={`${inputClasses} flex-1 min-w-0`}
+                type="checkbox"
+                checked={spell.prepared}
+                onChange={(e) => updateSpell(spell.id, { prepared: e.target.checked })}
+                className="accent-[#c4a35a]"
               />
-              <button
-                onClick={() => deleteSpell(spell.id)}
-                className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-                title="Delete spell"
-              >
-                X
-              </button>
-            </div>
-          );
-        })}
+              Prep
+            </label>
+            <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={spell.cast}
+                onChange={(e) => updateSpell(spell.id, { cast: e.target.checked })}
+                className="accent-[#c4a35a]"
+              />
+              Cast
+            </label>
+            <input
+              type="text"
+              value={spell.notes}
+              onChange={(e) => updateSpell(spell.id, { notes: e.target.value })}
+              placeholder="Notes"
+              className={`${inputClasses} flex-1 min-w-0`}
+            />
+            <button
+              onClick={() => deleteSpell(spell.id)}
+              className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
+              title="Delete spell"
+            >
+              X
+            </button>
+          </div>
+        ))}
 
         {/* Arcane: auto-listed scrolls from inventory */}
         {isArcane && <InventoryScrollsList character={character} onChange={onChange} />}
 
         {/* Empty state */}
         {character.spells.length === 0
-          && (!isArcane || getScrollItems(character).filter((s) => !character.spells.some((sp) => sp.fromScrollId === s.id)).length === 0) && (
+          && (!isArcane || getScrollItems(character).length === 0) && (
             <p className="text-[#f5e6c8]/40 text-sm italic mb-2">
               {isArcane
                 ? 'Nothing available yet. Memorise a known spell or add a scroll to your inventory.'
@@ -522,7 +507,12 @@ function SpellCasterSection({
 
         <div className="flex flex-wrap gap-2 mt-2">
           {isArcane ? (
-            <MemorisePicker character={character} onChange={onChange} />
+            <MemorisePicker
+              character={character}
+              spellsPerDay={spellsPerDay}
+              preparedByRank={preparedByRank}
+              onChange={onChange}
+            />
           ) : (
             <button onClick={addSpell} className={buttonClasses}>
               + Add Spell
@@ -561,15 +551,7 @@ function InventoryScrollsList({
   character: Character;
   onChange: (updates: Partial<Character>) => void;
 }) {
-  // Exclude scrolls that are still referenced by a (legacy) fromScrollId memorise slot
-  // so they don't render twice.
-  const referencedIds = new Set(
-    character.spells.map((s) => s.fromScrollId).filter((id): id is string => !!id),
-  );
-  const scrolls = getScrollItems(character).filter(
-    (s) => s.scrollSpell?.name && !referencedIds.has(s.id),
-  );
-
+  const scrolls = getScrollItems(character).filter((s) => s.scrollSpell?.name);
   if (scrolls.length === 0) return null;
 
   const castScroll = (scrollId: string) => {
@@ -639,6 +621,7 @@ function ApplyStartingBookButton({
       equipped: true,
       kind: 'spellbook',
       spellbookContents: contents,
+      isStartingBook: true,
     };
     const existingKnown = new Set(character.knownSpells.map((k) => k.name.toLowerCase()));
     const newKnown: KnownSpell[] = contents
@@ -699,7 +682,10 @@ function KnownSpellsBlock({
       inBook: isSpellInAnyBook(character, k.name),
       onScroll: isSpellOnScroll(character, k.name),
     }));
-  }, [character]);
+    // Narrow deps: this only reads knownSpells + inventory, not the rest of
+    // the character (notes, abilities, etc.). Re-running on every keystroke
+    // in unrelated fields was wasteful.
+  }, [character.knownSpells, character.equippedItems, character.stowedItems]);
 
   const filtered = decorated
     .filter((k) => (rankChips.size === 0 ? true : rankChips.has(k.rank)))
@@ -792,7 +778,7 @@ function KnownSpellsBlock({
           title="Filter by source"
         >
           <option value="all">Any source</option>
-          {(Object.keys(KNOWN_SOURCE_LABEL) as KnownSpellSource[]).map((s) => (
+          {KNOWN_SOURCES.map((s) => (
             <option key={s} value={s}>{KNOWN_SOURCE_LABEL[s]}</option>
           ))}
         </select>
@@ -899,7 +885,7 @@ function KnownSpellsBlock({
               className={`${selectClasses} text-xs`}
               title="How was this spell learned?"
             >
-              {(Object.keys(KNOWN_SOURCE_LABEL) as KnownSpellSource[]).map((s) => (
+              {KNOWN_SOURCES.map((s) => (
                 <option key={s} value={s}>{KNOWN_SOURCE_LABEL[s]}</option>
               ))}
             </select>
@@ -948,7 +934,7 @@ function SpellStudyBlock({
 
   const availableBooks = useMemo(
     () => getSpellbooks(character).filter((b) => (b.spellbookContents?.length ?? 0) < 3),
-    [character],
+    [character.equippedItems, character.stowedItems],
   );
 
   const knownNames = useMemo(
@@ -964,25 +950,33 @@ function SpellStudyBlock({
   }, [character.failedStudies, character.level]);
 
   // Pool of spells the player can study, depending on the source.
-  // Book: spells present in any inventory spellbook minus already-known.
-  //       (You can't learn a spell from a book you don't possess.)
-  // Mentor / Research / Rewrite: any arcane spell at or below caster's max rank.
+  // - Book: spells present in any inventory spellbook minus already-known.
+  //         (You can't learn a spell from a book you don't possess.)
+  // - Rewrite: spells you already know (RAW p78 — rewriting is for lost
+  //   spell books, i.e. recovering spells you previously learned).
+  // - Mentor / Research: any arcane spell at or below caster's max rank.
   const studyPool = useMemo(() => {
-    const inBooks = new Map<string, number>();
-    for (const book of getSpellbooks(character)) {
-      for (const entry of book.spellbookContents ?? []) {
-        if (!entry.name) continue;
-        inBooks.set(entry.name, entry.rank);
-      }
-    }
     if (draftSource === 'book') {
+      const inBooks = new Map<string, number>();
+      for (const book of getSpellbooks(character)) {
+        for (const entry of book.spellbookContents ?? []) {
+          if (!entry.name) continue;
+          inBooks.set(entry.name, entry.rank);
+        }
+      }
       return Array.from(inBooks.entries())
         .map(([name, rank]) => ({ name, rank }))
         .filter((s) => !knownNames.has(s.name.toLowerCase()) && s.rank <= maxRank)
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     }
+    if (draftSource === 'rewrite') {
+      return character.knownSpells
+        .filter((k) => k.rank <= maxRank)
+        .map((k) => ({ name: k.name, rank: k.rank }))
+        .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+    }
     return ARCANE_SPELLS.filter((s) => s.rank <= maxRank);
-  }, [character, draftSource, knownNames, maxRank]);
+  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, knownNames, maxRank]);
 
   // Reset selection if it falls outside the new pool when source changes.
   const draftRank = useMemo(() => {
@@ -1011,8 +1005,10 @@ function SpellStudyBlock({
       rank,
       source: draftSource,
       weeksRequired: cfg.weeksRequired,
-      goldCost: cfg.goldCost || undefined,
-      targetSpellbookId: draftBookId || undefined,
+      goldCost: cfg.goldCost,
+      // targetSpellbookId only applies to mentor/research/rewrite (book source
+      // already has the spell in the source book).
+      targetSpellbookId: draftSource !== 'book' && draftBookId ? draftBookId : undefined,
       notes: draftNotes.trim() || undefined,
     };
     if (!active) {
@@ -1027,10 +1023,15 @@ function SpellStudyBlock({
     setDraftNotes('');
   };
 
-  const promoteNext = (remainingQueue: SpellStudyEntry[]): { active: ActiveSpellStudy | null; queue: SpellStudyEntry[] } => {
+  // Promote the head of the queue to active. Caller passes the calendar
+  // date the new study should be considered to have started on.
+  const promoteNext = (
+    remainingQueue: SpellStudyEntry[],
+    startedOn: { day: number; month: number },
+  ): { active: ActiveSpellStudy | null; queue: SpellStudyEntry[] } => {
     if (remainingQueue.length === 0) return { active: null, queue: [] };
     const [head, ...rest] = remainingQueue;
-    return { active: { ...head, startedOn: { ...character.currentDate } }, queue: rest };
+    return { active: { ...head, startedOn: { ...startedOn } }, queue: rest };
   };
 
   const completeStudy = (passed: boolean) => {
@@ -1076,14 +1077,21 @@ function SpellStudyBlock({
         updatedEquipped = writeInto(updatedEquipped);
         updatedStowed = writeInto(updatedStowed);
       }
-    } else {
+    } else if (active.source === 'book') {
+      // Only book studies block retry until next level (RAW p78).
+      // Research failure (the 1-in-6 roll) just loses time and money;
+      // mentor and rewrite never fail.
       updatedFailed = [
         ...updatedFailed,
         { spellName: active.spellName, failedAtLevel: character.level },
       ];
     }
 
-    const next = promoteNext(queue);
+    // Stamp the next study's start at the actual handoff (start + weeks*7),
+    // not at currentDate. The player may have advanced past completion before
+    // clicking Complete; without this the next study would lose that gap.
+    const handoffDate = addDays(active.startedOn, active.weeksRequired * 7);
+    const next = promoteNext(queue, handoffDate);
     onChange({
       knownSpells: updatedKnown,
       failedStudies: updatedFailed,
@@ -1095,7 +1103,8 @@ function SpellStudyBlock({
 
   const cancelActive = () => {
     if (!confirm('Abandon current study? Time spent so far is lost.')) return;
-    const next = promoteNext(queue);
+    // Abandon means the next study really does start fresh today.
+    const next = promoteNext(queue, character.currentDate);
     onChange({ spellStudy: next });
   };
 
@@ -1131,49 +1140,89 @@ function SpellStudyBlock({
             <span className={studyReady ? 'text-[#c4a35a] font-semibold' : ''}>
               {elapsedWeeks} / {active.weeksRequired} weeks
             </span>
-            {active.goldCost ? (
+            {active.goldCost > 0 && (
               <span className="text-[#f5e6c8]/50 text-xs ml-2">(cost: {active.goldCost}gp)</span>
-            ) : null}
+            )}
           </div>
           {active.notes && (
             <div className="text-[#f5e6c8]/60 text-xs italic mb-2">{active.notes}</div>
           )}
-          <div className="flex flex-wrap gap-2">
-            {studyReady && active.source === 'book' && (
-              <>
+          {studyReady && (() => {
+            const activeCheck = getStudyConfig(active.source, active.rank).completionCheck;
+            return (
+              <div className="flex flex-wrap gap-2">
+                {activeCheck === 'int' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => completeStudy(true)}
+                      className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm font-semibold"
+                    >
+                      ✓ INT Check Passed
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => completeStudy(false)}
+                      className="bg-[#5a2a28] hover:bg-[#6b3a35] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+                    >
+                      ✗ INT Check Failed
+                    </button>
+                    <span className="text-[#f5e6c8]/50 text-xs self-center">
+                      Failed studies block retry until next level.
+                    </span>
+                  </>
+                )}
+                {activeCheck === 'd6' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => completeStudy(true)}
+                      className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm font-semibold"
+                    >
+                      ✓ Roll 2-6: Success
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => completeStudy(false)}
+                      className="bg-[#5a2a28] hover:bg-[#6b3a35] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+                    >
+                      ✗ Roll 1: Failure
+                    </button>
+                    <span className="text-[#f5e6c8]/50 text-xs self-center">
+                      Research has a minimum 1-in-6 failure chance (time + money lost).
+                    </span>
+                  </>
+                )}
+                {activeCheck === null && (
+                  <button
+                    type="button"
+                    onClick={() => completeStudy(true)}
+                    className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm font-semibold"
+                  >
+                    Complete Study
+                  </button>
+                )}
                 <button
                   type="button"
-                  onClick={() => completeStudy(true)}
-                  className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm font-semibold"
+                  onClick={cancelActive}
+                  className="text-[#f5e6c8]/50 hover:text-[#f5e6c8] text-xs underline self-center"
                 >
-                  ✓ INT Check Passed
+                  Abandon
                 </button>
-                <button
-                  type="button"
-                  onClick={() => completeStudy(false)}
-                  className="bg-[#5a2a28] hover:bg-[#6b3a35] text-[#f5e6c8] rounded px-3 py-1 text-sm"
-                >
-                  ✗ INT Check Failed
-                </button>
-              </>
-            )}
-            {studyReady && active.source !== 'book' && (
+              </div>
+            );
+          })()}
+          {!studyReady && (
+            <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => completeStudy(true)}
-                className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm font-semibold"
+                onClick={cancelActive}
+                className="text-[#f5e6c8]/50 hover:text-[#f5e6c8] text-xs underline"
               >
-                Complete Study
+                Abandon
               </button>
-            )}
-            <button
-              type="button"
-              onClick={cancelActive}
-              className="text-[#f5e6c8]/50 hover:text-[#f5e6c8] text-xs underline"
-            >
-              Abandon
-            </button>
-          </div>
+            </div>
+          )}
         </div>
       ) : (
         <p className="text-[#f5e6c8]/40 text-xs italic mb-2">No spell currently in study.</p>
@@ -1243,6 +1292,11 @@ function SpellStudyBlock({
             </label>
           ))}
         </div>
+        {draftSource === 'mentor' && (
+          <div className="text-[#f5e6c8]/50 text-xs italic mb-2">
+            Mentor must be at least 3 Levels higher than you (L{character.level + 3}+).
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <select
             value={draftName}
@@ -1283,7 +1337,8 @@ function SpellStudyBlock({
           <span className="text-[#f5e6c8]/60 text-xs">
             → {config.weeksRequired} week{config.weeksRequired === 1 ? '' : 's'}
             {config.goldCost > 0 ? `, ${config.goldCost}gp` : ''}
-            {config.requiresIntCheck ? ', INT check on completion' : ''}
+            {config.completionCheck === 'int' && ', INT check on completion'}
+            {config.completionCheck === 'd6' && ', 1-in-6 chance of failure'}
           </span>
         </div>
         {/* Target book only makes sense for sources where the spell isn't
@@ -1339,18 +1394,41 @@ function SpellStudyBlock({
 // ════════════════════════════════════════════════════════════
 function MemorisePicker({
   character,
+  spellsPerDay,
+  preparedByRank,
   onChange,
 }: {
   character: Character;
+  spellsPerDay: number[] | null;
+  preparedByRank: Record<number, number>;
   onChange: (updates: Partial<Character>) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Dismiss on outside click
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [open]);
 
   const knownAvailable = character.knownSpells
     .filter((k) => isSpellInAnyBook(character, k.name))
     .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
 
+  // Per-rank capacity: spellsPerDay is indexed by rank-1.
+  // Once preparedByRank[rank] >= cap, the corresponding option is disabled.
+  const capFor = (rank: number) => spellsPerDay?.[rank - 1] ?? 0;
+  const isAtCap = (rank: number) => (preparedByRank[rank] ?? 0) >= capFor(rank);
+
   const memoriseKnown = (k: KnownSpell) => {
+    if (isAtCap(k.rank)) return;
     const newSlot: SpellSlot = {
       id: crypto.randomUUID(),
       name: k.name,
@@ -1366,7 +1444,7 @@ function MemorisePicker({
   const noOptions = knownAvailable.length === 0;
 
   return (
-    <div className="relative">
+    <div className="relative" ref={containerRef}>
       <button
         type="button"
         onClick={() => setOpen(!open)}
@@ -1377,21 +1455,35 @@ function MemorisePicker({
         + Memorise ▾
       </button>
       {open && !noOptions && (
-        <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-10 min-w-64 max-h-96 overflow-y-auto">
+        <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-50 min-w-64 max-h-96 overflow-y-auto">
           <div className="px-3 py-1 text-[#c4a35a] text-xs font-semibold border-b border-[#5a3a28]/40">
             Known · In hand
           </div>
-          {knownAvailable.map((k) => (
-            <button
-              key={k.id}
-              type="button"
-              onClick={() => memoriseKnown(k)}
-              className="block w-full text-left px-3 py-1.5 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e]"
-            >
-              <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
-              {k.name}
-            </button>
-          ))}
+          {knownAvailable.map((k) => {
+            const atCap = isAtCap(k.rank);
+            return (
+              <button
+                key={k.id}
+                type="button"
+                disabled={atCap}
+                onClick={() => memoriseKnown(k)}
+                className={`block w-full text-left px-3 py-1.5 text-sm ${
+                  atCap
+                    ? 'text-[#f5e6c8]/30 cursor-not-allowed'
+                    : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
+                }`}
+                title={atCap ? `Rank ${k.rank} slots full (${preparedByRank[k.rank] ?? 0}/${capFor(k.rank)})` : ''}
+              >
+                <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
+                {k.name}
+                {atCap && (
+                  <span className="text-[#f5e6c8]/40 text-xs ml-2">
+                    (R{k.rank} full)
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

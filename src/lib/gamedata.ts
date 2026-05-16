@@ -313,17 +313,43 @@ export function getDayOfYear(date: CalendarDate): number {
 
 export const DAYS_IN_YEAR = MONTHS.reduce((sum, m) => sum + m.days, 0);
 
-// Calendar has no year field, so a study that wraps past year-end is detected
-// by end-of-year < start-of-year and assumed to be one wrap. Max arcane study
-// per Player's Book p78 is 12 weeks (Rank 6 research), well under one year.
+// Maximum plausible study length (Rank 6 research = 12 weeks = 84 days).
+// Used as the threshold to distinguish a real year-wrap from a backward
+// date edit by the player. Any "wrap" larger than this is treated as a
+// rewind and returns 0.
+const MAX_PLAUSIBLE_STUDY_DAYS = 90;
+
+// Calendar has no year field. When end-of-year < start-of-year we can't
+// tell from the data alone whether time wrapped forward (real progress)
+// or the player rewound the in-game date. Heuristic: only treat as a
+// wrap when the forward distance is within a study's reasonable bounds;
+// otherwise assume the player rewound and return 0.
 export function daysBetween(start: CalendarDate, end: CalendarDate): number {
   const s = getDayOfYear(start);
   const e = getDayOfYear(end);
-  return e >= s ? e - s : DAYS_IN_YEAR - s + e;
+  if (e >= s) return e - s;
+  const wrapDistance = DAYS_IN_YEAR - s + e;
+  return wrapDistance <= MAX_PLAUSIBLE_STUDY_DAYS ? wrapDistance : 0;
 }
 
 export function weeksElapsed(start: CalendarDate, end: CalendarDate): number {
   return Math.floor(daysBetween(start, end) / 7);
+}
+
+// Advance (or rewind) a calendar date by some number of days, wrapping
+// across month and year boundaries.
+export function addDays(date: CalendarDate, days: number): CalendarDate {
+  let { day, month } = date;
+  day += days;
+  while (day > MONTHS[month].days) {
+    day -= MONTHS[month].days;
+    month = (month + 1) % 12;
+  }
+  while (day < 1) {
+    month = (month - 1 + 12) % 12;
+    day += MONTHS[month].days;
+  }
+  return { day, month };
 }
 
 export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; dayInCycle: number } {
@@ -2090,21 +2116,30 @@ export function findArcaneSpell(name: string): { name: string; rank: number } | 
 
 // Arcane study costs and durations (Player's Book p78).
 // - Book: 1 week/rank + INT check; on fail, no retry until next level.
-// - Mentor: 1 week flat (mentor must be 3+ levels higher).
-// - Research: 2 weeks + 1,000gp per rank (minimum 1-in-6 failure chance).
+// - Mentor: 1 week flat (mentor must be 3+ levels higher). Auto-success.
+// - Research: 2 weeks + 1,000gp per rank; minimum 1-in-6 failure chance
+//   (failure costs the time and money but does not block retry).
 // - Rewrite: 1 week + 1,000gp per rank (replacing a lost book's contents).
+//   Auto-success (you already knew the spell).
+//
+// `completionCheck` controls what happens when the study finishes:
+//   'int' — player decides INT-check Pass/Fail; fail records a level-gated block.
+//   'd6'  — player rolls d6; 1 = fail (no level block, just lost effort).
+//   null  — auto-success.
+export type CompletionCheck = 'int' | 'd6' | null;
+
 export interface StudyConfig {
   weeksRequired: number;
   goldCost: number;
-  requiresIntCheck: boolean;
+  completionCheck: CompletionCheck;
 }
 
 export function getStudyConfig(source: 'book' | 'mentor' | 'research' | 'rewrite', rank: number): StudyConfig {
   switch (source) {
-    case 'book':     return { weeksRequired: Math.max(1, rank),     goldCost: 0,         requiresIntCheck: true };
-    case 'mentor':   return { weeksRequired: 1,                      goldCost: 0,         requiresIntCheck: false };
-    case 'research': return { weeksRequired: Math.max(2, rank * 2), goldCost: rank * 1000, requiresIntCheck: false };
-    case 'rewrite':  return { weeksRequired: Math.max(1, rank),     goldCost: rank * 1000, requiresIntCheck: false };
+    case 'book':     return { weeksRequired: Math.max(1, rank),     goldCost: 0,         completionCheck: 'int' };
+    case 'mentor':   return { weeksRequired: 1,                     goldCost: 0,         completionCheck: null };
+    case 'research': return { weeksRequired: Math.max(2, rank * 2), goldCost: rank * 1000, completionCheck: 'd6' };
+    case 'rewrite':  return { weeksRequired: Math.max(1, rank),     goldCost: rank * 1000, completionCheck: null };
   }
 }
 

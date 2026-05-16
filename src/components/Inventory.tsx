@@ -65,6 +65,34 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     };
   }, [catalogOpen]);
 
+  // Dismiss the "+ Magical ▾" dropdown on outside click. Each invocation
+  // tags itself with [data-magical-dropdown="<key>"]; we close when a
+  // click lands outside the currently-open dropdown.
+  useEffect(() => {
+    if (!magicalDropdownFor) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target?.closest(`[data-magical-dropdown="${magicalDropdownFor}"]`)) {
+        setMagicalDropdownFor(null);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [magicalDropdownFor]);
+
+  // Close the container-catalog dropdown on outside click too.
+  useEffect(() => {
+    if (!containerDropdownOpen) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as Element | null;
+      if (!target?.closest('[data-container-dropdown]')) {
+        setContainerDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [containerDropdownOpen]);
+
   // ── Encumbrance calculations (with coins) ──
   const coinWeight = getCoinWeight(coins);
   const coinSlots = getCoinSlots(coins);
@@ -104,7 +132,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   const handleAddFromCatalog = (entry: EquipmentEntry | { name: string; weight: number; slots: number; notes?: string }) => {
     // Auto-detect blank spell books from the catalog so they get the spellbook UI.
-    const isSpellbook = /spell\s*book/i.test(entry.name);
+    // Anchored to the start of the name so unrelated items containing "spellbook"
+    // (e.g. a hypothetical "Anti-Spellbook Ward") aren't misclassified.
+    const isSpellbook = /^spell\s*book/i.test(entry.name);
     const newItem: InventoryItem = {
       id: crypto.randomUUID(),
       name: entry.name,
@@ -550,7 +580,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const renderMagicalDropdown = (dropdownKey: string, equipped: boolean, containerId?: string) => {
     const isOpen = magicalDropdownFor === dropdownKey;
     return (
-      <div className="relative">
+      <div className="relative" data-magical-dropdown={dropdownKey}>
         <button
           type="button"
           onClick={() => setMagicalDropdownFor(isOpen ? null : dropdownKey)}
@@ -559,7 +589,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           + Magical ▾
         </button>
         {isOpen && (
-          <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-10 min-w-40">
+          <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-50 min-w-40">
             <button
               type="button"
               onClick={() => handleAddSpellbook(equipped, containerId)}
@@ -980,7 +1010,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           <h3 className="text-[#c4a35a] text-lg font-bold">Stowed Items</h3>
 
           {/* Add Container dropdown */}
-          <div className="relative">
+          <div className="relative" data-container-dropdown>
             <button
               type="button"
               onClick={() => setContainerDropdownOpen(!containerDropdownOpen)}
@@ -989,7 +1019,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               + Add Container
             </button>
             {containerDropdownOpen && (
-              <div className="absolute right-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-10 min-w-48">
+              <div className="absolute right-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-50 min-w-48">
                 {containerCatalogEntries.map((entry) => (
                   <button
                     key={entry.name}

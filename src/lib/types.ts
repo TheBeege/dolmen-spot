@@ -47,6 +47,7 @@ export interface InventoryItem {
   kind?: InventoryItemKind;
   spellbookContents?: SpellbookEntry[];  // present when kind === 'spellbook'; max 3 (Player's Book p78)
   scrollSpell?: SpellbookEntry;           // present when kind === 'scroll'
+  isStartingBook?: boolean;               // stamped by ApplyStartingBookButton so a rename doesn't reopen the dropdown
 }
 
 export interface CharacterContainer {
@@ -62,7 +63,6 @@ export interface SpellSlot {
   prepared: boolean;
   cast: boolean;
   notes: string;
-  fromScrollId?: string;   // when set, this memorised slot is sourced from a scroll inventory item
 }
 
 export type KnownSpellSource = 'starting' | 'studied' | 'mentor' | 'research' | 'rewrite' | 'manual';
@@ -84,7 +84,7 @@ export interface SpellStudyEntry {
   rank: number;
   source: StudySource;
   weeksRequired: number;
-  goldCost?: number;
+  goldCost: number;             // 0 for book/mentor; rank * 1000 for research/rewrite
   targetSpellbookId?: string;   // inventory item id; spell is written here on success
   notes?: string;
 }
