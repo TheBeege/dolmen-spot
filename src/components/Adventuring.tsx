@@ -18,6 +18,7 @@ import {
   FORAGING_YIELDS,
   getHungerEffects,
   getMoonPhaseLabel,
+  weeksElapsed,
 } from '@/lib/gamedata';
 
 interface AdventuringProps {
@@ -365,6 +366,30 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             </div>
             <div className="text-[#f5e6c8]/60 text-xs">{thirstText}</div>
           </div>
+
+          {/* Spell Study (only visible when active) */}
+          {character.spellStudy?.active && (() => {
+            const active = character.spellStudy.active;
+            const elapsed = weeksElapsed(active.startedOn, currentDate);
+            const remaining = Math.max(0, active.weeksRequired - elapsed);
+            const ready = remaining === 0;
+            return (
+              <div className={`bg-[#1a1a2e] rounded p-3 ${ready ? 'ring-1 ring-[#c4a35a]' : ''}`}>
+                <div className="text-[#c4a35a] text-sm font-semibold mb-2">🪄 Spell Study</div>
+                <div className="text-[#f5e6c8] text-sm font-bold">
+                  R{active.rank} {active.spellName}
+                </div>
+                <div className="text-[#f5e6c8]/60 text-xs">
+                  {ready
+                    ? 'Ready to complete (see Spells tab)'
+                    : `${remaining} week${remaining === 1 ? '' : 's'} remaining`}
+                </div>
+                <div className="text-[#f5e6c8]/40 text-xs italic mt-1">
+                  via {active.source}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Travel Days Without Rest */}
           <div className="bg-[#1a1a2e] rounded p-3">
