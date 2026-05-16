@@ -103,7 +103,7 @@ export default function ChangelogPage() {
                 <span className="text-xs text-[#f5e6c8]/50">{entry.date}</span>
                 {entry.prNumber !== undefined && (
                   <a
-                    href={`https://github.com/TheBeege/dolmenwood-character-sheet/pull/${entry.prNumber}`}
+                    href={`https://github.com/TheBeege/dolmen-spot/pull/${entry.prNumber}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs text-[#c4a35a]/60 hover:text-[#c4a35a] underline transition-colors"

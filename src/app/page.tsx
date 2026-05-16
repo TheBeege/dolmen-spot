@@ -264,7 +264,7 @@ export default function Home() {
           Dolmenwood is a trademark of Necrotic Gnome. This is an unofficial fan tool.
         </p>
         <p className="text-xs text-[#f5e6c8]/30 mt-1">
-          Found a bug? <a href="https://github.com/TheBeege/dolmenwood-character-sheet/issues" target="_blank" rel="noopener noreferrer" className="text-[#c4a35a]/50 hover:text-[#c4a35a] underline transition-colors">File an issue on GitHub</a>
+          Found a bug? <a href="https://github.com/TheBeege/dolmen-spot/issues" target="_blank" rel="noopener noreferrer" className="text-[#c4a35a]/50 hover:text-[#c4a35a] underline transition-colors">File an issue on GitHub</a>
         </p>
         <p className="text-xs text-[#f5e6c8]/30 mt-1">
           <Link href="/changelog" className="hover:text-[#c4a35a] transition-colors">Changelog</Link>

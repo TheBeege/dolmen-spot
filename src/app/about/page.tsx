@@ -73,7 +73,7 @@ export default function AboutPage() {
             <li>
               <span className="text-[#f5e6c8]/60">Issues / feature requests:</span>{' '}
               <a
-                href="https://github.com/TheBeege/dolmenwood-character-sheet/issues"
+                href="https://github.com/TheBeege/dolmen-spot/issues"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-[#c4a35a] hover:text-[#dbc07a] underline transition-colors"
