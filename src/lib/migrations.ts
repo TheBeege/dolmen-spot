@@ -104,7 +104,13 @@ const migrations: Record<number, (data: any) => any> = {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const stampYear = (parent: any, key: string) => {
       const d = parent?.[key];
-      if (d == null) return; // missing/null is fine — left alone
+      if (d === undefined) return; // reconcileWithDefaults will fill it in
+      if (d === null) {
+        // null is not undefined — reconcileWithDefaults would try to
+        // deep-merge into it and TypeError on `dataObj[subKey]`. Replace.
+        parent[key] = { ...DEFAULT_DATE };
+        return;
+      }
       if (typeof d === 'object' && !Array.isArray(d)) {
         if (typeof d.year !== 'number') d.year = 1;
         return;

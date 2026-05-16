@@ -989,7 +989,11 @@ function SpellStudyBlock({
 
   const config = getStudyConfig(draftSource, draftRank);
 
-  const elapsedWeeks = active ? weeksElapsed(active.startedOn, character.currentDate) : 0;
+  // Clamp at 0 so a player rewinding the calendar doesn't produce an
+  // ugly "-3 / 6 weeks" display. The study is just "not ready".
+  const elapsedWeeks = active
+    ? Math.max(0, weeksElapsed(active.startedOn, character.currentDate))
+    : 0;
   const studyReady = active ? elapsedWeeks >= active.weeksRequired : false;
 
   const handleAddToQueue = () => {

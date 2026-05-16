@@ -378,7 +378,9 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           {/* Spell Study (only visible when active) */}
           {character.spellStudy?.active && (() => {
             const active = character.spellStudy.active;
-            const elapsed = weeksElapsed(active.startedOn, currentDate);
+            // Clamp elapsed at 0 so a backward calendar nudge can't make
+            // `remaining` balloon past `weeksRequired` via subtraction.
+            const elapsed = Math.max(0, weeksElapsed(active.startedOn, currentDate));
             const remaining = Math.max(0, active.weeksRequired - elapsed);
             const ready = remaining === 0;
             return (
