@@ -141,6 +141,7 @@ export interface ActiveLightSource {
 export interface CalendarDate {
   day: number;
   month: number; // 0-11
+  year: number;  // campaign year; defaults to 1 for new characters
 }
 
 export interface Character {

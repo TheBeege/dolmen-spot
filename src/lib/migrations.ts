@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -92,6 +92,26 @@ const migrations: Record<number, (data: any) => any> = {
     if (data.knownSpells === undefined) data.knownSpells = [];
     if (data.spellStudy === undefined) data.spellStudy = { active: null, queue: [] };
     if (data.failedStudies === undefined) data.failedStudies = [];
+    return data;
+  },
+  // v10 -> v11: Add `year` to every CalendarDate. Pre-v11 saves had no
+  // year field, so all existing dates land in Year 1 by default — the
+  // player can adjust on the Adventuring tab.
+  10: (data) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const stampYear = (d: any) => {
+      if (d && typeof d === 'object' && typeof d.year !== 'number') {
+        d.year = 1;
+      }
+    };
+    stampYear(data.currentDate);
+    if (Array.isArray(data.journalEntries)) {
+      for (const entry of data.journalEntries) stampYear(entry?.date);
+    }
+    if (Array.isArray(data.knownSpells)) {
+      for (const k of data.knownSpells) stampYear(k?.learnedAt);
+    }
+    if (data.spellStudy?.active) stampYear(data.spellStudy.active.startedOn);
     return data;
   },
 };

@@ -13,6 +13,7 @@ import {
   SpellStudyEntry,
   StudySource,
   ActiveSpellStudy,
+  CalendarDate,
 } from '@/lib/types';
 import {
   getCharacterMagicProfile,
@@ -1029,7 +1030,7 @@ function SpellStudyBlock({
   // date the new study should be considered to have started on.
   const promoteNext = (
     remainingQueue: SpellStudyEntry[],
-    startedOn: { day: number; month: number },
+    startedOn: CalendarDate,
   ): { active: ActiveSpellStudy | null; queue: SpellStudyEntry[] } => {
     if (remainingQueue.length === 0) return { active: null, queue: [] };
     const [head, ...rest] = remainingQueue;
