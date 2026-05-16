@@ -18,6 +18,22 @@ type ChangelogEntry = {
 const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-05-16',
+    title: 'Rebuilt hex map',
+    prNumber: 4,
+    changes: [
+      'The Map tab is now an actual hex grid instead of pins on a backdrop. Hexes are colored by terrain (woods vs. open) so you can see the shape of Dolmenwood at a glance.',
+      'Hover any hex and a small floating menu appears with quick actions: set your current location, add a Point of Interest, mark a Faye Door, or open the hex inspector. The menu flips toward the upper-left near screen edges so it never clips off-screen.',
+      'Points of Interest are first-class: each one has a name, free-form notes, and lives at a specific hex. Click a hex to inspect everything there; edit names inline and add notes by expanding the entry.',
+      'Faye Doors come in two kinds — wild doors (into the fey realm generally) and roaded doors that lead, by a named road, to a matching door elsewhere on the map. Roaded pairs are drawn as a labeled dashed line connecting the two hexes and stay symmetric as you edit them.',
+      'New Laylines & Crossings: click hexes in order on the map to trace a layline (or any other path that crosses hexes). Each line has a name, a free-text type (Layline, Ward, Ancient Road…), a color, and notes. Click the last hex to undo, or click any earlier draft hex to truncate from that point. Switching tabs mid-draft no longer loses your work.',
+      'Pan the map with shift+drag, zoom toward the cursor with the mouse wheel. The Reset View button returns to the full extent.',
+      'When a hex gets crowded (more than 4 markers), the extras collapse into a "+N" badge so the map stays legible. The inspector still shows the full list.',
+      'Map information is per-character, so different characters can carry different (and sometimes contradictory) knowledge of the world — and you can update what your character knows as the campaign reveals it.',
+      'Existing pins from the old map are migrated into the new structured format automatically; unpadded hex codes like "303" are normalized to "0303".',
+    ],
+  },
+  {
+    date: '2026-05-16',
     title: 'Dolmen Spot branding, About, and Changelog pages',
     prNumber: 3,
     changes: [
