@@ -36,6 +36,11 @@ from pathlib import Path
 from PIL import Image
 import numpy as np
 
+# detect_drawn_hexes lives next to this file but isn't on sys.path when run
+# as `python3 scripts/extract_hex_grid.py`. Inject the scripts directory.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from detect_drawn_hexes import detect_drawn_hexes  # noqa: E402
+
 
 # --- Calibration ---
 LABEL_X_COL1 = 447      # x of label centroid for column 01 (odd)
@@ -116,12 +121,6 @@ def classify_hex(visited: np.ndarray, cx: float, cy: float, radius: int = 8) -> 
 
 
 def main() -> None:
-    # Import here so the calibration-only modules of detect_drawn_hexes
-    # don't trigger when this is imported elsewhere.
-    import sys
-    sys.path.insert(0, str(Path(__file__).resolve().parent))
-    from detect_drawn_hexes import find_digit_clusters, expected_label_center  # type: ignore
-
     root = Path(__file__).resolve().parent.parent
     img_path = root / "public" / "dolmenwood-map.png"
     out_path = root / "src" / "lib" / "hex-grid.json"
@@ -136,56 +135,11 @@ def main() -> None:
     outside = build_outside_mask(arr)
     print(f"Outside pixels: {outside.sum()} ({outside.mean()*100:.1f}%)")
 
-    # Step 1: detect which hexes are actually drawn on the printed map by
-    # finding their 4-digit coordinate labels. Off-map regions (compass
-    # rose, "Dolmenwood" title) have no labels and are excluded automatically.
+    # Step 1: detect which hexes are actually drawn on the printed map.
+    # Shared with the diagnostic visualisation in detect_drawn_hexes.py so
+    # both scripts agree on the set; see that module for the algorithm.
     print("Detecting drawn hexes via label clusters...")
-    centroids = find_digit_clusters(arr)
-    print(f"Found {len(centroids)} 4-digit label clusters.")
-
-    max_cols = int((w - LABEL_X_COL1) / COL_PITCH) + 2
-    max_rows = int((h - LABEL_Y_ROW1_ODD - LABEL_TO_CENTER_DY) / ROW_PITCH) + 2
-    candidates: list[tuple[int, int, float, float]] = []
-    for col in range(1, max_cols + 1):
-        for row in range(1, max_rows + 1):
-            lx, ly = expected_label_center(col, row)
-            if lx < 80 or lx > w - 80 or ly < 80 or ly > h - 80:
-                continue
-            candidates.append((col, row, lx, ly))
-
-    drawn: set[tuple[int, int]] = set()
-    for cx, cy in centroids:
-        best: tuple[int, int] | None = None
-        best_d = float("inf")
-        for col, row, lx, ly in candidates:
-            d = (cx - lx) ** 2 + (cy - ly) ** 2
-            if d < best_d:
-                best_d = d
-                best = (col, row)
-        if best is not None and math.sqrt(best_d) <= 100:
-            drawn.add(best)
-    print(f"Direct label matches: {len(drawn)} hexes")
-
-    # Gap-fill: hexes whose label was occluded by dense forest texture get
-    # rescued by having 4+ neighbors already in the drawn set. One pass is
-    # usually enough but we iterate to convergence.
-    def neighbors(c: int, r: int) -> list[tuple[int, int]]:
-        q = c - 1
-        if q % 2 == 0:
-            offsets = [(+1, -1), (+1, 0), (0, +1), (-1, 0), (-1, -1), (0, -1)]
-        else:
-            offsets = [(+1, 0), (+1, +1), (0, +1), (-1, +1), (-1, 0), (0, -1)]
-        return [(c + dq, r + dr) for dq, dr in offsets]
-
-    expected_set = {(c, r) for c, r, _, _ in candidates}
-    added = True
-    while added:
-        added = False
-        for col, row in list(expected_set - drawn):
-            ns = neighbors(col, row)
-            if sum(1 for n in ns if n in drawn) >= 4:
-                drawn.add((col, row))
-                added = True
+    drawn = detect_drawn_hexes(arr)
     print(f"After gap-fill: {len(drawn)} hexes")
 
     # Step 2: classify TERRAIN for each drawn hex.
@@ -220,10 +174,7 @@ def main() -> None:
             "hexSize": HEX_SIZE,
             "orientation": "flat-top",
             "offset": "odd-q",
-            "minCol": min(cols_present),
-            "maxCol": max(cols_present),
-            "minRow": min(rows_present),
-            "maxRow": max(rows_present),
+            "cellCount": len(hexes),
         },
         "hexes": hexes,
     }

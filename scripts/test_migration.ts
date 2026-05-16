@@ -133,13 +133,15 @@ section('Scenario 2: legacy MAP_PINS marker with valid pins');
 section('Scenario 3: unpadded legacy hex codes');
 {
   const data = baseV10();
+  // "303" → "0303" (live), "7" → "0007" (NOT in manifest, gets dropped by
+  // the orphan filter), "0507" (live).
   data.otherNotes = '<!--MAP_PINS-->[{"label":"X","hex":"303"},{"label":"Y","hex":"7"},{"label":"Z","hex":"0507"}]';
   const migrated = migrateCharacter(data as never);
-  check('all three POIs imported', migrated.mapData.pois.length === 3);
+  check('two live POIs survive (orphan dropped)', migrated.mapData.pois.length === 2);
   const hexes = migrated.mapData.pois.map((p) => p.hex);
-  check('hex 303 padded to 0303', hexes[0] === '0303');
-  check('hex 7 padded to 0007', hexes[1] === '0007');
-  check('hex 0507 unchanged', hexes[2] === '0507');
+  check('hex 303 padded to 0303', hexes.includes('0303'));
+  check('hex 0507 unchanged', hexes.includes('0507'));
+  check('hex 7 → 0007 was dropped (off-grid)', !hexes.includes('0007'));
 }
 
 // ----- Scenario 4: no marker at all -----
@@ -249,6 +251,69 @@ section('Scenario 11b: v12 save with borked mapData.pois (string)');
   check('pois repaired to array', Array.isArray(migrated.mapData.pois));
   check('pois empty after repair', migrated.mapData.pois.length === 0);
   check('schemaVersion stable', migrated.schemaVersion === CURRENT_SCHEMA_VERSION);
+}
+
+// ----- Scenario 11e: orphan hex references (dropped hexes) get cleared -----
+section('Scenario 11e: hex refs pointing at non-manifest hexes get cleared');
+{
+  const data = baseV10();
+  data.schemaVersion = CURRENT_SCHEMA_VERSION;
+  data.currentDate = { day: 1, month: 0, year: 1 };
+  // 1313 was in the old 250-hex bounding rectangle but is now an excluded
+  // corner (under the "Dolmenwood" title). 0303 is a live hex.
+  data.currentLocationHex = '1313';
+  (data as AnyData).mapData = {
+    pois: [
+      { id: 'live', hex: '0303', name: 'Live POI', notes: '' },
+      { id: 'orphan', hex: '1313', name: 'Orphan POI', notes: '' },
+    ],
+    fayeDoors: [
+      { id: 'd1', hex: '0404', name: 'Live door', notes: '', destination: { kind: 'wild' } },
+      { id: 'd2', hex: '1313', name: 'Orphan door', notes: '', destination: { kind: 'wild' } },
+    ],
+    laylines: [
+      // Layline that survives after pruning orphans (2 live hexes left).
+      { id: 'll1', name: 'Mixed', type: 'Layline', color: '#fff',
+        hexes: ['0303', '1313', '0404'], notes: '' },
+      // Layline that disappears (only 1 live hex left after pruning).
+      { id: 'll2', name: 'AllOrphan', type: 'Layline', color: '#fff',
+        hexes: ['1313', '1414'], notes: '' },
+    ],
+  };
+  const migrated = migrateCharacter(data as never);
+  check('orphan POI dropped', migrated.mapData.pois.length === 1 && migrated.mapData.pois[0].name === 'Live POI');
+  check('orphan door dropped', migrated.mapData.fayeDoors.length === 1 && migrated.mapData.fayeDoors[0].name === 'Live door');
+  check('orphan-only layline dropped',
+    migrated.mapData.laylines.length === 1 && migrated.mapData.laylines[0].name === 'Mixed');
+  check('mixed layline pruned to live hexes',
+    migrated.mapData.laylines[0].hexes.length === 2 &&
+    migrated.mapData.laylines[0].hexes[0] === '0303' &&
+    migrated.mapData.laylines[0].hexes[1] === '0404');
+  check('orphan currentLocationHex cleared', migrated.currentLocationHex === '');
+}
+
+// ----- Scenario 11g: non-string currentLocationHex coerced to '' -----
+section("Scenario 11g: non-string currentLocationHex (null/number) coerced to ''");
+{
+  const data = baseV10();
+  data.schemaVersion = CURRENT_SCHEMA_VERSION;
+  data.currentDate = { day: 1, month: 0, year: 1 };
+  (data as AnyData).currentLocationHex = null;
+  (data as AnyData).mapData = { pois: [], fayeDoors: [], laylines: [] };
+  const migrated = migrateCharacter(data as never);
+  check('null currentLocationHex coerced to empty string', migrated.currentLocationHex === '');
+}
+
+// ----- Scenario 11f: live currentLocationHex preserved -----
+section('Scenario 11f: a live currentLocationHex survives migration');
+{
+  const data = baseV10();
+  data.schemaVersion = CURRENT_SCHEMA_VERSION;
+  data.currentDate = { day: 1, month: 0, year: 1 };
+  data.currentLocationHex = '0303';
+  (data as AnyData).mapData = { pois: [], fayeDoors: [], laylines: [] };
+  const migrated = migrateCharacter(data as never);
+  check('currentLocationHex preserved', migrated.currentLocationHex === '0303');
 }
 
 // ----- Scenario 11d: self-paired door is downgraded to wild -----

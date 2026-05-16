@@ -97,9 +97,19 @@ export function pixelToHex(px: number, py: number): HexCoord | null {
 }
 
 /**
- * Bounding box of all hex centers — for sizing the SVG viewBox.
+ * Bounding box of all hex centers (plus the hex radius) — for sizing the
+ * SVG viewBox. HEX_CELLS is a frozen module-level constant, so the bounds
+ * never change after load: compute once and freeze. An outlier hex (none
+ * today, but possible if the manifest gains an isolated cell in the future)
+ * would stretch the box and leave empty viewBox padding around the playable
+ * area.
+ *
+ * `Object.freeze` here is shallow — fine because every field is a primitive
+ * number. If a future change adds a nested object/array to this struct,
+ * inner mutations would silently succeed; either keep the struct flat or
+ * upgrade to a deep freeze.
  */
-export function gridBounds(): { x: number; y: number; w: number; h: number } {
+const GRID_BOUNDS: Readonly<{ x: number; y: number; w: number; h: number }> = (() => {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const cell of Object.values(HEX_CELLS)) {
     const { x, y } = hexCenter(cell.col, cell.row);
@@ -109,5 +119,14 @@ export function gridBounds(): { x: number; y: number; w: number; h: number } {
     if (y + hexSize > maxY) maxY = y + hexSize;
   }
   const pad = hexSize * 0.3;
-  return { x: minX - pad, y: minY - pad, w: maxX - minX + 2 * pad, h: maxY - minY + 2 * pad };
+  return Object.freeze({
+    x: minX - pad,
+    y: minY - pad,
+    w: maxX - minX + 2 * pad,
+    h: maxY - minY + 2 * pad,
+  });
+})();
+
+export function gridBounds(): Readonly<{ x: number; y: number; w: number; h: number }> {
+  return GRID_BOUNDS;
 }
