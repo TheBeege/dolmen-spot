@@ -1,7 +1,7 @@
 import { Character } from './types';
 import { createDefaultCharacter, MONTHS } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
 
@@ -16,6 +16,11 @@ function sanitizeDate(d: any): { day: number; month: number; year: number } {
   if (d == null || typeof d !== 'object' || Array.isArray(d)) {
     return { ...DEFAULT_CALENDAR_DATE };
   }
+  // `month` is guaranteed to be an integer in [0, 11] after this expression:
+  // Number.isFinite rejects NaN/Infinity (so the else branch fires for those),
+  // Math.floor coerces fractional input, and Math.max/min clamp to the array
+  // bounds. MONTHS[month] is therefore always defined; no defensive guard
+  // needed at the index.
   const month = Number.isFinite(d.month)
     ? Math.max(0, Math.min(11, Math.floor(d.month)))
     : DEFAULT_CALENDAR_DATE.month;
@@ -94,6 +99,85 @@ function sanitizeCharacterDates(data: any): void {
     if (isPlainObject(data.spellStudy.active)) {
       data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
     }
+  }
+}
+
+const HEX_COORD_RE = /^\d{4}$/;
+
+/**
+ * Repair `mapData` shape on a partially-trusted save. Runs as part of the
+ * v11→v12 migration *and* unconditionally at the end of migrateCharacter so
+ * that a hand-edited save already at v12 (which the migration loop skips)
+ * gets the same defensive cleanup.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeMapData(data: any): void {
+  if (!isPlainObject(data.mapData)) {
+    data.mapData = { pois: [], fayeDoors: [], laylines: [] };
+    return;
+  }
+  const md = data.mapData as Record<string, unknown>;
+  if (!Array.isArray(md.pois)) md.pois = [];
+  if (!Array.isArray(md.fayeDoors)) md.fayeDoors = [];
+  if (!Array.isArray(md.laylines)) md.laylines = [];
+  md.pois = (md.pois as unknown[]).filter(
+    (p): p is Record<string, unknown> =>
+      isPlainObject(p) &&
+      typeof (p as { hex?: unknown }).hex === 'string' &&
+      HEX_COORD_RE.test((p as { hex: string }).hex),
+  );
+  md.fayeDoors = (md.fayeDoors as unknown[]).filter(
+    (d): d is Record<string, unknown> =>
+      isPlainObject(d) &&
+      typeof (d as { hex?: unknown }).hex === 'string' &&
+      HEX_COORD_RE.test((d as { hex: string }).hex),
+  );
+  md.laylines = (md.laylines as unknown[]).filter(
+    (l): l is Record<string, unknown> =>
+      isPlainObject(l) &&
+      Array.isArray((l as { hexes?: unknown }).hexes) &&
+      (l as { hexes: unknown[] }).hexes.length >= 2,
+  );
+  // draftLayline is optional. Drop it if malformed; downstream code handles
+  // its absence as "not currently drawing."
+  if (md.draftLayline !== undefined && !isPlainObject(md.draftLayline)) {
+    delete md.draftLayline;
+  }
+
+  // Repair asymmetric Faye-door pairings from hand-edited imports. A
+  // roaded door whose partner doesn't reciprocate (partner is wild, or
+  // points elsewhere, or doesn't exist) is downgraded to wild — that
+  // leaves it visible and editable, instead of drawing a one-sided
+  // connector or blocking the partner from being re-paired.
+  //
+  // Two-pass to keep iteration order irrelevant: pass 1 reads the
+  // ORIGINAL destination kinds and records which doors need to be
+  // downgraded; pass 2 applies the downgrade. (A single-pass loop is
+  // actually order-safe too because a wild-marked partner just fails
+  // the reciprocation test, which is the correct outcome — but the
+  // explicit two-pass version is easier to reason about.)
+  const doors = md.fayeDoors as Array<Record<string, unknown>>;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const isRoaded = (d: any): boolean => isPlainObject(d?.destination) && d.destination.kind === 'roaded';
+  const toDowngrade = new Set<unknown>();
+  for (const d of doors) {
+    if (!isRoaded(d)) continue;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dest = (d as any).destination;
+    const partnerId = typeof dest.pairedDoorId === 'string' ? dest.pairedDoorId : null;
+    const partner = partnerId ? doors.find((x) => (x as { id?: unknown }).id === partnerId) : null;
+    const reciprocates =
+      partner &&
+      isRoaded(partner) &&
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (partner as any).destination.pairedDoorId === (d as { id?: unknown }).id;
+    if (!reciprocates) {
+      toDowngrade.add(d);
+    }
+  }
+  for (const d of toDowngrade) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (d as any).destination = { kind: 'wild' };
   }
 }
 
@@ -195,6 +279,62 @@ const migrations: Record<number, (data: any) => any> = {
   // ranges. Same helper runs unconditionally at the end of migration.
   10: (data) => {
     sanitizeCharacterDates(data);
+    return data;
+  },
+  // v11 -> v12: Structured hex-map data. Adds mapData + currentLocationHex
+  // and best-effort-migrates the legacy <!--MAP_PINS--> marker stashed in
+  // otherNotes into proper MapPOI records.
+  11: (data) => {
+    // Ensure mapData is well-shaped before we push into it. The same helper
+    // also runs unconditionally in migrateCharacter() so a hand-edited v12
+    // save with a borked `mapData.pois` field gets repaired too.
+    sanitizeMapData(data);
+    if (typeof data.currentLocationHex !== 'string') data.currentLocationHex = '';
+
+    const PIN_MARKER = '<!--MAP_PINS-->';
+    const notes: string = typeof data.otherNotes === 'string' ? data.otherNotes : '';
+    const idx = notes.indexOf(PIN_MARKER);
+    if (idx === -1) return data;
+
+    const before = notes.slice(0, idx);
+    const payload = notes.slice(idx + PIN_MARKER.length);
+    let parsed: unknown = null;
+    try {
+      parsed = JSON.parse(payload);
+    } catch {
+      // Payload is unparseable. Leave the marker in place so the user can
+      // still see / recover their raw data by hand-editing the export.
+      return data;
+    }
+
+    // Parse succeeded. Whether the shape was an array or not, we strip the
+    // marker — keeping it around would leave it visible in the notes UI with
+    // no recovery path. Trim trailing whitespace that preceded the marker
+    // so re-saved notes don't accumulate phantom blank lines.
+    data.otherNotes = before.replace(/\s+$/, '');
+    if (!Array.isArray(parsed)) return data;
+
+    type LegacyPin = { id?: string; label?: string; hex?: string; isCurrentLocation?: boolean };
+    for (const pin of parsed as LegacyPin[]) {
+      if (!pin || typeof pin !== 'object') continue;
+      // Legacy form was a free-text input. Users typed things like "303"
+      // expecting the canonical 4-digit form; left-pad before validating
+      // so we don't silently drop their pins.
+      const raw = (pin.hex || '').trim();
+      const hex = /^\d{1,4}$/.test(raw) ? raw.padStart(4, '0') : raw;
+      if (!HEX_COORD_RE.test(hex)) continue;
+      data.mapData.pois.push({
+        id: pin.id || (typeof crypto !== 'undefined' && crypto.randomUUID
+          ? crypto.randomUUID()
+          : `poi-${Math.random().toString(36).slice(2)}`),
+        hex,
+        name: pin.label || 'Marker',
+        notes: '',
+      });
+      if (pin.isCurrentLocation) {
+        data.currentLocationHex = hex;
+      }
+    }
     return data;
   },
 };
@@ -305,9 +445,18 @@ export function migrateCharacter(data: any): Character {
   }
 
   // Defensive: also runs for already-current saves, so a hand-edited
-  // JSON import that smuggles in non-numeric date fields gets cleaned
-  // before downstream date math tries to use it.
+  // JSON import that smuggles in non-numeric date fields or a malformed
+  // mapData shape gets cleaned before downstream code tries to use it.
+  // reconcileWithDefaults only fills MISSING top-level keys; deeper
+  // shape repair has to happen here.
+  //
+  // Call order: sanitizers run BEFORE reconcileWithDefaults. This is safe
+  // because reconcileWithDefaults's object-merge branch only fills
+  // subkeys when the saved value is `undefined`; the arrays/objects
+  // populated by sanitizers above are never undefined, so reconcile
+  // won't overwrite them.
   sanitizeCharacterDates(data);
+  sanitizeMapData(data);
 
   return reconcileWithDefaults(data) as Character;
 }

@@ -144,6 +144,64 @@ export interface CalendarDate {
   year: number;  // campaign year; defaults to 1 for new characters
 }
 
+// 4-digit column-row hex coordinate (e.g. "0303" = column 3, row 3).
+// See src/lib/hex-grid.ts for the canonical set of valid hexes.
+export type HexCoord = string;
+
+export interface MapPOI {
+  id: string;
+  hex: HexCoord;
+  name: string;
+  notes: string;
+}
+
+export type FayeDoorDestination =
+  | { kind: 'wild' }
+  | { kind: 'roaded'; pairedDoorId: string; roadName: string };
+
+export interface FayeDoor {
+  id: string;
+  hex: HexCoord;
+  name: string;
+  notes: string;
+  destination: FayeDoorDestination;
+}
+
+export interface Layline {
+  id: string;
+  type: string;      // free-text label, e.g. "Layline", "Ancient Road", "Ward"
+  name: string;
+  color: string;     // CSS hex color, e.g. "#c4a35a"
+  hexes: HexCoord[]; // ordered sequence of hex coords the line passes through
+  notes: string;
+}
+
+// Polymorphic onChange contract used by every character-tab component.
+// Accepting both a partial-character object and a functional updater means
+// callers that need to compose multiple writes in one tick (e.g. HexMap's
+// finishLayline + an in-flight keystroke) can do so without losing edits.
+// Components that only ever write a single object can keep passing one.
+export type CharacterUpdater =
+  | Partial<Character>
+  | ((prev: Character) => Partial<Character>);
+
+export interface LaylineDraft {
+  name: string;
+  type: string;
+  color: string;
+  notes: string;
+  hexes: HexCoord[];
+}
+
+export interface CharacterMapData {
+  pois: MapPOI[];
+  fayeDoors: FayeDoor[];
+  laylines: Layline[];
+  // In-progress layline draft. Persisted so it survives tab unmounts;
+  // absent when not drawing.
+  draftLayline?: LaylineDraft;
+}
+
 export interface Character {
   schemaVersion: number;
   id: string;
@@ -214,6 +272,8 @@ export interface Character {
 
   currentDate: CalendarDate;
   currentLocation: string;
+  currentLocationHex: HexCoord | '';
+  mapData: CharacterMapData;
   journalEntries: JournalEntry[];
 
   exhaustionLevel: number;

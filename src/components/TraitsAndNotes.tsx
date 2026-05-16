@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Character, Retainer, Trophy } from '@/lib/types';
+import { Character, CharacterUpdater, Retainer, Trophy } from '@/lib/types';
 import {
   getCharacterLanguages,
   getCharacterFeatureProfile,
@@ -20,7 +20,7 @@ import {
 
 interface TraitsAndNotesProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =
