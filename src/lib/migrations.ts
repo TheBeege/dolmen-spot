@@ -1,7 +1,55 @@
 import { Character } from './types';
-import { createDefaultCharacter } from './gamedata';
+import { createDefaultCharacter, MONTHS } from './gamedata';
 
 export const CURRENT_SCHEMA_VERSION = 11;
+
+const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
+
+/**
+ * Coerce a value that's supposed to be a CalendarDate into a well-formed
+ * one. Replaces malformed shapes and non-finite numeric subfields with
+ * sensible defaults. `day` is bounded against the (clamped) month's
+ * actual length so a stale `day: 50` can't survive into display.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeDate(d: any): { day: number; month: number; year: number } {
+  if (d == null || typeof d !== 'object' || Array.isArray(d)) {
+    return { ...DEFAULT_CALENDAR_DATE };
+  }
+  const month = Number.isFinite(d.month)
+    ? Math.max(0, Math.min(11, Math.floor(d.month)))
+    : DEFAULT_CALENDAR_DATE.month;
+  const monthDays = MONTHS[month].days;
+  const day = Number.isFinite(d.day)
+    ? Math.max(1, Math.min(monthDays, Math.floor(d.day)))
+    : DEFAULT_CALENDAR_DATE.day;
+  const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
+  return { day, month, year };
+}
+
+/**
+ * Walk a character object and rewrite every persisted CalendarDate field
+ * through sanitizeDate. Both the v10 → v11 migration and the final
+ * post-migration pass call this so there's one canonical path for date
+ * repair.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeCharacterDates(data: any): void {
+  if (data.currentDate !== undefined) data.currentDate = sanitizeDate(data.currentDate);
+  if (Array.isArray(data.journalEntries)) {
+    for (const entry of data.journalEntries) {
+      if (entry && entry.date !== undefined) entry.date = sanitizeDate(entry.date);
+    }
+  }
+  if (Array.isArray(data.knownSpells)) {
+    for (const k of data.knownSpells) {
+      if (k && k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
+    }
+  }
+  if (data.spellStudy?.active?.startedOn !== undefined) {
+    data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
+  }
+}
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -95,88 +143,15 @@ const migrations: Record<number, (data: any) => any> = {
     return data;
   },
   // v10 -> v11: Add `year` to every CalendarDate. Pre-v11 saves had no
-  // year field, so all existing dates land in Year 1 by default — the
-  // player can adjust on the Adventuring tab. Malformed date values
-  // (e.g., a string from a corrupt save) are replaced with a default
-  // so they don't propagate NaN through the date math.
+  // year field. sanitizeCharacterDates walks every persisted date and
+  // rewrites it through sanitizeDate, which stamps year=1, coerces
+  // non-numeric subfields to defaults, and clamps month/day to valid
+  // ranges. Same helper runs unconditionally at the end of migration.
   10: (data) => {
-    const DEFAULT_DATE = { day: 1, month: 0, year: 1 };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const stampYear = (parent: any, key: string) => {
-      const d = parent?.[key];
-      if (d === undefined) return; // reconcileWithDefaults will fill it in
-      if (d === null) {
-        // null is not undefined — reconcileWithDefaults would try to
-        // deep-merge into it and TypeError on `dataObj[subKey]`. Replace.
-        parent[key] = { ...DEFAULT_DATE };
-        return;
-      }
-      if (typeof d === 'object' && !Array.isArray(d)) {
-        if (typeof d.year !== 'number') d.year = 1;
-        return;
-      }
-      // Anything else (string, number, array) is malformed; replace it.
-      parent[key] = { ...DEFAULT_DATE };
-    };
-    stampYear(data, 'currentDate');
-    if (Array.isArray(data.journalEntries)) {
-      for (const entry of data.journalEntries) {
-        if (entry) stampYear(entry, 'date');
-      }
-    }
-    if (Array.isArray(data.knownSpells)) {
-      for (const k of data.knownSpells) {
-        if (k) stampYear(k, 'learnedAt');
-      }
-    }
-    if (data.spellStudy?.active) stampYear(data.spellStudy.active, 'startedOn');
+    sanitizeCharacterDates(data);
     return data;
   },
 };
-
-const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
-
-/**
- * Coerce a value that's supposed to be a CalendarDate into a well-formed
- * one. Replaces malformed shapes and non-finite numeric subfields with
- * sensible defaults. Runs after migrations to catch hand-edited JSON
- * imports whose schemaVersion is already current but whose date fields
- * are corrupt (e.g. `year: "five"`, `month: NaN`).
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sanitizeDate(d: any): { day: number; month: number; year: number } {
-  if (d == null || typeof d !== 'object' || Array.isArray(d)) {
-    return { ...DEFAULT_CALENDAR_DATE };
-  }
-  const day = Number.isFinite(d.day) ? Math.max(1, Math.floor(d.day)) : DEFAULT_CALENDAR_DATE.day;
-  const month = Number.isFinite(d.month)
-    ? Math.max(0, Math.min(11, Math.floor(d.month)))
-    : DEFAULT_CALENDAR_DATE.month;
-  const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
-  return { day, month, year };
-}
-
-/**
- * Walk a character object and rewrite every persisted CalendarDate field
- * through sanitizeDate so downstream date math can trust the numbers.
- */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sanitizeCharacterDates(data: any): void {
-  if (data.currentDate !== undefined) data.currentDate = sanitizeDate(data.currentDate);
-  if (Array.isArray(data.journalEntries)) {
-    for (const entry of data.journalEntries) {
-      if (entry && entry.date !== undefined) entry.date = sanitizeDate(entry.date);
-    }
-  }
-  if (Array.isArray(data.knownSpells)) {
-    for (const k of data.knownSpells) {
-      if (k && k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
-    }
-  }
-  if (data.spellStudy?.active?.startedOn !== undefined) {
-    data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
-  }
-}
 
 /**
  * Deep-merge saved character data over a fresh default character.
