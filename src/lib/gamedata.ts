@@ -239,14 +239,18 @@ export const MONTHS = [
 
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
 
-export function getDayName(day: number): string {
-  return DAY_NAMES[(day - 1) % 7];
+// The 7-day weekday cycle runs continuously across months and years —
+// pre-PR this used (day-of-month - 1) % 7, which falsely reset to Colly
+// at the start of each month and lost track of weekday on month/year
+// boundaries that aren't multiples of 7.
+export function getDayName(date: CalendarDate): string {
+  return DAY_NAMES[((getAbsoluteDay(date) - 1) % 7 + 7) % 7];
 }
 
 export function formatCalendarDate(date: CalendarDate): string {
   const month = MONTHS[date.month];
   if (!month) return 'Unknown';
-  const dayName = getDayName(date.day);
+  const dayName = getDayName(date);
   return `${date.day} ${month.name} (${dayName}), Year ${date.year}`;
 }
 

@@ -76,7 +76,14 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
 
   // ── Calendar Handlers ──────────────────────────────────────────────
 
+  // Earliest representable campaign date. The Year input + this guard
+  // are the only enforcement that the campaign date never drops below
+  // Year 1; addDays itself stays math-pure so daysBetween invariants hold.
+  const isAtCampaignStart =
+    currentDate.year === 1 && currentDate.month === 0 && currentDate.day === 1;
+
   const handlePreviousDay = () => {
+    if (isAtCampaignStart) return;
     onChange({ currentDate: addDays(currentDate, -1) });
   };
 
@@ -240,7 +247,12 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         </div>
 
         <div className="flex items-center justify-center gap-3 mb-4">
-          <button onClick={handlePreviousDay} className={buttonClasses}>
+          <button
+            onClick={handlePreviousDay}
+            disabled={isAtCampaignStart}
+            title={isAtCampaignStart ? 'Already at Year 1, day 1' : ''}
+            className={`${buttonClasses} ${isAtCampaignStart ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
             Previous Day
           </button>
           <button onClick={handleNextDay} className={buttonClasses}>
