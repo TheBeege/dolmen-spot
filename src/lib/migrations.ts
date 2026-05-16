@@ -246,8 +246,14 @@ function reconcileWithDefaults(data: any): any {
         continue;
       }
       const required = NULLABLE_OBJECT_REQUIRED_KEYS[key];
-      if (required && !required.every((k) => k in (dataVal as object))) {
-        data[key] = null;
+      if (required) {
+        const obj = dataVal as Record<string, unknown>;
+        // Check the VALUE, not just key existence — `{ name: undefined }`
+        // would survive `k in obj` but still crash the controlled-input
+        // render flow we're trying to protect.
+        if (!required.every((k) => obj[k] !== undefined)) {
+          data[key] = null;
+        }
       }
       continue;
     }
