@@ -308,8 +308,11 @@ export const CELESTIAL_EVENTS: { month: number; day: number; name: string }[] = 
 // ──────────────────────────────────────────────────────────
 
 export function getDayOfYear(date: CalendarDate): number {
+  // Defensive clamp: out-of-range month would otherwise read
+  // MONTHS[date.month].days as undefined and TypeError.
+  const safeMonth = Math.max(0, Math.min(MONTHS.length - 1, date.month));
   let total = 0;
-  for (let i = 0; i < date.month; i++) {
+  for (let i = 0; i < safeMonth; i++) {
     total += MONTHS[i].days;
   }
   return total + date.day;

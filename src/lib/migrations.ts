@@ -134,6 +134,50 @@ const migrations: Record<number, (data: any) => any> = {
   },
 };
 
+const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
+
+/**
+ * Coerce a value that's supposed to be a CalendarDate into a well-formed
+ * one. Replaces malformed shapes and non-finite numeric subfields with
+ * sensible defaults. Runs after migrations to catch hand-edited JSON
+ * imports whose schemaVersion is already current but whose date fields
+ * are corrupt (e.g. `year: "five"`, `month: NaN`).
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeDate(d: any): { day: number; month: number; year: number } {
+  if (d == null || typeof d !== 'object' || Array.isArray(d)) {
+    return { ...DEFAULT_CALENDAR_DATE };
+  }
+  const day = Number.isFinite(d.day) ? Math.max(1, Math.floor(d.day)) : DEFAULT_CALENDAR_DATE.day;
+  const month = Number.isFinite(d.month)
+    ? Math.max(0, Math.min(11, Math.floor(d.month)))
+    : DEFAULT_CALENDAR_DATE.month;
+  const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
+  return { day, month, year };
+}
+
+/**
+ * Walk a character object and rewrite every persisted CalendarDate field
+ * through sanitizeDate so downstream date math can trust the numbers.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeCharacterDates(data: any): void {
+  if (data.currentDate !== undefined) data.currentDate = sanitizeDate(data.currentDate);
+  if (Array.isArray(data.journalEntries)) {
+    for (const entry of data.journalEntries) {
+      if (entry && entry.date !== undefined) entry.date = sanitizeDate(entry.date);
+    }
+  }
+  if (Array.isArray(data.knownSpells)) {
+    for (const k of data.knownSpells) {
+      if (k && k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
+    }
+  }
+  if (data.spellStudy?.active?.startedOn !== undefined) {
+    data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
+  }
+}
+
 /**
  * Deep-merge saved character data over a fresh default character.
  * Missing fields get safe defaults without overwriting existing player data.
@@ -185,6 +229,11 @@ export function migrateCharacter(data: any): Character {
     data = migration(data);
     data.schemaVersion = data.schemaVersion + 1;
   }
+
+  // Defensive: also runs for already-current saves, so a hand-edited
+  // JSON import that smuggles in non-numeric date fields gets cleaned
+  // before downstream date math tries to use it.
+  sanitizeCharacterDates(data);
 
   return reconcileWithDefaults(data) as Character;
 }
