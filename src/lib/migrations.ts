@@ -85,6 +85,11 @@ function sanitizeCharacterDates(data: any): void {
     if (data.spellStudy.queue !== undefined && !Array.isArray(data.spellStudy.queue)) {
       data.spellStudy.queue = [];
     }
+    // Filter out non-object queue entries (string/number/null) so the
+    // study UI can rely on `q.spellName` and friends existing.
+    if (Array.isArray(data.spellStudy.queue)) {
+      data.spellStudy.queue = data.spellStudy.queue.filter(isPlainObject);
+    }
     // ActiveSpellStudy.startedOn is required when active is set.
     if (isPlainObject(data.spellStudy.active)) {
       data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
@@ -196,29 +201,56 @@ const migrations: Record<number, (data: any) => any> = {
 
 /**
  * Deep-merge saved character data over a fresh default character.
- * Missing fields get safe defaults without overwriting existing player data.
+ * Missing fields get safe defaults without overwriting existing player
+ * data. Wrong-typed fields (e.g. an array field replaced by a string
+ * from a hand-edited JSON) are repaired to the default shape so that
+ * downstream components can rely on the schema.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function reconcileWithDefaults(data: any): any {
   const defaults = createDefaultCharacter();
 
   for (const key of Object.keys(defaults) as (keyof Character)[]) {
-    if (data[key] === undefined) {
-      data[key] = defaults[key];
-    } else if (
-      defaults[key] !== null &&
-      typeof defaults[key] === 'object' &&
-      !Array.isArray(defaults[key])
-    ) {
-      // One-level deep merge for nested objects (abilityScores, saveTargets, coins, currentDate, skillTargets)
-      const defaultObj = defaults[key] as Record<string, unknown>;
-      const dataObj = data[key] as Record<string, unknown>;
+    const defVal = defaults[key];
+    const dataVal = data[key];
+
+    if (dataVal === undefined) {
+      data[key] = defVal;
+      continue;
+    }
+
+    if (Array.isArray(defVal)) {
+      // Array field — repair if the saved value is anything other than an array.
+      if (!Array.isArray(dataVal)) data[key] = defVal;
+      continue;
+    }
+
+    if (defVal === null) {
+      // Nullable-object field (knack, animalCompanion). Anything other
+      // than null or a plain object is malformed → reset to null.
+      if (dataVal !== null && !isPlainObject(dataVal)) data[key] = null;
+      continue;
+    }
+
+    if (typeof defVal === 'object') {
+      // Object default. If the saved value isn't a plain object, replace
+      // wholesale; otherwise one-level deep-merge to fill missing subkeys.
+      if (!isPlainObject(dataVal)) {
+        data[key] = defVal;
+        continue;
+      }
+      const defaultObj = defVal as Record<string, unknown>;
+      const dataObj = dataVal as Record<string, unknown>;
       for (const subKey of Object.keys(defaultObj)) {
         if (dataObj[subKey] === undefined) {
           dataObj[subKey] = defaultObj[subKey];
         }
       }
     }
+    // Primitive defaults (numbers, strings, booleans): leave the saved
+    // value alone even if it's a different primitive type — we don't have
+    // enough schema info here to coerce safely, and component-level usage
+    // largely tolerates surprising primitives via Number()/String() casts.
   }
 
   return data;
