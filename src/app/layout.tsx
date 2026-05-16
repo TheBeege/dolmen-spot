@@ -4,8 +4,8 @@ import { Analytics } from '@vercel/analytics/next';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Dolmenwood Character Sheet',
-  description: 'Digital character sheet for the Dolmenwood TTRPG by Necrotic Gnome',
+  title: 'Dolmen Spot — Dolmenwood Character Sheet',
+  description: 'Your spot for tracking your Dolmenwood character. An unofficial digital character sheet for the Dolmenwood TTRPG by Necrotic Gnome.',
   icons: {
     icon: '/favicon.ico',
   },
