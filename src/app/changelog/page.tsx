@@ -19,6 +19,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-05-16',
     title: 'Dolmen Spot branding, About, and Changelog pages',
+    prNumber: 3,
     changes: [
       'The site is now called Dolmen Spot — your spot for tracking your Dolmenwood character. The game itself is still Dolmenwood; only the tracker has a name now.',
       'New About page describes the project and how to reach the author (GitHub issues or Discord @thebeege).',
