@@ -74,6 +74,23 @@ Character data is stored in localStorage and must survive schema changes across 
 - **Types**: All game interfaces live in `src/lib/types.ts`
 - **Game data**: All static game data lives in `src/lib/gamedata.ts`
 
+## Changelog
+
+The user-visible changelog lives at `src/app/changelog/page.tsx` and is shown to players at `/changelog`.
+
+**When preparing or updating a PR with user-facing changes**, add or amend an entry at the top of the `ENTRIES` array in that file. Required:
+
+1. **Player perspective, not developer perspective.** Describe what the player will see or be able to do — not what code or files changed. Compare:
+   - Bad: "Refactored `addDays` to use absolute-day arithmetic"
+   - Good: "Long spell studies no longer silently rewind when the calendar crosses a year."
+2. **Set the `date`** to the expected merge date (`YYYY-MM-DD`). It's fine to update this when the PR actually merges.
+3. **Leave `prNumber` undefined until the PR exists**, then fill it in (and update it if the PR is re-opened under a new number).
+4. **Skip purely internal changes** — refactors, lint fixes, migrations with no behavior change, doc-only changes, and dev tooling don't belong here.
+5. **Don't duplicate the changelog bullets verbatim inside the PR description.** The PR body covers implementation and test plan; the changelog entry is the player-facing source of truth. Both can exist, but the changelog entry should stand on its own.
+6. **One entry per PR, not per commit.** If a PR ships several features, list them as separate bullets under one entry.
+
+If a PR is later amended to add or remove user-facing behavior, update the existing changelog entry in the same PR — don't add a second entry for the same PR number.
+
 ## Deployment Phases
 
 See `docs/DEPLOYMENT-PHASES.md` for the ordered feature implementation plan. Work on phases sequentially -- later phases depend on earlier ones being correct.

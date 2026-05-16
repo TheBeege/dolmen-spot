@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback, lazy, Suspense } from 'react';
+import Link from 'next/link';
 import { useCharacter } from '@/hooks/useCharacter';
 import { useCloudStorage } from '@/hooks/useCloudStorage';
 import CharacterInfo from '@/components/CharacterInfo';
@@ -68,7 +69,7 @@ export default function Home() {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-[#c4a35a] mb-2">Dolmenwood</h1>
+          <h1 className="text-2xl font-bold text-[#c4a35a] mb-2">Dolmen Spot</h1>
           <p className="text-[#f5e6c8]/60">Loading character sheet...</p>
         </div>
       </div>
@@ -85,7 +86,7 @@ export default function Home() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <h1 className="text-lg font-bold text-[#c4a35a] tracking-wide">
-                Dolmenwood
+                Dolmen Spot
               </h1>
               <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
               <button
@@ -263,7 +264,12 @@ export default function Home() {
           Dolmenwood is a trademark of Necrotic Gnome. This is an unofficial fan tool.
         </p>
         <p className="text-xs text-[#f5e6c8]/30 mt-1">
-          Found a bug? <a href="https://github.com/TheBeege/dolmen-spot/issues" target="_blank" rel="noopener noreferrer" className="text-[#c4a35a]/50 hover:text-[#c4a35a] underline transition-colors">File an issue on GitHub</a>
+          Found a bug? <a href="https://github.com/TheBeege/dolmenwood-character-sheet/issues" target="_blank" rel="noopener noreferrer" className="text-[#c4a35a]/50 hover:text-[#c4a35a] underline transition-colors">File an issue on GitHub</a>
+        </p>
+        <p className="text-xs text-[#f5e6c8]/30 mt-1">
+          <Link href="/changelog" className="hover:text-[#c4a35a] transition-colors">Changelog</Link>
+          {' · '}
+          <Link href="/about" className="hover:text-[#c4a35a] transition-colors">About</Link>
         </p>
       </footer>
     </div>
