@@ -85,9 +85,9 @@ export default function Home() {
         <div className="max-w-6xl mx-auto px-3 py-2">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <h1 className="text-lg font-bold text-[#c4a35a] tracking-wide">
+              <span className="text-lg font-bold text-[#c4a35a] tracking-wide">
                 Dolmen Spot
-              </h1>
+              </span>
               <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
               <button
                 onClick={() => setShowCharList(!showCharList)}
@@ -205,6 +205,9 @@ export default function Home() {
 
       {/* Main Content */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-3 py-4">
+        <h1 className="sr-only">
+          {TABS.find(t => t.id === activeTab)?.label ?? 'Dolmen Spot'}
+        </h1>
         {activeTab === 'character' && (
           <CharacterInfo character={activeCharacter} onChange={updateCharacter} />
         )}
