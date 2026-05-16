@@ -1,5 +1,6 @@
 import { Character } from './types';
 import { createDefaultCharacter, MONTHS } from './gamedata';
+import { HEX_CELLS } from './hex-grid';
 
 export const CURRENT_SCHEMA_VERSION = 12;
 
@@ -120,26 +121,62 @@ function sanitizeMapData(data: any): void {
   if (!Array.isArray(md.pois)) md.pois = [];
   if (!Array.isArray(md.fayeDoors)) md.fayeDoors = [];
   if (!Array.isArray(md.laylines)) md.laylines = [];
+  // Validate hex coords both for format (4-digit) AND for existence in the
+  // canonical manifest. The grid shape changed between releases (the bounding
+  // rectangle once held 250 cells; the manifest is now smaller after we
+  // pinned to the printed map's actual outline — see hex-grid.json
+  // `meta.cellCount`). Saves can carry POIs / doors / layline hexes pointing
+  // at cells that no longer exist — drop those.
+  const isLiveHex = (raw: unknown): raw is string =>
+    typeof raw === 'string' && HEX_COORD_RE.test(raw) && raw in HEX_CELLS;
+
   md.pois = (md.pois as unknown[]).filter(
     (p): p is Record<string, unknown> =>
-      isPlainObject(p) &&
-      typeof (p as { hex?: unknown }).hex === 'string' &&
-      HEX_COORD_RE.test((p as { hex: string }).hex),
+      isPlainObject(p) && isLiveHex((p as { hex?: unknown }).hex),
   );
   md.fayeDoors = (md.fayeDoors as unknown[]).filter(
     (d): d is Record<string, unknown> =>
-      isPlainObject(d) &&
-      typeof (d as { hex?: unknown }).hex === 'string' &&
-      HEX_COORD_RE.test((d as { hex: string }).hex),
+      isPlainObject(d) && isLiveHex((d as { hex?: unknown }).hex),
   );
-  md.laylines = (md.laylines as unknown[]).filter(
-    (l): l is Record<string, unknown> =>
-      isPlainObject(l) &&
-      Array.isArray((l as { hexes?: unknown }).hexes) &&
-      (l as { hexes: unknown[] }).hexes.length >= 2,
-  );
-  // draftLayline is optional. Drop it if malformed; downstream code handles
-  // its absence as "not currently drawing."
+  // For laylines: trim each hexes[] to keep only live coords, then drop the
+  // whole layline if fewer than 2 valid hexes remain.
+  md.laylines = (md.laylines as unknown[])
+    .filter(
+      (l): l is Record<string, unknown> =>
+        isPlainObject(l) && Array.isArray((l as { hexes?: unknown }).hexes),
+    )
+    .map((l) => {
+      const hexes = (l.hexes as unknown[]).filter(isLiveHex);
+      return { ...l, hexes };
+    })
+    .filter((l) => (l.hexes as string[]).length >= 2);
+
+  // Validate the in-progress layline draft the same way; trim invalid hexes,
+  // drop the draft entirely if it would shrink below 1 hex.
+  if (isPlainObject(md.draftLayline)) {
+    const draft = md.draftLayline as Record<string, unknown>;
+    if (Array.isArray(draft.hexes)) {
+      draft.hexes = (draft.hexes as unknown[]).filter(isLiveHex);
+      if ((draft.hexes as string[]).length === 0) {
+        delete md.draftLayline;
+      }
+    } else {
+      delete md.draftLayline;
+    }
+  }
+
+  // currentLocationHex lives on the character (not in mapData), but the
+  // validity check belongs here next to its siblings. The field is typed
+  // HexCoord | ''; coerce any non-string (null, number, object from a
+  // hand-edited save) to '' and clear it if the live hex is no longer in
+  // the manifest.
+  if (typeof data.currentLocationHex !== 'string') {
+    data.currentLocationHex = '';
+  } else if (data.currentLocationHex !== '' && !(data.currentLocationHex in HEX_CELLS)) {
+    data.currentLocationHex = '';
+  }
+  // draftLayline non-object types get dropped here; the live-hex trim
+  // above handles the object-with-bad-hexes case.
   if (md.draftLayline !== undefined && !isPlainObject(md.draftLayline)) {
     delete md.draftLayline;
   }

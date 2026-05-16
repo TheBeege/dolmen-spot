@@ -5,13 +5,14 @@ the decorated regions (compass rose, "Dolmenwood" title) and is excluded.
 Algorithm:
   1. Threshold dark pixels (the text/labels are black).
   2. Connected-components pass to find character-sized blobs.
-  3. Cluster blobs horizontally into 4-digit labels.
+  3. Cluster blobs into 4-digit labels via proximity-based BFS.
   4. Each cluster's centroid maps to the nearest expected hex center.
 
-Outputs the kept hex set + a visualization at /tmp/map_inspect/detected_hexes.png.
+Outputs the kept hex set + a visualization next to this script (debug dir).
 """
 from __future__ import annotations
 import math
+import tempfile
 from collections import deque
 from pathlib import Path
 from PIL import Image, ImageDraw
@@ -84,19 +85,39 @@ def find_digit_clusters(arr: np.ndarray) -> list[tuple[int, int]]:
             if 5 <= cw <= 30 and 12 <= ch <= 40 and 20 <= size <= 400:
                 digits.append(((min_x + max_x) // 2, (min_y + max_y) // 2))
 
-    # Group horizontally: same row band (within ~15px y), within ~40px x.
-    digits.sort(key=lambda p: (p[1] // 15, p[0]))
+    # Group digits into labels with proximity-based connected components,
+    # not by sort + sequential scan. The previous sort-then-scan version
+    # could split a 4-digit label whose centroids didn't sort in left-to-
+    # right order (e.g. character bounding boxes vary in y by ±1px from
+    # ascenders/descenders). Y_TOL / X_GAP are empirical for the printed
+    # label font; bump if the source map's font ever changes.
+    Y_TOL = 15
+    X_GAP = 40
+    n = len(digits)
+    visited = [False] * n
     clusters: list[list[tuple[int, int]]] = []
-    cur: list[tuple[int, int]] = []
-    for px, py in digits:
-        if cur and abs(py - cur[-1][1]) <= 15 and (px - cur[-1][0]) <= 40:
-            cur.append((px, py))
-        else:
-            if cur:
-                clusters.append(cur)
-            cur = [(px, py)]
-    if cur:
-        clusters.append(cur)
+    for i in range(n):
+        if visited[i]:
+            continue
+        # BFS frontier from digit i, joining anything within (Y_TOL, X_GAP).
+        stack = [i]
+        cluster: list[tuple[int, int]] = []
+        while stack:
+            j = stack.pop()
+            if visited[j]:
+                continue
+            visited[j] = True
+            cluster.append(digits[j])
+            jx, jy = digits[j]
+            for k in range(n):
+                if visited[k]:
+                    continue
+                kx, ky = digits[k]
+                if abs(ky - jy) <= Y_TOL and abs(kx - jx) <= X_GAP:
+                    stack.append(k)
+        # Sort the cluster left-to-right so 4-digit ordering is reproducible
+        cluster.sort(key=lambda p: p[0])
+        clusters.append(cluster)
 
     centroids: list[tuple[int, int]] = []
     for cluster in clusters:
@@ -108,70 +129,91 @@ def find_digit_clusters(arr: np.ndarray) -> list[tuple[int, int]]:
     return centroids
 
 
-def main() -> None:
-    root = Path(__file__).resolve().parent.parent
-    img_path = root / "public" / "dolmenwood-map.png"
-    img = Image.open(img_path).convert("L")
-    arr = np.asarray(img, dtype=np.uint8)
-    h, w = arr.shape
+def hex_neighbors(c: int, r: int) -> list[tuple[int, int]]:
+    """Six neighbours of hex (col, row) in our flat-top odd-q offset layout.
+    1-indexed columns: odd col (0-indexed q is even) is NOT shifted; even col
+    (0-indexed q is odd) is shifted DOWN by half a row pitch."""
+    q = c - 1
+    if q % 2 == 0:
+        offsets = [(+1, -1), (+1, 0), (0, +1), (-1, 0), (-1, -1), (0, -1)]
+    else:
+        offsets = [(+1, 0), (+1, +1), (0, +1), (-1, +1), (-1, 0), (0, -1)]
+    return [(c + dq, r + dr) for dq, dr in offsets]
 
-    print("Detecting 4-digit label clusters (slow, scanning entire image)...")
-    centroids = find_digit_clusters(arr)
-    print(f"Found {len(centroids)} 4-digit label clusters.")
 
-    # For each centroid, find the nearest expected hex label position.
-    max_cols = int((w - LABEL_X_COL1) / COL_PITCH) + 2
-    max_rows = int((h - LABEL_Y_ROW1_ODD - LABEL_TO_CENTER_DY) / ROW_PITCH) + 2
-
-    expected: list[tuple[int, int, float, float]] = []
+def candidate_hexes(img_width: int, img_height: int) -> list[tuple[int, int, float, float]]:
+    """All (col, row, label_cx, label_cy) tuples whose expected label centre
+    sits comfortably inside the image bounds."""
+    max_cols = int((img_width - LABEL_X_COL1) / COL_PITCH) + 2
+    max_rows = int((img_height - LABEL_Y_ROW1_ODD - LABEL_TO_CENTER_DY) / ROW_PITCH) + 2
+    out: list[tuple[int, int, float, float]] = []
     for col in range(1, max_cols + 1):
         for row in range(1, max_rows + 1):
             lx, ly = expected_label_center(col, row)
-            if lx < 80 or lx > w - 80 or ly < 80 or ly > h - 80:
+            if lx < 80 or lx > img_width - 80 or ly < 80 or ly > img_height - 80:
                 continue
-            expected.append((col, row, lx, ly))
+            out.append((col, row, lx, ly))
+    return out
+
+
+def detect_drawn_hexes(
+    arr: np.ndarray,
+    *,
+    proximity_px: float = 100.0,
+    gap_fill_min_neighbors: int = 4,
+) -> set[tuple[int, int]]:
+    """Detect which hexes are drawn on the printed map. Returns the kept
+    (col, row) set. Used by both `detect_drawn_hexes.main()` (for the
+    diagnostic visualization) and `extract_hex_grid.main()` (to gate the
+    terrain classifier)."""
+    h, w = arr.shape
+    centroids = find_digit_clusters(arr)
+    candidates = candidate_hexes(w, h)
 
     kept: set[tuple[int, int]] = set()
     for cx, cy in centroids:
-        # Find the closest expected position within a reasonable tolerance.
         best: tuple[int, int] | None = None
         best_d = float('inf')
-        for col, row, lx, ly in expected:
+        for col, row, lx, ly in candidates:
             d = (cx - lx) ** 2 + (cy - ly) ** 2
             if d < best_d:
                 best_d = d
                 best = (col, row)
         if best is None:
             continue
-        # Hex label spacing is ~232.5 horizontally so anything within ~100px
-        # is the same hex; outside that we couldn't have come from this hex.
-        if math.sqrt(best_d) > 100:
+        # Hex label spacing is ~COL_PITCH horizontally; anything within
+        # `proximity_px` is plausibly the same hex. Outside that the cluster
+        # is unattached to any candidate (probably a place-name label).
+        if math.sqrt(best_d) > proximity_px:
             continue
         kept.add(best)
 
-    # Gap-fill: if a hex has 4+ of its 6 neighbors already kept, include it.
-    # Catches hexes whose label was occluded by dense forest texture but
-    # which are clearly part of the printed grid. Run iteratively until
-    # nothing new gets added (usually one pass is enough).
-    def neighbors(c: int, r: int) -> list[tuple[int, int]]:
-        q = c - 1
-        if q % 2 == 0:  # 1-indexed odd col → not shifted in our odd-q layout
-            offsets = [(+1, -1), (+1, 0), (0, +1), (-1, 0), (-1, -1), (0, -1)]
-        else:           # 1-indexed even col → shifted down
-            offsets = [(+1, 0), (+1, +1), (0, +1), (-1, +1), (-1, 0), (0, -1)]
-        return [(c + dq, r + dr) for dq, dr in offsets]
-
-    expected_set = {(c, r) for c, r, _, _ in expected}
+    # Gap-fill: hexes whose label was occluded by dense forest texture get
+    # rescued by having ≥`gap_fill_min_neighbors` of 6 neighbors already in
+    # the kept set. Iterate to convergence (usually one pass).
+    expected_set = {(c, r) for c, r, _, _ in candidates}
     added = True
     while added:
         added = False
         for col, row in list(expected_set - kept):
-            ns = neighbors(col, row)
-            in_kept = sum(1 for n in ns if n in kept)
-            if in_kept >= 4:
+            ns = hex_neighbors(col, row)
+            if sum(1 for n in ns if n in kept) >= gap_fill_min_neighbors:
                 kept.add((col, row))
                 added = True
-    print(f"After gap-fill: {len(kept)} hexes")
+    return kept
+
+
+def main() -> None:
+    root = Path(__file__).resolve().parent.parent
+    img_path = root / "public" / "dolmenwood-map.png"
+    img = Image.open(img_path).convert("L")
+    arr = np.asarray(img, dtype=np.uint8)
+
+    print("Detecting 4-digit label clusters (slow, scanning entire image)...")
+    kept = detect_drawn_hexes(arr)
+    h, w = arr.shape
+    expected = candidate_hexes(w, h)
+    print(f"Detected {len(kept)} drawn hexes (after gap-fill).")
 
     drawn = sorted(kept)
     excluded = [(c, r) for c, r, _, _ in expected if (c, r) not in kept]
@@ -192,11 +234,12 @@ def main() -> None:
     for col, row in excluded:
         verts = hex_vertices(col, row)
         draw.polygon(verts, outline=(220, 0, 0), width=2)
-    out_dir = Path("/tmp/map_inspect")
-    out_dir.mkdir(exist_ok=True)
+    out_dir = Path(tempfile.gettempdir()) / "dolmenwood_hex_map_debug"
+    out_dir.mkdir(parents=True, exist_ok=True)
     vis.thumbnail((2000, 2000))
-    vis.save(out_dir / "detected_hexes.png")
-    print(f"\nWrote /tmp/map_inspect/detected_hexes.png")
+    out_path = out_dir / "detected_hexes.png"
+    vis.save(out_path)
+    print(f"\nWrote {out_path}")
     # Also emit kept set
     print("\nKept hex coords (compact list):")
     coords_strs = sorted(f"{c:02d}{r:02d}" for c, r in kept)

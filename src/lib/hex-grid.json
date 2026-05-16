@@ -10,10 +10,7 @@
     "hexSize": 154.72987214281972,
     "orientation": "flat-top",
     "offset": "odd-q",
-    "minCol": 1,
-    "maxCol": 19,
-    "minRow": 1,
-    "maxRow": 12
+    "cellCount": 199
   },
   "hexes": {
     "0101": {
@@ -825,6 +822,11 @@
       "col": 14,
       "row": 9,
       "terrain": "woods"
+    },
+    "1410": {
+      "col": 14,
+      "row": 10,
+      "terrain": "open"
     },
     "1501": {
       "col": 15,
