@@ -13,6 +13,7 @@ import {
   SpellStudyEntry,
   StudySource,
   ActiveSpellStudy,
+  CalendarDate,
 } from '@/lib/types';
 import {
   getCharacterMagicProfile,
@@ -988,7 +989,11 @@ function SpellStudyBlock({
 
   const config = getStudyConfig(draftSource, draftRank);
 
-  const elapsedWeeks = active ? weeksElapsed(active.startedOn, character.currentDate) : 0;
+  // Clamp at 0 so a player rewinding the calendar doesn't produce an
+  // ugly "-3 / 6 weeks" display. The study is just "not ready".
+  const elapsedWeeks = active
+    ? Math.max(0, weeksElapsed(active.startedOn, character.currentDate))
+    : 0;
   const studyReady = active ? elapsedWeeks >= active.weeksRequired : false;
 
   const handleAddToQueue = () => {
@@ -1029,7 +1034,7 @@ function SpellStudyBlock({
   // date the new study should be considered to have started on.
   const promoteNext = (
     remainingQueue: SpellStudyEntry[],
-    startedOn: { day: number; month: number },
+    startedOn: CalendarDate,
   ): { active: ActiveSpellStudy | null; queue: SpellStudyEntry[] } => {
     if (remainingQueue.length === 0) return { active: null, queue: [] };
     const [head, ...rest] = remainingQueue;

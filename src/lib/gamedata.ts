@@ -239,15 +239,19 @@ export const MONTHS = [
 
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
 
-export function getDayName(day: number): string {
-  return DAY_NAMES[(day - 1) % 7];
+// The 7-day weekday cycle runs continuously across months and years —
+// pre-PR this used (day-of-month - 1) % 7, which falsely reset to Colly
+// at the start of each month and lost track of weekday on month/year
+// boundaries that aren't multiples of 7.
+export function getDayName(date: CalendarDate): string {
+  return DAY_NAMES[((getAbsoluteDay(date) - 1) % 7 + 7) % 7];
 }
 
 export function formatCalendarDate(date: CalendarDate): string {
   const month = MONTHS[date.month];
   if (!month) return 'Unknown';
-  const dayName = getDayName(date.day);
-  return `${date.day} ${month.name} (${dayName})`;
+  const dayName = getDayName(date);
+  return `${date.day} ${month.name} (${dayName}), Year ${date.year}`;
 }
 
 export function getSeasonIcon(month: number): string {
@@ -304,8 +308,11 @@ export const CELESTIAL_EVENTS: { month: number; day: number; name: string }[] = 
 // ──────────────────────────────────────────────────────────
 
 export function getDayOfYear(date: CalendarDate): number {
+  // Defensive clamp: out-of-range month would otherwise read
+  // MONTHS[date.month].days as undefined and TypeError.
+  const safeMonth = Math.max(0, Math.min(MONTHS.length - 1, date.month));
   let total = 0;
-  for (let i = 0; i < date.month; i++) {
+  for (let i = 0; i < safeMonth; i++) {
     total += MONTHS[i].days;
   }
   return total + date.day;
@@ -313,24 +320,17 @@ export function getDayOfYear(date: CalendarDate): number {
 
 export const DAYS_IN_YEAR = MONTHS.reduce((sum, m) => sum + m.days, 0);
 
-// Threshold to distinguish a real year-wrap (a study legitimately
-// continuing across the year boundary) from a backward date edit.
-// Picked at half a year so we accept generous campaign-resume jumps
-// (DM skips a season), but a player rewinding to fix a typo on day 5
-// of the year doesn't suddenly show 350 days of "progress".
-const MAX_PLAUSIBLE_STUDY_DAYS = 180;
+// Monotonic day count anchored so that Year 1 day 1 = absolute day 1.
+// Using (year - 1) means year-1 saves keep the same day-of-cycle they
+// had before the year field was introduced (no moon-phase jump on
+// upgrade); for later years the cycle simply continues monotonically.
+// Lets all date arithmetic be plain subtraction.
+export function getAbsoluteDay(date: CalendarDate): number {
+  return (date.year - 1) * DAYS_IN_YEAR + getDayOfYear(date);
+}
 
-// Calendar has no year field. When end-of-year < start-of-year we can't
-// tell from the data alone whether time wrapped forward (real progress)
-// or the player rewound the in-game date. Heuristic: only treat as a
-// wrap when the forward distance is within a study's reasonable bounds;
-// otherwise assume the player rewound and return 0.
 export function daysBetween(start: CalendarDate, end: CalendarDate): number {
-  const s = getDayOfYear(start);
-  const e = getDayOfYear(end);
-  if (e >= s) return e - s;
-  const wrapDistance = DAYS_IN_YEAR - s + e;
-  return wrapDistance <= MAX_PLAUSIBLE_STUDY_DAYS ? wrapDistance : 0;
+  return getAbsoluteDay(end) - getAbsoluteDay(start);
 }
 
 export function weeksElapsed(start: CalendarDate, end: CalendarDate): number {
@@ -340,23 +340,26 @@ export function weeksElapsed(start: CalendarDate, end: CalendarDate): number {
 // Advance (or rewind) a calendar date by some number of days, wrapping
 // across month and year boundaries.
 export function addDays(date: CalendarDate, days: number): CalendarDate {
-  let { day, month } = date;
+  let { day, month, year } = date;
   day += days;
   while (day > MONTHS[month].days) {
     day -= MONTHS[month].days;
-    month = (month + 1) % 12;
+    month += 1;
+    if (month > 11) { month = 0; year += 1; }
   }
   while (day < 1) {
-    month = (month - 1 + 12) % 12;
+    month -= 1;
+    if (month < 0) { month = 11; year -= 1; }
     day += MONTHS[month].days;
   }
-  return { day, month };
+  return { day, month, year };
 }
 
 export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; dayInCycle: number } {
-  const doy = getDayOfYear(date);
-  // 29⅓ day cycle — use 88/3 for precision
-  const cycleDay = ((doy - 1) % 29) + 1; // 1–29 within cycle (simplified from 29⅓)
+  // Continuous 29-day cycle anchored to the absolute day count so the
+  // moon doesn't reset every January.
+  const absDay = getAbsoluteDay(date);
+  const cycleDay = ((absDay - 1) % 29 + 29) % 29 + 1; // 1–29, defensive against negatives
   if (cycleDay <= 13) return { phase: 'waxing', dayInCycle: cycleDay };
   if (cycleDay <= 16) return { phase: 'full', dayInCycle: cycleDay };
   return { phase: 'waning', dayInCycle: cycleDay };
@@ -2591,7 +2594,7 @@ export function createDefaultCharacter(): Character {
     holyOrder: '',
     symbioticFleshTraits: [],
     fungalSymbiosisUsesRemaining: 0,
-    currentDate: { day: 1, month: 0 },
+    currentDate: { day: 1, month: 0, year: 1 },
     currentLocation: '',
     journalEntries: [],
 

@@ -1,7 +1,101 @@
 import { Character } from './types';
-import { createDefaultCharacter } from './gamedata';
+import { createDefaultCharacter, MONTHS } from './gamedata';
 
-export const CURRENT_SCHEMA_VERSION = 10;
+export const CURRENT_SCHEMA_VERSION = 11;
+
+const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
+
+/**
+ * Coerce a value that's supposed to be a CalendarDate into a well-formed
+ * one. Replaces malformed shapes and non-finite numeric subfields with
+ * sensible defaults. `day` is bounded against the (clamped) month's
+ * actual length so a stale `day: 50` can't survive into display.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeDate(d: any): { day: number; month: number; year: number } {
+  if (d == null || typeof d !== 'object' || Array.isArray(d)) {
+    return { ...DEFAULT_CALENDAR_DATE };
+  }
+  const month = Number.isFinite(d.month)
+    ? Math.max(0, Math.min(11, Math.floor(d.month)))
+    : DEFAULT_CALENDAR_DATE.month;
+  const monthDays = MONTHS[month].days;
+  const day = Number.isFinite(d.day)
+    ? Math.max(1, Math.min(monthDays, Math.floor(d.day)))
+    : DEFAULT_CALENDAR_DATE.day;
+  const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
+  return { day, month, year };
+}
+
+/**
+ * Walk a character object and rewrite every persisted CalendarDate field
+ * through sanitizeDate. Both the v10 → v11 migration and the final
+ * post-migration pass call this so there's one canonical path for date
+ * repair.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isPlainObject(v: any): boolean {
+  return v != null && typeof v === 'object' && !Array.isArray(v);
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeCharacterDates(data: any): void {
+  // currentDate is a required top-level field; if missing,
+  // reconcileWithDefaults will fill it from createDefaultCharacter,
+  // so we only sanitize when it's actually present.
+  if (data.currentDate !== undefined) data.currentDate = sanitizeDate(data.currentDate);
+
+  // journalEntries must be an array of objects with required `date`.
+  // Replace a non-array value (corrupt JSON like `"lol"`) with []; then
+  // drop any non-object entries before sanitizing each entry's date.
+  if (data.journalEntries !== undefined && !Array.isArray(data.journalEntries)) {
+    data.journalEntries = [];
+  }
+  if (Array.isArray(data.journalEntries)) {
+    data.journalEntries = data.journalEntries.filter(isPlainObject);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const entry of data.journalEntries as any[]) {
+      entry.date = sanitizeDate(entry.date);
+    }
+  }
+
+  // knownSpells: same shape defense. learnedAt is optional, so we only
+  // sanitize it if it's present (not undefined).
+  if (data.knownSpells !== undefined && !Array.isArray(data.knownSpells)) {
+    data.knownSpells = [];
+  }
+  if (Array.isArray(data.knownSpells)) {
+    data.knownSpells = data.knownSpells.filter(isPlainObject);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const k of data.knownSpells as any[]) {
+      if (k.learnedAt !== undefined) k.learnedAt = sanitizeDate(k.learnedAt);
+    }
+  }
+
+  // spellStudy shape: must be an object with `active` (object or null)
+  // and `queue` (array). Replace anything malformed with the default.
+  if (data.spellStudy !== undefined && !isPlainObject(data.spellStudy)) {
+    data.spellStudy = { active: null, queue: [] };
+  }
+  if (isPlainObject(data.spellStudy)) {
+    // `active` is allowed to be null; anything else that isn't an object → null
+    if (data.spellStudy.active !== null && data.spellStudy.active !== undefined && !isPlainObject(data.spellStudy.active)) {
+      data.spellStudy.active = null;
+    }
+    if (data.spellStudy.queue !== undefined && !Array.isArray(data.spellStudy.queue)) {
+      data.spellStudy.queue = [];
+    }
+    // Filter out non-object queue entries (string/number/null) so the
+    // study UI can rely on `q.spellName` and friends existing.
+    if (Array.isArray(data.spellStudy.queue)) {
+      data.spellStudy.queue = data.spellStudy.queue.filter(isPlainObject);
+    }
+    // ActiveSpellStudy.startedOn is required when active is set.
+    if (isPlainObject(data.spellStudy.active)) {
+      data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
+    }
+  }
+}
 
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
@@ -94,33 +188,95 @@ const migrations: Record<number, (data: any) => any> = {
     if (data.failedStudies === undefined) data.failedStudies = [];
     return data;
   },
+  // v10 -> v11: Add `year` to every CalendarDate. Pre-v11 saves had no
+  // year field. sanitizeCharacterDates walks every persisted date and
+  // rewrites it through sanitizeDate, which stamps year=1, coerces
+  // non-numeric subfields to defaults, and clamps month/day to valid
+  // ranges. Same helper runs unconditionally at the end of migration.
+  10: (data) => {
+    sanitizeCharacterDates(data);
+    return data;
+  },
+};
+
+// Required subkeys for the schema's nullable-object fields. If a saved
+// plain-object value is missing any of these, the field is reset to
+// `null` so the UI's "you must select X" flow handles it cleanly
+// instead of rendering undefined names / NaN counts.
+const NULLABLE_OBJECT_REQUIRED_KEYS: Partial<Record<keyof Character, readonly string[]>> = {
+  knack: ['knackId', 'name', 'notes'],
+  animalCompanion: ['name', 'type', 'hp', 'notes'],
 };
 
 /**
  * Deep-merge saved character data over a fresh default character.
- * Missing fields get safe defaults without overwriting existing player data.
+ * Missing fields get safe defaults without overwriting existing player
+ * data. Wrong-typed fields (e.g. an array field replaced by a string
+ * from a hand-edited JSON) are repaired to the default shape so that
+ * downstream components can rely on the schema.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function reconcileWithDefaults(data: any): any {
   const defaults = createDefaultCharacter();
 
   for (const key of Object.keys(defaults) as (keyof Character)[]) {
-    if (data[key] === undefined) {
-      data[key] = defaults[key];
-    } else if (
-      defaults[key] !== null &&
-      typeof defaults[key] === 'object' &&
-      !Array.isArray(defaults[key])
-    ) {
-      // One-level deep merge for nested objects (abilityScores, saveTargets, coins, currentDate, skillTargets)
-      const defaultObj = defaults[key] as Record<string, unknown>;
-      const dataObj = data[key] as Record<string, unknown>;
+    const defVal = defaults[key];
+    const dataVal = data[key];
+
+    if (dataVal === undefined) {
+      data[key] = defVal;
+      continue;
+    }
+
+    if (Array.isArray(defVal)) {
+      // Array field — repair if the saved value is anything other than an array.
+      if (!Array.isArray(dataVal)) data[key] = defVal;
+      continue;
+    }
+
+    if (defVal === null) {
+      // Nullable-object field (knack, animalCompanion). Three cases:
+      //   - null: legitimate cleared state, leave alone.
+      //   - non-null + non-plain-object: malformed → null.
+      //   - plain object: check required subkeys; if any are missing,
+      //     null it out so the UI re-selection flow handles it cleanly.
+      if (dataVal === null) continue;
+      if (!isPlainObject(dataVal)) {
+        data[key] = null;
+        continue;
+      }
+      const required = NULLABLE_OBJECT_REQUIRED_KEYS[key];
+      if (required) {
+        const obj = dataVal as Record<string, unknown>;
+        // Check the VALUE, not just key existence — `{ name: undefined }`
+        // would survive `k in obj` but still crash the controlled-input
+        // render flow we're trying to protect.
+        if (!required.every((k) => obj[k] !== undefined)) {
+          data[key] = null;
+        }
+      }
+      continue;
+    }
+
+    if (typeof defVal === 'object') {
+      // Object default. If the saved value isn't a plain object, replace
+      // wholesale; otherwise one-level deep-merge to fill missing subkeys.
+      if (!isPlainObject(dataVal)) {
+        data[key] = defVal;
+        continue;
+      }
+      const defaultObj = defVal as Record<string, unknown>;
+      const dataObj = dataVal as Record<string, unknown>;
       for (const subKey of Object.keys(defaultObj)) {
         if (dataObj[subKey] === undefined) {
           dataObj[subKey] = defaultObj[subKey];
         }
       }
     }
+    // Primitive defaults (numbers, strings, booleans): leave the saved
+    // value alone even if it's a different primitive type — we don't have
+    // enough schema info here to coerce safely, and component-level usage
+    // largely tolerates surprising primitives via Number()/String() casts.
   }
 
   return data;
@@ -147,6 +303,11 @@ export function migrateCharacter(data: any): Character {
     data = migration(data);
     data.schemaVersion = data.schemaVersion + 1;
   }
+
+  // Defensive: also runs for already-current saves, so a hand-edited
+  // JSON import that smuggles in non-numeric date fields gets cleaned
+  // before downstream date math tries to use it.
+  sanitizeCharacterDates(data);
 
   return reconcileWithDefaults(data) as Character;
 }

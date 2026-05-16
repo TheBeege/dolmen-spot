@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Character, CalendarDate, JournalEntry, ActiveLightSource } from '@/lib/types';
+import { Character, JournalEntry, ActiveLightSource } from '@/lib/types';
 import {
   MONTHS,
   formatCalendarDate,
@@ -19,6 +19,7 @@ import {
   getHungerEffects,
   getMoonPhaseLabel,
   weeksElapsed,
+  addDays,
 } from '@/lib/gamedata';
 
 interface AdventuringProps {
@@ -51,25 +52,6 @@ const SLEEP_DIFFICULTY_COLORS: Record<string, string> = {
   impossible: '#b33a1a',
 };
 
-function advanceDay(date: CalendarDate, delta: number): CalendarDate {
-  let { day, month } = date;
-  day += delta;
-
-  if (delta > 0) {
-    while (day > MONTHS[month].days) {
-      day -= MONTHS[month].days;
-      month = (month + 1) % 12;
-    }
-  } else {
-    while (day < 1) {
-      month = (month - 1 + 12) % 12;
-      day += MONTHS[month].days;
-    }
-  }
-
-  return { day, month };
-}
-
 function getFestivalsForMonth(month: number): { day: number; name: string }[] {
   return (FESTIVALS.festivals || []).filter((f) => f.month === month);
 }
@@ -94,24 +76,35 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
 
   // ── Calendar Handlers ──────────────────────────────────────────────
 
+  // Earliest representable campaign date. The Year input + this guard
+  // are the only enforcement that the campaign date never drops below
+  // Year 1; addDays itself stays math-pure so daysBetween invariants hold.
+  const isAtCampaignStart =
+    currentDate.year === 1 && currentDate.month === 0 && currentDate.day === 1;
+
   const handlePreviousDay = () => {
-    onChange({ currentDate: advanceDay(currentDate, -1) });
+    if (isAtCampaignStart) return;
+    onChange({ currentDate: addDays(currentDate, -1) });
   };
 
   const handleNextDay = () => {
-    onChange({ currentDate: advanceDay(currentDate, 1) });
+    onChange({ currentDate: addDays(currentDate, 1) });
   };
 
   const handleMonthChange = (newMonth: number) => {
     const maxDay = MONTHS[newMonth].days;
     const clampedDay = Math.min(currentDate.day, maxDay);
-    onChange({ currentDate: { day: clampedDay, month: newMonth } });
+    onChange({ currentDate: { ...currentDate, day: clampedDay, month: newMonth } });
   };
 
   const handleDayChange = (newDay: number) => {
     const maxDay = currentMonth.days;
     const clampedDay = Math.max(1, Math.min(newDay, maxDay));
     onChange({ currentDate: { ...currentDate, day: clampedDay } });
+  };
+
+  const handleYearChange = (newYear: number) => {
+    onChange({ currentDate: { ...currentDate, year: Math.max(1, Math.floor(newYear) || 1) } });
   };
 
   // ── Journal Handlers ───────────────────────────────────────────────
@@ -254,7 +247,12 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         </div>
 
         <div className="flex items-center justify-center gap-3 mb-4">
-          <button onClick={handlePreviousDay} className={buttonClasses}>
+          <button
+            onClick={handlePreviousDay}
+            disabled={isAtCampaignStart}
+            title={isAtCampaignStart ? 'Already at Year 1, day 1' : ''}
+            className={`${buttonClasses} ${isAtCampaignStart ? 'opacity-40 cursor-not-allowed' : ''}`}
+          >
             Previous Day
           </button>
           <button onClick={handleNextDay} className={buttonClasses}>
@@ -262,7 +260,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
             <label className={labelClasses}>Month</label>
             <select
@@ -285,6 +283,16 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
               max={currentMonth.days}
               value={currentDate.day}
               onChange={(e) => handleDayChange(parseInt(e.target.value) || 1)}
+              className={`${inputClasses} w-full`}
+            />
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <label className={labelClasses}>Year</label>
+            <input
+              type="number"
+              min={1}
+              value={currentDate.year}
+              onChange={(e) => handleYearChange(parseInt(e.target.value) || 1)}
               className={`${inputClasses} w-full`}
             />
           </div>
@@ -370,7 +378,9 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           {/* Spell Study (only visible when active) */}
           {character.spellStudy?.active && (() => {
             const active = character.spellStudy.active;
-            const elapsed = weeksElapsed(active.startedOn, currentDate);
+            // Clamp elapsed at 0 so a backward calendar nudge can't make
+            // `remaining` balloon past `weeksRequired` via subtraction.
+            const elapsed = Math.max(0, weeksElapsed(active.startedOn, currentDate));
             const remaining = Math.max(0, active.weeksRequired - elapsed);
             const ready = remaining === 0;
             return (
