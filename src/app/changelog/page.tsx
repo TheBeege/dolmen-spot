@@ -17,6 +17,24 @@ type ChangelogEntry = {
 // Write each bullet from the player's point of view — what changed for them, not what changed in code.
 const ENTRIES: ChangelogEntry[] = [
   {
+    date: '2026-05-17',
+    title: 'Rebuilt hex map',
+    prNumber: 4,
+    changes: [
+      'The Map tab is now an actual hex grid instead of pins on a backdrop. The grid matches the shape of Dolmenwood from the printed map — only hexes that are actually drawn on the map are clickable, and each one is colored by terrain (woods or open) so you can see the shape of the wood at a glance.',
+      'Each hex shows its coordinate (like "0303") in small text inside the hex; the labels fade in as you zoom in so they\'re always there when you need them and never overwhelming when you don\'t.',
+      'Click a hex to open its inspector. The inspector shows three primary actions — 📍 Set Current, + POI, ✦ Faye Door — and lists anything already at that hex. Picking an action expands its form in place; submit or cancel returns to the action buttons.',
+      'Points of Interest are first-class: each one has a name, free-form notes, and lives at a specific hex. Edit names inline; expand "Notes" to add or revise notes.',
+      'Faye Doors come in two kinds — wild doors (into the fey realm generally) and roaded doors that lead, by a named road, to a matching door elsewhere on the map. Roaded pairs are drawn as a labeled dashed line between the two hexes and stay symmetric as you edit them: changing one side updates the other, and deleting a door cleanly breaks the partner\'s link.',
+      'New Laylines & Crossings: click hexes in order on the map to trace a layline (or any other path that crosses hexes). Each line has a name, a free-text type (Layline, Ward, Ancient Road…), a color, and notes. Click the last hex to undo, or click any earlier draft hex to truncate from that point. Switching tabs mid-draft no longer loses your work.',
+      'Hovering any marker — a POI, a Faye Door, or a layline — shows a tooltip with its name and a snippet of its notes. Clicking a marker selects the hex and auto-expands that specific item in the inspector so you can edit it immediately. A "+N" badge appears on hexes with more than 4 markers; the full list is always reachable through the inspector.',
+      'Pan the map with shift+drag, zoom toward the cursor with the mouse wheel. The Reset View button returns to the full extent. A new "Go to hex" input lets you type a coordinate (e.g. "0303" or just "33") and jump straight to that hex — the map re-centers and the inspector opens.',
+      'The map is now keyboard-accessible: tab to markers and laylines, activate them with Enter or Space; use the Go-to-hex input to reach any hex without a mouse. Screen readers announce hex coordinates, terrain, and marker names.',
+      'Map information is per-character, so different characters can carry different (and sometimes contradictory) knowledge of the world — and you can update what your character knows as the campaign reveals it.',
+      'Existing pins from the old map are migrated into the new structured format automatically; unpadded hex codes like "303" are normalized to "0303", and references to hexes that no longer exist on the redrawn grid are cleared.',
+    ],
+  },
+  {
     date: '2026-05-16',
     title: 'Dolmen Spot branding, About, and Changelog pages',
     prNumber: 3,

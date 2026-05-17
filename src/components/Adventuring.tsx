@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Character, JournalEntry, ActiveLightSource } from '@/lib/types';
+import { Character, CharacterUpdater, JournalEntry, ActiveLightSource } from '@/lib/types';
 import {
   MONTHS,
   formatCalendarDate,
@@ -24,7 +24,7 @@ import {
 
 interface AdventuringProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =

@@ -2596,6 +2596,8 @@ export function createDefaultCharacter(): Character {
     fungalSymbiosisUsesRemaining: 0,
     currentDate: { day: 1, month: 0, year: 1 },
     currentLocation: '',
+    currentLocationHex: '',
+    mapData: { pois: [], fayeDoors: [], laylines: [] },
     journalEntries: [],
 
     exhaustionLevel: 0,

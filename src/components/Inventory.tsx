@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Character, InventoryItem, Coins, CharacterContainer, SpellbookEntry } from '@/lib/types';
+import { Character, CharacterUpdater, InventoryItem, Coins, CharacterContainer, SpellbookEntry } from '@/lib/types';
 import {
   getSpeedBySlots,
   getSpeedByWeight,
@@ -20,7 +20,7 @@ import {
 
 interface InventoryProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =

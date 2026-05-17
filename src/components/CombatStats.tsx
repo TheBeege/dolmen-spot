@@ -1,6 +1,6 @@
 'use client';
 
-import { Character } from '@/lib/types';
+import { Character, CharacterUpdater } from '@/lib/types';
 import {
   getAbilityModifier,
   formatModifier,
@@ -15,7 +15,7 @@ import {
 
 interface CombatStatsProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =

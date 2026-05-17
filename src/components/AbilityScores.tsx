@@ -1,12 +1,12 @@
 'use client';
 
-import { Character, AbilityScores as AbilityScoresType, SaveTargets } from '@/lib/types';
+import { Character, CharacterUpdater, AbilityScores as AbilityScoresType, SaveTargets } from '@/lib/types';
 import { getAbilityModifier, formatModifier, calculateXpModifier } from '@/lib/gamedata';
 import SkillsPanel from './SkillsPanel';
 
 interface AbilityScoresProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const ABILITIES: {
