@@ -30,6 +30,19 @@ type ChangelogEntry = {
 // Write each bullet from the player's point of view — what changed for them, not what changed in code.
 const ENTRIES: ChangelogEntry[] = [
   {
+    date: '2026-11-20',
+    title: 'Printable PDF character sheets',
+    prNumbers: [11],
+    changes: [
+      'New "Download PDF" button next to Save / Load saves a printable character sheet of your current character, named after them. On phones it shows as a download icon.',
+      'The sheet covers your character details, ability scores and modifiers, all five saving throws, combat stats (HP, AC, attack, melee, missile, speed and magic resistance), skills, class and kindred features, languages, retainers, your spells, glamours, runes or knacks, and your inventory by container with encumbrance and coins.',
+      'The map, free-form notes, the journal and the calendar stay in the app and aren\'t printed.',
+      'Pages are printer-friendly with selectable text. Long inventories continue onto extra pages with their table headings repeated, and every page shows your character\'s name and a page number.',
+      'Paper size follows your browser\'s language: Letter in the US, Canada and other Letter-paper regions, A4 elsewhere.',
+      'On phones, the header now shortens long character names and hides the kindred and class, so its buttons always fit on screen.',
+    ],
+  },
+  {
     date: '2026-05-16',
     title: 'Dolmen Spot branding, About, and Changelog pages',
     prNumbers: [3],
