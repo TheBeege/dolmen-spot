@@ -1663,12 +1663,20 @@ function Footer({ c }: { c: Character }) {
   );
 }
 
+/**
+ * The name for the PDF's title, which PDF viewers show with fonts of their own,
+ * so it keeps every character the sheet's fonts lack. Only line breaks and
+ * other control characters become spaces.
+ */
+function titleName(c: Character): string {
+  return (c.name ?? '').normalize('NFC').replace(/[\p{Cc}\p{Zl}\p{Zp}\s]+/gu, ' ').trim() || 'Unnamed';
+}
+
 function SheetPages({ character: c, pageSize, exportedOn }: Omit<CharacterSheetDocumentProps, 'fonts'>) {
   const { fonts } = useSheet();
-  const name = useCharacterName(c);
   return (
     <Document
-      title={`${name} - Dolmen Spot character sheet`}
+      title={`${titleName(c)} - Dolmen Spot character sheet`}
       subject="Dolmenwood character sheet"
       creator="Dolmen Spot"
       producer="Dolmen Spot"

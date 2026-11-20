@@ -1,6 +1,10 @@
 const SUFFIX = '-dolmen-spot.pdf';
-// Most file systems allow 255 bytes per file name; count the suffix too.
-const MAX_FILE_NAME_BYTES = 255;
+// Suffix included. File systems allow 255 bytes per name, but on Windows a
+// whole path is limited to 260 characters unless long paths are turned on,
+// and "C:\Users\<name>\Downloads\" takes 30 to 60 of them. 150 bytes
+// (which is never more than 150 characters) leaves room for that, for a
+// longer download folder, and for the " (2)" a browser adds to a repeat.
+const MAX_FILE_NAME_BYTES = 150;
 
 const encoder = new TextEncoder();
 
