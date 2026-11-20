@@ -107,6 +107,14 @@ python3 scripts/build-pdf-fonts.py          # rebuild public/fonts/pdf/ and src/
 python3 scripts/build-pdf-fonts.py --check  # verify the committed files are up to date
 ```
 
+## Patched Dependencies
+
+`patches/` holds fixes to react-pdf's PDF export, which [patch-package](https://github.com/ds300/patch-package) applies after every `npm install` and `npm ci` (the `postinstall` script):
+
+- `@react-pdf/textkit`: text cut off at its line limit (`maxLines`) ends in "…", also when the cut falls at a line break, which used to drop the rest of the text silently.
+
+After upgrading `@react-pdf/renderer`, check whether the new versions still need them. patch-package reports a patch that no longer applies, failing the install in CI and on Vercel, and warns when a package's version has changed. To change a patch, edit the package in `node_modules/` and run `npx patch-package <package name>`.
+
 ## Disclaimer
 
 Dolmenwood is a trademark of [Necrotic Gnome](https://necroticgnome.com/). This is an unofficial fan project and is not affiliated with or endorsed by Necrotic Gnome. Game content is used for personal/fan use only.

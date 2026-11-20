@@ -330,9 +330,11 @@ const s = StyleSheet.create({
 });
 
 // Table rows never split across pages, so a cell's text is capped to keep
-// every row shorter than a page (60 lines of 8.5pt text is about 560pt). A
-// row that tall moves to the next page whole when it doesn't fit, which can
-// leave the table's column headings alone at the foot of the page before.
+// every row shorter than a page (60 lines of 8.5pt text is about 560pt), and
+// ends in "…" where it is cut, at a line break too (that takes
+// patches/@react-pdf+textkit+7.0.1.patch). A row that tall moves to the next
+// page whole when it doesn't fit, which can leave the table's column headings
+// alone at the foot of the page before.
 const CELL_MAX_LINES = 60;
 
 // Spell table column widths; the scrolls table's name column spans all but the rank.

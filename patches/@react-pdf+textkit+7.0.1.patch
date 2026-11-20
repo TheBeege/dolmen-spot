@@ -1,0 +1,97 @@
+diff --git a/node_modules/@react-pdf/textkit/lib/textkit.js b/node_modules/@react-pdf/textkit/lib/textkit.js
+index 7bfe0d9..c80191d 100644
+--- a/node_modules/@react-pdf/textkit/lib/textkit.js
++++ b/node_modules/@react-pdf/textkit/lib/textkit.js
+@@ -681,23 +681,55 @@ const getEllipsisCodePoint = (font) => {
+     const [codePoints] = font.encode(ELLIPSIS_STRING);
+     return parseInt(codePoints[0], 16);
+ };
++/**
++ * Whether the line breaker ended the block's last line with a hyphen of its
++ * own (breakLines), rather than one from the text.
++ *
++ * Patched in by dolmen-spot (patches/@react-pdf+textkit+7.0.1.patch).
++ *
++ * @param paragraph - Lines of a paragraph, from its first
++ * @param string - The paragraph's text
++ * @returns Whether the last line ends with an inserted hyphen
++ */
++const endsWithInsertedHyphen = (paragraph, string) => {
++    let offset = 0;
++    let inserted = false;
++    for (const line of paragraph) {
++        inserted = line.string.endsWith('-') && !string.startsWith(line.string, offset);
++        offset += line.string.length - (inserted ? 1 : 0);
++    }
++    return inserted;
++};
+ /**
+  * Trucante block with ellipsis
+  *
++ * Patched by dolmen-spot (patches/@react-pdf+textkit+7.0.1.patch):
++ * - "…" replaces a hyphen the line breaker added, rather than following it.
++ * - A blank line is not trimmed, so that it keeps a run, and so a font, for
++ *   the "…".
++ * - The "…" is drawn in the font of the run it is added to, the last one
++ *   left after trimming, rather than that of a space or line break trimmed
++ *   away, which can be another font: its glyph would come out as some other
++ *   character of the run's font.
++ *
+  * @param paragraph - Paragraph
++ * @param string - The paragraph's text, if known
+  * @returns Sliced paragraph
+  */
+-const truncate = (paragraph) => {
+-    const runs = last(paragraph)?.runs || [];
+-    const font = last(runs)?.attributes?.font[0];
+-    if (font) {
+-        const index = paragraph.length - 1;
+-        const codePoint = getEllipsisCodePoint(font);
+-        const glyph = font.glyphForCodePoint(codePoint);
+-        const lastBlock = append(glyph, trim(paragraph[index]));
+-        return Object.assign([], paragraph, { [index]: lastBlock });
+-    }
+-    return paragraph;
++const truncate = (paragraph, string) => {
++    const index = paragraph.length - 1;
++    let line = paragraph[index];
++    if (!line)
++        return paragraph;
++    if (string !== undefined && endsWithInsertedHyphen(paragraph, string))
++        line = slice(0, line.string.length - 1, line);
++    if (findCharIndex(line.string) !== -1)
++        line = trim(line);
++    const font = last(line.runs)?.attributes?.font[0];
++    if (!font)
++        return paragraph;
++    const glyph = font.glyphForCodePoint(getEllipsisCodePoint(font));
++    return Object.assign([], paragraph, { [index]: append(glyph, line) });
+ };
+ 
+ /**
+@@ -1019,15 +1051,22 @@ const typesetter = (engines, options, container) => {
+             const paragraph = layout(paragraphRect, nextParagraph);
+             const slicedBlock = paragraph.slice(0, linesCount);
+             const linesHeight = height$2(slicedBlock);
+-            const shouldTruncate = truncateEllipsis && paragraph.length !== slicedBlock.length;
+             linesCount -= slicedBlock.length;
++            // Patched by dolmen-spot (patches/@react-pdf+textkit+7.0.1.patch):
++            // every line break starts a paragraph (splitParagraphs), so when
++            // the lines ran out at the end of one, the text of the next ones
++            // was dropped without an ellipsis. Truncate then too, unless all
++            // that is left is blank.
++            const shouldTruncate = truncateEllipsis &&
++                (paragraph.length !== slicedBlock.length ||
++                    (linesCount === 0 && paragraphs.some((p) => p.string.trim() !== '')));
+             if (paragraphRect.height >= linesHeight) {
+-                result.push(shouldTruncate ? truncate(slicedBlock) : slicedBlock);
++                result.push(shouldTruncate ? truncate(slicedBlock, nextParagraph.string) : slicedBlock);
+                 paragraphRect = crop(linesHeight, paragraphRect);
+                 nextParagraph = paragraphs.shift();
+             }
+             else {
+-                result.push(truncate(sliceAtHeight(paragraphRect.height, slicedBlock)));
++                result.push(truncate(sliceAtHeight(paragraphRect.height, slicedBlock), nextParagraph.string));
+                 break;
+             }
+         }
