@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Character,
   CharacterUpdater,
@@ -68,10 +68,11 @@ const buttonClasses =
 const selectClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
 
-// The part of a spell row (in a flex-wrap row) holding the spell's name, its
-// Rank and info button. It takes the width its contents need, so on a narrow
-// screen the row's other controls wrap below it instead of squeezing the name;
-// only a name too long for the whole row wraps onto a second line.
+// The part of a spell or rune row (a flex-wrap row) holding its name, with a
+// spell's Rank and info button or a rune's magnitude. It takes the width its
+// contents need, so on a narrow screen the row's other controls wrap below it
+// instead of squeezing the name; only a name too long for the whole row wraps
+// onto a second line.
 const rowNameClasses = 'flex flex-auto min-w-0 items-center gap-2';
 // The rest of such a row: kept to the right, and wrapping onto further lines
 // itself only if it can't fit on one.
@@ -1745,47 +1746,53 @@ function RuneSection({
         const freq = getRuneUsageFrequency(rune.magnitude, level);
         return (
           <div key={rune.id} className="bg-[#1a1a2e] p-2 rounded mb-1">
-            <div className="flex items-center gap-2">
-              <span className="text-[#c4a35a] font-semibold text-sm">{rune.name}</span>
-              <span
-                className={`text-xs px-1.5 py-0.5 rounded ${
-                  rune.magnitude === 'lesser'
-                    ? 'bg-green-900/40 text-green-400'
-                    : rune.magnitude === 'greater'
-                    ? 'bg-blue-900/40 text-blue-400'
-                    : 'bg-purple-900/40 text-purple-400'
-                }`}
-              >
-                {rune.magnitude}
-              </span>
-              <span className="text-[#f5e6c8]/50 text-xs">{freq}</span>
-              <div className="flex items-center gap-1 ml-auto">
-                <span className="text-[#f5e6c8]/70 text-xs">Uses:</span>
-                <button
-                  onClick={() =>
-                    updateRune(rune.id, { usesRemaining: Math.max(0, rune.usesRemaining - 1) })
-                  }
-                  className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+            <div className="flex flex-wrap items-center gap-2">
+              <span className={rowNameClasses}>
+                <span className="text-[#c4a35a] font-semibold text-sm min-w-0 break-words">{rune.name}</span>
+                <span
+                  className={`shrink-0 text-xs px-1.5 py-0.5 rounded ${
+                    rune.magnitude === 'lesser'
+                      ? 'bg-green-900/40 text-green-400'
+                      : rune.magnitude === 'greater'
+                      ? 'bg-blue-900/40 text-blue-400'
+                      : 'bg-purple-900/40 text-purple-400'
+                  }`}
                 >
-                  -
-                </button>
-                <span className="text-[#f5e6c8] text-sm w-6 text-center">
-                  {rune.usesRemaining}
+                  {rune.magnitude}
+                </span>
+                <span className="shrink-0 text-[#f5e6c8]/50 text-xs">{freq}</span>
+              </span>
+              <span className={rowControlsClasses}>
+                <span className="flex items-center gap-1">
+                  <span className="text-[#f5e6c8]/70 text-xs">Uses:</span>
+                  <button
+                    onClick={() =>
+                      updateRune(rune.id, { usesRemaining: Math.max(0, rune.usesRemaining - 1) })
+                    }
+                    aria-label={`Spend a use of ${rune.name}`}
+                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                  >
+                    -
+                  </button>
+                  <span className="text-[#f5e6c8] text-sm w-6 text-center">
+                    {rune.usesRemaining}
+                  </span>
+                  <button
+                    onClick={() => updateRune(rune.id, { usesRemaining: rune.usesRemaining + 1 })}
+                    aria-label={`Regain a use of ${rune.name}`}
+                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                  >
+                    +
+                  </button>
                 </span>
                 <button
-                  onClick={() => updateRune(rune.id, { usesRemaining: rune.usesRemaining + 1 })}
-                  className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                  onClick={() => deleteRune(rune.id)}
+                  className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
+                  title="Remove rune"
                 >
-                  +
+                  X
                 </button>
-              </div>
-              <button
-                onClick={() => deleteRune(rune.id)}
-                className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-                title="Remove rune"
-              >
-                X
-              </button>
+              </span>
             </div>
             <p className="text-[#f5e6c8]/50 text-xs mt-1">
               {FAIRY_RUNES.find((r) => r.id === rune.runeId)?.description}
@@ -1989,6 +1996,7 @@ function GlamourReference() {
 
 function RuneReference({ level }: { level: number }) {
   const modifier = getRuneRollModifier(level);
+  const frequencyId = useId();
 
   return (
     <details className="mb-2">
@@ -2024,37 +2032,41 @@ function RuneReference({ level }: { level: number }) {
         </div>
 
         <div className="mt-3 text-[#f5e6c8]/70 text-xs">
-          <div className="text-[#c4a35a] font-semibold mb-1">Usage Frequency:</div>
-          <table className="w-full">
-            <thead>
-              <tr className="text-[#f5e6c8]/50">
-                <th className="text-left pr-2">Magnitude</th>
-                <th className="text-left pr-2">L1-4</th>
-                <th className="text-left pr-2">L5-9</th>
-                <th className="text-left">L10+</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr className="text-green-400/70">
-                <td className="pr-2">Lesser</td>
-                <td className="pr-2">1x/day</td>
-                <td className="pr-2">2x/day</td>
-                <td>3x/day</td>
-              </tr>
-              <tr className="text-blue-400/70">
-                <td className="pr-2">Greater</td>
-                <td className="pr-2">1x/level</td>
-                <td className="pr-2">1x/week</td>
-                <td>1x/day</td>
-              </tr>
-              <tr className="text-purple-400/70">
-                <td className="pr-2">Mighty</td>
-                <td className="pr-2">1x ever</td>
-                <td className="pr-2">1x ever</td>
-                <td>1x/year</td>
-              </tr>
-            </tbody>
-          </table>
+          <div id={frequencyId} className="text-[#c4a35a] font-semibold mb-1">Usage Frequency:</div>
+          {/* Too wide for a narrow screen with a large font, so it scrolls
+              sideways there; focusable so the keyboard can scroll it too. */}
+          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr className="text-[#f5e6c8]/50">
+                  <th className="text-left pr-2">Magnitude</th>
+                  <th className="text-left pr-2">L1-4</th>
+                  <th className="text-left pr-2">L5-9</th>
+                  <th className="text-left">L10+</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="text-green-400/70">
+                  <td className="pr-2">Lesser</td>
+                  <td className="pr-2">1x/day</td>
+                  <td className="pr-2">2x/day</td>
+                  <td>3x/day</td>
+                </tr>
+                <tr className="text-blue-400/70">
+                  <td className="pr-2">Greater</td>
+                  <td className="pr-2">1x/level</td>
+                  <td className="pr-2">1x/week</td>
+                  <td>1x/day</td>
+                </tr>
+                <tr className="text-purple-400/70">
+                  <td className="pr-2">Mighty</td>
+                  <td className="pr-2">1x ever</td>
+                  <td className="pr-2">1x ever</td>
+                  <td>1x/year</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
 
         <div className="mt-3">
