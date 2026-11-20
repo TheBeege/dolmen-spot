@@ -1,5 +1,5 @@
 import { Character, FairyDate, FairyEvent, FairyVisit } from './types';
-import { createDefaultCharacter, MONTHS, daysBetween } from './gamedata';
+import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, daysBetween } from './gamedata';
 import { fitCountingStart, getLivedDayAtDolmenwoodDate } from './livedTime';
 
 export const CURRENT_SCHEMA_VERSION = 12;
@@ -10,7 +10,10 @@ const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
  * Coerce a value that's supposed to be a CalendarDate into a well-formed
  * one. Replaces malformed shapes and non-finite numeric subfields with
  * sensible defaults. `day` is bounded against the (clamped) month's
- * actual length so a stale `day: 50` can't survive into display.
+ * actual length so a stale `day: 50` can't survive into display. A date
+ * past the calendar's last day (Year MAX_YEAR) becomes that day, so loaded
+ * data stays within what the calendar and the Fairy dialogs accept, and
+ * dates keep their order.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeDate(d: any): { day: number; month: number; year: number } {
@@ -25,6 +28,7 @@ function sanitizeDate(d: any): { day: number; month: number; year: number } {
     ? Math.max(1, Math.min(monthDays, Math.floor(d.day)))
     : DEFAULT_CALENDAR_DATE.day;
   const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
+  if (year > MAX_YEAR) return { ...LATEST_DATE };
   return { day, month, year };
 }
 

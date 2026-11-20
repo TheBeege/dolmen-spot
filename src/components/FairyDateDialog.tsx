@@ -7,7 +7,8 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { CalendarDate, Character, FairyVisit } from '@/lib/types';
 import {
-  MAX_YEAR,
+  LATEST_DATE,
+  addDays,
   addElapsedTime,
   daysBetween,
   describeDolmenwoodSpan,
@@ -71,8 +72,8 @@ function describeEditMoves(plan: ReturnEditPlan, daysSinceReturn: number): strin
   ].filter(Boolean);
   const lines = [`Today moves with it, to ${formatCalendarDate(plan.today)}.`];
   if (records.length > 0) lines.push(`Records from after you came back move too: ${listOf(records)}.`);
-  if (plan.movesCountingStart) lines.push('The days-lived counter’s start moves too, so the count stays the same.');
-  if (daysSinceReturn > 0) lines.push(`The ${plural(daysSinceReturn, 'day')} you’ve lived since you came back still count.`);
+  if (plan.movesCountingStart) lines.push("The days-lived counter's start moves too, so the count stays the same.");
+  if (daysSinceReturn > 0) lines.push(`The ${plural(daysSinceReturn, 'day')} you've lived since you came back still count.`);
   return lines;
 }
 
@@ -134,9 +135,14 @@ export default function FairyDateDialog({
   const beforeEntry = target !== undefined && !canReturnOn(visit, target);
   const pastCalendar = target !== undefined && !beforeEntry && !isWithinCalendar(target);
   const plan = editing && target && !beforeEntry && !pastCalendar ? planReturnEdit(character, target) : null;
-  // Editing moves today by the same amount; that mustn't pass the calendar's last year either.
-  const todayPastCalendar = editing && target !== undefined && !beforeEntry && !pastCalendar && plan === null;
-  const valid = target !== undefined && !beforeEntry && !pastCalendar && !todayPastCalendar;
+  // Editing moves today, and what's been dated since the return, by the same
+  // amount; none of it may pass the calendar's last day either.
+  const movesPastCalendar = editing && target !== undefined && !beforeEntry && !pastCalendar && plan === null;
+  const todayPastCalendar =
+    movesPastCalendar && target !== undefined && visit.returnedOn
+      ? !isWithinCalendar(addDays(character.currentDate, daysBetween(visit.returnedOn, target)))
+      : false;
+  const valid = target !== undefined && !beforeEntry && !pastCalendar && !movesPastCalendar;
   const passedDays = target ? daysBetween(visit.enteredOn, target) : 0;
   const span = target ? describeDolmenwoodSpan(visit.enteredOn, target) : '';
   const passedText = passedDays > 0
@@ -345,12 +351,12 @@ export default function FairyDateDialog({
               </div>
             ) : pastCalendar ? (
               <div className="text-[#ff8a6a] text-sm">
-                That&apos;s past Year {MAX_YEAR.toLocaleString('en-US')}, the last year the calendar goes to.
+                That&apos;s after {formatShortDate(LATEST_DATE)}, the calendar&apos;s last day.
               </div>
-            ) : todayPastCalendar ? (
+            ) : movesPastCalendar ? (
               <div className="text-[#ff8a6a] text-sm">
-                Today&apos;s date would move past Year {MAX_YEAR.toLocaleString('en-US')}, the last year the calendar
-                goes to. Pick an earlier date.
+                {todayPastCalendar ? "Today's date" : 'Something dated after today'} would move past{' '}
+                {formatShortDate(LATEST_DATE)}, the calendar&apos;s last day. Pick an earlier date.
               </div>
             ) : (
               <div className="text-[#f5e6c8]/80 text-sm">Fix the fields marked above to see the date.</div>

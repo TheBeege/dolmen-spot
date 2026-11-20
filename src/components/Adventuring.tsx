@@ -36,7 +36,7 @@ import {
   getStudyProgress,
 } from '@/lib/livedTime';
 import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
-import { errorClasses, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
+import { errorClasses, formatYearNumber, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 
 interface AdventuringProps {
@@ -100,6 +100,7 @@ function CalendarNumberInput({
   value,
   min,
   max,
+  formatLimit,
   problemWith,
   onValid,
 }: {
@@ -108,6 +109,7 @@ function CalendarNumberInput({
   value: number;
   min: number;
   max: number;
+  formatLimit?: (n: number) => string; // how min and max read in the range message
   problemWith: (n: number) => string | undefined; // why a whole number in range still can't apply
   onValid: (n: number) => void;
 }) {
@@ -115,7 +117,7 @@ function CalendarNumberInput({
   const [draft, setDraft] = useState<{ field: NumberField; typedAgainst: number } | null>(null);
   const active = draft && draft.typedAgainst === value ? draft.field : null;
   const read = (field: NumberField): { value?: number; error?: string } => {
-    const reading = readWholeNumber(field, label, min, max, `Enter a ${label.toLowerCase()}.`);
+    const reading = readWholeNumber(field, label, min, max, `Enter a ${label.toLowerCase()}.`, formatLimit);
     if (reading.error !== undefined) return { error: reading.error };
     return { value: reading.value, error: problemWith(reading.value) };
   };
@@ -197,10 +199,15 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
       : undefined;
 
   // A month that would put the date before the floor isn't applied; say why.
-  // Shown only while the date it was refused against is unchanged.
-  const [monthProblem, setMonthProblem] = useState<{ message: string; refusedAt: number } | null>(null);
+  // Shown only while the character and the date it was refused against are
+  // unchanged.
+  const [monthProblem, setMonthProblem] = useState<{ message: string; characterId: string; refusedAt: number } | null>(
+    null,
+  );
   const monthMessage =
-    monthProblem && monthProblem.refusedAt === getAbsoluteDay(currentDate) ? monthProblem.message : undefined;
+    monthProblem && monthProblem.characterId === character.id && monthProblem.refusedAt === getAbsoluteDay(currentDate)
+      ? monthProblem.message
+      : undefined;
 
   const handlePreviousDay = () => {
     if (isAtEarliestDate) return;
@@ -217,7 +224,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
     const date = { ...currentDate, day: Math.min(currentDate.day, MONTHS[newMonth].days), month: newMonth };
     const problem = beforeEarliest(date);
     if (problem) {
-      setMonthProblem({ message: `${MONTHS[newMonth].name}: ${problem}`, refusedAt: getAbsoluteDay(currentDate) });
+      setMonthProblem({
+        message: `${MONTHS[newMonth].name}: ${problem}`,
+        characterId: character.id,
+        refusedAt: getAbsoluteDay(currentDate),
+      });
       return;
     }
     setMonthProblem(null);
@@ -313,7 +324,9 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   return (
     <div className="space-y-4">
       {/* ── 5a. Calendar (existing) ──────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
+      {/* Keyed by character, so a half-typed field, an open editor or an
+          error message never carries over to another character. */}
+      <div key={character.id} className="bg-[#2a2a3e] rounded-lg p-4">
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Calendar
         </h2>
@@ -408,7 +421,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
               <button
                 onClick={handleNextDay}
                 disabled={isAtLatestDate}
-                title={isAtLatestDate ? `Year ${MAX_YEAR.toLocaleString('en-US')} is as far as the calendar goes` : ''}
+                title={isAtLatestDate ? "The calendar's last day" : ''}
                 className={`${buttonClasses} ${isAtLatestDate ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
                 Next Day
@@ -418,6 +431,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
               <p className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
                 You came back from Fairy on this day, so the calendar can&apos;t go earlier. To change when you came
                 back, use Edit return date under Fairy visits below.
+              </p>
+            )}
+            {isAtLatestDate && (
+              <p className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
+                {formatShortDate(LATEST_DATE)} is the calendar&apos;s last day, so Next Day stops here.
               </p>
             )}
 
@@ -468,6 +486,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
                   value={currentDate.year}
                   min={1}
                   max={MAX_YEAR}
+                  formatLimit={formatYearNumber}
                   problemWith={yearProblem}
                   onValid={(year) => {
                     if (year !== currentDate.year) onChange({ currentDate: { ...currentDate, year } });

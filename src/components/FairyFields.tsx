@@ -43,20 +43,30 @@ export const fieldFrom = (n: number): NumberField => ({ text: String(n), badInpu
 
 export type Reading = { value: number; error?: undefined } | { value?: undefined; error: string };
 
+// Counts read "9,999"; a year reads "99999", as dates print it ("Year 99999").
+const formatCount = (n: number) => n.toLocaleString('en-US');
+export const formatYearNumber = (n: number) => String(n);
+
 /**
  * Read a field as a whole number from min to max, without guessing: "2.5",
  * "45" for a day, or a cleared field each get a message instead of being
  * rounded, clamped or replaced. `blank` is what an empty field means: a
- * value, or the message to show.
+ * value, or the message to show. `formatLimit` writes min and max in the
+ * message (formatYearNumber for a year).
  */
-export function readWholeNumber(field: NumberField, label: string, min: number, max: number, blank: number | string): Reading {
+export function readWholeNumber(
+  field: NumberField,
+  label: string,
+  min: number,
+  max: number,
+  blank: number | string,
+  formatLimit: (n: number) => string = formatCount,
+): Reading {
   const text = field.text.trim();
   if (!field.badInput && text === '') return typeof blank === 'number' ? { value: blank } : { error: blank };
   const n = Number(text);
   if (field.badInput || !Number.isInteger(n)) return { error: `${label} must be a whole number.` };
-  if (n < min || n > max) {
-    return { error: `${label} must be from ${min.toLocaleString('en-US')} to ${max.toLocaleString('en-US')}.` };
-  }
+  if (n < min || n > max) return { error: `${label} must be from ${formatLimit(min)} to ${formatLimit(max)}.` };
   return { value: n };
 }
 
@@ -125,7 +135,7 @@ export const draftFrom = (date: CalendarDate): DateDraft => ({ month: date.month
 
 export function readDate(draft: DateDraft): { date?: CalendarDate; dayError?: string; yearError?: string } {
   const day = readWholeNumber(draft.day, 'Day', 1, MONTHS[draft.month].days, 'Enter a day.');
-  const year = readWholeNumber(draft.year, 'Year', 1, MAX_YEAR, 'Enter a year.');
+  const year = readWholeNumber(draft.year, 'Year', 1, MAX_YEAR, 'Enter a year.', formatYearNumber);
   if (day.error !== undefined || year.error !== undefined) return { dayError: day.error, yearError: year.error };
   return { date: { day: day.value, month: draft.month, year: year.value } };
 }
