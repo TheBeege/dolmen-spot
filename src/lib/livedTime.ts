@@ -42,6 +42,7 @@ import type {
   FairyVisit,
   JournalEntry,
 } from './types';
+import { isValidHex } from './hex';
 import {
   MAX_YEAR,
   daysBetween,
@@ -188,6 +189,19 @@ export function getCurrentTimelinePoint(character: WithClock): TimelinePoint & {
     sinceReturnFrom: last && !open ? last.id : undefined,
     livedDay: getLivedDays(character),
   };
+}
+
+/**
+ * Where the character is now, to stamp on a new journal entry alongside
+ * getCurrentTimelinePoint: the location typed on the Adventuring tab, and the
+ * map's current hex. An entry stamped while no hex is set has no `hex`.
+ */
+export function getCurrentPlace(
+  character: Pick<Character, 'currentLocation' | 'currentLocationHex'>,
+): Pick<JournalEntry, 'location' | 'hex'> {
+  const location = character.currentLocation ?? '';
+  const hex = character.currentLocationHex;
+  return isValidHex(hex) ? { location, hex } : { location };
 }
 
 /**
@@ -471,7 +485,7 @@ export function enterFairy(character: Character): Partial<Character> | null {
     id: crypto.randomUUID(),
     date: { ...enteredOn },
     fairyEvent: { visitId: visit.id, kind: 'entered' },
-    location: character.currentLocation ?? '',
+    ...getCurrentPlace(character),
     text: `Entered Fairy (visit ${visits.length + 1}).`,
   };
   const fairyVisits = [...visits, visit];
@@ -524,7 +538,7 @@ export function returnFromFairy(character: Character, returnedOn: CalendarDate):
     id: crypto.randomUUID(),
     date: { ...date },
     fairyEvent: { visitId: open.id, kind: 'returned' },
-    location: character.currentLocation ?? '',
+    ...getCurrentPlace(character),
     text: describeReturn(visits.length, open.daysInFairy, open.enteredOn, date),
   };
   const fairyVisits = visits.map((v) => (v.id === open.id ? { ...v, returnedOn: { ...date } } : v));

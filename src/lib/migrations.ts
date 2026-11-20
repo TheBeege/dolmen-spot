@@ -15,7 +15,7 @@ import { HEX_GRID_META } from './hex-grid';
 import { isValidHex, pixelToHex } from './hex';
 import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS } from './map-data';
 
-export const CURRENT_SCHEMA_VERSION = 13;
+export const CURRENT_SCHEMA_VERSION = 14;
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
 
@@ -305,10 +305,11 @@ const MAP_PINS_MARKER = '<!--MAP_PINS-->';
 const LOST_ITEMS_HEADING = "Map markers that couldn't be placed:";
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 
-function newMapId(): string {
+// A new id for an item repaired on load (a map item, a journal entry).
+function newId(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
-    : `map-${Math.random().toString(36).slice(2)}`;
+    : `id-${Math.random().toString(36).slice(2)}`;
 }
 
 /** A text field read defensively: strings as is, finite numbers as text, anything else ''. */
@@ -413,7 +414,7 @@ function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown
   const usedIds = new Set<string>();
   const uniqueId = (raw: unknown): string => {
     let id = asText(raw);
-    while (!id || usedIds.has(id)) id = newMapId();
+    while (!id || usedIds.has(id)) id = newId();
     usedIds.add(id);
     return id;
   };
@@ -614,6 +615,58 @@ function convertLegacyMapPins(data: any, lost: string[]): MapPOI[] {
   }
 }
 
+/**
+ * Give journal entries their hex (JournalEntry.hex): the map hex each was
+ * written in. Saves from before this version never recorded it, and it isn't
+ * guessed from the free-text location, with one exception: a location that
+ * is exactly a hex id on the map, such as "0606", can only mean that hex, so
+ * it's carried over (the location stays as it is). Anything looser ("Hex
+ * 0606", "606", "near 0606") is left alone, and the entry gets no hex.
+ *
+ * A hex already on an entry could only be there by a hand edit; it stays if
+ * it's on the map, like one in a current save (see sanitizeJournalEntries),
+ * and is otherwise removed. Running this twice changes nothing more.
+ *
+ * Kept self-contained (no version numbers inside) so it can be renumbered
+ * if another schema bump lands first.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateAddJournalHexes(data: any): any {
+  if (!Array.isArray(data.journalEntries)) return data; // repaired after the migrations
+  for (const entry of data.journalEntries) {
+    if (!isPlainObject(entry) || isValidHex(entry.hex)) continue;
+    if (isValidHex(entry.location)) entry.hex = entry.location;
+    else delete entry.hex;
+  }
+  return data;
+}
+
+/**
+ * Repair journal entries on a partially-trusted save (hand-edited imports
+ * skip the migration loop). Runs after the migrations on every load and
+ * import, and after sanitizeCharacterDates has made the journal a list of
+ * objects:
+ *   - every entry has an id of its own, a non-empty string. The Journal tab
+ *     lists, edits and deletes entries by id, so a missing or repeated one is
+ *     replaced; nothing else refers to an entry's id;
+ *   - an entry's hex is a hex on the map, or it has none. No hex is ever
+ *     guessed here, so an entry whose hex the player cleared stays without one.
+ * Nothing else about an entry changes.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeJournalEntries(data: any): void {
+  if (!Array.isArray(data.journalEntries)) return;
+  const ids = new Set<string>();
+  for (const entry of data.journalEntries) {
+    if (!isPlainObject(entry)) continue;
+    let id = typeof entry.id === 'string' ? entry.id : '';
+    while (id === '' || ids.has(id)) id = newId();
+    entry.id = id;
+    ids.add(id);
+    if (entry.hex !== undefined && !isValidHex(entry.hex)) delete entry.hex;
+  }
+}
+
 /** Append `lost` to otherNotes under LOST_ITEMS_HEADING. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function keepLostMapItems(data: any, lost: string[]): void {
@@ -740,6 +793,9 @@ const migrations: Record<number, (data: any) => any> = {
     if (data.currentLocationHex === undefined) data.currentLocationHex = '';
     return data;
   },
+  // v13 -> v14: Journal entries record the hex they were written in. Old
+  // entries get none, unless their location is exactly a hex id on the map.
+  13: migrateAddJournalHexes,
 };
 
 /**
@@ -858,8 +914,9 @@ export function migrateCharacter(data: any): Character {
   }
 
   // Defensive: also runs for already-current saves, so a hand-edited
-  // JSON import that smuggles in non-numeric date fields or a malformed
-  // mapData shape gets cleaned before downstream code tries to use it.
+  // JSON import that smuggles in non-numeric date fields, a malformed
+  // mapData shape, or journal entries with a repeated id or a hex that
+  // isn't on the map gets cleaned before downstream code tries to use it.
   // reconcileWithDefaults only fills MISSING top-level keys; deeper
   // shape repair has to happen here. Old-map pins are converted first so
   // the map sanitizer also normalizes (and de-duplicates) the new POIs;
@@ -876,6 +933,7 @@ export function migrateCharacter(data: any): Character {
   const legacyPois = convertLegacyMapPins(data, lostMapItems);
   sanitizeMapData(data, lostMapItems, legacyPois);
   keepLostMapItems(data, lostMapItems);
+  sanitizeJournalEntries(data);
 
   return reconcileWithDefaults(data) as Character;
 }
