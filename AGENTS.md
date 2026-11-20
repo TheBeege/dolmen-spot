@@ -12,15 +12,17 @@ If the docs are ambiguous or incomplete, cross-reference the source PDF at `sour
 
 | Rule Doc | Governs These Source Files |
 |----------|---------------------------|
-| `docs/rules/01-character-creation.md` | `src/lib/gamedata.ts` (modifiers, XP), `src/lib/types.ts` (Character interface), `src/components/CharacterInfo.tsx`, `src/components/AbilityScores.tsx` |
-| `docs/rules/02-kindreds.md` | `src/lib/gamedata.ts` (KINDREDS, KINDRED_CLASS_RESTRICTIONS), `src/components/CharacterInfo.tsx` |
-| `docs/rules/03-classes.md` | `src/lib/gamedata.ts` (CLASSES, advancement tables), `src/components/CombatStats.tsx`, `src/components/AbilityScores.tsx` |
-| `docs/rules/04-kindred-classes.md` | `src/lib/gamedata.ts` (kindred-class advancement tables), `src/components/CombatStats.tsx` |
-| `docs/rules/05-magic.md` | `src/lib/gamedata.ts` (spell data), `src/components/SpellsAndMagic.tsx` |
+| `docs/rules/01-character-creation.md` | `src/lib/gamedata.ts` (modifiers, XP), `src/lib/types.ts` (Character interface), `src/lib/character-sheet.ts` (ability-score notes, languages, retainer limits), `src/components/CharacterInfo.tsx`, `src/components/AbilityScores.tsx` |
+| `docs/rules/02-kindreds.md` | `src/lib/gamedata.ts` (KINDREDS, KINDRED_CLASS_RESTRICTIONS), `src/lib/character-sheet.ts` (Mad Revelry), `src/components/CharacterInfo.tsx` |
+| `docs/rules/03-classes.md` | `src/lib/gamedata.ts` (CLASSES, advancement tables), `src/lib/character-sheet.ts` (calculated attack bonus, skill layout, and the Turning the Undead, Trophies, Code of Chivalry and Resistance to Divine Aid feature notes), `src/components/CombatStats.tsx`, `src/components/AbilityScores.tsx` |
+| `docs/rules/04-kindred-classes.md` | `src/lib/gamedata.ts` (kindred-class advancement tables), `src/lib/character-sheet.ts` (calculated attack bonus, skill layout, Breggle arcane magic from Level 4, daily uses of Gaze, Mad Revelry and Fungal Symbiosis, and the Fungal Symbiosis and Resistance to Divine Aid feature notes), `src/components/CombatStats.tsx` |
+| `docs/rules/05-magic.md` | `src/lib/gamedata.ts` (spell data), `src/lib/character-sheet.ts` (prepared spells per rank, spell books and scrolls), `src/components/SpellsAndMagic.tsx` |
 | `docs/rules/06-equipment.md` | `src/lib/gamedata.ts` (ARMOUR_TABLE, WEAPONS_TABLE, ADVENTURING_GEAR, LIGHT_SOURCE_TYPES), `src/components/Inventory.tsx`, `src/components/Adventuring.tsx` (light tracker) |
-| `docs/rules/07-combat.md` | `src/components/CombatStats.tsx`, `src/lib/gamedata.ts` (attack modifiers) |
-| `docs/rules/08-adventuring.md` | `src/lib/gamedata.ts` (adventuring tables such as TERRAIN_TABLE and SLEEP_MATRIX), `src/components/Inventory.tsx` (encumbrance), `src/components/CombatStats.tsx` (speed), `src/components/Adventuring.tsx` (travel, camping, hunger and condition trackers) |
+| `docs/rules/07-combat.md` | `src/components/CombatStats.tsx`, `src/lib/gamedata.ts` (attack modifiers), `src/lib/character-sheet.ts` (calculated attack bonus, save categories) |
+| `docs/rules/08-adventuring.md` | `src/lib/gamedata.ts` (speed tables, coin slots, adventuring tables such as TERRAIN_TABLE and SLEEP_MATRIX), `src/lib/character-sheet.ts` (encumbrance totals, slot and load limits, choice of speed table), `src/components/Inventory.tsx` (encumbrance), `src/components/Adventuring.tsx` (travel, camping, hunger and condition trackers) |
 | `docs/rules/09-appendices.md` | `src/lib/gamedata.ts` (MONTHS, FESTIVALS, calendar), `src/components/Adventuring.tsx` (calendar UI), `src/components/ReferencePanel.tsx` |
+
+`src/lib/pdf/CharacterSheetDocument.tsx`, the printable PDF sheet, prints content from every rule doc above. It reads its values from `gamedata.ts` and `character-sheet.ts`, but it lays out each section itself and hard-codes a few rules notes (such as the Hunter's +1 missile attack), so when a rules change alters what a tab shows, check the PDF as well.
 
 ## Validation Rules
 
@@ -40,7 +42,7 @@ Character data is stored in localStorage and must survive schema changes across 
 
 ### When modifying the `Character` interface (`src/lib/types.ts`):
 
-1. **Adding a field**: Bump `CURRENT_SCHEMA_VERSION` in `migrations.ts`, add a migration that sets the default value, and add the field to `createDefaultCharacter()` in `gamedata.ts`
+1. **Adding a field**: Bump `CURRENT_SCHEMA_VERSION` in `migrations.ts`, add a migration that sets the default value, and add the field to `createDefaultCharacter()` in `gamedata.ts`. If the field should appear on the printable sheet, also add it to `src/lib/pdf/CharacterSheetDocument.tsx`
 2. **Changing a field type/shape**: Bump version, write a migration that transforms old data to the new shape
 3. **Removing a field**: Bump version, write a migration that deletes the old field
 4. **Renaming a field**: Bump version, write a migration that copies the old key to the new key and deletes the old key
@@ -74,7 +76,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **ESLint 10 overrides**: The `overrides` in `package.json` let eslint-plugin-import, eslint-plugin-jsx-a11y and eslint-plugin-react (from eslint-config-next) use ESLint 10 before their peer ranges allow it. Remove an entry once the version eslint-config-next installs accepts ESLint 10: delete the entry, run `npm update <plugin>`, then check that `npm ci` prints no ERESOLVE warning and `npm ls --all` exits 0
 - **State management**: React hooks + localStorage persistence via `src/hooks/useCharacter.ts`
 - **No external UI libraries**: All components are custom
-- **Theme**: Dark fantasy -- see `MEMORY.md` for exact color values
+- **Theme**: Dark fantasy -- base background `#1a1a2e`, cards `#2a2a3e`, text `#f5e6c8`, gold accent `#c4a35a`, warm-brown borders `#5a3a28`, written as arbitrary-value classes (e.g. `bg-[#2a2a3e]`)
 - **Types**: All game interfaces live in `src/lib/types.ts`
 - **Game data**: All static game data lives in `src/lib/gamedata.ts`
 
@@ -105,7 +107,7 @@ How the hook works, and what that means for you:
 
 ## Releases & Deployment
 
-Production is https://dolmen.spot: the Vercel project `dolmenwood-character-sheet-owl` (team `beeges-projects`), deployed by Vercel's Git integration. **Merging a PR into `main` does not ship it to players.** Changes collect on `main` and go live together when a release is cut, so each release gets one coherent changelog entry.
+Production is https://www.dolmen.spot (the bare `dolmen.spot` redirects there): the Vercel project `dolmenwood-character-sheet-owl` (team `beeges-projects`), deployed by Vercel's Git integration. **Merging a PR into `main` does not ship it to players.** Changes collect on `main` and go live together when a release is cut, so each release gets one coherent changelog entry.
 
 | Branch | Role | Vercel deploys it to |
 |--------|------|----------------------|
@@ -113,21 +115,47 @@ Production is https://dolmen.spot: the Vercel project `dolmenwood-character-shee
 | `main` | Integration / staging | Preview, at the stable URL `dolmenwood-character-sheet-owl-git-main-beeges-projects.vercel.app` (Vercel login required) |
 | `release` | What players have | **Production** (dolmen.spot) |
 
-- `release` only ever **fast-forwards** to `main`. Never commit to it directly, merge PRs into it (except hotfixes, below), or force-push it.
+- `release` only ever **fast-forwards** to a commit on `main` (hotfixes, below, are the one exception). Never commit to it directly, merge PRs into it (except hotfixes), or force-push it. GitHub enforces the force-push ban: the repository ruleset "Protect release (production)" (id 27715042) rejects force-pushes and deletion of `release` for everyone, admins included. Fast-forward pushes and hotfix PR merges still work. `gh api repos/TheBeege/dolmen-spot/rules/branches/release` lists its rules, `non_fast_forward` and `deletion`.
 - Cut a release only when the user asks for one.
 - Never deploy to production from a local checkout (`vercel --prod`). Production deploys come only from pushes to `release`.
 
 ### Cutting a release
 
-1. `git fetch origin`, then list what's unreleased: `git log --first-parent --oneline origin/release..origin/main`. Each merge commit names its PR.
-2. Read the **Player-facing changes** section of each of those PRs (`gh pr view <n>`).
-3. If any PR has player-facing changes: on a `chore/release-YYYY-MM-DD` branch from `origin/main`, add **one** entry at the top of `ENTRIES` in `src/app/changelog/page.tsx` (see Changelog below), run `npm run build`, and open a PR into `main`. Wait for it to merge. (Don't name the branch `release/...` — git can't have both a `release` branch and `release/*` branches.)
-4. Fast-forward production: `git fetch origin && git push origin origin/main:release`. If git rejects this as non-fast-forward, `release` has diverged (see Hotfixes). Never force it.
-5. Verify that the newest production deployment is the new `release` commit and is `READY` (Vercel MCP `list_deployments` with `target: "production"`, or `gh api 'repos/TheBeege/dolmen-spot/deployments?environment=Production&per_page=1'`), and that https://dolmen.spot/changelog shows the entry.
+1. `git fetch origin`, then list what's unreleased: `git log --first-parent --oneline origin/release..origin/main`. Most lines are PR merges (`Merge pull request #<n> …`), but a merge can have a custom subject and `main` also takes direct pushes, so for any line that doesn't name its PR, look it up with `gh api repos/TheBeege/dolmen-spot/commits/<sha>/pulls --jq '.[].number'`. No output means the commit was pushed straight to `main`.
+2. Read the **Player-facing changes** section of each of those PRs (`gh pr view <n>`), and read each direct commit itself (`git show <sha>`).
+3. If any of them has player-facing changes: on a `chore/release-YYYY-MM-DD` branch from `origin/main`, add **one** entry at the top of `ENTRIES` in `src/app/changelog/page.tsx` (see Changelog below), run `npm run build`, and open a PR into `main`. Wait for it to merge; its CI must pass first. (Don't name the branch `release/...` — git can't have both a `release` branch and `release/*` branches.) Before it merges (when the user is ready to merge it, or before you merge it if asked to), re-run step 1: read anything new, and if it's player-facing, add it to the entry while the PR is still open. Push `release` (step 4) the day it merges; that day is the entry's `date`. If the push slips past it, update `date` first (in the PR, or in a follow-up PR if it has merged).
+4. Fast-forward production to the merge commit of the release PR (or of its latest follow-up PR, if one amended the entry), **not** to `origin/main`: anything merged into `main` after it would ship without review or a changelog entry. Right before pushing, run this check, with `<n>` being that PR's number. Each block sets `sha` itself and stops if it comes back empty, which happens when the PR hasn't merged or `<n>` is wrong; an empty `sha` would turn the push into a deletion of `release`.
+
+   ```bash
+   git fetch origin
+   sha=$(gh pr view <n> --json mergeCommit -q .mergeCommit.oid) && test -n "$sha" &&
+     git log --first-parent --oneline "origin/release..$sha" &&
+     gh api "repos/TheBeege/dolmen-spot/commits/$sha/check-runs" --jq '.check_runs[] | select(.name == "Lint and typecheck") | "CI: \(.name): \(.status) \(.conclusion)"'
+   ```
+
+   Check what it prints:
+
+   - **First line:** it must be the merge commit of your release PR (or of its latest follow-up). If its subject doesn't name a PR (a custom merge subject, or a rebase merge), look the PR up as in step 1. If it's another PR, stop: `<n>` is wrong.
+   - **No commits listed:** stop. `<n>` is wrong, the PR hasn't merged (the guard then stops before `git log`), or that commit is already on `release`.
+   - **Other commits:** you must already have read each one, in step 2, step 3's re-run, or an earlier run of this check (this release's own changelog PRs excepted). If one is new, stop and read it as in step 2. If it's player-facing and not yet in the entry, or the entry's `date` is now wrong, amend this release's existing entry in a follow-up PR into `main` (never add a second entry), wait for it to merge, and repeat this step with that PR as `<n>`.
+   - **CI:** the `CI:` line is the result of CI's `Lint and typecheck` job on that exact commit, from its push to `main` (the check leaves out other apps' check runs, such as Vercel's), and must read `CI: Lint and typecheck: completed success`. If it's missing or not yet `completed`, wait a few minutes and re-run the check. If CI failed, or never reports, stop and tell the user.
+
+   If all of that holds, push:
+
+   ```bash
+   sha=$(gh pr view <n> --json mergeCommit -q .mergeCommit.oid) && test -n "$sha" && git push origin "$sha:refs/heads/release"
+   ```
+
+   If there's no release PR (no player-facing changes), use `sha=<the newest commit step 1 listed>` in place of the `gh pr view` call in both blocks; the check's first line must then be that commit. If git rejects the push as non-fast-forward, `release` has diverged (see Hotfixes). Never force it; the ruleset above rejects force-pushes anyway.
+5. Verify that the newest production deployment is for the commit you pushed and has succeeded and, if this release has a changelog entry, that https://www.dolmen.spot/changelog shows it. Check the deployment with either:
+   - Vercel MCP `list_deployments` with `projectId: "dolmenwood-character-sheet-owl"`, `slug: "beeges-projects"`, `target: "production"`, `limit: 1` (without `projectId` it lists the team's other projects too). Its `meta.githubCommitSha` must be the pushed commit and its `state` `READY`.
+   - `gh api 'repos/TheBeege/dolmen-spot/deployments?environment=Production&per_page=1' --jq '.[0] | "\(.id) \(.sha)"'`, which prints the newest production deployment's id and commit. The commit must be the one you pushed. Deployments have no state of their own, so then check its status: `gh api repos/TheBeege/dolmen-spot/deployments/<id>/statuses --jq '.[0].state'` must print `success`. Vercel has only ever created these records after a successful build, so this route shows the previous release until the build succeeds, and may not show a failed build at all.
+
+   If no production deployment for the pushed commit appears within about 10 minutes, check Vercel directly: `list_deployments` with `sha: "<pushed sha>"` (plus `projectId` and `slug`) lists that commit's deployments, failed ones included, and the production one has `target: "production"`. Without the Vercel MCP, `gh api repos/TheBeege/dolmen-spot/commits/<sha>/status --jq '.statuses[] | "\(.context): \(.state) \(.target_url)"'` links to the commit's latest Vercel build, which may still be its preview build from `main`. If no production deployment was triggered, or it failed, stop and tell the user. Don't redeploy or promote anything yourself.
 
 ### Hotfixes
 
-If `main` holds nothing you'd mind shipping, land the fix on `main` and cut a normal release. Otherwise, branch from `origin/release` and PR the fix (plus its changelog entry, since a hotfix is a release) into `release`; merging it deploys. Then merge `release` back into `main` so the next release fast-forwards again.
+If `main` holds nothing you'd mind shipping, land the fix on `main` and cut a normal release. Otherwise, branch from `origin/release` and PR the fix (plus its changelog entry, since a hotfix is a release) into `release`; its CI must pass before it merges, since merging it deploys. (A PR into `release` gets no CI run until a release has put `.github/workflows/ci.yml` on `release`; before that, `git ls-tree origin/release .github/workflows/ci.yml` prints nothing. Until then, run `npm run lint` and `npm run build` on the branch yourself and tell the user the results. A `release` from before CI has no `typecheck` script, but its `next build` typechecks.) Then merge `release` back into `main` so the next release fast-forwards again: open a PR into `main` from a new branch cut at `origin/release` (not from `release` itself, where resolving a conflict would commit `main` into `release` and deploy it). That PR must be merged with a merge commit (`gh pr merge <n> --merge`), never squashed or rebased: either of those copies the hotfix into new commits, so `release` stops being an ancestor of `main` and the next release can't fast-forward.
 
 ## Changelog
 
@@ -143,7 +171,7 @@ The player-facing changelog lives at `src/app/changelog/page.tsx` and is shown a
 1. **Player perspective, not developer perspective.** Describe what the player will see or be able to do — not what code or files changed. Compare:
    - Bad: "Refactored `addDays` to use absolute-day arithmetic"
    - Good: "Long spell studies no longer silently rewind when the calendar crosses a year."
-2. **`date`** is the day the release goes live (`YYYY-MM-DD`).
+2. **`date`** is the day the release goes live (`YYYY-MM-DD`). In a normal release, `release` is pushed the day the release PR merges (step 3); a hotfix deploys as it merges. If the push slips past `date`, update it first: in the PR, or in a follow-up PR if it has merged.
 3. **`title`** names the release as a whole (e.g. "Rebuilt hex map", "Map fixes and spell polish"), not one PR.
 4. **`prNumbers`** lists the user-facing PRs in the release.
 5. **Shape:** a single-topic release uses a flat `changes` list; a multi-feature release uses `sections`, one per feature, each with a short `heading`.

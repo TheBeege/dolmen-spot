@@ -29,6 +29,7 @@
     "eslint-config-next": "^16.4.6",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.1",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3"
