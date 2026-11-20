@@ -105,13 +105,13 @@ export default function Home() {
                 onClick={() => setShowCharList(!showCharList)}
                 className="text-sm text-[#f5e6c8] hover:text-[#c4a35a] transition-colors flex items-center gap-1 min-w-0"
               >
-                {/* On phones the In Fairy badge sits under the name, so the name keeps its room. */}
-                <span className="flex flex-col items-start min-w-0 sm:flex-row sm:items-center sm:gap-1">
-                  <span className="font-semibold truncate min-w-0 max-w-full sm:max-w-[150px]">
+                {/* Below md the In Fairy badge sits under the name, so the name keeps
+                    its room; the cloud icon and chevron then line up with the name. */}
+                <span className="flex flex-col items-start min-w-0 md:flex-row md:items-center md:gap-1">
+                  <span className="font-semibold truncate min-w-0 max-w-[min(100%,150px)] md:shrink-0">
                     {activeCharacter.name || 'Unnamed'}
                   </span>
                   {isInFairy(activeCharacter) && (
-                    // Never shrinks: the name truncates first to make room for it.
                     <span
                       className="shrink-0 whitespace-nowrap text-[10px] leading-tight font-semibold uppercase tracking-wider text-[#c9b3f0] border border-[#8a6fb0]/70 bg-[#8a6fb0]/15 rounded-full px-1.5 py-px"
                       title="This character is in Fairy. Dolmenwood's calendar is paused for them."
@@ -120,11 +120,16 @@ export default function Home() {
                     </span>
                   )}
                 </span>
-                <CloudStatusBadge metadata={cloudMetadata} />
-                <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate">
+                {cloudMetadata && (
+                  <span className="shrink-0 self-start mt-0.5 md:self-auto md:mt-0">
+                    <CloudStatusBadge metadata={cloudMetadata} />
+                  </span>
+                )}
+                {/* Shrinks first when space runs short, before the name does. */}
+                <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate min-w-0 shrink-[4] self-start mt-0.5 md:self-auto md:mt-0">
                   {getKindredClassLabel(activeCharacter)}
                 </span>
-                <svg className="w-3 h-3 ml-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 ml-1 shrink-0 self-start mt-1 md:self-auto md:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>

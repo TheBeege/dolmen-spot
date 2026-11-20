@@ -696,6 +696,7 @@ function KnownSpellsBlock({
       source: addSource,
       learnedAt: now.date,
       learnedInFairy: now.fairyDate,
+      sinceReturnFrom: now.sinceReturnFrom,
     };
     onChange({ knownSpells: [...character.knownSpells, newSpell] });
     setAddName('');
@@ -1058,6 +1059,7 @@ function SpellStudyBlock({
               : 'rewrite',
             learnedAt: now.date,
             learnedInFairy: now.fairyDate,
+            sinceReturnFrom: now.sinceReturnFrom,
           },
         ];
       }

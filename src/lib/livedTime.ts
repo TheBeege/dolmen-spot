@@ -21,10 +21,12 @@
 // Dolmenwood time that passes between entering and returning isn't lived.
 // Within a stretch, any change to the date counts as lived time, including
 // corrections backwards. The calendar can't be set earlier than the day the
-// character last came back from Fairy (getEarliestDolmenwoodDate); a wrong
-// return date is fixed with editReturnDate, which moves the rest of that
-// stretch along with it, so no lived time is gained or lost. `stretch` still
-// clamps at zero, but only to guard against imported data that breaks this.
+// character last came back from Fairy (getEarliestDolmenwoodDate). A wrong
+// return date is fixed with editReturnDate, which moves everything after the
+// return along with it (today, and the journal entries, spells, study and
+// counter start made since then), so no lived time is gained or lost.
+// `stretch` still clamps at zero, but only to guard against imported data
+// that breaks these rules.
 //
 // Spell study only uses differences between lived days, measured on a fixed
 // clock that starts at Year 1, day 1 (getLivedDays). The days-lived counter
@@ -35,11 +37,13 @@ import type {
   ActiveSpellStudy,
   CalendarDate,
   Character,
+  CountingStart,
   FairyDate,
   FairyVisit,
   JournalEntry,
 } from './types';
 import {
+  MAX_YEAR,
   daysBetween,
   describeDolmenwoodSpan,
   formatCalendarDate,
@@ -132,19 +136,26 @@ export interface LivedTime {
  * zero and `startsAfterToday` is set.
  */
 export function getLivedTime(character: Pick<Character, 'fairyVisits' | 'currentDate' | 'livedTimeStart'>): LivedTime {
-  const countingFrom = character.livedTimeStart ?? LIVED_TIME_EPOCH;
+  const start: CountingStart = character.livedTimeStart ?? LIVED_TIME_EPOCH;
+  const countingFrom = { day: start.day, month: start.month, year: start.year };
+  const visits = getFairyVisits(character);
+  // A stamped start comes after its visit, even on that visit's entry day.
+  const after = returnStampIndex(visits, countingFrom, start.sinceReturnFrom);
   let fairyDays = 0;
   let awayDays = 0;
   let visitCount = 0;
-  for (const visit of getFairyVisits(character)) {
-    if (daysBetween(countingFrom, visit.enteredOn) < 0) continue;
+  visits.forEach((visit, i) => {
+    if (i <= after || daysBetween(countingFrom, visit.enteredOn) < 0) return;
     visitCount += 1;
     fairyDays += Math.max(0, visit.daysInFairy);
     if (visit.returnedOn) awayDays += stretch(visit.enteredOn, visit.returnedOn);
-  }
-  const totalDays = Math.max(0, getLivedDays(character) - getLivedDayAtDolmenwoodDate(character, countingFrom));
+  });
+  const totalDays = Math.max(
+    0,
+    getLivedDays(character) - getLivedDayAtDolmenwoodDate(character, countingFrom, start.sinceReturnFrom),
+  );
   return {
-    countingFrom: { ...countingFrom },
+    countingFrom,
     startsAfterToday: daysBetween(character.currentDate, countingFrom) > 0,
     totalDays,
     dolmenwoodDays: Math.max(0, totalDays - fairyDays),
@@ -154,18 +165,27 @@ export function getLivedTime(character: Pick<Character, 'fairyVisits' | 'current
   };
 }
 
-/** Where the character was on some lived day: a Dolmenwood date, plus a Fairy date if they were in Fairy. */
+/**
+ * Where the character was on some lived day: a Dolmenwood date, plus a Fairy
+ * date if they were in Fairy, or the visit they had last come back from if
+ * they were in Dolmenwood after a return (stamped on records as
+ * `sinceReturnFrom`, so editing that return date can move them with it).
+ */
 export interface TimelinePoint {
   date: CalendarDate;
   fairyDate?: FairyDate;
+  sinceReturnFrom?: string;
 }
 
 /** Where the character is now, and their lived day. Use this to stamp new records. */
 export function getCurrentTimelinePoint(character: WithClock): TimelinePoint & { livedDay: number } {
-  const open = getOpenFairyVisit(character);
+  const visits = getFairyVisits(character);
+  const last = visits[visits.length - 1];
+  const open = last && last.returnedOn == null ? last : null;
   return {
     date: { ...(open ? open.enteredOn : character.currentDate) },
     fairyDate: open ? { visitId: open.id, day: fairyDayNumber(open.daysInFairy) } : undefined,
+    sinceReturnFrom: last && !open ? last.id : undefined,
     livedDay: getLivedDays(character),
   };
 }
@@ -176,14 +196,26 @@ export function getCurrentTimelinePoint(character: WithClock): TimelinePoint & {
  * day they came back, resolves to the Dolmenwood side, even for a visit that
  * is still open. Only lived days inside a visit, or after the start of the
  * visit in progress, resolve to a Fairy date.
+ *
+ * A visit with no days in Fairy has one lived day on both sides of it: the
+ * day they entered and the day they came back. That reads as the day they
+ * entered, unless `sinceReturnFrom` names the visit (or a later one), as it
+ * does for a record made after coming back.
  */
-export function getTimelinePointAtLivedDay(character: WithVisits, livedDay: number): TimelinePoint {
+export function getTimelinePointAtLivedDay(character: WithVisits, livedDay: number, sinceReturnFrom?: string): TimelinePoint {
   const target = Math.max(0, Math.floor(livedDay));
+  const visits = getFairyVisits(character);
+  const stamped = visits.findIndex((v) => v.id === sinceReturnFrom && v.returnedOn != null);
+  const after = stamped >= 0 && target >= livedDayAtReturn(visits, stamped) ? stamped : -1;
   let cursor = LIVED_TIME_EPOCH;
   let lived = 0;
-  for (const visit of getFairyVisits(character)) {
+  let returnedFrom: string | undefined; // the visit whose return began the current stretch
+  for (let i = 0; i < visits.length; i++) {
+    const visit = visits[i];
     const dolmenwood = stretch(cursor, visit.enteredOn);
-    if (target <= lived + dolmenwood) return { date: shiftDate(cursor, target - lived) };
+    if (target < lived + dolmenwood || (target === lived + dolmenwood && i > after)) {
+      return dolmenwoodPoint(shiftDate(cursor, target - lived), returnedFrom);
+    }
     lived += dolmenwood;
     const inFairy = Math.max(0, visit.daysInFairy);
     if (!visit.returnedOn || target < lived + inFairy) {
@@ -194,21 +226,49 @@ export function getTimelinePointAtLivedDay(character: WithVisits, livedDay: numb
     }
     lived += inFairy;
     cursor = visit.returnedOn;
+    returnedFrom = visit.id;
   }
-  return { date: shiftDate(cursor, target - lived) };
+  return dolmenwoodPoint(shiftDate(cursor, target - lived), returnedFrom);
+}
+
+function dolmenwoodPoint(date: CalendarDate, sinceReturnFrom: string | undefined): TimelinePoint {
+  return sinceReturnFrom ? { date, sinceReturnFrom } : { date };
+}
+
+// The lived day the character came back from visits[k] on. That visit must be over.
+function livedDayAtReturn(visits: FairyVisit[], k: number): number {
+  return getLivedDays({ fairyVisits: visits.slice(0, k + 1), currentDate: visits[k].returnedOn ?? LIVED_TIME_EPOCH });
+}
+
+// Which visit a `sinceReturnFrom` stamp on a Dolmenwood date names, if the
+// stamp fits the date: that visit is over, and the date falls between its
+// return and the next visit's entry. Otherwise -1, and the date is read alone.
+function returnStampIndex(visits: FairyVisit[], date: CalendarDate, sinceReturnFrom: string | undefined): number {
+  if (!sinceReturnFrom) return -1;
+  const k = visits.findIndex((v) => v.id === sinceReturnFrom);
+  if (k < 0) return -1;
+  const returnedOn = visits[k].returnedOn;
+  const next = visits[k + 1];
+  if (!returnedOn || daysBetween(returnedOn, date) < 0) return -1;
+  if (next && daysBetween(date, next.enteredOn) < 0) return -1;
+  return k;
 }
 
 /**
- * Best-effort lived day for a bare Dolmenwood date: the start of the
- * days-lived counter, or a record saved before lived time existed. With no
- * Fairy visits it's exact: the days since Year 1, day 1. A date inside a
- * visit's away time maps to the moment the character returned; a visit's
- * entry date maps to just before they left.
+ * Best-effort lived day for a Dolmenwood date: the start of the days-lived
+ * counter, or a record saved before lived time existed. With no Fairy visits
+ * it's exact: the days since Year 1, day 1. A date inside a visit's away time
+ * maps to the moment the character returned; a visit's entry date maps to
+ * just before they left, unless `sinceReturnFrom` names that visit: then the
+ * date is after its return (the same day, when no Dolmenwood time passed).
  */
-export function getLivedDayAtDolmenwoodDate(character: WithVisits, date: CalendarDate): number {
+export function getLivedDayAtDolmenwoodDate(character: WithVisits, date: CalendarDate, sinceReturnFrom?: string): number {
+  const visits = getFairyVisits(character);
+  const stamped = returnStampIndex(visits, date, sinceReturnFrom);
+  if (stamped >= 0) return livedDayAtReturn(visits, stamped) + stretch(visits[stamped].returnedOn ?? date, date);
   let cursor = LIVED_TIME_EPOCH;
   let lived = 0;
-  for (const visit of getFairyVisits(character)) {
+  for (const visit of visits) {
     if (daysBetween(visit.enteredOn, date) <= 0) return lived + stretch(cursor, date);
     lived += stretch(cursor, visit.enteredOn) + Math.max(0, visit.daysInFairy);
     if (!visit.returnedOn || daysBetween(date, visit.returnedOn) >= 0) return lived;
@@ -223,7 +283,8 @@ export function getLivedDayAtDolmenwoodDate(character: WithVisits, date: Calenda
  * The earliest Dolmenwood date the calendar can be set to: the day the
  * character last came back from Fairy, or Year 1, day 1 if they never went.
  * Going further back would undo time spent in Fairy; editReturnDate is the
- * way to fix a wrong return date.
+ * way to fix a wrong return date. The calendar's controls refuse an earlier
+ * date and say why, rather than changing what the player picked.
  */
 export function getEarliestDolmenwoodDate(character: WithVisits): CalendarDate {
   const visits = getFairyVisits(character);
@@ -231,16 +292,57 @@ export function getEarliestDolmenwoodDate(character: WithVisits): CalendarDate {
   return { ...(last ? last.returnedOn ?? last.enteredOn : LIVED_TIME_EPOCH) };
 }
 
-/** `date`, or the earliest allowed date if it's before that. */
-export function clampToEarliestDate(character: WithVisits, date: CalendarDate): CalendarDate {
-  const earliest = getEarliestDolmenwoodDate(character);
-  return daysBetween(earliest, date) < 0 ? earliest : { ...date };
+/**
+ * The visit the character was away on during a Dolmenwood date: after the
+ * day they entered and before the day they came back. They didn't live
+ * those days, so the days-lived counter can't start on one.
+ */
+export function getVisitAwayOn(character: WithVisits, date: CalendarDate): FairyVisit | null {
+  return (
+    getFairyVisits(character).find(
+      (v) => v.returnedOn != null && daysBetween(v.enteredOn, date) > 0 && daysBetween(date, v.returnedOn) > 0,
+    ) ?? null
+  );
 }
 
-/** Set the date the days-lived counter counts from. Null if it's after today's Dolmenwood date. */
+// The counter start for a date, stamped with the visit the character had
+// last come back from by then. A visit's entry date counts as before they
+// left, as in getLivedDayAtDolmenwoodDate.
+function countingStartAt(character: WithVisits, date: CalendarDate): CountingStart {
+  const start: CountingStart = { day: date.day, month: date.month, year: date.year };
+  const visits = getFairyVisits(character);
+  for (let i = visits.length - 1; i >= 0; i--) {
+    const visit = visits[i];
+    if (daysBetween(visit.enteredOn, date) <= 0) continue; // on or before the day they entered
+    if (visit.returnedOn && daysBetween(visit.returnedOn, date) >= 0) start.sinceReturnFrom = visit.id;
+    break;
+  }
+  return start;
+}
+
+/**
+ * A counter start that fits the visits, for saves and returns. A stamp that
+ * fits the date is kept, since it's what makes a shared entry-and-return day
+ * read as after the return; otherwise the stamp comes from the date. A date
+ * while the character was away moves to the day they came back, which counts
+ * the same days.
+ */
+export function fitCountingStart(character: WithVisits, start: CountingStart): CountingStart {
+  const date = { day: start.day, month: start.month, year: start.year };
+  if (returnStampIndex(getFairyVisits(character), date, start.sinceReturnFrom) >= 0) {
+    return { ...date, sinceReturnFrom: start.sinceReturnFrom };
+  }
+  return countingStartAt(character, getVisitAwayOn(character, date)?.returnedOn ?? date);
+}
+
+/**
+ * Set the date the days-lived counter counts from. Null if it's after
+ * today's Dolmenwood date, or a day the character was away in Fairy
+ * (getVisitAwayOn says which visit).
+ */
 export function setLivedTimeStart(character: WithClock, date: CalendarDate): Partial<Character> | null {
-  if (daysBetween(character.currentDate, date) > 0) return null;
-  return { livedTimeStart: { day: date.day, month: date.month, year: date.year } };
+  if (daysBetween(character.currentDate, date) > 0 || getVisitAwayOn(character, date)) return null;
+  return { livedTimeStart: countingStartAt(character, date) };
 }
 
 // ── Spell study ──────────────────────────────────────────────────────
@@ -292,14 +394,17 @@ export function getStudyProgress(
 export function getStudyStart(
   character: WithClock,
   livedDay?: number,
-): Pick<ActiveSpellStudy, 'startedOn' | 'startedLivedDay' | 'startedInFairy'> {
+): Pick<ActiveSpellStudy, 'startedOn' | 'startedLivedDay' | 'startedInFairy' | 'sinceReturnFrom'> {
   const now = getCurrentTimelinePoint(character);
-  if (livedDay === undefined || !Number.isFinite(livedDay) || livedDay >= now.livedDay) {
-    return { startedOn: now.date, startedLivedDay: now.livedDay, startedInFairy: now.fairyDate };
-  }
-  const start = Math.max(0, Math.floor(livedDay));
-  const point = getTimelinePointAtLivedDay(character, start);
-  return { startedOn: point.date, startedLivedDay: start, startedInFairy: point.fairyDate };
+  const useNow = livedDay === undefined || !Number.isFinite(livedDay) || livedDay >= now.livedDay;
+  const startedLivedDay = useNow ? now.livedDay : Math.max(0, Math.floor(livedDay));
+  const point = useNow ? now : getTimelinePointAtLivedDay(character, startedLivedDay);
+  return {
+    startedOn: point.date,
+    startedLivedDay,
+    ...(point.fairyDate ? { startedInFairy: point.fairyDate } : {}),
+    ...(point.sinceReturnFrom ? { sinceReturnFrom: point.sinceReturnFrom } : {}),
+  };
 }
 
 // ── Returning from Fairy ─────────────────────────────────────────────
@@ -317,6 +422,11 @@ export function roll2d20(random: () => number = Math.random): { dice: [number, n
 /** A character can come back on the day they entered or later, never earlier. */
 export function canReturnOn(visit: FairyVisit, date: CalendarDate): boolean {
   return daysBetween(visit.enteredOn, date) >= 0;
+}
+
+/** Whether a date is within the calendar the sheet accepts (Year 1 to MAX_YEAR). */
+export function isWithinCalendar(date: CalendarDate): boolean {
+  return date.year >= 1 && date.year <= MAX_YEAR;
 }
 
 // The sentence for a return's automatic journal entry.
@@ -364,10 +474,26 @@ export function enterFairy(character: Character): Partial<Character> | null {
     location: character.currentLocation ?? '',
     text: `Entered Fairy (visit ${visits.length + 1}).`,
   };
+  const fairyVisits = [...visits, visit];
   return {
-    fairyVisits: [...visits, visit],
+    fairyVisits,
     journalEntries: [...(character.journalEntries ?? []), entry],
+    ...refitCountingStart(character, fairyVisits, enteredOn),
   };
+}
+
+// A days-lived counter start after the day a visit began (possible if the
+// calendar was moved back before it) needs refitting when the visit starts
+// or ends: its stamp no longer fits, and after the return it may fall in
+// time spent away (see fitCountingStart).
+function refitCountingStart(
+  character: Character,
+  fairyVisits: FairyVisit[],
+  enteredOn: CalendarDate,
+): Pick<Character, 'livedTimeStart'> | Record<string, never> {
+  const start = character.livedTimeStart;
+  if (!start || daysBetween(enteredOn, start) <= 0) return {};
+  return { livedTimeStart: fitCountingStart({ fairyVisits }, start) };
 }
 
 /** Set the days lived on the current visit. Dolmenwood's date doesn't move. */
@@ -383,11 +509,14 @@ export function setDaysInFairy(character: Character, days: number): Partial<Char
 /**
  * Close the current visit: Dolmenwood's calendar jumps to `returnedOn` (the
  * Referee's call) and the journal records the trip. Null if the character
- * isn't in Fairy or the date is before the day they entered.
+ * isn't in Fairy or the date is before the day they entered. A days-lived
+ * counter start in the time they were away moves to the return date, which
+ * counts the same days; a study start the calendar was moved back past moves
+ * to wherever its lived day now falls.
  */
 export function returnFromFairy(character: Character, returnedOn: CalendarDate): Partial<Character> | null {
   const open = getOpenFairyVisit(character);
-  if (!open || !canReturnOn(open, returnedOn)) return null;
+  if (!open || !canReturnOn(open, returnedOn) || !isWithinCalendar(returnedOn)) return null;
   const visits = getFairyVisits(character);
   const date = { day: returnedOn.day, month: returnedOn.month, year: returnedOn.year };
   const entry: JournalEntry = {
@@ -397,36 +526,130 @@ export function returnFromFairy(character: Character, returnedOn: CalendarDate):
     location: character.currentLocation ?? '',
     text: describeReturn(visits.length, open.daysInFairy, open.enteredOn, date),
   };
+  const fairyVisits = visits.map((v) => (v.id === open.id ? { ...v, returnedOn: { ...date } } : v));
   return {
-    fairyVisits: visits.map((v) => (v.id === open.id ? { ...v, returnedOn: { ...date } } : v)),
+    fairyVisits,
     currentDate: { ...date },
     journalEntries: [...(character.journalEntries ?? []), entry],
+    ...refitCountingStart(character, fairyVisits, open.enteredOn),
+    ...refitOvertakenStudy(character, fairyVisits, open.enteredOn),
   };
 }
 
+// The study with its start moved to a point on the timeline.
+function studyStartingAt(active: ActiveSpellStudy, point: TimelinePoint): ActiveSpellStudy {
+  const moved: ActiveSpellStudy = { ...active, startedOn: point.date };
+  delete moved.startedInFairy;
+  delete moved.sinceReturnFrom;
+  if (point.fairyDate) moved.startedInFairy = point.fairyDate;
+  if (point.sinceReturnFrom) moved.sinceReturnFrom = point.sinceReturnFrom;
+  return moved;
+}
+
+// A study dated after the day a visit began (the calendar was moved back past
+// its start, then the character went into Fairy) no longer falls on that
+// date. On the return, its start moves to wherever its lived day falls: a
+// day in Fairy, or a date after coming back. Progress doesn't change.
+function refitOvertakenStudy(
+  character: Character,
+  fairyVisits: FairyVisit[],
+  enteredOn: CalendarDate,
+): Pick<Character, 'spellStudy'> | Record<string, never> {
+  const active = character.spellStudy?.active;
+  const progress = getStudyProgress(character);
+  if (!active || !progress || active.startedInFairy || daysBetween(enteredOn, active.startedOn) <= 0) return {};
+  const point = getTimelinePointAtLivedDay({ fairyVisits }, progress.startedLivedDay);
+  return { spellStudy: { ...character.spellStudy, active: studyStartingAt(active, point) } };
+}
+
+/** What correcting the last return date changes; the dialog previews it. */
+export interface ReturnEditPlan {
+  patch: Partial<Character>;
+  today: CalendarDate;          // today's Dolmenwood date after the edit
+  movedEntries: number;         // journal entries written since coming back
+  movedSpells: number;          // spells learned since coming back
+  movesStudy: boolean;          // the study in progress began since coming back
+  movesCountingStart: boolean;  // the days-lived counter starts since coming back
+}
+
 /**
- * Correct the date the character came back from their most recent visit.
- * Today's Dolmenwood date moves by the same amount, so the days lived since
- * coming back are kept: lived time and study progress don't change, and the
- * return date can't end up after today. The return's automatic journal
- * entry is redated and its sentence rewritten (any text the player added
- * stays). Other records keep the dates they were written with. Null if
- * there's no completed visit or the date is before the day they entered.
+ * Correct the date the character came back from their most recent visit, and
+ * move everything after the return with it by the same number of days, so
+ * nothing lived is gained or lost:
+ *   - today's Dolmenwood date (never earlier than the new return date);
+ *   - journal entries and learned spells made since coming back: stamped
+ *     `sinceReturnFrom` with this visit and dated on or after the old return.
+ *     Records made in Fairy, and the entry the app wrote on entering, stay as
+ *     they are;
+ *   - the study in progress, if it began since coming back (stamped like a
+ *     record): its start is worked out again from the lived day it began
+ *     (getTimelinePointAtLivedDay);
+ *   - the days-lived counter's start, if it's since coming back (stamped like
+ *     a record), so the count stays the same;
+ *   - the return's own journal entry, which is redated and has its sentence
+ *     rewritten (any text the player added stays).
+ * Because the stamps don't change, editing twice equals editing once, and
+ * editing back restores everything. Null if there's no completed visit, the
+ * date is before the day they entered, or today would pass the calendar's
+ * last year.
  */
-export function editReturnDate(character: Character, returnedOn: CalendarDate): Partial<Character> | null {
+export function planReturnEdit(character: Character, returnedOn: CalendarDate): ReturnEditPlan | null {
   const visit = getEditableReturnVisit(character);
-  if (!visit || !visit.returnedOn || !canReturnOn(visit, returnedOn)) return null;
+  const oldReturn = visit?.returnedOn;
+  if (!visit || !oldReturn || !canReturnOn(visit, returnedOn) || !isWithinCalendar(returnedOn)) return null;
   const visits = getFairyVisits(character);
   const date = { day: returnedOn.day, month: returnedOn.month, year: returnedOn.year };
-  const oldText = describeReturn(visits.length, visit.daysInFairy, visit.enteredOn, visit.returnedOn);
+  const shift = daysBetween(oldReturn, date);
+  const shifted = shiftDate(character.currentDate, shift);
+  const today = daysBetween(date, shifted) < 0 ? { ...date } : shifted; // guards imported data
+  if (!isWithinCalendar(today)) return null;
+  const fairyVisits = visits.map((v) => (v.id === visit.id ? { ...v, returnedOn: { ...date } } : v));
+  // Made in Dolmenwood since coming back from this visit.
+  const sinceReturn = (on: CalendarDate | undefined, stamp: string | undefined): on is CalendarDate =>
+    shift !== 0 && stamp === visit.id && on != null && daysBetween(oldReturn, on) >= 0;
+
+  const oldText = describeReturn(visits.length, visit.daysInFairy, visit.enteredOn, oldReturn);
   const newText = describeReturn(visits.length, visit.daysInFairy, visit.enteredOn, date);
-  return {
-    fairyVisits: visits.map((v) => (v.id === visit.id ? { ...v, returnedOn: { ...date } } : v)),
-    currentDate: shiftDate(character.currentDate, daysBetween(visit.returnedOn, date)),
-    journalEntries: (character.journalEntries ?? []).map((entry) =>
-      entry.fairyEvent?.visitId === visit.id && entry.fairyEvent.kind === 'returned'
-        ? { ...entry, date: { ...date }, text: entry.text.split(oldText).join(newText) }
-        : entry,
-    ),
-  };
+  let movedEntries = 0;
+  const journalEntries = (character.journalEntries ?? []).map((entry) => {
+    if (entry.fairyEvent?.visitId === visit.id && entry.fairyEvent.kind === 'returned') {
+      return { ...entry, date: { ...date }, text: entry.text.split(oldText).join(newText) };
+    }
+    if (entry.fairyEvent || entry.fairyDate || !sinceReturn(entry.date, entry.sinceReturnFrom)) return entry;
+    movedEntries += 1;
+    return { ...entry, date: shiftDate(entry.date, shift) };
+  });
+
+  let movedSpells = 0;
+  const knownSpells = (character.knownSpells ?? []).map((spell) => {
+    if (spell.learnedInFairy || !sinceReturn(spell.learnedAt, spell.sinceReturnFrom)) return spell;
+    movedSpells += 1;
+    return { ...spell, learnedAt: shiftDate(spell.learnedAt, shift) };
+  });
+
+  const patch: Partial<Character> = { fairyVisits, currentDate: today, journalEntries };
+  if (movedSpells > 0) patch.knownSpells = knownSpells;
+
+  // The study in progress moves if it began since coming back. Its start is
+  // worked out again from the lived day it began, read as after this return
+  // (which matters when the visit had no days in Fairy).
+  const active = character.spellStudy?.active ?? null;
+  const progress = getStudyProgress(character);
+  const movesStudy = Boolean(
+    active && progress && !active.startedInFairy && sinceReturn(active.startedOn, active.sinceReturnFrom),
+  );
+  if (movesStudy && active && progress) {
+    const point = getTimelinePointAtLivedDay({ fairyVisits }, progress.startedLivedDay, visit.id);
+    patch.spellStudy = { ...character.spellStudy, active: studyStartingAt(active, point) };
+  }
+
+  const start = character.livedTimeStart;
+  const movesCountingStart = Boolean(start) && sinceReturn(start, start.sinceReturnFrom);
+  if (movesCountingStart) patch.livedTimeStart = { ...shiftDate(start, shift), sinceReturnFrom: visit.id };
+  return { patch, today, movedEntries, movedSpells, movesStudy, movesCountingStart };
+}
+
+/** Correct the last return date; see planReturnEdit. */
+export function editReturnDate(character: Character, returnedOn: CalendarDate): Partial<Character> | null {
+  return planReturnEdit(character, returnedOn)?.patch ?? null;
 }

@@ -307,8 +307,10 @@ export function formatCalendarDate(date: CalendarDate): string {
 }
 
 // The largest year the date fields accept. Date math copes with any year;
-// anything bigger is almost certainly a typo.
+// anything bigger is almost certainly a typo. LATEST_DATE is that year's last
+// day: the calendar stops there.
 export const MAX_YEAR = 99999;
+export const LATEST_DATE: CalendarDate = { day: MONTHS[MONTHS.length - 1].days, month: MONTHS.length - 1, year: MAX_YEAR };
 
 // "3 Grimvold, Year 2": formatCalendarDate without the day name.
 export function formatShortDate(date: CalendarDate): string {

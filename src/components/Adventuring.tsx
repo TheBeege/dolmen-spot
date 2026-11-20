@@ -1,12 +1,15 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Character, JournalEntry, ActiveLightSource, CalendarDate } from '@/lib/types';
 import {
+  LATEST_DATE,
   MAX_YEAR,
   MONTHS,
   daysBetween,
   formatCalendarDate,
+  formatShortDate,
+  getAbsoluteDay,
   FESTIVALS,
   FESTIVAL_DESCRIPTIONS,
   CELESTIAL_EVENTS,
@@ -25,7 +28,6 @@ import {
   isWysenday,
 } from '@/lib/gamedata';
 import {
-  clampToEarliestDate,
   formatRecordDate,
   getCurrentTimelinePoint,
   getEarliestDolmenwoodDate,
@@ -33,7 +35,9 @@ import {
   getOpenFairyVisit,
   getStudyProgress,
 } from '@/lib/livedTime';
-import { FairyStatusPanel, LivedTimePanel, useFocusAfterRender } from '@/components/FairyTime';
+import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
+import { errorClasses, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
+import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 
 interface AdventuringProps {
   character: Character;
@@ -84,43 +88,68 @@ function ordinal(n: number): string {
   }
 }
 
-// A Day or Year field for the calendar. Each keystroke that makes an
-// allowed date applies straight away; anything else waits until the player
-// leaves the field, then gets clamped into range. Not fighting keystrokes
-// lets someone type "10" without the "1" first being snapped up to the
-// earliest allowed date.
+// A Day or Year field for the calendar. A whole number that makes an allowed
+// date applies as soon as it's typed. Anything else stays in the field with a
+// message saying why, and the date doesn't change: nothing is rounded,
+// clamped or reverted behind the player's back. What's typed is only shown
+// while the date it was typed against is unchanged, so moving the date
+// another way (Next Day, say) clears it.
 function CalendarNumberInput({
+  id,
+  label,
   value,
   min,
   max,
-  apply,
+  problemWith,
+  onValid,
 }: {
+  id: string;
+  label: string;
   value: number;
   min: number;
   max: number;
-  apply: (n: number, final: boolean) => void;
+  problemWith: (n: number) => string | undefined; // why a whole number in range still can't apply
+  onValid: (n: number) => void;
 }) {
-  const [draft, setDraft] = useState<string | null>(null);
+  const errorId = useId();
+  const [draft, setDraft] = useState<{ field: NumberField; typedAgainst: number } | null>(null);
+  const active = draft && draft.typedAgainst === value ? draft.field : null;
+  const read = (field: NumberField): { value?: number; error?: string } => {
+    const reading = readWholeNumber(field, label, min, max, `Enter a ${label.toLowerCase()}.`);
+    if (reading.error !== undefined) return { error: reading.error };
+    return { value: reading.value, error: problemWith(reading.value) };
+  };
+  const error = active ? read(active).error : undefined;
   return (
-    <input
-      type="number"
-      min={min}
-      max={max}
-      value={draft ?? String(value)}
-      onChange={(e) => {
-        const text = e.target.value;
-        setDraft(text);
-        const n = Number(text);
-        if (text.trim() !== '' && Number.isInteger(n)) apply(n, false);
-      }}
-      onBlur={() => {
-        if (draft === null) return;
-        const n = Number(draft);
-        apply(draft.trim() !== '' && Number.isInteger(n) ? n : value, true);
-        setDraft(null);
-      }}
-      className={`${inputClasses} w-full`}
-    />
+    <>
+      <input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        step={1}
+        min={min}
+        max={max}
+        value={active ? active.text : String(value)}
+        onChange={(e) => {
+          const field = { text: e.target.value, badInput: e.target.validity.badInput };
+          const result = read(field);
+          if (result.error === undefined && result.value !== undefined) {
+            setDraft(null);
+            onValid(result.value);
+          } else {
+            setDraft({ field, typedAgainst: value });
+          }
+        }}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? errorId : undefined}
+        className={`${inputClass(Boolean(error))} w-full`}
+      />
+      {error && (
+        <p id={errorId} className={errorClasses}>
+          {error}
+        </p>
+      )}
+    </>
   );
 }
 
@@ -147,52 +176,56 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const fairyStatusRef = useRef<HTMLHeadingElement>(null);
   const dolmenwoodDateRef = useRef<HTMLDivElement>(null);
   const focusAfterRender = useFocusAfterRender();
+  const dateFieldsId = useId();
 
   // ── Calendar Handlers ──────────────────────────────────────────────
 
-  // The earliest date the calendar can show: Year 1, day 1, or the day the
-  // character last came back from Fairy, since going back past that would
-  // undo time spent in Fairy ("Edit return date" fixes a wrong return).
-  // These handlers are the only enforcement; addDays itself stays math-pure
-  // so daysBetween invariants hold.
+  // The calendar runs from the earliest date it can show (Year 1, day 1, or
+  // the day the character last came back from Fairy, since going back past
+  // that would undo time spent in Fairy; "Edit return date" fixes a wrong
+  // return) to LATEST_DATE. These handlers are the only enforcement; addDays
+  // itself stays math-pure so daysBetween invariants hold.
   const earliestDate = getEarliestDolmenwoodDate(character);
   const isAtEarliestDate = daysBetween(earliestDate, currentDate) <= 0;
+  const isAtLatestDate = daysBetween(currentDate, LATEST_DATE) <= 0;
   const earliestIsReturn = getFairyVisits(character).length > 0;
+  const beforeEarliest = (date: CalendarDate) =>
+    daysBetween(earliestDate, date) < 0
+      ? earliestIsReturn
+        ? `That's before the day you came back from Fairy (${formatShortDate(earliestDate)}).`
+        : `That's before Year 1, day 1.`
+      : undefined;
 
-  const setDate = (date: CalendarDate) => {
-    const next = clampToEarliestDate(character, date);
-    if (daysBetween(currentDate, next) !== 0) onChange({ currentDate: next });
-  };
+  // A month that would put the date before the floor isn't applied; say why.
+  // Shown only while the date it was refused against is unchanged.
+  const [monthProblem, setMonthProblem] = useState<{ message: string; refusedAt: number } | null>(null);
+  const monthMessage =
+    monthProblem && monthProblem.refusedAt === getAbsoluteDay(currentDate) ? monthProblem.message : undefined;
 
   const handlePreviousDay = () => {
     if (isAtEarliestDate) return;
-    setDate(addDays(currentDate, -1));
+    onChange({ currentDate: addDays(currentDate, -1) });
   };
 
   const handleNextDay = () => {
+    if (isAtLatestDate) return;
     onChange({ currentDate: addDays(currentDate, 1) });
   };
 
   const handleMonthChange = (newMonth: number) => {
-    const maxDay = MONTHS[newMonth].days;
-    const clampedDay = Math.min(currentDate.day, maxDay);
-    setDate({ ...currentDate, day: clampedDay, month: newMonth });
+    // A day past the new month's end moves to its last day (Chysting 31 → Lillipythe 29).
+    const date = { ...currentDate, day: Math.min(currentDate.day, MONTHS[newMonth].days), month: newMonth };
+    const problem = beforeEarliest(date);
+    if (problem) {
+      setMonthProblem({ message: `${MONTHS[newMonth].name}: ${problem}`, refusedAt: getAbsoluteDay(currentDate) });
+      return;
+    }
+    setMonthProblem(null);
+    onChange({ currentDate: date });
   };
 
-  // While typing (final = false) only an allowed date applies; on leaving the
-  // field (final = true) the value is clamped into range and to the floor.
-  const applyDay = (day: number, final: boolean) => {
-    const maxDay = currentMonth.days;
-    const date = { ...currentDate, day: Math.max(1, Math.min(maxDay, day)) };
-    if (!final && (day !== date.day || daysBetween(earliestDate, date) < 0)) return;
-    setDate(date);
-  };
-
-  const applyYear = (year: number, final: boolean) => {
-    const date = { ...currentDate, year: Math.max(1, Math.min(MAX_YEAR, year)) };
-    if (!final && (year !== date.year || daysBetween(earliestDate, date) < 0)) return;
-    setDate(date);
-  };
+  const dayProblem = (day: number) => beforeEarliest({ ...currentDate, day });
+  const yearProblem = (year: number) => beforeEarliest({ ...currentDate, year });
 
   // ── Journal Handlers ───────────────────────────────────────────────
 
@@ -202,6 +235,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
       id: crypto.randomUUID(),
       date: now.date,
       fairyDate: now.fairyDate,
+      sinceReturnFrom: now.sinceReturnFrom,
       location: currentLocation,
       text: '',
     };
@@ -371,7 +405,12 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
               >
                 Previous Day
               </button>
-              <button onClick={handleNextDay} className={buttonClasses}>
+              <button
+                onClick={handleNextDay}
+                disabled={isAtLatestDate}
+                title={isAtLatestDate ? `Year ${MAX_YEAR.toLocaleString('en-US')} is as far as the calendar goes` : ''}
+                className={`${buttonClasses} ${isAtLatestDate ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
                 Next Day
               </button>
             </div>
@@ -383,11 +422,14 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              <div>
-                <label className={labelClasses}>Month</label>
+              {/* Below sm, Month gets the full row so long month names fit. */}
+              <div className="col-span-2 sm:col-span-1">
+                <label htmlFor={`${dateFieldsId}-month`} className={labelClasses}>Month</label>
                 <select
+                  id={`${dateFieldsId}-month`}
                   value={currentDate.month}
                   onChange={(e) => handleMonthChange(parseInt(e.target.value))}
+                  aria-describedby={monthMessage ? `${dateFieldsId}-month-problem` : undefined}
                   className={`${inputClasses} w-full`}
                 >
                   {MONTHS.map((m, i) => (
@@ -396,14 +438,41 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
                     </option>
                   ))}
                 </select>
+                <div aria-live="polite">
+                  {monthMessage && (
+                    <p id={`${dateFieldsId}-month-problem`} className={errorClasses}>
+                      {monthMessage}
+                    </p>
+                  )}
+                </div>
               </div>
               <div>
-                <label className={labelClasses}>Day</label>
-                <CalendarNumberInput value={currentDate.day} min={1} max={currentMonth.days} apply={applyDay} />
+                <label htmlFor={`${dateFieldsId}-day`} className={labelClasses}>Day</label>
+                <CalendarNumberInput
+                  id={`${dateFieldsId}-day`}
+                  label="Day"
+                  value={currentDate.day}
+                  min={1}
+                  max={currentMonth.days}
+                  problemWith={dayProblem}
+                  onValid={(day) => {
+                    if (day !== currentDate.day) onChange({ currentDate: { ...currentDate, day } });
+                  }}
+                />
               </div>
-              <div className="col-span-2 sm:col-span-1">
-                <label className={labelClasses}>Year</label>
-                <CalendarNumberInput value={currentDate.year} min={1} max={MAX_YEAR} apply={applyYear} />
+              <div>
+                <label htmlFor={`${dateFieldsId}-year`} className={labelClasses}>Year</label>
+                <CalendarNumberInput
+                  id={`${dateFieldsId}-year`}
+                  label="Year"
+                  value={currentDate.year}
+                  min={1}
+                  max={MAX_YEAR}
+                  problemWith={yearProblem}
+                  onValid={(year) => {
+                    if (year !== currentDate.year) onChange({ currentDate: { ...currentDate, year } });
+                  }}
+                />
               </div>
             </div>
           </>
