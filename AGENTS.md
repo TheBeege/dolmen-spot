@@ -58,11 +58,16 @@ Character data is stored in localStorage and must survive schema changes across 
 
 - Each migration transforms from version N to N+1 (sequential)
 - After all migrations run, `reconcileWithDefaults()` deep-merges saved data over a fresh `createDefaultCharacter()` to fill any missing fields
-- Migrations run on load (`loadCharacters()`) and import (`importCharacter()`)
-- Migrated data is persisted back to localStorage immediately so migration only runs once
+- Migrations run on load (`load()` in `src/lib/storage.ts`, one character at a time) and on import (`parseImportedCharacters()`)
+- Migrated data is persisted back to localStorage immediately (best-effort) so migration only runs once
+- **A migration must never throw.** If one does, that character is *set aside*: it stays in the saved list unchanged (re-serialized from the parsed value; identical for anything Dolmen Spot wrote), every save keeps it there, and the next load tries it again, so once the migration is fixed the character comes back. It is also copied to a `dolmenwood-recovery-*` backup the player can download. Until then the player can't open that character, so treat a throw as a bug.
+- **A character saved by a newer schema is left alone.** One whose finite numeric `schemaVersion` is above `CURRENT_SCHEMA_VERSION` (saved by a newer release, e.g. before a rollback) isn't migrated or reconciled: it's set aside unchanged (re-serialized from the parsed value; identical for anything Dolmen Spot wrote), and opens again once a release with that schema is deployed. Import refuses such files. This is what makes a schema bump safe to roll back, to any release that has the guard.
+- All reads and writes of saved characters go through `src/lib/storage.ts`. It never overwrites saved data it couldn't read (an unreadable whole value, or an entry that can never load, is removed only after a verified backup; a character nested more than 100 levels deep, measured from itself on load, import and in backups, is one of those), and before each save it checks that no other tab has saved since this tab last read or wrote. If another has, it stops saving rather than overwrite that tab's work. Two tabs can still disagree, though: the other tab's changes only show up after a reload.
 
 ### Testing migrations:
 
+- Add a scenario to the relevant `src/lib/*.test.ts` file (the hex map's are in `src/lib/map-migration.test.ts`) and run `npm test`, which runs every `src/lib/*.test.ts` file with Node's test runner (via `tsx`). CI runs it on every PR. `src/lib/migrations.test.ts` also fails if `CURRENT_SCHEMA_VERSION` isn't one more than the last migration's version, which catches a bump lost when two branches that each add a migration merge
+- How loading treats migrations (one character at a time, a throwing migration setting that character aside) is tested in `src/lib/storage.test.ts`, against a fake localStorage. Its "set aside ... come back once it is fixed" tests show the pattern for a migration that throws
 - Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
 - Test import/export round-trip with old-format files
 - Verify `npm run build` passes after any schema change
@@ -75,7 +80,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- base background `#1a1a2e`, cards `#2a2a3e`, text `#f5e6c8`, gold accent `#c4a35a`, warm-brown borders `#5a3a28`, written as arbitrary-value classes (e.g. `bg-[#2a2a3e]`)
 - **Types**: All game interfaces live in `src/lib/types.ts`
-- **Game data**: All static game data lives in `src/lib/gamedata.ts`
+- **Game data**: All static game data lives in `src/lib/gamedata.ts`, except the hex-map manifest `src/lib/hex-grid.json`. It is generated from the printed map by `scripts/extract_hex_grid.py` (don't edit it by hand) and loaded through `src/lib/hex-grid.ts`; its types are in `types.ts` like the rest
 
 ## Pre-commit Hook & CI
 
@@ -85,7 +90,7 @@ Next.js 16's `next build` no longer lints, so these checks do instead:
   - ESLint on staged `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` files.
   - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
   - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
-- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck` and `npm run check:msal-bridge`.
+- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`.
   - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
   - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
 

@@ -1,7 +1,21 @@
-import { Character } from './types';
-import { createDefaultCharacter, MONTHS } from './gamedata';
+import type {
+  Character,
+  FairyDate,
+  FairyDoor,
+  FairyDoorDestination,
+  FairyEvent,
+  FairyVisit,
+  HexCoord,
+  LeyLine,
+  MapPOI,
+} from './types';
+import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, daysBetween } from './gamedata';
+import { fitCountingStart, getLivedDayAtDolmenwoodDate } from './livedTime';
+import { HEX_GRID_META } from './hex-grid';
+import { isValidHex, pixelToHex } from './hex';
+import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS } from './map-data';
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
 
@@ -9,13 +23,21 @@ const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
  * Coerce a value that's supposed to be a CalendarDate into a well-formed
  * one. Replaces malformed shapes and non-finite numeric subfields with
  * sensible defaults. `day` is bounded against the (clamped) month's
- * actual length so a stale `day: 50` can't survive into display.
+ * actual length so a stale `day: 50` can't survive into display. A date
+ * past the calendar's last day (Year MAX_YEAR) becomes that day, so loaded
+ * data stays within what the calendar and the Fairy dialogs accept, and
+ * dates keep their order.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeDate(d: any): { day: number; month: number; year: number } {
   if (d == null || typeof d !== 'object' || Array.isArray(d)) {
     return { ...DEFAULT_CALENDAR_DATE };
   }
+  // `month` is guaranteed to be an integer in [0, 11] after this expression:
+  // Number.isFinite rejects NaN/Infinity (so the else branch fires for those),
+  // Math.floor coerces fractional input, and Math.max/min clamp to the array
+  // bounds. MONTHS[month] is therefore always defined; no defensive guard
+  // needed at the index.
   const month = Number.isFinite(d.month)
     ? Math.max(0, Math.min(11, Math.floor(d.month)))
     : DEFAULT_CALENDAR_DATE.month;
@@ -24,20 +46,23 @@ function sanitizeDate(d: any): { day: number; month: number; year: number } {
     ? Math.max(1, Math.min(monthDays, Math.floor(d.day)))
     : DEFAULT_CALENDAR_DATE.day;
   const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
+  if (year > MAX_YEAR) return { ...LATEST_DATE };
   return { day, month, year };
 }
 
-/**
- * Walk a character object and rewrite every persisted CalendarDate field
- * through sanitizeDate. Both the v10 → v11 migration and the final
- * post-migration pass call this so there's one canonical path for date
- * repair.
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isPlainObject(v: any): boolean {
   return v != null && typeof v === 'object' && !Array.isArray(v);
 }
 
+/**
+ * Walk a character object and rewrite the CalendarDate fields that predate
+ * Fairy time (currentDate, journal entry dates, learnedAt, and the active
+ * study's startedOn) through sanitizeDate, repairing the shapes around them.
+ * Both the v10 → v11 migration and the final post-migration pass call this.
+ * The Fairy-time dates (visit dates and livedTimeStart) are repaired in
+ * sanitizeFairyTime, which runs right after it in that final pass.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeCharacterDates(data: any): void {
   // currentDate is a required top-level field; if missing,
@@ -95,6 +120,510 @@ function sanitizeCharacterDates(data: any): void {
       data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
     }
   }
+}
+
+/**
+ * Anchor an in-progress spell study on the lived-time clock (see
+ * src/lib/livedTime.ts), measured against the given well-formed visits.
+ * Leaves an existing anchor alone unless `force` is set, or unless the
+ * study began in Dolmenwood after the last return (stamped with that visit):
+ * then the anchor always comes from its date, which is exact for such a
+ * study. Editing that return works the study's start out again from the
+ * anchor, so a hand-edited anchor would otherwise block every edit.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anchorActiveStudy(data: any, fairyVisits: FairyVisit[], force = false): void {
+  const active = isPlainObject(data.spellStudy) ? data.spellStudy.active : null;
+  if (!isPlainObject(active)) return;
+  const stamp = typeof active.sinceReturnFrom === 'string' ? active.sinceReturnFrom : undefined;
+  const startedOn = sanitizeDate(active.startedOn);
+  const last = fairyVisits[fairyVisits.length - 1];
+  const sinceLastReturn =
+    !active.startedInFairy && stamp !== undefined && last?.id === stamp && last.returnedOn != null && daysBetween(last.returnedOn, startedOn) >= 0;
+  if (!force && !sinceLastReturn && Number.isFinite(active.startedLivedDay)) {
+    active.startedLivedDay = Math.max(0, Math.floor(active.startedLivedDay)); // a whole, non-negative lived day
+    return;
+  }
+  active.startedLivedDay = getLivedDayAtDolmenwoodDate({ fairyVisits }, startedOn, stamp);
+}
+
+/**
+ * Add Fairy time tracking: an empty visit list, the days-lived counter's
+ * start date (Year 1, 1 Grimvold), and a lived-day anchor on any
+ * in-progress spell study.
+ *
+ * A save from before this version can't hold real Fairy data, so anything
+ * already in those fields is a leftover from a hand edit: the visit list and
+ * counter start are replaced, and Fairy references on records are removed.
+ * The anchor is measured with no visits, where a date's lived day is just
+ * its days since Year 1, day 1. Progress, livedDays(now) - startedLivedDay,
+ * then equals daysBetween(startedOn, currentDate): exactly what the old app
+ * showed.
+ *
+ * Kept self-contained (no version numbers inside) so it can be renumbered
+ * if another schema bump lands first.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateAddFairyTime(data: any): any {
+  data.fairyVisits = [];
+  data.livedTimeStart = { ...DEFAULT_CALENDAR_DATE };
+  if (Array.isArray(data.journalEntries)) {
+    for (const entry of data.journalEntries.filter(isPlainObject)) {
+      delete entry.fairyDate;
+      delete entry.fairyEvent;
+      delete entry.sinceReturnFrom;
+    }
+  }
+  if (Array.isArray(data.knownSpells)) {
+    for (const spell of data.knownSpells.filter(isPlainObject)) {
+      delete spell.learnedInFairy;
+      delete spell.sinceReturnFrom;
+    }
+  }
+  if (isPlainObject(data.spellStudy) && isPlainObject(data.spellStudy.active)) {
+    delete data.spellStudy.active.startedInFairy;
+    delete data.spellStudy.active.sinceReturnFrom;
+  }
+  anchorActiveStudy(data, [], true);
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyDate(ref: any): FairyDate | undefined {
+  if (!isPlainObject(ref) || typeof ref.visitId !== 'string' || !Number.isFinite(ref.day)) return undefined;
+  return { visitId: ref.visitId, day: Math.max(1, Math.floor(ref.day)) };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyEvent(event: any): FairyEvent | undefined {
+  if (!isPlainObject(event) || typeof event.visitId !== 'string') return undefined;
+  if (event.kind !== 'entered' && event.kind !== 'returned') return undefined;
+  return { visitId: event.visitId, kind: event.kind };
+}
+
+// Repair (or drop) the Fairy references a record can carry.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeRecordRefs(record: any, fairyDateKey: string, withEvent = false): void {
+  if (record[fairyDateKey] !== undefined) {
+    const ref = sanitizeFairyDate(record[fairyDateKey]);
+    if (ref) record[fairyDateKey] = ref; else delete record[fairyDateKey];
+  }
+  if (withEvent && record.fairyEvent !== undefined) {
+    const event = sanitizeFairyEvent(record.fairyEvent);
+    if (event) record.fairyEvent = event; else delete record.fairyEvent;
+  }
+  if (record.sinceReturnFrom !== undefined && typeof record.sinceReturnFrom !== 'string') delete record.sinceReturnFrom;
+}
+
+// A date with all three parts present as numbers (it may still need clamping).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasDateParts(d: any): boolean {
+  return isPlainObject(d) && Number.isFinite(d.day) && Number.isFinite(d.month) && Number.isFinite(d.year);
+}
+
+/**
+ * Repair Fairy-time data on a partially-trusted save (a hand-edited import
+ * can skip the migration loop), restoring the invariants the rest of the app
+ * relies on:
+ *   - visits have unique ids, whole non-negative days, and an entry date. A
+ *     visit with no usable entry date is dropped rather than placed on an
+ *     invented one;
+ *   - visits are in order: none begins before the previous one ended, and
+ *     none ends before it began; only the last can still be open;
+ *   - while the character is in Fairy, Dolmenwood's date is frozen on the
+ *     entry day; otherwise it's never before the last return (the calendar's
+ *     floor);
+ *   - the study's lived-day anchor is a whole, non-negative number.
+ * A counter start date later than today is valid; the counter shows 0 until
+ * the calendar reaches it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyTime(data: any): void {
+  if (data.fairyVisits !== undefined && !Array.isArray(data.fairyVisits)) data.fairyVisits = [];
+  if (Array.isArray(data.fairyVisits)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const visits: any[] = data.fairyVisits.filter((v: any) => isPlainObject(v) && hasDateParts(v.enteredOn));
+    const seenIds = new Set<string>();
+    let previousReturn: { day: number; month: number; year: number } | null = null;
+    visits.forEach((visit, i) => {
+      if (typeof visit.id !== 'string' || visit.id === '' || seenIds.has(visit.id)) visit.id = crypto.randomUUID();
+      seenIds.add(visit.id);
+      visit.enteredOn = sanitizeDate(visit.enteredOn);
+      if (previousReturn && daysBetween(previousReturn, visit.enteredOn) < 0) visit.enteredOn = { ...previousReturn };
+      if (visit.returnedOn == null) {
+        // Only the most recent visit can still be open; close any earlier
+        // one on the day it began, as if no time passed.
+        visit.returnedOn = i === visits.length - 1 ? null : { ...visit.enteredOn };
+      } else {
+        visit.returnedOn = sanitizeDate(visit.returnedOn);
+        if (daysBetween(visit.enteredOn, visit.returnedOn) < 0) visit.returnedOn = { ...visit.enteredOn };
+      }
+      visit.daysInFairy = Number.isFinite(visit.daysInFairy) ? Math.max(0, Math.floor(visit.daysInFairy)) : 0;
+      previousReturn = visit.returnedOn;
+    });
+    data.fairyVisits = visits;
+    const last = visits[visits.length - 1];
+    if (last && last.returnedOn === null) {
+      data.currentDate = { ...last.enteredOn };
+    } else if (last && (!isPlainObject(data.currentDate) || daysBetween(last.returnedOn, data.currentDate) < 0)) {
+      data.currentDate = { ...last.returnedOn };
+    }
+  }
+
+  // The counter's start; reconcileWithDefaults fills it in if missing. Its
+  // stamp stays only if it fits the visits; a day spent away in Fairy moves
+  // to the return date (see fitCountingStart).
+  if (data.livedTimeStart !== undefined) {
+    const raw = data.livedTimeStart;
+    const stamp = isPlainObject(raw) && typeof raw.sinceReturnFrom === 'string' ? raw.sinceReturnFrom : undefined;
+    data.livedTimeStart = fitCountingStart(
+      { fairyVisits: Array.isArray(data.fairyVisits) ? data.fairyVisits : [] },
+      { ...sanitizeDate(raw), ...(stamp ? { sinceReturnFrom: stamp } : {}) },
+    );
+  }
+
+  // Fairy references on records: keep well-formed ones, drop anything else.
+  // A reference to an unknown visit is kept; it still displays its day.
+  if (Array.isArray(data.journalEntries)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const entry of data.journalEntries as any[]) sanitizeRecordRefs(entry, 'fairyDate', true);
+  }
+  if (Array.isArray(data.knownSpells)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const spell of data.knownSpells as any[]) sanitizeRecordRefs(spell, 'learnedInFairy');
+  }
+  if (isPlainObject(data.spellStudy) && isPlainObject(data.spellStudy.active)) {
+    sanitizeRecordRefs(data.spellStudy.active, 'startedInFairy');
+    anchorActiveStudy(data, Array.isArray(data.fairyVisits) ? data.fairyVisits : []);
+  }
+}
+
+const MAP_PINS_MARKER = '<!--MAP_PINS-->';
+// Heading of the list, appended to otherNotes, of map items that couldn't be
+// kept on the map (legacy pins with no usable position, items on hexes that
+// aren't on the printed map), so nothing the player wrote is thrown away.
+const LOST_ITEMS_HEADING = "Map markers that couldn't be placed:";
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+
+function newMapId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `map-${Math.random().toString(36).slice(2)}`;
+}
+
+/** A text field read defensively: strings as is, finite numbers as text, anything else ''. */
+function asText(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  return '';
+}
+
+/**
+ * True if `v` is, or somewhere contains, a string that isn't blank, a number
+ * or a boolean. Walks nested arrays and objects without recursion, so a
+ * deeply nested hand-edited value can't overflow the stack.
+ */
+function holdsText(v: unknown): boolean {
+  const pending: unknown[] = [v];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const x = pending.pop();
+    if (typeof x === 'string') {
+      if (x.trim() !== '') return true;
+    } else if (typeof x === 'number' || typeof x === 'boolean') {
+      return true;
+    } else if (x !== null && typeof x === 'object' && !seen.has(x)) {
+      seen.add(x);
+      for (const y of Object.values(x)) pending.push(y);
+    }
+  }
+  return false;
+}
+
+/**
+ * Text to keep from a value that can't be a map item or pin (or list of
+ * them): strings (trimmed), numbers and booleans as written, arrays and
+ * objects as JSON. '' for values that hold no text: null, blank strings,
+ * and arrays or objects with none inside, such as [] or {"a": [[]]}.
+ */
+function nonItemText(v: unknown): string {
+  if (!holdsText(v)) return '';
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v) ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * `fields`, then any fields of `raw` it doesn't set. The values in `fields`
+ * win, and its keys come first, in its order.
+ */
+function withExtraFields<T extends object>(fields: T, raw: Record<string, unknown>): T {
+  return { ...fields, ...raw, ...fields };
+}
+
+/** "Label (Hex 1313): notes" for the couldn't-be-placed list. */
+function lostItem(label: string, hex: string, notes: string): string {
+  return `${label}${hex ? ` (Hex ${hex})` : ''}${notes ? `: ${notes}` : ''}`;
+}
+
+/** `notes` plus a line recording a fairy road that had to be unlinked. */
+function withLostRoad(notes: string, roadName: string): string {
+  if (!roadName) return notes;
+  const line = `Was on the fairy road "${roadName}" (its other end couldn't be found).`;
+  return notes ? `${notes}\n${line}` : line;
+}
+
+/**
+ * Repair `mapData` and `currentLocationHex` on a partially-trusted save
+ * (hand-edited imports, saves made on an older grid). Runs after the
+ * migration loop on every load and import, so it must be idempotent.
+ * Every element is normalized to the shape the map UI relies on, ids are
+ * made unique, and items that can't stay on the map are described in `lost`
+ * (kept in Other Notes) instead of being deleted. Fields this repair doesn't
+ * know about are kept as they are, so a field added later isn't deleted on
+ * the next load if it was left out here. `legacyPois` (converted old-map
+ * pins) are added after the saved POIs.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown[]): void {
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  // Values that can't be map items (a mapData that isn't an object, a list
+  // that isn't an array, an entry that isn't an object) are replaced, but
+  // any text they carry is kept.
+  const keepText = (v: unknown) => {
+    const t = nonItemText(v);
+    if (t) lost.push(t);
+  };
+  if (!isPlainObject(data.mapData)) {
+    keepText(data.mapData);
+    data.mapData = {};
+  }
+  const md = data.mapData as Record<string, unknown>;
+  const items = (key: 'pois' | 'fairyDoors' | 'leyLines'): unknown[] => {
+    if (Array.isArray(md[key])) return md[key];
+    keepText(md[key]);
+    return [];
+  };
+  // Ids must be unique across POIs, doors and ley lines: the UI keys,
+  // focuses, edits and deletes items by id.
+  const usedIds = new Set<string>();
+  const uniqueId = (raw: unknown): string => {
+    let id = asText(raw);
+    while (!id || usedIds.has(id)) id = newMapId();
+    usedIds.add(id);
+    return id;
+  };
+
+  const pois: MapPOI[] = [];
+  for (const raw of [...items('pois'), ...legacyPois]) {
+    if (!isPlainObject(raw)) { keepText(raw); continue; }
+    const p = raw as Record<string, unknown>;
+    const name = asText(p.name);
+    const notes = asText(p.notes);
+    if (!isValidHex(p.hex)) {
+      lost.push(lostItem(name || 'Unnamed point of interest', asText(p.hex), notes));
+      continue;
+    }
+    pois.push(withExtraFields({ id: uniqueId(p.id), hex: p.hex, name, notes }, p));
+  }
+  md.pois = pois;
+
+  const doors: FairyDoor[] = [];
+  for (const raw of items('fairyDoors')) {
+    if (!isPlainObject(raw)) { keepText(raw); continue; }
+    const d = raw as Record<string, unknown>;
+    const name = asText(d.name);
+    let notes = asText(d.notes);
+    const dest = (isPlainObject(d.destination) ? d.destination : {}) as Record<string, unknown>;
+    const roadName = dest.kind === 'roaded' ? asText(dest.roadName) : '';
+    if (!isValidHex(d.hex)) {
+      lost.push(lostItem(`Fairy door ${name || 'Unnamed'}`, asText(d.hex), withLostRoad(notes, roadName)));
+      continue;
+    }
+    // Anything but a well-formed wild or roaded destination becomes wild.
+    let destination: FairyDoorDestination = { kind: 'wild' };
+    if (dest.kind === 'roaded' && asText(dest.pairedDoorId)) {
+      destination = withExtraFields<FairyDoorDestination>({ kind: 'roaded', pairedDoorId: asText(dest.pairedDoorId), roadName }, dest);
+    } else {
+      if (dest.kind === 'wild') destination = withExtraFields<FairyDoorDestination>({ kind: 'wild' }, dest);
+      notes = withLostRoad(notes, roadName);
+    }
+    doors.push(withExtraFields({ id: uniqueId(d.id), hex: d.hex, name, notes, destination }, d));
+  }
+  // A roaded door whose partner doesn't link back (partner wild, pointing
+  // elsewhere, missing, or the door itself) becomes wild, keeping its road
+  // name in its notes. Checks read the doors as they were, so order is
+  // irrelevant.
+  const byId = new Map(doors.map((d) => [d.id, d]));
+  md.fairyDoors = doors.map((d): FairyDoor => {
+    if (d.destination.kind !== 'roaded') return d;
+    const partner = byId.get(d.destination.pairedDoorId);
+    const linked = partner !== undefined && partner !== d
+      && partner.destination.kind === 'roaded' && partner.destination.pairedDoorId === d.id;
+    return linked ? d : { ...d, notes: withLostRoad(d.notes, d.destination.roadName), destination: { kind: 'wild' } };
+  });
+
+  const leyLines: LeyLine[] = [];
+  for (const raw of items('leyLines')) {
+    if (!isPlainObject(raw)) { keepText(raw); continue; }
+    const l = raw as Record<string, unknown>;
+    const name = asText(l.name);
+    const type = asText(l.type);
+    const notes = asText(l.notes);
+    const color = typeof l.color === 'string' && HEX_COLOR_RE.test(l.color) ? l.color : LEY_LINE_COLORS[0];
+    const allHexes = list(l.hexes);
+    const hexes = allHexes.filter(isValidHex);
+    const off = allHexes.filter((h) => !isValidHex(h)).map(asText).filter(Boolean);
+    const label = `${type || DEFAULT_LEY_LINE_TYPE} ${name || 'Unnamed'}`;
+    if (hexes.length < 2) {
+      const route = Array.isArray(l.hexes) ? allHexes.map(asText).filter(Boolean).join(' → ') : nonItemText(l.hexes);
+      lost.push(`${label}${route ? ` (hexes ${route})` : ''}${notes ? `: ${notes}` : ''}`);
+      continue;
+    }
+    if (off.length > 0) lost.push(`${label}: hexes ${off.join(', ')} left out (not on the map)`);
+    leyLines.push(withExtraFields({ id: uniqueId(l.id), type, name, color, hexes, notes }, l));
+  }
+  md.leyLines = leyLines;
+
+  // The in-progress draft only needs a sane shape; a draft with no hexes yet
+  // is normal (the player clicked Draw Ley Line and hasn't picked any).
+  if (isPlainObject(md.draftLeyLine)) {
+    const dft = md.draftLeyLine as Record<string, unknown>;
+    md.draftLeyLine = withExtraFields({
+      name: asText(dft.name),
+      type: asText(dft.type),
+      color: typeof dft.color === 'string' && HEX_COLOR_RE.test(dft.color) ? dft.color : LEY_LINE_COLORS[0],
+      notes: asText(dft.notes),
+      hexes: list(dft.hexes).filter(isValidHex),
+    }, dft);
+  } else {
+    keepText(md.draftLeyLine);
+    delete md.draftLeyLine;
+  }
+
+  // currentLocationHex lives on the character, but its check belongs with
+  // the other hex references: anything but a hex on the map becomes ''.
+  if (!isValidHex(data.currentLocationHex)) data.currentLocationHex = '';
+}
+
+/**
+ * Index just past the JSON array that `text` starts with (after optional
+ * whitespace), or -1 if it doesn't start with a complete array.
+ */
+function endOfLeadingJsonArray(text: string): number {
+  let i = 0;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (text[i] !== '[') return -1;
+  let depth = 0;
+  let inString = false;
+  for (; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+    } else if (c === '[' || c === '{') {
+      depth++;
+    } else if (c === ']' || c === '}') {
+      depth--;
+      if (depth === 0) return i + 1;
+    }
+  }
+  return -1;
+}
+
+/**
+ * Hex under a pre-v13 map pin. The old map stored each pin's position as x/y
+ * percentages (0–100) of the printed map image (now scripts/dolmenwood-map.png).
+ * hex-grid.json was extracted from that same image, so percentage × image
+ * size is a point in pixelToHex's pixel space. Returns null when the position
+ * is missing or out of range, or isn't on a hex of the current grid.
+ */
+function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return null;
+  return pixelToHex((x / 100) * HEX_GRID_META.imageWidth, (y / 100) * HEX_GRID_META.imageHeight);
+}
+
+/**
+ * Convert pins saved by the pre-v13 map, a <!--MAP_PINS--> marker followed by
+ * a JSON array in otherNotes, into POIs, which it returns for sanitizeMapData
+ * to add. Each pin goes on the hex typed into the old "Hex #" field if that's
+ * a hex on the map, otherwise on the hex under its position (keeping the
+ * typed text in the POI's notes); pins that fit neither are described in
+ * `lost`. Text after the array is kept.
+ *
+ * Runs after the migration loop on every load and import, not only in
+ * v12 → v13, so a save whose marker had to be repaired by hand still
+ * converts when re-imported. A marker not followed by a complete array is
+ * left alone so the player can recover it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertLegacyMapPins(data: any, lost: string[]): MapPOI[] {
+  const converted: MapPOI[] = [];
+  for (;;) { // a save can hold more than one marker
+    if (typeof data.otherNotes !== 'string') return converted;
+    const notes: string = data.otherNotes;
+    const idx = notes.indexOf(MAP_PINS_MARKER);
+    if (idx === -1) return converted;
+    const rest = notes.slice(idx + MAP_PINS_MARKER.length);
+    const end = endOfLeadingJsonArray(rest);
+    if (end === -1) return converted;
+    let pins: unknown;
+    try {
+      pins = JSON.parse(rest.slice(0, end));
+    } catch {
+      return converted;
+    }
+    if (!Array.isArray(pins)) return converted;
+    // Every pin below becomes a POI or a `lost` entry, so stripping the
+    // marker and its JSON loses nothing.
+    data.otherNotes = [notes.slice(0, idx).trimEnd(), rest.slice(end).trim()].filter(Boolean).join('\n');
+
+    for (const raw of pins) {
+      if (!isPlainObject(raw)) {
+        const t = nonItemText(raw);
+        if (t) lost.push(t);
+        continue;
+      }
+      const pin = raw as Record<string, unknown>;
+      const label = asText(pin.label);
+      const typedHex = asText(pin.hex).trim();
+      // Users typed things like "303" expecting the canonical 4-digit form.
+      const padded = /^\d{1,4}$/.test(typedHex) ? typedHex.padStart(4, '0') : '';
+      const typedIsHex = isValidHex(padded);
+      const hex = typedIsHex ? padded : legacyPinPositionToHex(pin.x, pin.y);
+      if (hex === null) {
+        if (label || typedHex) lost.push(typedHex ? `${label || 'Marker'} (Hex ${typedHex})` : label);
+        continue;
+      }
+      converted.push({
+        id: asText(pin.id), // made unique by sanitizeMapData
+        hex,
+        name: label || 'Marker',
+        notes: !typedIsHex && typedHex ? `Old map hex: ${typedHex}` : '',
+      });
+      if (pin.isCurrentLocation === true) data.currentLocationHex = hex;
+    }
+  }
+}
+
+/** Append `lost` to otherNotes under LOST_ITEMS_HEADING. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function keepLostMapItems(data: any, lost: string[]): void {
+  if (lost.length === 0) return;
+  // One "- " entry per item; continuation lines are indented. A marker
+  // inside an entry is defused so a later load can't treat it as pins.
+  const entries = lost.map((s) => `- ${s.split(MAP_PINS_MARKER).join('<!--MAP PINS-->').replace(/\n/g, '\n  ')}`);
+  const block = `${LOST_ITEMS_HEADING}\n${entries.join('\n')}`;
+  const notes = asText(data.otherNotes).trimEnd();
+  data.otherNotes = notes ? `${notes}\n\n${block}` : block;
 }
 
 // Each migration transforms from version N to N+1.
@@ -197,7 +726,31 @@ const migrations: Record<number, (data: any) => any> = {
     sanitizeCharacterDates(data);
     return data;
   },
+  // v11 -> v12: Fairy time tracking. Adds fairyVisits and anchors any
+  // in-progress spell study on the lived-time clock (progress unchanged).
+  11: migrateAddFairyTime,
+  // v12 -> v13: Structured hex-map data. Adds mapData + currentLocationHex.
+  // Pins from the old map (the <!--MAP_PINS--> marker in otherNotes) are
+  // converted after the migration loop, by convertLegacyMapPins, so that a
+  // save whose marker was repaired by hand still converts on re-import.
+  // Values of the wrong shape are left for sanitizeMapData, which keeps any
+  // text they hold.
+  12: (data) => {
+    if (data.mapData === undefined) data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
+    if (data.currentLocationHex === undefined) data.currentLocationHex = '';
+    return data;
+  },
 };
+
+/**
+ * The versions that have a migration to the next one, in order. Exported for
+ * migrations.test.ts, which checks that they run without a gap from 1 to
+ * CURRENT_SCHEMA_VERSION - 1: two branches that each add a migration can
+ * merge without a conflict on the version line and leave it one too low.
+ */
+export const MIGRATION_VERSIONS: readonly number[] = Object.freeze(
+  Object.keys(migrations).map(Number).sort((a, b) => a - b),
+);
 
 // Required subkeys for the schema's nullable-object fields. If a saved
 // plain-object value is missing any of these, the field is reset to
@@ -305,9 +858,24 @@ export function migrateCharacter(data: any): Character {
   }
 
   // Defensive: also runs for already-current saves, so a hand-edited
-  // JSON import that smuggles in non-numeric date fields gets cleaned
-  // before downstream date math tries to use it.
+  // JSON import that smuggles in non-numeric date fields or a malformed
+  // mapData shape gets cleaned before downstream code tries to use it.
+  // reconcileWithDefaults only fills MISSING top-level keys; deeper
+  // shape repair has to happen here. Old-map pins are converted first so
+  // the map sanitizer also normalizes (and de-duplicates) the new POIs;
+  // map items that can't be kept end up listed in otherNotes.
+  //
+  // Call order: sanitizers run BEFORE reconcileWithDefaults. This is safe
+  // because reconcileWithDefaults's object-merge branch only fills
+  // subkeys when the saved value is `undefined`; the arrays/objects
+  // populated by sanitizers above are never undefined, so reconcile
+  // won't overwrite them.
   sanitizeCharacterDates(data);
+  sanitizeFairyTime(data);
+  const lostMapItems: string[] = [];
+  const legacyPois = convertLegacyMapPins(data, lostMapItems);
+  sanitizeMapData(data, lostMapItems, legacyPois);
+  keepLostMapItems(data, lostMapItems);
 
   return reconcileWithDefaults(data) as Character;
 }
