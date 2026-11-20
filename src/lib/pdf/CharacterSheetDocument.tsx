@@ -638,7 +638,11 @@ function CombatSection({ c }: { c: Character }) {
           value={formatModifier(missile)}
           sub={`ATK ${formatModifier(c.attackBonus)} + DEX ${dexMod}${c.class === 'hunter' ? ' +1 Hunter' : ''}`}
         />
-        <StatBox label="Speed" value={`${speed} ft`} sub={`By ${c.encumbranceMethod === 'slots' ? 'slots' : 'weight'}`} />
+        <StatBox
+          label="Speed"
+          value={`${speed} ft`}
+          sub={speed === 0 ? 'Over max load' : `By ${c.encumbranceMethod === 'slots' ? 'slots' : 'weight'}`}
+        />
         <StatBox
           label="Magic Resist."
           value={formatModifier(c.magicResistance)}
@@ -1439,7 +1443,10 @@ function InventorySection({ c }: { c: Character }) {
               <SummaryRow label="Total weight" value={String(enc.totalWeight)} warn={enc.overMaxLoad} />
             </>
           )}
-          <SummaryRow label="Calculated speed" value={`${enc.speed} ft`} total />
+          <SummaryRow label="Calculated speed" value={`${enc.speed} ft`} total warn={enc.speed === 0} />
+          {enc.speed === 0 ? (
+            <Text style={s.warn}>Over maximum load: can&apos;t move until items are dropped.</Text>
+          ) : null}
         </View>
         <View style={s.col}>
           <Text style={s.caption}>Coins</Text>

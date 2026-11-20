@@ -1951,18 +1951,22 @@ export function calculateXpToNextLevel(kindred: KindredId | '', classId: ClassId
 }
 
 // 2h. Speed Functions (shared between CombatStats and Inventory)
+// Above the maximum load (10 equipped slots, 16 stowed slots or 1,600 coins of
+// weight) a character can't move, so Speed is 0. Source: docs/rules/08-adventuring.md
 export function getSpeedByEquippedSlots(equippedSlots: number): number {
   if (equippedSlots <= 3) return 40;
   if (equippedSlots <= 5) return 30;
   if (equippedSlots <= 7) return 20;
-  return 10;
+  if (equippedSlots <= 10) return 10;
+  return 0;
 }
 
 export function getSpeedByStowedSlots(stowedSlots: number): number {
   if (stowedSlots <= 10) return 40;
   if (stowedSlots <= 12) return 30;
   if (stowedSlots <= 14) return 20;
-  return 10;
+  if (stowedSlots <= 16) return 10;
+  return 0;
 }
 
 export function getSpeedBySlots(equippedSlots: number, stowedSlots: number): number {
@@ -1973,7 +1977,8 @@ export function getSpeedByWeight(totalWeight: number): number {
   if (totalWeight <= 400) return 40;
   if (totalWeight <= 600) return 30;
   if (totalWeight <= 800) return 20;
-  return 10;
+  if (totalWeight <= 1600) return 10;
+  return 0;
 }
 
 // ──────────────────────────────────────────────────────────

@@ -910,6 +910,19 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
+  // Speed is 0 over the maximum load (by either method): the character can't move.
+  const speedSummary = (
+    <div className="border-t border-[#5a3a28] pt-2 mt-2">
+      <div className="flex justify-between">
+        <span className="font-semibold">Calculated Speed:</span>
+        <span className={`font-bold ${calculatedSpeed === 0 ? 'text-[#b33a1a]' : 'text-[#c4a35a]'}`}>{calculatedSpeed} ft</span>
+      </div>
+      {calculatedSpeed === 0 && (
+        <p className="text-[#b33a1a] text-xs italic text-right">Over maximum load: can&apos;t move until items are dropped.</p>
+      )}
+    </div>
+  );
+
   return (
     <>
     <div className="space-y-4">
@@ -1089,10 +1102,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard stowed limit ({STOWED_SLOT_LIMIT} slots)</p>
               )}
             </div>
-            <div className="flex justify-between border-t border-[#5a3a28] pt-2 mt-2">
-              <span className="font-semibold">Calculated Speed:</span>
-              <span className="font-bold text-[#c4a35a]">{calculatedSpeed} ft</span>
-            </div>
+            {speedSummary}
           </div>
         ) : (
           <div className="space-y-2 text-[#f5e6c8]">
@@ -1112,10 +1122,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 {totalWeight}
               </span>
             </div>
-            <div className="flex justify-between border-t border-[#5a3a28] pt-2 mt-2">
-              <span className="font-semibold">Calculated Speed:</span>
-              <span className="font-bold text-[#c4a35a]">{calculatedSpeed} ft</span>
-            </div>
+            {speedSummary}
           </div>
         )}
       </div>
