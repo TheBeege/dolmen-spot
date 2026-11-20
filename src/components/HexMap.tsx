@@ -360,7 +360,10 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     | { kind: 'pinch'; startDist: number; startMid: Point; anchor: Point; view: View; rect: DOMRect }
     | null
   >(null);
-  // Set after a real pan/pinch; the click that ends it must not select anything.
+  // Set when a mouse or pen pan or pinch ends, so the click the browser fires
+  // right after it doesn't select anything. It's cleared once that event is
+  // over: a touch drag fires no click, and a flag left set would swallow the
+  // next click that comes without a press (from assistive technology).
   const suppressClickRef = useRef(false);
 
   const startPan = (start: Point, v: View, moved = false) => {
@@ -459,7 +462,13 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return;
     const g = gestureRef.current;
-    if (g !== null && (g.kind === 'pinch' || g.moved)) suppressClickRef.current = true;
+    if (g !== null && (g.kind === 'pinch' || g.moved) && e.pointerType !== 'touch') {
+      suppressClickRef.current = true;
+      // The click, if any, is dispatched with the pointerup, before this runs.
+      setTimeout(() => {
+        suppressClickRef.current = false;
+      }, 0);
+    }
     removePointer(e.pointerId);
   };
 
