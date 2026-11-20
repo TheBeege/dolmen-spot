@@ -6,6 +6,6 @@ export const PDF_FONT_FILES = {
   'NotoSans-Bold': 'NotoSans-Bold.ab81906bd9.ttf',
   'NotoSans-Italic': 'NotoSans-Italic.93fbf9e08a.ttf',
   'NotoSerif-Bold': 'NotoSerif-Bold.93b92d6801.ttf',
-  'NotoSansCJK-Hangul': 'NotoSansCJK-Hangul.312458f4f4.otf',
-  'NotoSansCJK-HanKana': 'NotoSansCJK-HanKana.8670fcdc5d.otf',
+  'NotoSansCJK-Hangul': 'NotoSansCJK-Hangul.47f77b564d.otf',
+  'NotoSansCJK-HanKana': 'NotoSansCJK-HanKana.3aa100df17.otf',
 } as const;
