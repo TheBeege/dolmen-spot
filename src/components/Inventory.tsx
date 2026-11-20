@@ -15,6 +15,7 @@ import {
   SPELLBOOK_CAPACITY,
   STOWED_SLOT_LIMIT,
 } from '@/lib/gamedata';
+import GrowingTextarea from './GrowingTextarea';
 import {
   calculateEncumbrance,
   getOverloadNote,
@@ -32,6 +33,28 @@ const inputClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
+
+// The height of a one-line field (py-1, a 1.5rem line and the border), so a
+// smaller control can be centred on the first line of a field that has grown.
+const ONE_LINE_FIELD_HEIGHT = 'h-[calc(2rem+2px)]';
+
+// The Name column from sm up: a quarter of the row, but never so narrow that
+// most catalog names wrap. Rows and column headers both use it.
+const NAME_COLUMN = 'sm:flex-none sm:w-1/4 sm:min-w-44';
+const NAME_HEADER = 'w-1/4 min-w-44';
+
+// Spell book and scroll rows have a 1px border, so their padding is 1px less
+// than an item row's to keep their fields on the same columns.
+const BORDERED_ROW_PADDING = 'py-2 px-[calc(0.5rem-1px)]';
+
+// On phones a name shares its line with the move select and × until that would
+// make it narrower than this; then they wrap below it. In rem, so it grows with
+// the default font size (6rem is 96px at 16px, 144px at 24px), but never wider
+// than the row. A spell book's title cell adds room for its toggle and icon
+// (3rem), a scroll's spell cell for its icon (1.5rem).
+const NAME_MIN_WIDTH = 'min-w-[min(6rem,100%)]';
+const SPELL_BOOK_TITLE_MIN_WIDTH = 'min-w-[min(9rem,100%)]';
+const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
 
 type CatalogTarget = { section: 'equipped' } | { section: 'stowed'; containerId?: string };
 
@@ -362,73 +385,134 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   // ── Render helpers ──
-  const renderSpellbookItem = (item: InventoryItem, equipped: boolean) => {
+  // Phones hide the column headers, so each field gets a short visible label there.
+  const phoneLabel = (text: string) => (
+    <span aria-hidden="true" className="sm:hidden text-[10px] uppercase tracking-wide text-[#f5e6c8]/70">
+      {text}
+    </span>
+  );
+
+  // Enter in a name field moves on to the item's Slots field.
+  const slotsFieldId = (itemId: string) => `inventory-${itemId}-slots`;
+  const focusSlots = (itemId: string) => () => document.getElementById(slotsFieldId(itemId))?.focus();
+
+  // A row's move select (stowed items, when there are containers) and its ×.
+  // Every row renders each twice: on phones together after the name
+  // (phoneControlsFor), and from sm up at the end of the row, with the other
+  // copy hidden (display: none), so the keyboard order always matches what's on
+  // screen. Each is one field line tall, so it sits centred on the first line of
+  // a field that has grown.
+  const moveSelectFor = (item: InventoryItem, equipped: boolean, label: string, layoutClass: string) =>
+    !equipped && containers.length > 0 ? (
+      <div className={`${ONE_LINE_FIELD_HEIGHT} shrink-0 items-center ${layoutClass}`}>
+        <select
+          value={item.containerId ?? ''}
+          onChange={(e) => handleMoveToContainer(item.id, e.target.value || undefined)}
+          className={`${inputClasses} w-10 text-xs p-0.5`}
+          title="Move to container"
+          aria-label={`Move ${label} to a container`}
+        >
+          <option value="">Loose</option>
+          {containers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      </div>
+    ) : null;
+  const removeButtonFor = (item: InventoryItem, equipped: boolean, label: string, layoutClass: string) => (
+    <button
+      type="button"
+      onClick={() => handleDeleteItem(equipped, item.id)}
+      className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${ONE_LINE_FIELD_HEIGHT} ${layoutClass}`}
+      title={`Remove ${label}`}
+      aria-label={`Remove ${label}`}
+    >
+      &times;
+    </button>
+  );
+  // The phone copies of both, as one group: when there's no room beside the
+  // name they wrap below it together, rather than the × on its own.
+  const phoneControlsFor = (item: InventoryItem, equipped: boolean, label: string) => (
+    <div className="flex shrink-0 items-start gap-2 sm:hidden">
+      {moveSelectFor(item, equipped, label, 'flex')}
+      {removeButtonFor(item, equipped, label, '')}
+    </div>
+  );
+
+  const renderSpellbookItem = (item: InventoryItem, equipped: boolean, position: string) => {
     const contents = item.spellbookContents ?? [];
+    const bookName = item.name.trim() || 'spell book';
     const isCollapsed = collapsedSpellbooks.has(item.id);
     const isFull = contents.length >= SPELLBOOK_CAPACITY;
     return (
       <div key={item.id} className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1">
-        {/* Header */}
-        <div className="flex flex-wrap items-center gap-2 p-2">
-          <button
-            type="button"
-            onClick={() => toggleSpellbookCollapse(item.id)}
-            className="text-[#c4a35a] text-xs shrink-0 w-4"
-            title={isCollapsed ? 'Expand spell book' : 'Collapse spell book'}
-          >
-            {isCollapsed ? '▶' : '▼'}
-          </button>
-          <span className="text-[#c4a35a] text-sm shrink-0" title="Spell book">📕</span>
-          <input
-            type="text"
-            value={item.name}
-            onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
-            placeholder="Spell book title"
-            className={`${inputClasses} flex-1 min-w-[120px]`}
-          />
-          <span className="text-[#f5e6c8]/50 text-xs shrink-0">
-            {contents.length}/{SPELLBOOK_CAPACITY}
-          </span>
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={item.slots}
-              onChange={(e) => handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)}
-              min={0}
-              title="Slots"
-              className={`${inputClasses} w-16 text-center`}
-            />
-            <input
-              type="number"
-              value={item.weight}
-              onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
-              min={0}
-              title="Weight"
-              className={`${inputClasses} w-20 text-center`}
-            />
-            {!equipped && containers.length > 0 && (
-              <select
-                value={item.containerId ?? ''}
-                onChange={(e) => handleMoveToContainer(item.id, e.target.value || undefined)}
-                className={`${inputClasses} w-10 text-xs p-0.5`}
-                title="Move to container"
-              >
-                <option value="">Loose</option>
-                {containers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            )}
+        {/* Header, laid out like an item row: from sm up on the columns, with
+            the spell count at the start of the Notes column; on phones the
+            title, move select and × on the first line and labelled Slots and
+            Weight on the second. A long title wraps, so everything lines up
+            along the top, with the smaller controls centred on its first line. */}
+        <div className={`flex flex-wrap items-start gap-2 ${BORDERED_ROW_PADDING}`}>
+          <span className={`flex flex-1 ${SPELL_BOOK_TITLE_MIN_WIDTH} items-start gap-2 ${NAME_COLUMN}`}>
             <button
               type="button"
-              onClick={() => handleDeleteItem(equipped, item.id)}
-              className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 px-1"
-              title={`Remove ${item.name.trim() || 'spell book'}`}
-              aria-label={`Remove ${item.name.trim() || 'spell book'}`}
+              onClick={() => toggleSpellbookCollapse(item.id)}
+              className={`text-[#c4a35a] text-xs shrink-0 w-4 ${ONE_LINE_FIELD_HEIGHT} flex items-center justify-center`}
+              title={isCollapsed ? 'Expand spell book' : 'Collapse spell book'}
+              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${bookName}`}
+              aria-expanded={!isCollapsed}
             >
-              &times;
+              {isCollapsed ? '▶' : '▼'}
             </button>
+            <span className={`text-[#c4a35a] text-sm shrink-0 ${ONE_LINE_FIELD_HEIGHT} flex items-center`} title="Spell book">📕</span>
+            <GrowingTextarea
+              value={item.name}
+              onValueChange={(name) => handleUpdateItem(equipped, item.id, 'name', name)}
+              singleLine
+              onEnter={focusSlots(item.id)}
+              enterKeyHint="next"
+              placeholder="Spell book title"
+              aria-label={`Name of ${position}`}
+              className="flex-1 min-w-0"
+              fieldClassName={inputClasses}
+            />
+          </span>
+          {phoneControlsFor(item, equipped, bookName)}
+          <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
+            <label className="flex flex-col gap-0.5">
+              {phoneLabel('Slots')}
+              <input
+                id={slotsFieldId(item.id)}
+                type="number"
+                value={item.slots}
+                onChange={(e) => handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)}
+                min={0}
+                title="Slots"
+                aria-label={`${bookName} slots`}
+                className={`${inputClasses} w-16 text-center`}
+              />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              {phoneLabel('Weight')}
+              <input
+                type="number"
+                value={item.weight}
+                onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
+                min={0}
+                title="Weight"
+                aria-label={`${bookName} weight`}
+                className={`${inputClasses} w-20 text-center`}
+              />
+            </label>
+            <span className={`text-[#f5e6c8]/50 text-xs shrink-0 ${ONE_LINE_FIELD_HEIGHT} flex items-center`}>
+              {contents.length}/{SPELLBOOK_CAPACITY}
+            </span>
+            {/* The rest of the Notes column */}
+            <span className="flex-1" />
+            {moveSelectFor(item, equipped, bookName, 'hidden sm:flex')}
           </div>
+          {removeButtonFor(item, equipped, bookName, 'hidden sm:block')}
         </div>
 
         {/* Spell list */}
@@ -438,7 +522,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="text-[#f5e6c8]/40 text-xs italic">No spells recorded. Up to 3.</div>
             )}
             {contents.map((entry, index) => (
-              <div key={index} className="flex items-center gap-2">
+              <div key={index} className="flex flex-wrap items-center gap-2">
                 <select
                   value={entry.name}
                   onChange={(e) => {
@@ -449,6 +533,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                       rank: matched?.rank ?? entry.rank,
                     });
                   }}
+                  aria-label={`Spell ${index + 1} in ${bookName}`}
                   className={`${inputClasses} flex-1 min-w-[160px] text-sm`}
                 >
                   <option value="">-- Select spell --</option>
@@ -467,8 +552,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   type="button"
                   onClick={() => handleSpellbookRemoveEntry(equipped, item.id, index)}
                   className="text-[#ff6b4a] hover:text-[#f5e6c8] text-sm shrink-0 px-1"
-                  title={`Remove ${entry.name || 'spell'}`}
-                  aria-label={`Remove ${entry.name || 'spell'}`}
+                  title={`Remove ${entry.name || `spell ${index + 1}`} from ${bookName}`}
+                  aria-label={`Remove ${entry.name || `spell ${index + 1}`} from ${bookName}`}
                 >
                   &times;
                 </button>
@@ -478,6 +563,11 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               type="button"
               onClick={() => handleSpellbookAddEntry(equipped, item.id)}
               disabled={isFull}
+              aria-label={
+                isFull
+                  ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY}): ${bookName}`
+                  : `Add spell to ${bookName}`
+              }
               className={`text-xs px-2 py-0.5 rounded mt-1 ${
                 isFull
                   ? 'bg-[#1a1a2e] text-[#f5e6c8]/30 border border-[#5a3a28]/40 cursor-not-allowed'
@@ -486,12 +576,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             >
               {isFull ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY})` : '+ Add spell'}
             </button>
-            <textarea
+            <GrowingTextarea
               value={item.notes}
-              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes (language, source, etc.)"
-              rows={1}
-              className={`${inputClasses} w-full mt-1 text-xs resize-y`}
+              aria-label={`${bookName} notes`}
+              className="mt-1"
+              fieldClassName={`${inputClasses} text-xs`}
             />
           </div>
         )}
@@ -499,88 +590,92 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
-  const renderScrollItem = (item: InventoryItem, equipped: boolean) => {
+  // Laid out like an item row: from sm up on the columns, with the spell in the
+  // Name column, an empty Slots cell (scrolls take no slots), Weight, and the
+  // rank and Use button at the start of the Notes column; on phones the spell,
+  // move select and × on the first line and the labelled Weight, rank and Use
+  // button on the second.
+  const renderScrollItem = (item: InventoryItem, equipped: boolean, position: string) => {
     const scroll = item.scrollSpell ?? { name: '', rank: 1 };
+    const scrollName = scroll.name ? `scroll of ${scroll.name}` : 'scroll';
     return (
-      <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 p-2 rounded mb-1">
-        <span className="text-[#c4a35a] text-sm shrink-0" title="Scroll">📜</span>
-        <select
-          value={scroll.name}
-          onChange={(e) => {
-            const value = e.target.value;
-            const matched = findArcaneSpell(value);
-            handleScrollUpdate(equipped, item.id, {
-              name: value,
-              rank: matched?.rank ?? scroll.rank,
-            });
-          }}
-          className={`${inputClasses} flex-1 min-w-[160px] text-sm`}
-        >
-          <option value="">-- Select spell --</option>
-          {[1, 2, 3, 4, 5, 6].map((rank) => (
-            <optgroup key={rank} label={`Rank ${rank}`}>
-              {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
-                <option key={s.name} value={s.name}>{s.name}</option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-        {scroll.name && (
-          <span className="text-[#c4a35a] text-xs shrink-0">R{scroll.rank}</span>
-        )}
-        <input
-          type="number"
-          value={item.weight}
-          onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
-          min={0}
-          title="Weight"
-          className={`${inputClasses} w-20 text-center text-sm`}
-        />
-        {!equipped && containers.length > 0 && (
+      <div key={item.id} className={`flex flex-wrap items-start gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1 ${BORDERED_ROW_PADDING}`}>
+        <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
+          <span className="text-[#c4a35a] text-sm shrink-0" title="Scroll">📜</span>
           <select
-            value={item.containerId ?? ''}
-            onChange={(e) => handleMoveToContainer(item.id, e.target.value || undefined)}
-            className={`${inputClasses} w-10 text-xs p-0.5`}
-            title="Move to container"
+            value={scroll.name}
+            onChange={(e) => {
+              const value = e.target.value;
+              const matched = findArcaneSpell(value);
+              handleScrollUpdate(equipped, item.id, {
+                name: value,
+                rank: matched?.rank ?? scroll.rank,
+              });
+            }}
+            aria-label={`Spell on ${position}`}
+            className={`${inputClasses} flex-1 min-w-0 text-sm`}
           >
-            <option value="">Loose</option>
-            {containers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
+            <option value="">-- Select spell --</option>
+            {[1, 2, 3, 4, 5, 6].map((rank) => (
+              <optgroup key={rank} label={`Rank ${rank}`}>
+                {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                  <option key={s.name} value={s.name}>{s.name}</option>
+                ))}
+              </optgroup>
             ))}
           </select>
-        )}
-        <button
-          type="button"
-          onClick={() => {
-            if (confirm(`Use the ${scroll.name || 'scroll'}? It will be consumed.`)) {
-              handleDeleteItem(equipped, item.id);
-            }
-          }}
-          className="bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-2 py-1 rounded shrink-0"
-          title="Use scroll (consumes it)"
-        >
-          Use
-        </button>
-        <button
-          type="button"
-          onClick={() => handleDeleteItem(equipped, item.id)}
-          className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 px-1"
-          title={`Remove ${scroll.name ? `scroll of ${scroll.name}` : 'scroll'}`}
-          aria-label={`Remove ${scroll.name ? `scroll of ${scroll.name}` : 'scroll'}`}
-        >
-          &times;
-        </button>
+        </span>
+        {phoneControlsFor(item, equipped, scrollName)}
+        <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
+          <span className="hidden sm:block w-16 shrink-0" />
+          <label className="flex flex-col gap-0.5">
+            {phoneLabel('Weight')}
+            <input
+              type="number"
+              value={item.weight}
+              onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
+              min={0}
+              title="Weight"
+              aria-label={`${scrollName} weight`}
+              className={`${inputClasses} w-20 text-center`}
+            />
+          </label>
+          <span className={`flex flex-1 items-center gap-2 ${ONE_LINE_FIELD_HEIGHT}`}>
+            {scroll.name && (
+              <span className="text-[#c4a35a] text-xs shrink-0">R{scroll.rank}</span>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                if (confirm(`Use the ${scroll.name || 'scroll'}? It will be consumed.`)) {
+                  handleDeleteItem(equipped, item.id);
+                }
+              }}
+              className="bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-2 py-1 rounded shrink-0"
+              title="Use scroll (consumes it)"
+              aria-label={`Use ${scrollName}`}
+            >
+              Use
+            </button>
+          </span>
+          {moveSelectFor(item, equipped, scrollName, 'hidden sm:flex')}
+        </div>
+        {removeButtonFor(item, equipped, scrollName, 'hidden sm:block')}
       </div>
     );
   };
 
-  const renderInventoryItem = (item: InventoryItem, equipped: boolean) => {
-    if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped);
-    if (item.kind === 'scroll') return renderScrollItem(item, equipped);
-    return equipped ? renderItemRow(item, true) : renderStowedItemRow(item);
+  // `position` says where the item is ("equipped item 2", "item 1 in Backpack"),
+  // to give each row's name field a name of its own for screen readers.
+  const renderInventoryItem = (item: InventoryItem, equipped: boolean, position: string) => {
+    if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped, position);
+    if (item.kind === 'scroll') return renderScrollItem(item, equipped, position);
+    return renderItemRow(item, equipped, position);
   };
 
-  const renderMagicalDropdown = (dropdownKey: string, equipped: boolean, containerId?: string) => {
+  // `destination` names the list the item goes into ("Backpack"), so each
+  // list's add buttons have names of their own for screen readers.
+  const renderMagicalDropdown = (dropdownKey: string, destination: string, equipped: boolean, containerId?: string) => {
     const isOpen = magicalDropdownFor === dropdownKey;
     return (
       <div className="relative" data-magical-dropdown={dropdownKey}>
@@ -588,6 +683,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           type="button"
           onClick={() => setMagicalDropdownFor(isOpen ? null : dropdownKey)}
           className="bg-[#3a2a4e] hover:bg-[#4a3a6e] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+          aria-label={`Add magical item to ${destination}`}
         >
           + Magical ▾
         </button>
@@ -614,65 +710,34 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   // From sm up: one line per item, under the column headers (which leave room for
-  // the move select when there are containers). On phones: the name, move select
-  // and × on the first line, then the labelled fields. The move select and × are
-  // rendered for each layout, with the other copy hidden (display: none), so the
-  // keyboard order always matches what's on screen.
-  const renderItemRow = (item: InventoryItem, equipped: boolean) => {
+  // the move select when there are containers), with NAME_COLUMN for the name
+  // and the rest after Slots and Weight for the notes. On phones: the name, move
+  // select and × on the first line, labelled Slots and Weight on the second, and
+  // Notes across the whole third. Long names wrap and notes can have several
+  // lines, so a row can grow taller: its controls line up along the top, with
+  // the move select and × centred on the first line.
+  const renderItemRow = (item: InventoryItem, equipped: boolean, position: string) => {
     const itemName = item.name.trim() || 'item';
-    const moveSelect = (layoutClass: string) =>
-      !equipped && containers.length > 0 ? (
-        <select
-          value={item.containerId ?? ''}
-          onChange={(e) =>
-            handleMoveToContainer(item.id, e.target.value || undefined)
-          }
-          className={`${inputClasses} w-10 shrink-0 text-xs p-0.5 ${layoutClass}`}
-          title="Move to container"
-          aria-label={`Move ${itemName} to a container`}
-        >
-          <option value="">Loose</option>
-          {containers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-      ) : null;
-    const removeButton = (layoutClass: string) => (
-      <button
-        type="button"
-        onClick={() => handleDeleteItem(equipped, item.id)}
-        className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${layoutClass}`}
-        title={`Remove ${itemName}`}
-        aria-label={`Remove ${itemName}`}
-      >
-        &times;
-      </button>
-    );
-    // Phones hide the column headers, so each field gets a short visible label there.
-    const phoneLabel = (text: string) => (
-      <span aria-hidden="true" className="sm:hidden text-[10px] uppercase tracking-wide text-[#f5e6c8]/70">
-        {text}
-      </span>
-    );
 
     return (
-      <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
-        <input
-          type="text"
+      <div key={item.id} className="flex flex-wrap items-start gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
+        <GrowingTextarea
           value={item.name}
-          onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
+          onValueChange={(name) => handleUpdateItem(equipped, item.id, 'name', name)}
+          singleLine
+          onEnter={focusSlots(item.id)}
+          enterKeyHint="next"
           placeholder="Item name"
-          aria-label="Item name"
-          className={`${inputClasses} flex-1 min-w-[120px]`}
+          aria-label={`Name of ${position}`}
+          className={`flex-1 ${NAME_MIN_WIDTH} ${NAME_COLUMN}`}
+          fieldClassName={inputClasses}
         />
-        {moveSelect('sm:hidden')}
-        {removeButton('sm:hidden')}
-        <div className="flex items-end gap-2 w-full sm:w-auto sm:items-center">
+        {phoneControlsFor(item, equipped, itemName)}
+        <div className="flex flex-wrap items-start gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap">
           <label className="flex flex-col gap-0.5">
             {phoneLabel('Slots')}
             <input
+              id={slotsFieldId(item.id)}
               type="number"
               value={item.slots}
               onChange={(e) =>
@@ -700,25 +765,22 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               className={`${inputClasses} w-20 text-center`}
             />
           </label>
-          <label className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
+          <label className="flex flex-col gap-0.5 grow basis-full min-w-0 sm:basis-0">
             {phoneLabel('Notes')}
-            <input
-              type="text"
+            <GrowingTextarea
               value={item.notes}
-              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes"
               aria-label={`${itemName} notes`}
-              className={`${inputClasses} w-full sm:w-32`}
+              fieldClassName={inputClasses}
             />
           </label>
-          {moveSelect('hidden sm:block')}
+          {moveSelectFor(item, equipped, itemName, 'hidden sm:flex')}
         </div>
-        {removeButton('hidden sm:block')}
+        {removeButtonFor(item, equipped, itemName, 'hidden sm:block')}
       </div>
     );
   };
-
-  const renderStowedItemRow = (item: InventoryItem) => renderItemRow(item, false);
 
   const renderContainerGroup = (container: CharacterContainer | null) => {
     const containerId = container?.id;
@@ -726,6 +788,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     const isCollapsed = containerId ? collapsedContainers.has(containerId) : false;
 
     const { usedWeight, capacity, fillPercent, isOverCapacity } = getContainerLoad(container, stowedItems);
+    const destination = container ? container.name || 'container' : 'Loose Items';
 
     return (
       <div key={containerId ?? 'loose'} className="mb-3">
@@ -785,15 +848,17 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="ml-4">
                 {/* Column headers (hidden on mobile) */}
                 <div className="hidden sm:flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
-                  <span className="flex-1">Name</span>
+                  <span className={NAME_HEADER}>Name</span>
                   <span className="w-16 text-center">Slots</span>
                   <span className="w-20 text-center">Weight</span>
-                  <span className="w-32">Notes</span>
+                  <span className="flex-1">Notes</span>
                   {/* Stowed rows have a move-to-container select when there are containers */}
                   {containers.length > 0 && <span className="w-10" />}
                   <span className="w-6" />
                 </div>
-                {containerItems.map((item) => renderInventoryItem(item, false))}
+                {containerItems.map((item, i) =>
+                  renderInventoryItem(item, false, container ? `item ${i + 1} in ${container.name || 'a container'}` : `loose item ${i + 1}`),
+                )}
               </div>
             )}
 
@@ -803,6 +868,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 type="button"
                 onClick={() => handleAddItem(false, containerId)}
                 className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+                aria-label={`Add item to ${destination}`}
               >
                 + Add Item
               </button>
@@ -813,10 +879,11 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   setCatalogOpen(true);
                 }}
                 className="bg-[#3a2a4e] hover:bg-[#4a3a6e] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+                aria-label={`Add item from catalog to ${destination}`}
               >
                 + From Catalog
               </button>
-              {renderMagicalDropdown(`stowed-${containerId ?? 'loose'}`, false, containerId)}
+              {renderMagicalDropdown(`stowed-${containerId ?? 'loose'}`, destination, false, containerId)}
             </div>
           </>
         )}
@@ -982,7 +1049,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           Inventory &amp; Encumbrance
         </h2>
 
-        <div className="flex items-center gap-4 mb-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-3">
           <span className={labelClasses}>Encumbrance Method:</span>
           <label className="flex items-center gap-1 text-[#f5e6c8] cursor-pointer">
             <input
@@ -1026,20 +1093,21 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
         {/* Column headers (hidden on mobile) */}
         <div className="hidden sm:flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
-          <span className="flex-1">Name</span>
+          <span className={NAME_HEADER}>Name</span>
           <span className="w-16 text-center">Slots</span>
           <span className="w-20 text-center">Weight</span>
-          <span className="w-32">Notes</span>
+          <span className="flex-1">Notes</span>
           <span className="w-6" />
         </div>
 
-        {equippedItems.map((item) => renderInventoryItem(item, true))}
+        {equippedItems.map((item, i) => renderInventoryItem(item, true, `equipped item ${i + 1}`))}
 
         <div className="flex flex-wrap gap-2 mt-2">
           <button
             type="button"
             onClick={() => handleAddItem(true)}
             className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+            aria-label="Add item to Equipped Items"
           >
             + Add Item
           </button>
@@ -1050,10 +1118,11 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               setCatalogOpen(true);
             }}
             className="bg-[#3a2a4e] hover:bg-[#4a3a6e] text-[#f5e6c8] rounded px-3 py-1 text-sm"
+            aria-label="Add item from catalog to Equipped Items"
           >
             + From Catalog
           </button>
-          {renderMagicalDropdown('equipped', true)}
+          {renderMagicalDropdown('equipped', 'Equipped Items', true)}
         </div>
       </div>
 
@@ -1183,52 +1252,55 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
         <div className="flex flex-wrap gap-4">
           {/* Copper */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#b87333' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#b87333' }}>
               Copper
-            </label>
+            </span>
             <input
               type="number"
               min={0}
               value={coins.copper}
               onChange={(e) => handleCoinChange('copper', parseInt(e.target.value) || 0)}
+              aria-label="Copper pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
 
           {/* Silver */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#c0c0c0' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#c0c0c0' }}>
               Silver
-            </label>
+            </span>
             <input
               type="number"
               min={0}
               value={coins.silver}
               onChange={(e) => handleCoinChange('silver', parseInt(e.target.value) || 0)}
+              aria-label="Silver pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
 
           {/* Gold */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#c4a35a' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#c4a35a' }}>
               Gold
-            </label>
+            </span>
             <input
               type="number"
               min={0}
               value={coins.gold}
               onChange={(e) => handleCoinChange('gold', parseInt(e.target.value) || 0)}
+              aria-label="Gold pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
 
           {/* Pellucidium */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#8b6aab' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#8b6aab' }}>
               Pellucidium
-            </label>
+            </span>
             <input
               type="number"
               min={0}
@@ -1236,9 +1308,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               onChange={(e) =>
                 handleCoinChange('pellucidium', parseInt(e.target.value) || 0)
               }
+              aria-label="Pellucidium pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
         </div>
 
         {/* Coin summary & exchange reference */}

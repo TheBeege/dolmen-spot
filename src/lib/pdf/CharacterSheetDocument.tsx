@@ -1502,7 +1502,9 @@ function itemName(item: InventoryItem): string {
     const spell = item.scrollSpell;
     return spell?.name ? `Scroll: ${spell.name} (R${spell.rank})` : 'Scroll (no spell chosen)';
   }
-  return item.name;
+  // The Inventory tab shows an item's (or spell book's) name on one line, even
+  // one saved with a line break, so the sheet does too.
+  return oneLine(item.name ?? '');
 }
 
 function ItemCell({ item }: { item: InventoryItem }) {
@@ -1550,7 +1552,8 @@ function ContainerGroup({ c, container, lead }: {
   const { usedWeight, capacity, isOverCapacity } = getContainerLoad(container, c.stowedItems);
   // Like the Inventory tab, capacity is only shown with weight encumbrance.
   const weightMode = c.encumbranceMethod === 'weight';
-  const name = container ? container.name || 'Container' : 'Loose Items';
+  // On one line, as the Inventory tab shows it (a line break there is a space).
+  const name = container ? oneLine(container.name ?? '') || 'Container' : 'Loose Items';
   return (
     <>
       <KeepWithNext>
