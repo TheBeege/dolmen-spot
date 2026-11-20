@@ -14,6 +14,7 @@ import type {
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
 import { gridBounds, hexCenterOf, hexPath, hexVertices, isValidHex, nearestPointOnMap, pixelToHex } from '@/lib/hex';
+import { countOnStar, layoutRing } from '@/lib/marker-layout';
 import {
   DEFAULT_LEY_LINE_TYPE,
   LEY_LINE_COLORS,
@@ -39,6 +40,7 @@ const DOOR_FILL = '#a774d6';
 
 // --- Sizes in image units (the printed map's pixels); they scale with zoom ---
 const HEX_SIZE = HEX_GRID_META.hexSize;
+const HEX_INNER_RADIUS = HEX_GRID_META.rowPitch / 2; // centre to the middle of an edge
 const MARKER_RING_RADIUS = 42; // markers sharing a hex fan out on this circle
 const POI_RADIUS = 22;
 const DOOR_RADIUS = 26;
@@ -78,6 +80,7 @@ const MIN_LEY_LINE_PX = 2.5;
 const MIN_ROAD_LINE_PX = 1.5;
 const MIN_STEP_FONT_PX = 10; // step numbers of a ley line being drawn
 const MIN_LABEL_FONT_PX = 8; // hex coordinates and fairy road names
+const MIN_COUNT_PX = 10; // item count over the star when the current hex's markers are combined
 const COORD_LABEL_OPACITY = 0.7;
 
 // --- Navigation ---
@@ -439,6 +442,12 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const suppressClickUntilRef = useRef(0);
   // The pointer type of the last press, for clicks that don't report one.
   const lastPointerTypeRef = useRef('');
+  // Where the last touch or pen press went down, in client coordinates.
+  // Touch browsers move a tap's click to a nearby clickable element (touch
+  // adjustment): markers are focusable and hexes aren't, so a tap near a
+  // marker would open the marker's hex. A tap is resolved to the element
+  // under the finger instead.
+  const tapPointRef = useRef<Point | null>(null);
 
   const startPan = (start: Point, v: View, moved = false) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -453,6 +462,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     lastPointerTypeRef.current = e.pointerType;
+    tapPointRef.current = e.pointerType === 'touch' || e.pointerType === 'pen' ? { x: e.clientX, y: e.clientY } : null;
     // A new interaction: forget a suppression left by an earlier gesture.
     suppressClickUntilRef.current = 0;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -607,6 +617,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   };
 
   const handleMapClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const tapPoint = tapPointRef.current;
+    tapPointRef.current = null;
     // Current browsers make the click a PointerEvent. Its pointerType is ''
     // when no pointer made it (assistive technology, the keyboard), and such
     // a click is never the end of a gesture. In other browsers the last
@@ -618,9 +630,14 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       return;
     }
     const pointerType = clickType ?? lastPointerTypeRef.current;
+    const tapped = pointerType === 'touch' || pointerType === 'pen';
+    // A tap opens what was under the finger, not what touch adjustment moved
+    // the click to (see tapPointRef).
+    const underFinger = tapped && tapPoint ? document.elementFromPoint(tapPoint.x, tapPoint.y) : null;
+    const target = underFinger && svgRef.current?.contains(underFinger) ? underFinger : (e.target as Element);
     // A tap on a marker focuses its editor, not the name field, so that a
     // phone or tablet doesn't raise its keyboard.
-    activateMapItem(e.target as Element, pointerType === 'touch' || pointerType === 'pen' ? 'item' : 'name');
+    activateMapItem(target, tapped ? 'item' : 'name');
   };
 
   // Keyboard: Enter/Space activate the focused marker or line; when the map
@@ -715,6 +732,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     coordLabels: legible(COORD_LABEL_FONT),
     roadLabels: legible(ROAD_LABEL_FONT),
   };
+  // The current-location star: grown like the markers, but never wider than its hex.
+  const starRadius = Math.min(STAR_RADIUS * size.star, HEX_INNER_RADIUS);
 
   const polylinePoints = (hexes: HexCoord[]) =>
     hexes
@@ -851,38 +870,35 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       const visible = items.slice(0, MAX_VISIBLE_MARKERS);
       const overflow = items.length - visible.length;
       const slots = visible.length + (overflow > 0 ? 1 : 0);
-      // A lone marker sits in the middle; several share a ring, the first
-      // at the top. On the current hex the star has the middle, so markers
-      // ring it on a wider circle, which would reach the coordinate label
-      // above: the ring gets one more place than it has markers, and the
-      // top one is left empty.
+      // A lone marker sits in the middle; several share a ring, the first at
+      // the top; on the current hex they ring the star, with the top place
+      // left free for the coordinate label (layoutRing). Markers always stay
+      // inside their hex: where they'd crowd each other or the star, as when
+      // zoomed out on a phone, the hex gets one combined marker instead.
       const onCurrent = hex === currentHex;
-      const radius = onCurrent
-        ? STAR_RADIUS * size.star + CURRENT_RING_GAP * size.marker
-        : slots === 1 ? 0 : MARKER_RING_RADIUS * size.marker;
-      const places = onCurrent ? slots + 1 : slots;
-      const firstPlace = onCurrent ? 1 : 0;
-      const slotAt = (i: number) => {
-        const angle = -Math.PI / 2 + ((i + firstPlace) / places) * Math.PI * 2;
-        return { x: c.x + radius * Math.cos(angle), y: c.y + radius * Math.sin(angle) };
-      };
+      const largest =
+        Math.max(...visible.map((e) => (e.kind === 'door' ? DOOR_RADIUS : POI_RADIUS)), overflow > 0 ? BADGE_RADIUS : 0) * size.marker +
+        (MARKER_RIM * size.marker) / 2;
+      const layout = layoutRing({
+        slots,
+        markerRadius: largest,
+        ringRadius: onCurrent ? starRadius + CURRENT_RING_GAP * size.marker : slots === 1 ? 0 : MARKER_RING_RADIUS * size.marker,
+        innerRadius: HEX_INNER_RADIUS,
+        starRadius: onCurrent ? starRadius : 0,
+      });
+      if (layout.kind === 'combined') {
+        els.push(renderCombinedMarker(hex, c, items, onCurrent));
+        return;
+      }
+      const slotAt = (i: number) => ({ x: c.x + layout.offsets[i].x, y: c.y + layout.offsets[i].y });
       visible.forEach((entry, i) => {
         const m = slotAt(i);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
-        // Touch browsers move a tap that's near a marker to the nearest point
-        // of the marker's bounding box. An invisible square over that box makes
-        // sure the tap then lands on the marker, not on the hex underneath its
-        // corner (often a neighbouring hex, once markers outgrow their hexes).
-        const hitBox = (r: number) => {
-          const half = r + (MARKER_RIM * size.marker) / 2;
-          return <rect x={m.x - half} y={m.y - half} width={2 * half} height={2 * half} fill="none" pointerEvents="all" />;
-        };
         if (entry.kind === 'poi') {
           const label = `POI: ${entry.item.name || 'Unnamed'}${notesPreview(entry.item.notes)}`;
           els.push(
             <g key={`poi-${entry.item.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
-              {hitBox(POI_RADIUS * size.marker)}
               <circle cx={m.x} cy={m.y} r={POI_RADIUS * size.marker} fill={POI_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
             </g>,
           );
@@ -894,7 +910,6 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           els.push(
             <g key={`door-${door.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
-              {hitBox(DOOR_RADIUS * size.marker)}
               <circle cx={m.x} cy={m.y} r={DOOR_RADIUS * size.marker} fill={DOOR_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
               <text
                 x={m.x}
@@ -927,13 +942,50 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     return els;
   };
 
+  // One marker for all of a hex's items when they don't fit in it separately:
+  // their count, in the middle of the hex, or over the star's lower right on
+  // the current hex. It opens the hex, whose inspector lists the items.
+  const renderCombinedMarker = (
+    hex: HexCoord,
+    c: Point,
+    items: ({ kind: 'poi'; item: MapPOI } | { kind: 'door'; item: FairyDoor })[],
+    onCurrent: boolean,
+  ) => {
+    const names = items.map((e) => e.item.name || 'Unnamed').join(', ');
+    const label = `${items.length} ${items.length === 1 ? 'item' : 'items'} on hex ${hex}: ${names}`;
+    const r = onCurrent
+      ? Math.max(BADGE_RADIUS * 0.6, pxPerUnit ? MIN_COUNT_PX / 2 / pxPerUnit : 0)
+      : Math.min(BADGE_RADIUS * size.marker, HEX_INNER_RADIUS);
+    const o = onCurrent ? countOnStar(starRadius, r, HEX_INNER_RADIUS) : { x: 0, y: 0 };
+    const fill = onCurrent || !items.every((e) => e.kind === items[0].kind) ? NIGHT : items[0].kind === 'poi' ? POI_FILL : DOOR_FILL;
+    return (
+      <g key={`combined-${hex}`} {...MAP_BUTTON_PROPS} data-hex={hex} aria-label={label}>
+        <title>{label}</title>
+        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={PARCHMENT} strokeWidth={r * 0.15} />
+        <text
+          x={c.x + o.x}
+          y={c.y + o.y + r * 0.5}
+          textAnchor="middle"
+          fontSize={r * 1.4}
+          fill={PARCHMENT}
+          fontWeight="bold"
+          pointerEvents="none"
+          aria-hidden="true"
+        >
+          {items.length}
+        </text>
+      </g>
+    );
+  };
+
   const renderCurrentLocation = () => {
     const c = currentHex ? hexCenterOf(currentHex) : null;
     if (!c) return null;
+    const k = starRadius / STAR_RADIUS;
     return (
       <g pointerEvents="none" aria-hidden="true">
-        <circle cx={c.x} cy={c.y} r={STAR_RADIUS * size.star} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * size.star} />
-        <text x={c.x} y={c.y + STAR_GLYPH_FONT * size.star * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * size.star} fill={NIGHT} fontWeight="bold">
+        <circle cx={c.x} cy={c.y} r={starRadius} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * k} />
+        <text x={c.x} y={c.y + STAR_GLYPH_FONT * k * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * k} fill={NIGHT} fontWeight="bold">
           ★
         </text>
       </g>
@@ -1088,8 +1140,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           <g>{renderLeyLines()}</g>
           {renderDraft()}
           <g>{renderDoorConnectors()}</g>
-          <g>{renderMarkers()}</g>
           {renderCurrentLocation()}
+          <g>{renderMarkers()}</g>
           {renderOutlines()}
         </svg>
       </div>
