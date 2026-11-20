@@ -128,8 +128,10 @@ const s = StyleSheet.create({
   // flexBasis 0 so a long name wraps instead of running under the brand
   headerMain: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 12 },
   headerSide: { flexShrink: 0 },
-  // 22pt Noto Serif is about as big as the 24pt Times the sheet was designed with.
-  name: { fontWeight: 700, fontSize: 22, lineHeight: 1.1 },
+  // 22pt Noto Serif is about as big as the 24pt Times the sheet was designed
+  // with. Capped at 24 lines (about 600pt), so even an absurdly long name
+  // can't push the header past the bottom of the page.
+  name: { fontWeight: 700, fontSize: 22, lineHeight: 1.1, maxLines: 24, textOverflow: 'ellipsis' },
   identity: { fontSize: 10.5, color: COLOR.brown, marginTop: 3 },
   brand: {
     fontWeight: 700,
@@ -145,13 +147,16 @@ const s = StyleSheet.create({
     right: 40,
     bottom: 22,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     borderTopWidth: 0.75,
     borderTopColor: COLOR.gold,
     paddingTop: 4,
     fontSize: 7.5,
     color: COLOR.muted,
   },
+  // One line, cut short with "…", so a long name can't run into the page number
+  footerName: { flexGrow: 1, flexShrink: 1, flexBasis: 0, marginRight: 12, maxLines: 1, textOverflow: 'ellipsis' },
+  // A fixed width: react-pdf lays the row out before it knows the page numbers.
+  footerPage: { flexShrink: 0, width: 64, textAlign: 'right' },
 
   // Headings
   sectionTitle: {
@@ -320,6 +325,10 @@ const s = StyleSheet.create({
   summaryTotal: { fontWeight: 700, color: COLOR.brown },
 });
 
+// Table rows never split across pages, so a cell's text is capped to keep
+// every row shorter than a page (60 lines of 8.5pt text is about 560pt).
+const CELL_MAX_LINES = 60;
+
 // Spell table column widths; the scrolls table's name column spans all but the rank.
 const SPELL_COLUMNS = { rank: 0.8, spell: 4, prepared: 0.8, cast: 0.8, notes: 5 };
 const SCROLL_NAME_WIDTH = SPELL_COLUMNS.spell + SPELL_COLUMNS.prepared + SPELL_COLUMNS.cast + SPELL_COLUMNS.notes;
@@ -402,7 +411,9 @@ function Field({ label, value, note, warn, last }: {
   const { text } = useSheet();
   return (
     <View style={[s.field, last ? s.fieldLast : {}]}>
-      <Text style={s.fieldLabel}>{upper(label)}</Text>
+      <Text style={s.fieldLabel} minPresenceAhead={12}>
+        {upper(label)}
+      </Text>
       {/* Mostly names (affiliation, moon sign...), so no syllable hyphenation. */}
       <Text style={s.fieldValue} hyphenationCallback={breakName}>
         {text(value) || EMPTY}
@@ -497,7 +508,7 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
               >
                 {typeof content === 'string' || typeof content === 'number' ? (
                   <Text
-                    style={{ textAlign: align }}
+                    style={{ textAlign: align, maxLines: CELL_MAX_LINES, textOverflow: 'ellipsis' }}
                     hyphenationCallback={col.breaks}
                   >
                     {content}
@@ -622,8 +633,9 @@ function CharacterSection({ c }: { c: Character }) {
       : `Manual override; calc. ${formatXpPercent(xpCalc.total)} (${breakdown.join(' + ')})`;
   }
 
+  // Not wrap={false}: a long background or affiliation may continue on the next page.
   return (
-    <View wrap={false}>
+    <View>
       <SectionTitle>Character</SectionTitle>
       <View style={s.fieldGrid}>
         <Field label="Kindred" value={kindredName(c)} note={kindred?.description} />
@@ -777,22 +789,47 @@ interface BlockSpec {
   key: string;
   title: string;
   note?: string;
+  /** Holds text of any length (notes, lists): may continue on the next page. */
+  breakable?: boolean;
   body: ReactNode;
 }
 
 /**
- * An unbreakable feature block. `lead` holds any headings that introduce it:
- * minPresenceAhead can't keep a heading with a block taller than its
- * look-ahead, so headings travel inside the first block instead.
+ * A feature block. `lead` holds any headings that introduce it, so they stay
+ * on the same page as its start. A short, fixed-size block is unbreakable,
+ * and its headings travel inside it (minPresenceAhead can't keep a heading
+ * with a block taller than its look-ahead). A breakable block keeps its
+ * headings and title together with the first lines of its body.
  */
-function Block({ title, note, lead, children }: { title: string; note?: string; lead?: ReactNode; children?: ReactNode }) {
-  return (
-    <View style={s.block} wrap={false}>
+function Block({ title, note, lead, breakable, children }: {
+  title: string;
+  note?: string;
+  lead?: ReactNode;
+  breakable?: boolean;
+  children?: ReactNode;
+}) {
+  const heading = (
+    <>
       {lead}
       <Text style={s.blockTitle}>
         {title}
         {note ? <Text style={s.subTitleNote}>{`  ${note}`}</Text> : null}
       </Text>
+    </>
+  );
+  if (!breakable) {
+    return (
+      <View style={s.block} wrap={false}>
+        {heading}
+        {children}
+      </View>
+    );
+  }
+  return (
+    <View style={s.block}>
+      <View wrap={false} minPresenceAhead={30}>
+        {heading}
+      </View>
       {children}
     </View>
   );
@@ -893,6 +930,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
       key: 'trophies',
       title: 'Trophies',
       note: FEATURE_NOTES.trophies,
+      breakable: true,
       body: c.trophies.length > 0 ? <Chips items={c.trophies.map((tr) => tr.creatureType)} /> : <Empty>None yet.</Empty>,
     });
   }
@@ -902,6 +940,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
     blocks.push({
       key: 'companion',
       title: 'Animal Companion',
+      breakable: true,
       body: companion ? (
         <Text style={s.body} hyphenationCallback={breakName}>
           <Text style={s.bold}>{companion.name || EMPTY}</Text>
@@ -1039,6 +1078,7 @@ function languagesBlock(c: Character): BlockSpec {
   return {
     key: 'languages',
     title: 'Languages',
+    breakable: true,
     body: (
       <>
         <Text style={s.body}>
@@ -1118,7 +1158,7 @@ function TraitsSection({ c }: { c: Character }) {
       );
       first = false;
       return (
-        <Block key={block.key} title={block.title} note={block.note} lead={lead}>
+        <Block key={block.key} title={block.title} note={block.note} lead={lead} breakable={block.breakable}>
           {block.body}
         </Block>
       );
@@ -1318,17 +1358,17 @@ function KnackBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
   const knack = c.knack;
   const ref = knack ? MOSSLING_KNACKS.find((k) => k.id === knack.knackId) : undefined;
   return (
-    <View wrap={false}>
-      {lead}
-      <Text style={s.subTitle}>
-        Mossling Knack
-        {knack ? <Text style={s.subTitleNote}>{`  ${knack.name}`}</Text> : null}
-      </Text>
-      {!knack || !ref ? (
-        <Empty>No knack chosen yet.</Empty>
-      ) : (
-        <>
-          {ref.tiers.map((tier) => {
+    <>
+      <KeepWithNext>
+        {lead}
+        <Text style={s.subTitle}>
+          Mossling Knack
+          {knack ? <Text style={s.subTitleNote}>{`  ${knack.name}`}</Text> : null}
+        </Text>
+        {!knack || !ref ? (
+          <Empty>No knack chosen yet.</Empty>
+        ) : (
+          ref.tiers.map((tier) => {
             const active = c.level >= tier.level;
             return (
               <Text key={tier.level} style={[s.body, active ? {} : { color: COLOR.faint }]}>
@@ -1337,11 +1377,12 @@ function KnackBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
                 {active ? '' : `  (Level ${tier.level})`}
               </Text>
             );
-          })}
-          {knack.notes ? <Text style={s.note}>{knack.notes}</Text> : null}
-        </>
-      )}
-    </View>
+          })
+        )}
+      </KeepWithNext>
+      {/* The player's notes can be any length, so they may continue on the next page. */}
+      {knack && ref && knack.notes ? <Text style={s.note}>{knack.notes}</Text> : null}
+    </>
   );
 }
 
@@ -1400,7 +1441,7 @@ function ItemCell({ item }: { item: InventoryItem }) {
   const contents = item.spellbookContents ?? [];
   return (
     <View>
-      <Text>{text(itemName(item)) || EMPTY}</Text>
+      <Text style={{ maxLines: CELL_MAX_LINES, textOverflow: 'ellipsis' }}>{text(itemName(item)) || EMPTY}</Text>
       {item.kind === 'spellbook' ? (
         <Text style={s.cellSub}>
           {`Spell book (${contents.length}/${SPELLBOOK_CAPACITY})${
@@ -1478,10 +1519,9 @@ function InventorySection({ c }: { c: Character }) {
       ))}
       <ContainerGroup c={c} container={null} />
 
-      <View wrap={false}>
-        <Caption>Tiny Items</Caption>
-        <Text style={s.body}>{text(c.tinyItems ?? '').trim() || EMPTY}</Text>
-      </View>
+      {/* The list can be any length, so it may continue on the next page. */}
+      <Caption>Tiny Items</Caption>
+      <Text style={s.body}>{text(c.tinyItems ?? '').trim() || EMPTY}</Text>
 
       <View style={[s.twoCol, { marginTop: 10 }]} wrap={false}>
         <View style={s.col}>
@@ -1566,8 +1606,10 @@ function Footer({ c }: { c: Character }) {
   const name = useCharacterName(c);
   return (
     <View style={s.footer} fixed>
-      <Text>{`${name} · ${identityLine(c)}`}</Text>
-      <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+      <Text style={s.footerName} hyphenationCallback={breakName}>
+        {`${name} · ${identityLine(c)}`}
+      </Text>
+      <Text style={s.footerPage} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
     </View>
   );
 }
