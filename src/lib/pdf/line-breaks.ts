@@ -1,12 +1,20 @@
 /**
  * Where the PDF may break a line inside a word.
  *
- * react-pdf breaks lines at spaces, and inside a word only where a
- * hyphenation callback splits it, drawing a hyphen at the break. An empty
- * string between two parts is a break point that adds nothing (react-pdf
- * turns it into zero-width glue). That is how Japanese and Chinese, written
- * without spaces, get to wrap between characters, and how a name can wrap
- * after one of its own hyphens without gaining a second one.
+ * react-pdf (its textkit) breaks lines at spaces, and inside a word at two
+ * kinds of point, drawing a hyphen at the break in the font of the text
+ * before it: where a hyphenation callback splits the word, and where the font
+ * changes (Korean followed by a ".", which comes from Noto Sans). An empty
+ * string between two parts is a break point that draws nothing instead
+ * (textkit makes it zero-width glue, not a hyphenation point). That is how
+ * Japanese and Chinese, written without spaces, get to wrap between
+ * characters, and how a name can wrap after one of its own hyphens without
+ * gaining a second one.
+ *
+ * Text with Korean, Japanese or Chinese in it is laid out without hyphen
+ * breaks at all (see `hasCjk` and the sheet's Text), so it breaks only at
+ * spaces and empty strings: never at a font change, where it might leave a
+ * comma at the start of a line.
  */
 
 type Hyphenate = (word: string) => string[];
@@ -89,6 +97,10 @@ function breakCjk(word: string, hyphenate: Hyphenate): string[] {
   endRun();
 
   const parts: string[] = [];
+  // Japanese and Chinese may wrap before a character that follows other text
+  // directly (as in "HPは"): a break the font change would otherwise make, with
+  // a hyphen. Korean keeps a word together.
+  if (chunks[0]?.open && !NO_LINE_START.has(firstChar(chunks[0].text))) parts.push('');
   let group = '';
   const flush = () => {
     // Latin text keeps its usual hyphenation; Korean, Japanese and Chinese never get a hyphen.
@@ -112,8 +124,9 @@ function breakCjk(word: string, hyphenate: Hyphenate): string[] {
   return parts;
 }
 
-function needsCjkBreaks(word: string): boolean {
-  return ANYWHERE.test(word) || HANGUL.test(word);
+/** True if the text has Korean, Japanese or Chinese in it. */
+export function hasCjk(text: string): boolean {
+  return ANYWHERE.test(text) || HANGUL.test(text);
 }
 
 /**
@@ -121,7 +134,17 @@ function needsCjkBreaks(word: string): boolean {
  * react-pdf's English hyphenation, plus break points in CJK text.
  */
 export function breakWords(word: string, hyphenate: Hyphenate = noHyphenation): string[] {
-  return needsCjkBreaks(word) ? breakCjk(word, hyphenate) : hyphenate(word);
+  return hasCjk(word) ? breakCjk(word, hyphenate) : hyphenate(word);
+}
+
+/** Joins closing punctuation to the character before it, so no line starts with it. */
+function keepPunctuationAttached(units: string[]): string[] {
+  const out: string[] = [];
+  for (const unit of units) {
+    if (out.length > 0 && NO_LINE_START.has(firstChar(unit))) out[out.length - 1] += unit;
+    else out.push(unit);
+  }
+  return out;
 }
 
 /** A part of a name this long (in characters) seldom fits a line, so it may break anywhere. */
@@ -148,9 +171,9 @@ export function breakName(word: string): string[] {
   pieces.forEach((p, i) => {
     if (i > 0) parts.push('');
     const units = p.match(UNITS) ?? [p];
-    if (needsCjkBreaks(p)) parts.push(...breakCjk(p, noHyphenation));
+    if (hasCjk(p)) parts.push(...breakCjk(p, noHyphenation));
     else if (units.length <= LONG_NAME_PART) parts.push(p);
-    else parts.push(...units); // react-pdf adds a hyphen where it breaks
+    else parts.push(...keepPunctuationAttached(units)); // react-pdf adds a hyphen where it breaks
   });
   return parts;
 }

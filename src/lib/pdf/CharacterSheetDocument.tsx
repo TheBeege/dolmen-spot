@@ -14,7 +14,7 @@
  * printable with the sheet's fonts (see text.ts and fonts.ts).
  */
 import { Document, Page, StyleSheet, Text as PdfText, View } from '@react-pdf/renderer';
-import { Children, createContext, useContext, useMemo, type ComponentProps, type ReactNode } from 'react';
+import { Children, createContext, isValidElement, useContext, useMemo, type ComponentProps, type ReactNode } from 'react';
 import type { Character, CharacterContainer, InventoryItem } from '@/lib/types';
 import {
   ARMOUR_TABLE,
@@ -81,7 +81,7 @@ import {
 } from '@/lib/character-sheet';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import type { SheetFonts } from './fonts';
-import { breakName } from './line-breaks';
+import { breakName, hasCjk } from './line-breaks';
 import type { PdfPageSize } from './page-size';
 import { createPdfText } from './text';
 
@@ -352,16 +352,37 @@ function useSheet(): Sheet {
 // react-pdf's Text props, without its SVG variant (which requires x and y).
 type TextProps = Exclude<ComponentProps<typeof PdfText>, { x: string | number }>;
 
-/** react-pdf's Text, with every string it prints made printable. */
+// textkit's "infinity": a hyphenation point with this penalty is never a
+// place to break a line.
+const NO_HYPHEN_BREAKS = 10000;
+
+/** Whether any string in `children`, nested Text included, has Korean, Japanese or Chinese in it. */
+function containsCjk(children: ReactNode): boolean {
+  let found = false;
+  Children.forEach(children, (child) => {
+    if (found) return;
+    if (typeof child === 'string') found = hasCjk(child);
+    else if (isValidElement<{ children?: ReactNode }>(child)) found = containsCjk(child.props.children);
+  });
+  return found;
+}
+
+/**
+ * react-pdf's Text, with every string it prints made printable. Text with
+ * Korean, Japanese or Chinese in it breaks lines only at spaces and the points
+ * line-breaks.ts adds, never at a hyphenation point, since react-pdf also
+ * treats every font change as one.
+ */
 function Text({ children, render, ...props }: TextProps) {
   const { text } = useSheet();
   // Pass `render` only when there is one: react-pdf treats any Text with the prop as dynamic.
   if (render) return <PdfText {...props} render={(args) => text(render(args))} />;
+  const printable = Children.map(children, (child) =>
+    typeof child === 'string' || typeof child === 'number' ? text(child) : child,
+  );
   return (
-    <PdfText {...props}>
-      {Children.map(children, (child) =>
-        typeof child === 'string' || typeof child === 'number' ? text(child) : child,
-      )}
+    <PdfText {...props} {...(containsCjk(printable) ? { hyphenationPenalty: NO_HYPHEN_BREAKS } : {})}>
+      {printable}
     </PdfText>
   );
 }
