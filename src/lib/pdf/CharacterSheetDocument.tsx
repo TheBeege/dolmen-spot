@@ -1687,8 +1687,14 @@ interface CharacterSheetDocumentProps {
   fonts: SheetFonts;
 }
 
+/** The text on one line: line breaks and runs of other spacing become single spaces. */
+function oneLine(value: string): string {
+  return value.replace(/[\p{Cc}\p{Zl}\p{Zp}\s]+/gu, ' ').trim();
+}
+
 function Footer({ c }: { c: Character }) {
-  const name = useCharacterName(c);
+  // The footer has one line, which a line break in the name would end.
+  const name = oneLine(useCharacterName(c));
   return (
     <View style={s.footer} fixed>
       <Text style={s.footerName} hyphenationCallback={breakName}>
@@ -1705,7 +1711,7 @@ function Footer({ c }: { c: Character }) {
  * other control characters become spaces.
  */
 function titleName(c: Character): string {
-  return (c.name ?? '').normalize('NFC').replace(/[\p{Cc}\p{Zl}\p{Zp}\s]+/gu, ' ').trim() || 'Unnamed';
+  return oneLine((c.name ?? '').normalize('NFC')) || 'Unnamed';
 }
 
 function SheetPages({ character: c, pageSize, exportedOn }: Omit<CharacterSheetDocumentProps, 'fonts'>) {
