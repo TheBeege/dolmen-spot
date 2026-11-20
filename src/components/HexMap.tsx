@@ -13,7 +13,17 @@ import type {
   MapPOI,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
-import { gridBounds, hexCenterOf, hexPath, hexVertices, isValidHex, nearestPointOnMap, pixelToHex } from '@/lib/hex';
+import {
+  MIN_VIEW_FRACTION,
+  PAN_MARGIN,
+  gridBounds,
+  hexCenterOf,
+  hexPath,
+  hexVertices,
+  isValidHex,
+  nearestPointOnMap,
+  pixelToHex,
+} from '@/lib/hex';
 import { countOnStar, layoutRing } from '@/lib/marker-layout';
 import {
   DEFAULT_LEY_LINE_TYPE,
@@ -86,7 +96,7 @@ const COORD_LABEL_OPACITY = 0.7;
 // --- Navigation ---
 const PAN_THRESHOLD_PX = 4; // movement before a press becomes a pan, so taps still select
 const CLICK_AFTER_GESTURE_MS = 250; // a pointer's click this soon after a pan or pinch ends belongs to it
-const MIN_VIEW_FRACTION = 0.05; // most zoomed in: 5% of the map's width
+// Most zoomed in: MIN_VIEW_FRACTION of the map's width (hex.ts, tied to the pan limit).
 const MAX_VIEW_FRACTION = 1.5; // most zoomed out
 const WHEEL_ZOOM_PER_PX = 0.0015; // a 100 px mouse-wheel notch zooms ~16%
 const WHEEL_DELTA_CAP_PX = 100; // per event, so one large jump can't zoom far
@@ -191,7 +201,7 @@ const inView = (v: View, p: Point) => p.x >= v.x && p.x <= v.x + v.w && p.y >= v
  */
 function keepOnMap(v: View): View {
   const c = viewCenter(v);
-  const p = nearestPointOnMap(c, HEX_SIZE / 2);
+  const p = nearestPointOnMap(c, PAN_MARGIN);
   return p === c ? v : { ...v, x: p.x - v.w / 2, y: p.y - v.h / 2 };
 }
 

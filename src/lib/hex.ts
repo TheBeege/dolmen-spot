@@ -151,7 +151,7 @@ function cross(o: Point, a: Point, b: Point): number {
  * in y-up coordinates. The map's pan limit: because it's convex, the nearest
  * point of it moves smoothly as a point outside it moves.
  */
-const CENTRE_HULL: readonly Point[] = (() => {
+export const CENTRE_HULL: readonly Point[] = (() => {
   const pts = [...CENTERS.values()].sort((a, b) => a.x - b.x || a.y - b.y);
   const half = (list: Point[]) => {
     const out: Point[] = [];
@@ -174,6 +174,17 @@ function nearestOnSegment(p: Point, a: Point, b: Point): Point {
   const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
   return { x: a.x + t * dx, y: a.y + t * dy };
 }
+
+/** How far beyond the hull of the hex centres the view's centre may be panned. */
+export const PAN_MARGIN = HEX_GRID_META.hexSize / 2;
+
+/**
+ * The most zoomed-in view, as a fraction of the whole map's width and height.
+ * With the pan limit, a smaller view centred at the edge of the map's
+ * bottom-right staircase could show no hex at all (at 5% it did). hex.test.ts
+ * checks that this one shows part of a hex all along the limit's boundary.
+ */
+export const MIN_VIEW_FRACTION = 0.08;
 
 /**
  * `p` if it lies within `margin` of the hull of the hex centres; otherwise the
