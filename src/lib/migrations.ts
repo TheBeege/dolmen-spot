@@ -141,6 +141,14 @@ function nonItemText(v: unknown): string {
   }
 }
 
+/**
+ * `fields`, then any fields of `raw` it doesn't set. The values in `fields`
+ * win, and its keys come first, in its order.
+ */
+function withExtraFields<T extends object>(fields: T, raw: Record<string, unknown>): T {
+  return { ...fields, ...raw, ...fields };
+}
+
 /** "Label (Hex 1313): notes" for the couldn't-be-placed list. */
 function lostItem(label: string, hex: string, notes: string): string {
   return `${label}${hex ? ` (Hex ${hex})` : ''}${notes ? `: ${notes}` : ''}`;
@@ -159,7 +167,9 @@ function withLostRoad(notes: string, roadName: string): string {
  * migration loop on every load and import, so it must be idempotent.
  * Every element is normalized to the shape the map UI relies on, ids are
  * made unique, and items that can't stay on the map are described in `lost`
- * (kept in Other Notes) instead of being deleted.
+ * (kept in Other Notes) instead of being deleted. Fields this repair doesn't
+ * know about are kept as they are, so a field added later isn't deleted on
+ * the next load if it was left out here.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeMapData(data: any, lost: string[]): void {
@@ -191,7 +201,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
       lost.push(lostItem(name || 'Unnamed point of interest', asText(p.hex), notes));
       continue;
     }
-    pois.push({ id: uniqueId(p.id), hex: p.hex, name, notes });
+    pois.push(withExtraFields({ id: uniqueId(p.id), hex: p.hex, name, notes }, p));
   }
   md.pois = pois;
 
@@ -210,11 +220,12 @@ function sanitizeMapData(data: any, lost: string[]): void {
     // Anything but a well-formed wild or roaded destination becomes wild.
     let destination: FairyDoorDestination = { kind: 'wild' };
     if (dest.kind === 'roaded' && asText(dest.pairedDoorId)) {
-      destination = { kind: 'roaded', pairedDoorId: asText(dest.pairedDoorId), roadName };
+      destination = withExtraFields<FairyDoorDestination>({ kind: 'roaded', pairedDoorId: asText(dest.pairedDoorId), roadName }, dest);
     } else {
+      if (dest.kind === 'wild') destination = withExtraFields<FairyDoorDestination>({ kind: 'wild' }, dest);
       notes = withLostRoad(notes, roadName);
     }
-    doors.push({ id: uniqueId(d.id), hex: d.hex, name, notes, destination });
+    doors.push(withExtraFields({ id: uniqueId(d.id), hex: d.hex, name, notes, destination }, d));
   }
   // A roaded door whose partner doesn't link back (partner wild, pointing
   // elsewhere, missing, or the door itself) becomes wild, keeping its road
@@ -247,7 +258,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
       continue;
     }
     if (off.length > 0) lost.push(`${label}: hexes ${off.join(', ')} left out (not on the map)`);
-    leyLines.push({ id: uniqueId(l.id), type, name, color, hexes, notes });
+    leyLines.push(withExtraFields({ id: uniqueId(l.id), type, name, color, hexes, notes }, l));
   }
   md.leyLines = leyLines;
 
@@ -255,13 +266,13 @@ function sanitizeMapData(data: any, lost: string[]): void {
   // is normal (the player clicked Draw Ley Line and hasn't picked any).
   if (isPlainObject(md.draftLeyLine)) {
     const dft = md.draftLeyLine as Record<string, unknown>;
-    md.draftLeyLine = {
+    md.draftLeyLine = withExtraFields({
       name: asText(dft.name),
       type: asText(dft.type),
       color: typeof dft.color === 'string' && HEX_COLOR_RE.test(dft.color) ? dft.color : LEY_LINE_COLORS[0],
       notes: asText(dft.notes),
       hexes: list(dft.hexes).filter(isValidHex),
-    };
+    }, dft);
   } else {
     delete md.draftLeyLine;
   }

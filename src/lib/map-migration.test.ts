@@ -620,3 +620,42 @@ describe('Scenario 21: printed hex 0111 is on the grid', () => {
     );
   });
 });
+
+describe('Scenario 22: fields the repair doesn\'t know about are kept', () => {
+  const data = baseV12({
+    pois: [{ id: 'p', hex: '0303', name: { bad: 1 }, notes: 5, visited: true, icon: 'skull' }],
+    fairyDoors: [
+      { id: 'a', hex: '0404', name: 'Oak', notes: '', discoveredOn: { day: 3, month: 1, year: 1 },
+        destination: { kind: 'roaded', pairedDoorId: 'b', roadName: 'Silver', roadNotes: 'Moonlit' } },
+      { id: 'b', hex: '0505', name: 'Stone', notes: '', destination: { kind: 'roaded', pairedDoorId: 'a', roadName: 'Silver' } },
+      { id: 'w', hex: '0606', name: 'Well', notes: '', destination: { kind: 'wild', realm: 'Fairy' } },
+    ],
+    leyLines: [{ id: 'l', name: 'L', type: 'Ley line', color: '#c4a35a', hexes: ['0303', '0404'], notes: '', strength: 3 }],
+    draftLeyLine: { name: 'D', type: '', color: '#c4a35a', notes: '', hexes: [], startedOn: 'today' },
+    futureLayer: ['kept'],
+  });
+  const m = migrateCharacter(clone(data) as never);
+  const [poi] = m.mapData.pois as unknown as AnyData[];
+  const doors = Object.fromEntries((m.mapData.fairyDoors as unknown as AnyData[]).map((d) => [d.id, d]));
+  test('a POI keeps its extra fields, and the repaired ones still win', () => {
+    assert.deepEqual(poi, { id: 'p', hex: '0303', name: '', notes: '5', visited: true, icon: 'skull' });
+  });
+  test('the known fields come first, in their usual order', () => {
+    assert.deepEqual(Object.keys(poi), ['id', 'hex', 'name', 'notes', 'visited', 'icon']);
+  });
+  test('a door and its roaded destination keep their extra fields', () => {
+    assert.deepEqual(doors.a.discoveredOn, { day: 3, month: 1, year: 1 });
+    assert.deepEqual(doors.a.destination, { kind: 'roaded', pairedDoorId: 'b', roadName: 'Silver', roadNotes: 'Moonlit' });
+  });
+  test('a wild destination keeps its extra fields', () => {
+    assert.deepEqual(doors.w.destination, { kind: 'wild', realm: 'Fairy' });
+  });
+  test('a ley line, the draft and mapData itself keep theirs', () => {
+    assert.equal((m.mapData.leyLines[0] as unknown as AnyData).strength, 3);
+    assert.equal((m.mapData.draftLeyLine as unknown as AnyData).startedOn, 'today');
+    assert.deepEqual((m.mapData as unknown as AnyData).futureLayer, ['kept']);
+  });
+  test('a second load changes nothing', () => {
+    assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m));
+  });
+});
