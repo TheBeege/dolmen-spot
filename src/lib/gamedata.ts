@@ -190,14 +190,6 @@ export const CLASSES: ClassInfo[] = [
   },
 ];
 
-export const MOON_SIGNS = [
-  'Grinning moon', 'Dead moon', 'Beast moon', 'Squamous moon',
-  "Knight's moon", 'Rotting moon', "Maiden's moon", "Witch's moon",
-  "Robber's moon", 'Goat moon', 'Narrow moon', 'Black moon',
-];
-
-export const MOON_PHASES = ['Waxing', 'Full', 'Waning'] as const;
-
 export const ALIGNMENTS = ['Lawful', 'Neutral', 'Chaotic'] as const;
 
 export const ABILITY_MODIFIER_TABLE: Record<number, number> = {
@@ -222,29 +214,48 @@ export function formatModifier(mod: number): string {
 }
 
 // Dolmenwood Calendar
+// newMoon / fullMoon: day of the month marked with a new / full moon on the
+// official Dolmenwood Calendar. They are the same every year.
 export const MONTHS = [
-  { name: 'Grimvold', season: 'Winter', days: 30, description: 'The Onset of Winter', moonName: 'Grinning moon', wysendays: ['Hanglemas', "Dyboll's Day"] },
-  { name: 'Lymewald', season: 'Winter', days: 28, description: 'Deep Winter', moonName: 'Dead moon', wysendays: [] as string[] },
-  { name: 'Haggryme', season: 'Winter', days: 30, description: 'The Fading of Winter', moonName: 'Beast moon', wysendays: ["Yarl's Day", 'Day of Virgins'] },
-  { name: 'Symswald', season: 'Spring', days: 29, description: 'The Onset of Spring', moonName: 'Squamous moon', wysendays: ['Hopfast'] },
-  { name: 'Harchment', season: 'Spring', days: 29, description: 'High Spring', moonName: "Knight's moon", wysendays: ['Smithing'] },
-  { name: 'Iggwyld', season: 'Spring', days: 30, description: 'The Fading of Spring', moonName: 'Rotting moon', wysendays: ['Shortening', "Longshank's Day"] },
-  { name: 'Chysting', season: 'Summer', days: 31, description: 'The Onset of Summer', moonName: "Maiden's moon", wysendays: ['Bradging', 'Copsewallow', 'Chalice'] },
-  { name: 'Lillipythe', season: 'Summer', days: 29, description: 'High Summer', moonName: "Witch's moon", wysendays: ["Old Dobey's Day"] },
-  { name: 'Haelhold', season: 'Summer', days: 28, description: 'The Fading of Summer', moonName: "Robber's moon", wysendays: [] as string[] },
-  { name: 'Reedwryme', season: 'Autumn', days: 30, description: 'The Onset of Autumn', moonName: 'Goat moon', wysendays: ["Shub's Eve", 'Druden Day'] },
-  { name: 'Obthryme', season: 'Autumn', days: 28, description: 'Deep Autumn', moonName: 'Narrow moon', wysendays: [] as string[] },
-  { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn', moonName: 'Black moon', wysendays: ['Day of Doors', 'Dolmenday'] },
+  { name: 'Grimvold', season: 'Winter', days: 30, description: 'The Onset of Winter', moonName: 'Grinning moon', newMoon: 4, fullMoon: 19, wysendays: ['Hanglemas', "Dyboll's Day"] },
+  { name: 'Lymewald', season: 'Winter', days: 28, description: 'Deep Winter', moonName: 'Dead moon', newMoon: 4, fullMoon: 18, wysendays: [] as string[] },
+  { name: 'Haggryme', season: 'Winter', days: 30, description: 'The Fading of Winter', moonName: 'Beast moon', newMoon: 5, fullMoon: 20, wysendays: ["Yarl's Day", 'The Day of Virgins'] },
+  { name: 'Symswald', season: 'Spring', days: 29, description: 'The Onset of Spring', moonName: 'Squamous moon', newMoon: 4, fullMoon: 19, wysendays: ['Hopfast'] },
+  { name: 'Harchment', season: 'Spring', days: 29, description: 'High Spring', moonName: "Knight's moon", newMoon: 5, fullMoon: 19, wysendays: ['Smithing'] },
+  { name: 'Iggwyld', season: 'Spring', days: 30, description: 'The Fading of Spring', moonName: 'Rotting moon', newMoon: 5, fullMoon: 20, wysendays: ['Shortening', "Longshank's Day"] },
+  { name: 'Chysting', season: 'Summer', days: 31, description: 'The Onset of Summer', moonName: "Maiden's moon", newMoon: 4, fullMoon: 19, wysendays: ['Bradging', 'Copsewallow', 'Chalice'] },
+  { name: 'Lillipythe', season: 'Summer', days: 29, description: 'High Summer', moonName: "Witch's moon", newMoon: 3, fullMoon: 17, wysendays: ["Old Dobey's Day"] },
+  { name: 'Haelhold', season: 'Summer', days: 28, description: 'The Fading of Summer', moonName: "Robber's moon", newMoon: 3, fullMoon: 18, wysendays: [] as string[] },
+  { name: 'Reedwryme', season: 'Autumn', days: 30, description: 'The Onset of Autumn', moonName: 'Goat moon', newMoon: 4, fullMoon: 19, wysendays: ["Shub's Eve", 'Druden Day'] },
+  { name: 'Obthryme', season: 'Autumn', days: 28, description: 'Deep Autumn', moonName: 'Narrow moon', newMoon: 4, fullMoon: 19, wysendays: [] as string[] },
+  { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn', moonName: 'Black moon', newMoon: 5, fullMoon: 20, wysendays: ['The Day of Doors', 'Dolmenday'] },
 ];
+
+// Moon signs (optional rule, Player's Book pp174-175): the moon a character
+// was born under (each month's moon, in calendar order) and its phase.
+export const MOON_SIGNS = MONTHS.map((m) => m.moonName);
+
+export const MOON_PHASES = ['Waxing', 'Full', 'Waning'] as const;
 
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
 
-// The 7-day weekday cycle runs continuously across months and years —
-// pre-PR this used (day-of-month - 1) % 7, which falsely reset to Colly
-// at the start of each month and lost track of weekday on month/year
-// boundaries that aren't multiples of 7.
+// Every month is 4 standard weeks, always starting on Colly, followed by
+// its Wysendays (days 29+). Wysendays have their own names and are not
+// part of any week, so weekdays restart with each month rather than
+// running on across months and years (Player's Book p174; Dolmenwood
+// Calendar).
+export const WEEK_DAYS_PER_MONTH = 28;
+
+export function isWysenday(date: CalendarDate): boolean {
+  return date.day > WEEK_DAYS_PER_MONTH;
+}
+
+// Weekday name for days 1-28; the Wysenday's own name for days 29+.
 export function getDayName(date: CalendarDate): string {
-  return DAY_NAMES[((getAbsoluteDay(date) - 1) % 7 + 7) % 7];
+  if (isWysenday(date)) {
+    return MONTHS[date.month]?.wysendays[date.day - WEEK_DAYS_PER_MONTH - 1] ?? 'Wysenday';
+  }
+  return DAY_NAMES[((date.day - 1) % 7 + 7) % 7];
 }
 
 export function formatCalendarDate(date: CalendarDate): string {
@@ -254,23 +265,12 @@ export function formatCalendarDate(date: CalendarDate): string {
   return `${date.day} ${month.name} (${dayName}), Year ${date.year}`;
 }
 
-export function getSeasonIcon(month: number): string {
-  const season = MONTHS[month]?.season;
-  switch (season) {
-    case 'Winter': return '\u2744';
-    case 'Spring': return '\u2618';
-    case 'Summer': return '\u2600';
-    case 'Autumn': return '\u2618';
-    default: return '';
-  }
-}
-
 export const FESTIVALS: Record<string, { month: number; day: number; name: string }[]> = {
   festivals: [
     { month: 0, day: 29, name: 'Hanglemas' },
     { month: 0, day: 30, name: "Dyboll's Day" },
     { month: 2, day: 29, name: "Yarl's Day" },
-    { month: 2, day: 30, name: 'Day of Virgins' },
+    { month: 2, day: 30, name: 'The Day of Virgins' },
     { month: 3, day: 2, name: 'Feast of Cats' },
     { month: 3, day: 29, name: 'Hopfast' },
     { month: 4, day: 29, name: 'Smithing' },
@@ -283,7 +283,7 @@ export const FESTIVALS: Record<string, { month: number; day: number; name: strin
     { month: 9, day: 25, name: 'Feast of St Clewyd' },
     { month: 9, day: 29, name: "Shub's Eve" },
     { month: 9, day: 30, name: 'Druden Day / Festival of the Green Man' },
-    { month: 11, day: 29, name: 'Day of Doors' },
+    { month: 11, day: 29, name: 'The Day of Doors' },
     { month: 11, day: 30, name: 'Dolmenday - The Hunting of the Winter Hart' },
   ],
 };
@@ -303,8 +303,7 @@ export const CELESTIAL_EVENTS: { month: number; day: number; name: string }[] = 
 ];
 
 // ──────────────────────────────────────────────────────────
-// Moon Phase Calculator
-// Lunar cycle: 29⅓ days (13 waxing / 3 full / 13 waning)
+// Date Arithmetic
 // ──────────────────────────────────────────────────────────
 
 export function getDayOfYear(date: CalendarDate): number {
@@ -321,9 +320,6 @@ export function getDayOfYear(date: CalendarDate): number {
 export const DAYS_IN_YEAR = MONTHS.reduce((sum, m) => sum + m.days, 0);
 
 // Monotonic day count anchored so that Year 1 day 1 = absolute day 1.
-// Using (year - 1) means year-1 saves keep the same day-of-cycle they
-// had before the year field was introduced (no moon-phase jump on
-// upgrade); for later years the cycle simply continues monotonically.
 // Lets all date arithmetic be plain subtraction.
 export function getAbsoluteDay(date: CalendarDate): number {
   return (date.year - 1) * DAYS_IN_YEAR + getDayOfYear(date);
@@ -355,14 +351,41 @@ export function addDays(date: CalendarDate, days: number): CalendarDate {
   return { day, month, year };
 }
 
-export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; dayInCycle: number } {
-  // Continuous 29-day cycle anchored to the absolute day count so the
-  // moon doesn't reset every January.
-  const absDay = getAbsoluteDay(date);
-  const cycleDay = ((absDay - 1) % 29 + 29) % 29 + 1; // 1–29, defensive against negatives
-  if (cycleDay <= 13) return { phase: 'waxing', dayInCycle: cycleDay };
-  if (cycleDay <= 16) return { phase: 'full', dayInCycle: cycleDay };
-  return { phase: 'waning', dayInCycle: cycleDay };
+// ──────────────────────────────────────────────────────────
+// Moon Phase Calculator
+// The lunar cycle is 29⅓ days, so exactly 12 moons fill the 352-day year
+// (Player's Book p174) and new and full moons fall on the same dates every
+// year: the days marked on the official calendar (MONTHS[].newMoon and
+// .fullMoon). Each moon waxes from its new moon (~13 days), is full for
+// 3 days centred on its full moon, then wanes (~13 days) until the next
+// new moon.
+// ──────────────────────────────────────────────────────────
+
+// Day of the year of each month's new and full moon.
+const LUNATIONS = MONTHS.map((m, month) => ({
+  moonName: m.moonName,
+  newMoon: getDayOfYear({ day: m.newMoon, month, year: 1 }),
+  fullMoon: getDayOfYear({ day: m.fullMoon, month, year: 1 }),
+}));
+
+export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; moonName: string } {
+  const doy = getDayOfYear(date);
+  // The moon in the sky is the one whose new moon came most recently.
+  // Until Grimvold's new moon, that is still last year's Black moon.
+  const last = LUNATIONS[LUNATIONS.length - 1];
+  let moon = { ...last, newMoon: last.newMoon - DAYS_IN_YEAR, fullMoon: last.fullMoon - DAYS_IN_YEAR };
+  for (const lunation of LUNATIONS) {
+    if (lunation.newMoon <= doy) moon = lunation;
+  }
+  const phase = Math.abs(doy - moon.fullMoon) <= 1 ? 'full' : doy < moon.fullMoon ? 'waxing' : 'waning';
+  return { phase, moonName: moon.moonName };
+}
+
+// Name of the moon in the sky on this date. Usually the month's own moon,
+// but the first few days of a month, before its new moon, still belong to
+// the previous month's waning moon.
+export function getMoonName(date: CalendarDate): string {
+  return getMoonPhase(date).moonName;
 }
 
 export function getMoonPhaseLabel(date: CalendarDate): string {
