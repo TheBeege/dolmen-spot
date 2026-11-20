@@ -13,6 +13,10 @@ and writes:
   NotoSans-Regular, NotoSans-Bold,           Latin (incl. Latin Extended and Vietnamese),
   NotoSans-Italic, NotoSerif-Bold            Greek (incl. polytonic) and Cyrillic.
                                              Fetched on every export.
+  NotoSansSymbols                            Symbols players write in notes (check
+                                             boxes and marks, stars, card suits, dice,
+                                             music...), from Noto Sans Symbols and
+                                             Symbols 2. Fetched on every export.
   NotoSansCJK-Hangul                         Korean Hangul. Fetched only for sheets
                                              with Korean text.
   NotoSansCJK-HanKana                        Japanese kana and the Han characters of
@@ -42,6 +46,7 @@ import urllib.request
 
 from fontTools import subset
 from fontTools import version as fonttools_version
+from fontTools.merge import Merger
 from fontTools.pens.t2CharStringPen import T2CharStringPen
 from fontTools.ttLib import TTFont
 from fontTools.ttLib.tables._g_l_y_f import Glyph
@@ -52,7 +57,8 @@ OUT_DIR = os.path.join(REPO, 'public', 'fonts', 'pdf')
 MANIFEST = os.path.join(REPO, 'src', 'lib', 'pdf', 'font-files.ts')
 FONTTOOLS_VERSION = '4.63.0'
 
-# Noto Sans/Serif 2.015 and Noto Sans CJK 2.004, pinned to fixed commits/tags.
+# Noto Sans/Serif 2.015, Noto Sans Symbols 2.003, Noto Sans Symbols 2 2.008 and
+# Noto Sans CJK 2.004, pinned to fixed commits/tags.
 LGC = 'https://raw.githubusercontent.com/notofonts/notofonts.github.io/28b15b4b43b7bed62b5cf6e6b0b5ff5846270535/fonts'
 CJK = 'https://raw.githubusercontent.com/notofonts/noto-cjk/Sans2.004'
 SOURCES = {
@@ -64,16 +70,23 @@ SOURCES = {
                             '678288f868807d4d64a6f3b51466871d117d915780381ce9d0ed4b3bcbd06d37'),
     'NotoSerif-Bold.ttf': (f'{LGC}/NotoSerif/unhinted/ttf/NotoSerif-Bold.ttf',
                            '24ad531e6b05ddad8c3d89572d2c93eb86a6b74e652ce7ee3c3e171de68e84c3'),
+    'NotoSansSymbols-Regular.ttf': (f'{LGC}/NotoSansSymbols/unhinted/ttf/NotoSansSymbols-Regular.ttf',
+                                    '6eea9cb4cd39269ea9f95ba5c2735f80ae74049dfc9e1a7c932a5cfc8f0c3030'),
+    'NotoSansSymbols2-Regular.ttf': (f'{LGC}/NotoSansSymbols2/unhinted/ttf/NotoSansSymbols2-Regular.ttf',
+                                     'c4a0a80f0041ce4be81e2478faad22776d23edb98ae3f0d19bd37044820ecf9d'),
     'NotoSansCJKjp-Regular.otf': (f'{CJK}/Sans/OTF/Japanese/NotoSansCJKjp-Regular.otf',
                                   '68a3fc98800b2a27b371f2fb79991daf3633bd89309d4ffaa6946fd587f375b5'),
     'OFL-Noto.txt': ('https://raw.githubusercontent.com/notofonts/latin-greek-cyrillic/NotoSans-v2.015/OFL.txt',
                      'cee9892f9f0cc8fe882c9e9537ee6a89621d86ee7ceaf70b02e2b2b1c25c061a'),
+    'OFL-NotoSansSymbols.txt': ('https://raw.githubusercontent.com/notofonts/symbols/NotoSansSymbols2-v2.008/OFL.txt',
+                                'b118dd41337806a5d4797052c77caf3bd096aed783e5eb21b4d11154351e1ac0'),
     'OFL-NotoSansCJK.txt': (f'{CJK}/LICENSE',
                             '6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2'),
 }
 
 LICENSES = {
     'LICENSE-NotoSans-NotoSerif.txt': 'OFL-Noto.txt',
+    'LICENSE-NotoSansSymbols.txt': 'OFL-NotoSansSymbols.txt',
     'LICENSE-NotoSansCJK.txt': 'OFL-NotoSansCJK.txt',
 }
 
@@ -113,6 +126,44 @@ LGC_FONTS = {
     'NotoSans-Italic.ttf': ('NotoSans-Italic.ttf', 900, -200),
     'NotoSerif-Bold.ttf': ('NotoSerif-Bold.ttf', 900, -220),
 }
+
+# ── Symbols ──────────────────────────────────────────────────
+
+# Symbols players write in their notes, from Noto Sans Symbols 2 or, where
+# only it has one, Noto Sans Symbols. Only symbols that are text by default:
+# the sheet leaves out emoji such as 🔥, ⚡ and ✨ (see src/lib/pdf/text.ts).
+SYMBOLS = ranges(
+    (0x2190, 0x2199),  # arrows ← ↑ → ↓ ↔ ↕ ↖ ↗ ↘ ↙
+    (0x25A0, 0x25A3), (0x25AA, 0x25AB),  # squares ■ □ ▢ ▣ ▪ ▫
+    (0x25B2, 0x25B3), (0x25B6, 0x25B7), (0x25BC, 0x25BD), (0x25C0, 0x25C1),  # triangles ▲ △ ▶ ▷ ▼ ▽ ◀ ◁
+    (0x25C6, 0x25C8), (0x25CB, 0x25CB), (0x25CE, 0x25D1), (0x25EF, 0x25EF),  # ◆ ◇ ◈ ○ ◎ ● ◐ ◑ ◯
+    (0x25FB, 0x25FC),  # ◻ ◼
+    (0x2600, 0x2606),  # weather, stars ☀ ☁ ☂ ☃ ☄ ★ ☆
+    (0x2609, 0x2609),  # ☉
+    (0x2610, 0x2612),  # ballot boxes ☐ ☑ ☒
+    (0x2618, 0x2618),  # ☘
+    (0x261A, 0x2620),  # pointing hands ☚ ☛ ☜ ☝ ☞ ☟, ☠
+    (0x2624, 0x2626), (0x2628, 0x2629), (0x262F, 0x262F),  # ☤ ☥ ☦ ☨ ☩ ☯
+    (0x2638, 0x2647),  # ☸ ☹ ☺ ☻ ☼, moons ☽ ☾, planets ☿ ♀ ♁ ♂ ♃ ♄ ♅ ♆ ♇
+    (0x2654, 0x2667),  # chess ♔–♟, card suits ♠ ♡ ♢ ♣ ♤ ♥ ♦ ♧
+    (0x2669, 0x266F),  # music ♩ ♪ ♫ ♬ ♭ ♮ ♯
+    (0x2680, 0x2685),  # dice ⚀ ⚁ ⚂ ⚃ ⚄ ⚅
+    (0x2690, 0x2692),  # flags ⚐ ⚑, hammer and pick ⚒
+    (0x2694, 0x269A),  # crossed swords ⚔, ⚕ ⚖ ⚗ ⚘ ⚙ ⚚
+    (0x269C, 0x269D),  # fleur-de-lis ⚜, ⚝
+    (0x26A0, 0x26A0),  # ⚠
+    (0x26B0, 0x26B1),  # coffin ⚰, urn ⚱
+    (0x26CF, 0x26CF),  # pick ⛏
+    (0x26E4, 0x26E7),  # pentagrams ⛤ ⛥ ⛦ ⛧
+    (0x2702, 0x2702), (0x2709, 0x2709),  # ✂ ✉
+    (0x270E, 0x2710),  # pencils ✎ ✏ ✐
+    (0x2713, 0x2718),  # check and cross marks ✓ ✔ ✕ ✖ ✗ ✘
+    (0x271D, 0x2720),  # crosses ✝ ✞ ✟ ✠
+    (0x2726, 0x2727), (0x2729, 0x2730),  # stars ✦ ✧ ✩ ✪ ✫ ✬ ✭ ✮ ✯ ✰
+    (0x2764, 0x2767),  # hearts ❤ ❥ ❦ ❧
+    (0x1F56F, 0x1F56F), (0x1F5DD, 0x1F5DD), (0x1F5E1, 0x1F5E1), (0x1F6E1, 0x1F6E1),  # 🕯 🗝 🗡 🛡
+    (0x1F5F7, 0x1F5F7), (0x1F5F9, 0x1F5F9),  # ballot boxes 🗷 🗹
+)
 
 # ── Korean, Japanese and Chinese ─────────────────────────────
 
@@ -283,6 +334,32 @@ def subset_font(source_path, unicodes, *, layout_features, ascender, descender, 
     return buffer.getvalue(), set(font.getBestCmap())
 
 
+def build_symbols(cache_dir):
+    """One font with every symbol in SYMBOLS, merged from Noto Sans Symbols 2 and Symbols."""
+    symbols2 = fetch(cache_dir, 'NotoSansSymbols2-Regular.ttf')
+    symbols1 = fetch(cache_dir, 'NotoSansSymbols-Regular.ttf')
+    in2 = SYMBOLS & set(TTFont(symbols2, lazy=True).getBestCmap())
+    in1 = (SYMBOLS - in2) & set(TTFont(symbols1, lazy=True).getBestCmap())
+    assert in1 | in2 == SYMBOLS, f'no source font has {sorted(map(hex, SYMBOLS - in1 - in2))}'
+    parts = []
+    for source, unicodes in [(symbols2, in2), (symbols1, in1)]:
+        data, _ = subset_font(source, unicodes, layout_features=[], ascender=900, descender=-200,
+                              drop_tables=['GDEF', 'GPOS', 'GSUB', 'vhea', 'vmtx'])
+        parts.append(io.BytesIO(data))
+    font = Merger().merge(parts)
+    # The merger stamps the fonts with the current time; keep Symbols 2's dates
+    # so that the build is reproducible.
+    source_head = TTFont(symbols2, lazy=True)['head']
+    font['head'].created, font['head'].modified = source_head.created, source_head.modified
+    font.recalcTimestamp = False
+    # Empty hyphens, as for the CJK fonts below: react-pdf may break a line where
+    # the text changes to or from a symbol, drawing a hyphen in this font.
+    add_empty_glyphs(font, [0x2D, 0x2010])
+    buffer = io.BytesIO()
+    font.save(buffer)
+    return buffer.getvalue(), set(font.getBestCmap())
+
+
 def build(cache_dir, out_dir, manifest_path):
     os.makedirs(out_dir, exist_ok=True)
     report = []
@@ -302,6 +379,9 @@ def build(cache_dir, out_dir, manifest_path):
                                  ascender=ascender, descender=descender, empty=[0x0A])
         assert cmap == shared | {0x0A}, f'{out}: coverage differs from the other faces'
         report.append((out, len(cmap), data))
+
+    data, cmap = build_symbols(cache_dir)
+    report.append(('NotoSansSymbols.ttf', len(cmap), data))
 
     cjk_source = fetch(cache_dir, 'NotoSansCJKjp-Regular.otf')
     cjk_cmap = set(TTFont(cjk_source, lazy=True).getBestCmap())

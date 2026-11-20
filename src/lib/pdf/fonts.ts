@@ -5,11 +5,12 @@
  * content (font-files.ts), so browsers may cache them for good.
  *
  * Every export uses Noto Sans (regular, bold, italic) and Noto Serif Bold for
- * the headings: Latin, Greek and Cyrillic, about 0.8 MB together. A sheet
- * with Korean text also fetches Noto Sans CJK's Hangul (1.2 MB); one with
- * Japanese or Chinese text, its kana and Han characters (2.4 MB). Each style
- * names a list of families, and react-pdf draws every character with the
- * first family in the list that has it.
+ * the headings, covering Latin, Greek and Cyrillic, and a font of symbols
+ * from Noto Sans Symbols and Symbols 2: about 0.8 MB together. A sheet with
+ * Korean text also fetches Noto Sans CJK's Hangul (1.2 MB); one with Japanese
+ * or Chinese text, its kana and Han characters (2.5 MB). Each style names a
+ * list of families, and react-pdf draws every character with the first
+ * family in the list that has it.
  */
 import { Font } from '@react-pdf/renderer';
 import { pdfLoadError } from './errors';
@@ -36,6 +37,7 @@ const FACES = {
   ],
   italic: [{ file: PDF_FONT_FILES['NotoSans-Italic'], fontWeight: 400 }],
   serif: [{ file: PDF_FONT_FILES['NotoSerif-Bold'], fontWeight: 700 }],
+  symbols: [{ file: PDF_FONT_FILES['NotoSansSymbols'], fontWeight: 400 }],
   hangul: [{ file: PDF_FONT_FILES['NotoSansCJK-Hangul'], fontWeight: 400 }],
   hanKana: [{ file: PDF_FONT_FILES['NotoSansCJK-HanKana'], fontWeight: 400 }],
 } as const;
@@ -68,7 +70,7 @@ function warmGlyphCache(font: LoadedFont) {
   warmedFonts.add(font);
 }
 
-// The Noto Sans and Serif faces have composite glyphs; the CJK fonts (CFF outlines) don't.
+// The Noto Sans and Serif faces have composite glyphs; the symbols and CJK fonts don't.
 const HAS_COMPOSITE_GLYPHS = new Set<FamilyKey>(['sans', 'italic', 'serif']);
 
 /** fontFamily lists for the sheet's styles, and which characters they can draw. */
@@ -214,7 +216,7 @@ export function cjkFontsFor(text: string): CjkFamilyKey[] {
  * that failed.
  */
 export async function loadSheetFonts(text: string, onDownload?: () => void): Promise<SheetFonts> {
-  const keys: FamilyKey[] = ['sans', 'italic', 'serif', ...cjkFontsFor(text)];
+  const keys: FamilyKey[] = ['sans', 'italic', 'serif', 'symbols', ...cjkFontsFor(text)];
   if (keys.some((key) => !families.has(key))) onDownload?.();
   const controller = new AbortController();
   let loaded: Family[];
@@ -225,29 +227,31 @@ export async function loadSheetFonts(text: string, onDownload?: () => void): Pro
     controller.abort();
     throw pdfLoadError("Couldn't download the fonts for the PDF.", cause);
   }
-  const [sans, italic, serif, ...cjk] = loaded;
+  const [sans, italic, serif, symbols, ...cjk] = loaded;
   const latinFonts = [...sans.fonts, ...italic.fonts, ...serif.fonts];
-  const cjkFonts = cjk.flatMap((family) => family.fonts);
-  const cjkFamilies = cjk.map((family) => family.name);
+  const otherFonts = [...symbols.fonts, ...cjk.flatMap((family) => family.fonts)];
+  // After each style's own family: the symbols, then the CJK fonts.
+  const fallbacks = [symbols.name, ...cjk.map((family) => family.name)];
 
   // A character is printable if every Latin face has it (they cover the same
-  // characters, so text keeps its look in every style) or a CJK font does.
+  // characters, so text keeps its look in every style), or the symbols or a
+  // CJK font does.
   const cache = new Map<number, boolean>();
   const hasGlyph: HasGlyph = (codePoint) => {
     let has = cache.get(codePoint);
     if (has === undefined) {
       has =
         latinFonts.every((font) => font.hasGlyphForCodePoint(codePoint)) ||
-        cjkFonts.some((font) => font.hasGlyphForCodePoint(codePoint));
+        otherFonts.some((font) => font.hasGlyphForCodePoint(codePoint));
       cache.set(codePoint, has);
     }
     return has;
   };
 
   return {
-    sans: [sans.name, ...cjkFamilies],
-    italic: [italic.name, ...cjkFamilies],
-    serif: [serif.name, ...cjkFamilies],
+    sans: [sans.name, ...fallbacks],
+    italic: [italic.name, ...fallbacks],
+    serif: [serif.name, ...fallbacks],
     hasGlyph,
   };
 }

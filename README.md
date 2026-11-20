@@ -91,12 +91,13 @@ The "Download PDF" export draws the sheet with fonts from `public/fonts/pdf/`, w
 | File | Covers | Size | Fetched |
 |------|--------|------|---------|
 | `NotoSans-Regular`, `NotoSans-Bold`, `NotoSans-Italic`, `NotoSerif-Bold` | Latin (incl. Latin Extended and Vietnamese), Greek (incl. polytonic), Cyrillic | 0.78 MB together | on every export |
+| `NotoSansSymbols` | Symbols players write in notes: check boxes, check and cross marks, stars, card suits, dice, music, sun and moon, arrows... | 38 KB | on every export |
 | `NotoSansCJK-Hangul` | Korean Hangul | 1.2 MB | only for sheets with Korean text |
-| `NotoSansCJK-HanKana` | Japanese kana and the Han characters of JIS X 0208, GB 2312, Big5 level 1 and KS X 1001 | 2.4 MB | only for sheets with Japanese or Chinese text |
+| `NotoSansCJK-HanKana` | Japanese kana and the Han characters of JIS X 0208, GB 2312, Big5 level 1 and KS X 1001, plus variant kanji common in Japanese names | 2.5 MB | only for sheets with Japanese or Chinese text |
 
 Each file is named after its content (`NotoSans-Regular.<hash>.ttf`), and `next.config.ts` lets browsers cache these files for a year, so each one is downloaded once. The script writes the current names to `src/lib/pdf/font-files.ts`, which the app imports.
 
-They are subsets of [Noto Sans, Noto Serif](https://github.com/notofonts/latin-greek-cyrillic) 2.015 and [Noto Sans CJK](https://github.com/notofonts/noto-cjk) 2.004, licensed under the SIL Open Font License 1.1 (`public/fonts/pdf/LICENSE-*.txt`). Emoji are left out, and letters from scripts the fonts don't cover (Arabic, Hebrew, Devanagari, Thai...) print as `?`.
+They are subsets of [Noto Sans, Noto Serif](https://github.com/notofonts/latin-greek-cyrillic) 2.015, [Noto Sans Symbols and Symbols 2](https://github.com/notofonts/symbols) 2.003 and 2.008 (merged into one font) and [Noto Sans CJK](https://github.com/notofonts/noto-cjk) 2.004, licensed under the SIL Open Font License 1.1 (`public/fonts/pdf/LICENSE-*.txt`). Emoji such as 🔥 are left out (a symbol such as ❤ prints, even when written as the emoji ❤️), and letters from scripts the fonts don't cover (Arabic, Hebrew, Devanagari, Thai...) print as `?`.
 
 To rebuild them (for example to cover more characters), edit and run the script. It downloads the pinned releases, checks their SHA-256 and writes the subsets; with the same fontTools version the output is byte-identical:
 
