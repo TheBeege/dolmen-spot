@@ -45,6 +45,7 @@ import {
   getClassName,
   getCoinGpEquivalent,
   getFighterTalentCount,
+  getKindredClassLabel,
   getKindredName,
   getRuneUsageFrequency,
   skillKeyToDisplayName,
@@ -484,15 +485,9 @@ function isKindredClass(c: Character): boolean {
   return !!c.kindred && c.kindred !== 'human' && !c.class;
 }
 
-/** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" */
+/** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" (the same label as the app's header) */
 export function identityLine(c: Character): string {
-  const parts = [`Level ${c.level}`];
-  const kindred = kindredName(c);
-  const cls = className(c);
-  if (kindred) parts.push(kindred);
-  if (cls) parts.push(cls);
-  else if (isKindredClass(c)) parts.push('(kindred-class)');
-  return parts.join(' ');
+  return [`Level ${c.level}`, getKindredClassLabel(c)].filter(Boolean).join(' ');
 }
 
 function calcNote(stored: number, calculated: number | null, format: (n: number) => string = String): string | undefined {

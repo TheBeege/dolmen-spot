@@ -201,6 +201,15 @@ export function getClassName(id: string): string {
   return CLASSES.find(c => c.id === id)?.name ?? id;
 }
 
+/** "Woodgrue Enchanter", "Elf (kindred-class)", "Human"; '' when neither is chosen. */
+export function getKindredClassLabel(character: Pick<Character, 'kindred' | 'class'>): string {
+  const parts: string[] = [];
+  if (character.kindred) parts.push(getKindredName(character.kindred));
+  if (character.class) parts.push(getClassName(character.class));
+  else if (character.kindred && character.kindred !== 'human') parts.push('(kindred-class)');
+  return parts.join(' ');
+}
+
 export const ALIGNMENTS = ['Lawful', 'Neutral', 'Chaotic'] as const;
 
 export const ABILITY_MODIFIER_TABLE: Record<number, number> = {
