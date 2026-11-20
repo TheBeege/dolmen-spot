@@ -62,6 +62,17 @@ function getCelestialEventsForMonth(month: number): { day: number; name: string 
   return CELESTIAL_EVENTS.filter((e) => e.month === month);
 }
 
+// Day of the month as an ordinal: 3 -> "3rd", 4 -> "4th", 21 -> "21st".
+function ordinal(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
+}
+
 export default function Adventuring({ character, onChange }: AdventuringProps) {
   const { currentDate, currentLocation, journalEntries } = character;
   const currentMonth = MONTHS[currentDate.month];
@@ -834,7 +845,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           {currentMonth.days} days &middot; {currentMonth.description}
         </div>
         <div className="text-[#f5e6c8]/60 text-sm mb-2">
-          Moon: {currentMonth.moonName}
+          Moon: {currentMonth.moonName} (new {ordinal(currentMonth.newMoon)}, full {ordinal(currentMonth.fullMoon)})
           {currentMonth.wysendays.length > 0 && (
             <span> &middot; Wysendays: {currentMonth.wysendays.join(', ')}</span>
           )}

@@ -174,16 +174,19 @@ export default function ReferencePanel() {
 
       {tab === 'calendar' && (
         <div className="space-y-4">
-          {/* Year overview */}
+          {/* Year overview. On phones the season sits under the month name
+              instead of in its own column, so the moon days stay in view. */}
           <div className="overflow-x-auto">
             <table className="w-full text-xs text-[#f5e6c8]">
               <thead>
                 <tr className="text-[#c4a35a] border-b border-[#5a3a28]">
                   <th className="text-left py-1 pr-2">#</th>
                   <th className="text-left py-1 pr-2">Month</th>
-                  <th className="text-left py-1 pr-2">Season</th>
+                  <th className="hidden sm:table-cell text-left py-1 pr-2">Season</th>
                   <th className="text-center py-1 px-1">Days</th>
                   <th className="text-left py-1 px-1">Moon</th>
+                  <th className="text-center py-1 px-1">New</th>
+                  <th className="text-center py-1 px-1">Full</th>
                   <th className="text-left py-1 px-1">Wysendays</th>
                 </tr>
               </thead>
@@ -191,10 +194,15 @@ export default function ReferencePanel() {
                 {MONTHS.map((m, i) => (
                   <tr key={m.name} className="border-b border-[#5a3a28]/30">
                     <td className="py-1 pr-2 text-[#f5e6c8]/40">{i + 1}</td>
-                    <td className="py-1 pr-2 font-semibold">{m.name}</td>
-                    <td className="py-1 pr-2 text-[#f5e6c8]/60">{m.season}</td>
+                    <td className="py-1 pr-2 font-semibold">
+                      {m.name}
+                      <div className="sm:hidden font-normal text-[#f5e6c8]/60">{m.season}</div>
+                    </td>
+                    <td className="hidden sm:table-cell py-1 pr-2 text-[#f5e6c8]/60">{m.season}</td>
                     <td className="text-center py-1 px-1">{m.days}</td>
                     <td className="py-1 px-1 text-[#f5e6c8]/60">{m.moonName}</td>
+                    <td className="text-center py-1 px-1 text-[#f5e6c8]/60">{m.newMoon}</td>
+                    <td className="text-center py-1 px-1 text-[#f5e6c8]/60">{m.fullMoon}</td>
                     <td className="py-1 px-1 text-[#f5e6c8]/60">
                       {m.wysendays.length > 0 ? m.wysendays.join(', ') : '—'}
                     </td>
@@ -270,6 +278,7 @@ export default function ReferencePanel() {
             <div className="text-[#c4a35a] text-sm font-semibold mb-1">Moon Phases</div>
             <div>Lunar cycle: 29&#x2153; days (12 lunar months per year), so new and full moons fall on the same dates every year</div>
             <div>Three phases: Waxing (about 13 days), Full (3 days), Waning (about 13 days)</div>
+            <div>Each moon is named for the month of its new moon, so until that day the previous month&apos;s moon is still waning.</div>
           </div>
         </div>
       )}
