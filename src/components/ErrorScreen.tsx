@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { SAVE_DATA_FORMAT } from '@/lib/save-data-file';
 
 /**
  * What app/error.tsx and app/global-error.tsx show when the sheet fails to
- * render. It must never throw itself, so it imports nothing from the app,
- * touches storage only when a button is pressed, and catches every failure.
+ * render. It must never throw itself, so it imports only a dependency-free
+ * constant, and every storage or download call sits inside try/catch.
  */
 
 // Every key Dolmen Spot keeps in localStorage starts with this.
@@ -15,17 +16,105 @@ const ISSUES_URL = 'https://github.com/TheBeege/dolmen-spot/issues';
 const BUTTON =
   'px-3 py-1.5 text-sm font-semibold rounded text-[#f5e6c8] transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]';
 
-function describeError(error: unknown): string {
+/** What can be said about the saved characters, given the error and this browser's storage. */
+type SaveState = 'saved' | 'full' | 'blocked';
+
+const MESSAGES: Record<SaveState, { status: string; next: string }> = {
+  saved: {
+    status: "Dolmen Spot hit an error and couldn't show this page. Your character data is still saved safely in this browser.",
+    next: 'Try again, or download a copy of your save data to keep.',
+  },
+  full: {
+    status: "This browser's storage is full, so Dolmen Spot couldn't save your latest change. Everything saved before it is still in this browser.",
+    next: 'Try again to go back to your last saved version, or download a copy of your save data to keep.',
+  },
+  blocked: {
+    status: "Dolmen Spot couldn't open this page because the browser is blocking its storage (site data), so your characters can't be loaded or saved here.",
+    next: "Allow site data for this site in your browser's settings, then reload the page.",
+  },
+};
+
+function isQuotaError(error: unknown): boolean {
   try {
-    if (error instanceof Error) return `${error.name}: ${error.message}`;
-    return String(error);
+    const name = typeof error === 'object' && error !== null ? (error as { name?: unknown }).name : undefined;
+    return name === 'QuotaExceededError' || name === 'NS_ERROR_DOM_QUOTA_REACHED';
   } catch {
-    return 'Unknown error';
+    return false;
   }
 }
 
-/** Everything the app has saved in this browser, exactly as stored, in a file that explains itself. */
-function buildSaveDataFile(error: unknown): string {
+function getSaveState(error: unknown): SaveState {
+  if (isQuotaError(error)) return 'full';
+  if (typeof window === 'undefined') return 'saved'; // not in a browser (never the case for these errors)
+  try {
+    // Throws when the browser blocks site data.
+    window.localStorage.getItem(`${SAVE_KEY_PREFIX}characters`);
+    return 'saved';
+  } catch {
+    return 'blocked';
+  }
+}
+
+interface ErrorDetails {
+  name: string;
+  message: string;
+  digest?: string;
+  stack?: string;
+}
+
+function getErrorDetails(error: unknown): ErrorDetails {
+  try {
+    if (error instanceof Error) {
+      const digest = (error as Error & { digest?: unknown }).digest;
+      return {
+        name: error.name,
+        message: error.message,
+        ...(typeof digest === 'string' ? { digest } : {}),
+        ...(typeof error.stack === 'string' ? { stack: error.stack } : {}),
+      };
+    }
+    return { name: 'Error', message: String(error) };
+  } catch {
+    return { name: 'Error', message: 'Unknown error' };
+  }
+}
+
+function formatErrorDetails(details: ErrorDetails): string {
+  return [
+    `${details.name}: ${details.message}`,
+    details.digest ? `Digest: ${details.digest}` : '',
+    details.stack ? `\n${details.stack}` : '',
+  ].filter(Boolean).join('\n');
+}
+
+// These behave like downloadFile / localFileStamp in PR #16's
+// src/lib/download.ts; use those instead once both are merged.
+/** Local date and time for a file name, e.g. `2026-11-20-1837`. */
+function localFileStamp(date: Date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
+}
+
+/**
+ * Offers `text` as a file download. The link is added to the page before
+ * clicking (some browsers ignore clicks on detached links), and the object URL
+ * is revoked only after a minute: revoking it at once can cancel a download
+ * that hasn't started yet.
+ */
+function downloadFile(fileName: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = fileName;
+  link.style.display = 'none';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+}
+
+/** Everything the app has saved in this browser, exactly as stored, in a file that explains itself. Throws if storage can't be read. */
+function buildSaveDataFile(details: ErrorDetails): string {
   const saved: Record<string, string | null> = {};
   for (let i = 0; i < localStorage.length; i++) {
     const key = localStorage.key(i);
@@ -33,10 +122,14 @@ function buildSaveDataFile(error: unknown): string {
   }
   return JSON.stringify(
     {
+      format: SAVE_DATA_FORMAT,
+      version: 1,
       app: 'Dolmen Spot',
-      about: `Everything Dolmen Spot had saved in this browser when it hit an error, exactly as stored. Keep this file safe. It also helps if you report the problem at ${ISSUES_URL}`,
+      about:
+        "A copy of everything Dolmen Spot had saved in this browser when it hit an error, exactly as stored. " +
+        `It isn't a character file and can't be imported. Keep it safe, or attach it to a bug report at ${ISSUES_URL}`,
       downloadedAt: new Date().toISOString(),
-      error: describeError(error),
+      error: details,
       localStorage: saved,
     },
     null,
@@ -44,37 +137,69 @@ function buildSaveDataFile(error: unknown): string {
   );
 }
 
+const UNREADABLE = "This browser won't let Dolmen Spot read its storage right now, so there's no save data to copy or download.";
+
 export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onTryAgain: () => void }) {
-  // The save data, shown for copying when the browser won't start a download.
+  // Chosen when the screen appears (getSaveState never throws), and switched
+  // to 'blocked' if storage later can't be read, so the message stays true.
+  const [saveState, setSaveState] = useState<SaveState>(() => getSaveState(error));
+  const [details] = useState(() => getErrorDetails(error));
+  // The save data, shown for copying on request or when a download fails.
   const [copyText, setCopyText] = useState<string | null>(null);
+  const [copyNote, setCopyNote] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
+  const copyRef = useRef<HTMLTextAreaElement>(null);
+
+  // Move focus to the copy box when it opens, ready to copy.
+  useEffect(() => {
+    if (copyText === null) return;
+    try {
+      copyRef.current?.focus();
+      copyRef.current?.select();
+    } catch {
+      // Focus is a convenience; the box is still there to copy from.
+    }
+  }, [copyText]);
+
+  const readSaveData = (): string | null => {
+    setProblem(null);
+    try {
+      return buildSaveDataFile(details);
+    } catch {
+      setSaveState('blocked');
+      setProblem(UNREADABLE);
+      return null;
+    }
+  };
 
   const downloadSaveData = () => {
-    setProblem(null);
-    let text: string;
+    const text = readSaveData();
+    if (text === null) return;
     try {
-      text = buildSaveDataFile(error);
+      downloadFile(`dolmen-spot-save-data-${localFileStamp()}.json`, text);
     } catch {
-      setProblem('This browser won’t let Dolmen Spot read its storage right now, so there’s nothing to download.');
-      return;
-    }
-    try {
-      const stamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
-      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `dolmen-spot-save-data-${stamp}.json`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      // Revoking straight away can cancel the download in some browsers.
-      setTimeout(() => URL.revokeObjectURL(url), 1000);
-    } catch {
+      setCopyNote("The download didn't start. Copy this text into a file to keep it:");
       setCopyText(text);
     }
   };
 
-  const details = describeError(error);
+  const showSaveData = () => {
+    const text = readSaveData();
+    if (text === null) return;
+    setCopyNote('Copy this text into a file to keep it:');
+    setCopyText(text);
+  };
+
+  const reloadPage = () => {
+    try {
+      window.location.reload();
+    } catch {
+      // Nothing more to try; the browser's own reload still works.
+    }
+  };
+
+  const message = MESSAGES[saveState];
+  const canReadSaves = saveState !== 'blocked';
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-8 bg-[#1a1a2e] text-[#f5e6c8]">
@@ -82,30 +207,44 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
         <p className="text-sm font-bold tracking-wide text-[#c4a35a]">Dolmen Spot</p>
         <div role="alert">
           <h1 className="text-xl font-bold text-[#c4a35a] mt-1">Something went wrong</h1>
-          <p className="text-sm leading-relaxed mt-3">
-            Dolmen Spot hit an error and couldn&apos;t show this page. Your character data is still saved safely in this browser.
-          </p>
+          <p className="text-sm leading-relaxed mt-3">{message.status}</p>
         </div>
-        <p className="text-sm leading-relaxed mt-2 text-[#f5e6c8]/80">
-          Try again, or download a copy of your save data to keep.
-        </p>
+        <p className="text-sm leading-relaxed mt-2 text-[#f5e6c8]/80">{message.next}</p>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          <button type="button" onClick={onTryAgain} className={`${BUTTON} bg-[#2d4a2e] hover:bg-[#3d6b3e]`}>
-            Try again
+          {canReadSaves && (
+            <button type="button" onClick={onTryAgain} className={`${BUTTON} bg-[#2d4a2e] hover:bg-[#3d6b3e]`}>
+              Try Again
+            </button>
+          )}
+          <button type="button" onClick={reloadPage} className={`${BUTTON} bg-[#3a3a5e] hover:bg-[#4a4a6e]`}>
+            Reload Page
           </button>
-          <button type="button" onClick={downloadSaveData} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#7a5a38]`}>
-            Download save data
-          </button>
+          {canReadSaves && (
+            <>
+              <button type="button" onClick={downloadSaveData} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#7a5a38]`}>
+                Download Save Data
+              </button>
+              <button type="button" onClick={showSaveData} className={`${BUTTON} border border-[#5a3a28] hover:bg-[#3a3a4e]`}>
+                Show Save Data to Copy
+              </button>
+            </>
+          )}
         </div>
 
-        {problem && <p className="text-xs text-[#ff6b4a] mt-3">{problem}</p>}
+        {problem && (
+          <p role="alert" className="text-xs text-[#ff6b4a] mt-3">
+            {problem}
+          </p>
+        )}
         {copyText !== null && (
           <div className="mt-3">
-            <p className="text-xs text-[#f5e6c8]/80 mb-1">
-              The download didn&apos;t start. Copy this text into a file to keep it:
-            </p>
+            <label htmlFor="save-data-copy" className="block text-xs text-[#f5e6c8]/80 mb-1">
+              {copyNote}
+            </label>
             <textarea
+              id="save-data-copy"
+              ref={copyRef}
               readOnly
               value={copyText}
               rows={6}
@@ -115,16 +254,16 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
           </div>
         )}
 
-        <p className="text-xs text-[#f5e6c8]/60 mt-4">
+        <p className="text-xs text-[#f5e6c8]/70 mt-4">
           If this keeps happening, please{' '}
           <a href={ISSUES_URL} target="_blank" rel="noopener noreferrer" className="text-[#c4a35a] underline hover:text-[#dbc07a]">
             report it on GitHub
           </a>
           .
         </p>
-        <details className="mt-3 text-xs text-[#f5e6c8]/60">
-          <summary className="cursor-pointer hover:text-[#f5e6c8]/80">Technical details</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-words font-mono">{details}</pre>
+        <details className="mt-3 text-xs text-[#f5e6c8]/70">
+          <summary className="cursor-pointer hover:text-[#f5e6c8]/90">Technical details</summary>
+          <pre className="mt-1 whitespace-pre-wrap break-words font-mono">{formatErrorDetails(details)}</pre>
         </details>
       </div>
     </main>
