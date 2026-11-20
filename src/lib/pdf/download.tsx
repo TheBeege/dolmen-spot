@@ -2,35 +2,37 @@
  * Entry point for the PDF export. The "Download PDF" button loads this module
  * with a dynamic import() when clicked, so @react-pdf/renderer (and its
  * layout engine) is split into its own chunk and never ships with the page.
+ * The fonts are fetched from /fonts/pdf/ at the same point (see fonts.ts).
  * Browser-only: it builds a Blob and clicks a temporary download link.
  */
 import { pdf } from '@react-pdf/renderer';
 import type { Character } from '@/lib/types';
-import { CharacterSheetDocument } from './CharacterSheetDocument';
+import { CharacterSheetDocument, sheetText } from './CharacterSheetDocument';
 import { pdfFileName } from './filename';
-import { browserPageSize, type PdfPageSize } from './page-size';
+import { loadSheetFonts } from './fonts';
+import { browserPageSize } from './page-size';
 
-export async function renderCharacterPdf(
-  character: Character,
-  pageSize: PdfPageSize = browserPageSize(),
-  exportedAt: Date = new Date(),
-): Promise<Blob> {
-  const exportedOn = exportedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  return pdf(
-    <CharacterSheetDocument character={character} pageSize={pageSize} exportedOn={exportedOn} />,
-  ).toBlob();
+// The object URL of the last PDF saved. It is released when the next PDF is
+// saved or the page is left (pagehide), never on a timer: Safari on iOS asks
+// before it downloads and only reads the file once the player confirms,
+// however long that takes. Keeping one PDF around costs a few hundred
+// kilobytes at most.
+let lastUrl: string | null = null;
+
+function releaseLastUrl() {
+  if (lastUrl) URL.revokeObjectURL(lastUrl);
+  lastUrl = null;
 }
 
-/** Renders the character sheet and saves it as `<name>-dolmen-spot.pdf`. */
-export async function downloadCharacterPdf(character: Character): Promise<void> {
-  if (typeof window === 'undefined' || typeof document === 'undefined') {
-    throw new Error('PDF export only runs in the browser.');
-  }
-  const blob = await renderCharacterPdf(character);
+function saveBlob(blob: Blob, fileName: string) {
+  releaseLastUrl();
+  // Adding the same listener again is a no-op.
+  window.addEventListener('pagehide', releaseLastUrl);
   const url = URL.createObjectURL(blob);
+  lastUrl = url;
   const link = document.createElement('a');
   link.href = url;
-  link.download = pdfFileName(character.name);
+  link.download = fileName;
   link.rel = 'noopener';
   link.style.display = 'none';
   document.body.appendChild(link);
@@ -38,7 +40,33 @@ export async function downloadCharacterPdf(character: Character): Promise<void> 
     link.click();
   } finally {
     link.remove();
-    // Give the browser time to start reading the blob before releasing it.
-    setTimeout(() => URL.revokeObjectURL(url), 60_000);
   }
+}
+
+/** What an export is busy with: downloading fonts (only the first time), then laying out the sheet. */
+export type ExportPhase = 'fonts' | 'layout';
+
+/**
+ * Renders the character sheet and saves it as `<name>-dolmen-spot.pdf`,
+ * telling `onPhase` what it's doing.
+ */
+export async function downloadCharacterPdf(
+  character: Character,
+  onPhase?: (phase: ExportPhase) => void,
+): Promise<void> {
+  if (typeof window === 'undefined' || typeof document === 'undefined') {
+    throw new Error('PDF export only runs in the browser.');
+  }
+  const fonts = await loadSheetFonts(sheetText(character), () => onPhase?.('fonts'));
+  onPhase?.('layout');
+  const exportedOn = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+  const blob = await pdf(
+    <CharacterSheetDocument
+      character={character}
+      pageSize={browserPageSize()}
+      exportedOn={exportedOn}
+      fonts={fonts}
+    />,
+  ).toBlob();
+  saveBlob(blob, pdfFileName(character.name));
 }

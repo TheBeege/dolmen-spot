@@ -13,6 +13,7 @@ import {
   TURNING_UNDEAD_TABLE,
   NOBLE_HOUSES,
   SYMBIOTIC_FLESH_TABLE,
+  FEATURE_NOTES,
 } from '@/lib/gamedata';
 import {
   getLanguageBreakdown,
@@ -22,8 +23,8 @@ import {
   getRetainerLimits,
   hasAnyClassFeature,
   hasAnyKindredFeature,
-  FEATURE_NOTES,
 } from '@/lib/character-sheet';
+import { pluralize } from '@/lib/grammar';
 
 interface TraitsAndNotesProps {
   character: Character;
@@ -745,7 +746,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               {profile.hasCombatTalents && (
                 <div>
                   <label className={labelClasses}>
-                    Combat Talents <span className="text-[#f5e6c8]/40 font-normal">({getFighterTalentCount(character.level)} slots)</span>
+                    Combat Talents <span className="text-[#f5e6c8]/40 font-normal">({pluralize(getFighterTalentCount(character.level), 'slot')})</span>
                   </label>
                   <FighterTalents character={character} onChange={onChange} />
                 </div>
@@ -844,7 +845,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
             <label className={labelClasses}>
               Bonus Languages
               <span className="text-[#f5e6c8]/40 font-normal ml-1">
-                ({bonusUsed} of {langInfo.bonusSlots} slots used)
+                ({bonusUsed} of {pluralize(langInfo.bonusSlots, 'slot')} used)
               </span>
             </label>
 

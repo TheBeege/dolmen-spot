@@ -7,7 +7,8 @@
 
 import { useEffect, useId, useRef, useState, type Ref } from 'react';
 import type { CalendarDate, Character, FairyVisit } from '@/lib/types';
-import { daysBetween, describeDays, describeDolmenwoodSpan, formatCalendarDate, formatShortDate, plural } from '@/lib/gamedata';
+import { daysBetween, describeDays, describeDolmenwoodSpan, formatCalendarDate, formatShortDate } from '@/lib/gamedata';
+import { pluralize } from '@/lib/grammar';
 import {
   LIVED_TIME_EPOCH,
   enterFairy,
@@ -265,9 +266,9 @@ export function LivedTimePanel({
     fairySummary = (
       <div className="text-xs mt-1 space-y-0.5">
         <div className="text-[#f5e6c8]/80">
-          {plural(lived.dolmenwoodDays, 'day')} in Dolmenwood &middot;{' '}
-          <span className="text-[#c9b3f0]">{plural(lived.fairyDays, 'day')} in Fairy</span> across{' '}
-          {plural(lived.visitCount, 'visit')}
+          {pluralize(lived.dolmenwoodDays, 'day', { grouping: true })} in Dolmenwood &middot;{' '}
+          <span className="text-[#c9b3f0]">{pluralize(lived.fairyDays, 'day', { grouping: true })} in Fairy</span> across{' '}
+          {pluralize(lived.visitCount, 'visit', { grouping: true })}
         </div>
         {lived.awayDays > 0 && (
           <div className="text-[#f5e6c8]/80">
@@ -376,11 +377,11 @@ export function LivedTimePanel({
 
 function describeVisit(visit: FairyVisit): string {
   const entered = `entered ${formatShortDate(visit.enteredOn)}`;
-  if (!visit.returnedOn) return `${entered} · ${plural(visit.daysInFairy, 'day')} in Fairy so far (still there)`;
+  if (!visit.returnedOn) return `${entered} · ${pluralize(visit.daysInFairy, 'day', { grouping: true })} in Fairy so far (still there)`;
   const passed = daysBetween(visit.enteredOn, visit.returnedOn) > 0
     ? `${describeDolmenwoodSpan(visit.enteredOn, visit.returnedOn)} later`
     : 'the same day';
-  return `${entered} · ${plural(visit.daysInFairy, 'day')} in Fairy · returned ${formatShortDate(visit.returnedOn)} (${passed})`;
+  return `${entered} · ${pluralize(visit.daysInFairy, 'day', { grouping: true })} in Fairy · returned ${formatShortDate(visit.returnedOn)} (${passed})`;
 }
 
 /** Inline editor for the date the days-lived counter counts from. */
