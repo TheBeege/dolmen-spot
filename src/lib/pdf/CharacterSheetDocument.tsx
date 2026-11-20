@@ -42,8 +42,10 @@ import {
   getArmourRestrictionWarning,
   getAvailableClasses,
   getCharacterFeatureProfile,
+  getClassName,
   getCoinGpEquivalent,
   getFighterTalentCount,
+  getKindredName,
   getRuneUsageFrequency,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
@@ -469,12 +471,13 @@ function SummaryRow({ label, value, warn, total }: { label: string; value: strin
 
 // ── Shared display helpers ───────────────────────────────────
 
+// An id the app doesn't know is printed as stored, as the app shows it.
 function kindredName(c: Character): string {
-  return KINDREDS.find((k) => k.id === c.kindred)?.name ?? '';
+  return getKindredName(c.kindred);
 }
 
 function className(c: Character): string {
-  return CLASSES.find((cl) => cl.id === c.class)?.name ?? '';
+  return getClassName(c.class);
 }
 
 function isKindredClass(c: Character): boolean {
@@ -516,17 +519,23 @@ function Header({ c, exportedOn }: { c: Character; exportedOn: string }) {
 function CharacterSection({ c }: { c: Character }) {
   const kindred = KINDREDS.find((k) => k.id === c.kindred);
   const classEntry = getAvailableClasses(c.kindred).find((entry) => entry.class.id === c.class);
+  // Ids the app doesn't know are printed as the Character tab's dropdowns show them.
+  const knownClass = CLASSES.some((cl) => cl.id === c.class);
+  const unknownKindred = !!c.kindred && !kindred;
 
   let classValue = className(c);
   let classNote: string | undefined;
   let classWarn: string | undefined;
-  if (classEntry) {
+  if (c.class && !knownClass) {
+    classValue = `${c.class} (unknown class)`;
+    classWarn = "Dolmen Spot doesn't recognise this class, so it can't calculate class-based values.";
+  } else if (classEntry) {
     classNote = classEntry.class.description + (classEntry.restriction === 'rare' ? ' Unusual combination for this kindred.' : '');
   } else if (c.kindred === 'human' && !c.class) {
     classWarn = 'Humans must select a class.';
   } else if (isKindredClass(c)) {
     classValue = 'Kindred-class';
-    classNote = `Playing as a ${kindred?.name ?? ''} kindred-class (see appendix).`;
+    classNote = `Playing as a ${kindredName(c)} kindred-class (see appendix).`;
   }
 
   const hasMoonSign = canHaveMoonSign(c.kindred);
@@ -538,10 +547,11 @@ function CharacterSection({ c }: { c: Character }) {
   const alignmentWarning = getAlignmentWarning(c.class, c.alignment);
 
   // The Character tab shows the calculated XP modifier for classed characters
-  // and offers "Sync" when the stored value differs; the stored one is in effect.
+  // (not for a class id it doesn't know) and offers "Sync" when the stored
+  // value differs; the stored one is in effect.
   const xpCalc = calculateXpModifier(c.class, c.kindred, c.abilityScores);
   let xpNote: string | undefined;
-  if (c.class) {
+  if (knownClass) {
     const breakdown = [`Prime ${formatXpPercent(xpCalc.primeBonus)}`];
     if (xpCalc.humanBonus > 0) breakdown.push(`Human ${formatXpPercent(xpCalc.humanBonus)}`);
     xpNote = c.xpModifier === xpCalc.total
@@ -553,7 +563,12 @@ function CharacterSection({ c }: { c: Character }) {
     <View wrap={false}>
       <SectionTitle>Character</SectionTitle>
       <View style={s.fieldGrid}>
-        <Field label="Kindred" value={kindred?.name ?? ''} note={kindred?.description} />
+        <Field
+          label="Kindred"
+          value={unknownKindred ? `${c.kindred} (unknown kindred)` : kindredName(c)}
+          note={kindred?.description}
+          warn={unknownKindred ? "Dolmen Spot doesn't recognise this kindred, so it can't calculate kindred-based values." : undefined}
+        />
         <Field label="Class" value={classValue} note={classNote} warn={classWarn} />
         <Field label="Level" value={c.level} />
         <Field label="Background" value={c.background} />

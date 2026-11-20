@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Character, KindredId, ClassId } from '@/lib/types';
 import {
   KINDREDS,
+  CLASSES,
+  getKindredName,
   MOON_SIGNS,
   ALIGNMENTS,
   getAvailableClasses,
@@ -35,6 +37,10 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
   const selectedKindred = KINDREDS.find((k) => k.id === character.kindred);
   const availableClasses = getAvailableClasses(character.kindred);
   const selectedClassEntry = availableClasses.find((c) => c.class.id === character.class);
+  // Ids the app doesn't know (e.g. from a hand-edited save) stay as stored; the
+  // dropdowns show them, and nothing is calculated from them.
+  const isUnknownKindred = !!character.kindred && !selectedKindred;
+  const isUnknownClass = !!character.class && !CLASSES.some((c) => c.id === character.class);
 
   const calculated = calculateXpModifier(character.class, character.kindred, character.abilityScores);
   const xpOutOfSync = character.xpModifier !== calculated.total;
@@ -151,10 +157,18 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 {k.name}
               </option>
             ))}
+            {isUnknownKindred && (
+              <option value={character.kindred}>{character.kindred} (unknown kindred)</option>
+            )}
           </select>
           {selectedKindred && (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
               {selectedKindred.description}
+            </p>
+          )}
+          {isUnknownKindred && (
+            <p className="text-yellow-400 text-xs mt-1">
+              Dolmen Spot doesn&apos;t recognise this kindred, so it can&apos;t calculate kindred-based values. Choose a kindred from the list.
             </p>
           )}
         </div>
@@ -180,8 +194,15 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 {c.name}{restriction === 'rare' ? ' (rare)' : ''}
               </option>
             ))}
+            {isUnknownClass && (
+              <option value={character.class}>{character.class} (unknown class)</option>
+            )}
           </select>
-          {selectedClassEntry ? (
+          {isUnknownClass ? (
+            <p className="text-yellow-400 text-xs mt-1">
+              Dolmen Spot doesn&apos;t recognise this class, so it can&apos;t calculate class-based values. Choose a class from the list.
+            </p>
+          ) : selectedClassEntry ? (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
               {selectedClassEntry.class.description}
               {selectedClassEntry.restriction === 'rare' && (
@@ -194,7 +215,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             </p>
           ) : character.kindred && !character.class ? (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
-              Playing as a {selectedKindred?.name} kindred-class (see appendix).
+              Playing as a {getKindredName(character.kindred)} kindred-class (see appendix).
             </p>
           ) : null}
         </div>
@@ -322,7 +343,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
         {/* XP Modifier */}
         <div>
           <label className={labelClasses}>XP Modifier</label>
-          {character.class ? (
+          {character.class && !isUnknownClass ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-[#f5e6c8]">
                 <span className="bg-[#1a1a2e] border border-[#5a3a28] rounded px-2 py-1">

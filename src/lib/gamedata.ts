@@ -190,6 +190,17 @@ export const CLASSES: ClassInfo[] = [
   },
 ];
 
+// Display names. Saved data can hold an id the app doesn't know (a hand-edited
+// or newer-version file), and the sheet shows that id as stored rather than
+// hiding it.
+export function getKindredName(id: string): string {
+  return KINDREDS.find(k => k.id === id)?.name ?? id;
+}
+
+export function getClassName(id: string): string {
+  return CLASSES.find(c => c.id === id)?.name ?? id;
+}
+
 export const ALIGNMENTS = ['Lawful', 'Neutral', 'Chaotic'] as const;
 
 export const ABILITY_MODIFIER_TABLE: Record<number, number> = {
@@ -1560,9 +1571,10 @@ export function calculateXpModifier(
   kindredId: KindredId | '',
   abilityScores: AbilityScoresType,
 ): { primeBonus: number; humanBonus: number; total: number } {
-  if (!classId) return { primeBonus: 0, humanBonus: 0, total: 0 };
+  // No class, or a class id the app doesn't know: no modifier.
+  const primeKeys = classId ? CLASS_PRIME_ABILITIES[classId] : undefined;
+  if (!primeKeys) return { primeBonus: 0, humanBonus: 0, total: 0 };
 
-  const primeKeys = CLASS_PRIME_ABILITIES[classId];
   const lowestPrime = Math.min(...primeKeys.map(k => abilityScores[k]));
   const primeBonus = getPrimeAbilityXpModifier(lowestPrime);
   const humanBonus = kindredId === 'human' ? 10 : 0;
@@ -1739,7 +1751,7 @@ export function rollD6(): number {
 }
 
 export function rollStartingEquipment(classId: ClassId, category: 'armour' | 'weapons'): { roll: number; result: string } {
-  const table = STARTING_EQUIPMENT[classId][category];
+  const table = STARTING_EQUIPMENT[classId]?.[category] ?? [];
   const roll = rollD6();
   const entry = table.find(e => e.roll.includes(roll));
   return { roll, result: entry?.result ?? 'Unknown' };
@@ -1826,6 +1838,7 @@ function getArmourBulkCategory(bulk: string): 'light' | 'medium' | 'heavy' | nul
 export function getArmourRestrictionWarning(classId: ClassId | '', armourName: string, hasShield: boolean): string | null {
   if (!classId) return null;
   const restrictions = CLASS_ARMOUR_RESTRICTIONS[classId];
+  if (!restrictions) return null; // a class id the app doesn't know
 
   if (hasShield && !restrictions.shield) {
     const classInfo = CLASSES.find(c => c.id === classId);
