@@ -18,7 +18,10 @@ import { fileURLToPath } from 'node:url';
 let sharp;
 try {
   ({ default: sharp } = await import('sharp'));
-} catch {
+} catch (error) {
+  // Any other failure, such as sharp's native binary not loading after an
+  // install on another OS, comes with sharp's own explanation and fix.
+  if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
   console.error('generate-icons: sharp is not installed. Run `npm ci` first.');
   process.exit(1);
 }
