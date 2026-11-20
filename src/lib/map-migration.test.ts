@@ -1,4 +1,4 @@
-// Tests for the hex-map side of loading a save: the v11 → v12 migration,
+// Tests for the hex-map side of loading a save: the v12 → v13 migration,
 // converting the old map's pins, and the repair of mapData and
 // currentLocationHex that runs on every load and import. Run with `npm test`.
 import { describe, test } from 'node:test';
@@ -98,7 +98,7 @@ function baseV10(): AnyData {
   };
 }
 
-function baseV12(mapData: unknown): AnyData {
+function baseV13(mapData: unknown): AnyData {
   const data = baseV10();
   data.schemaVersion = CURRENT_SCHEMA_VERSION;
   data.currentDate = { day: 1, month: 0, year: 1 };
@@ -228,7 +228,7 @@ describe('Scenario 9: malformed mapData wholesale (string)', () => {
   });
 });
 
-describe('Scenario 10: idempotency — re-running on a v12 save', () => {
+describe('Scenario 10: idempotency — re-running on a v13 save', () => {
   const data = baseV10();
   data.otherNotes = '<!--MAP_PINS-->[{"label":"A","hex":"0303"}]';
   const first = migrateCharacter(data as never);
@@ -239,7 +239,7 @@ describe('Scenario 10: idempotency — re-running on a v12 save', () => {
   test('currentLocationHex unchanged', () => assert.equal(second.currentLocationHex, first.currentLocationHex));
 });
 
-describe('Scenario 11b: v12 save with borked mapData.pois (string)', () => {
+describe('Scenario 11b: v13 save with borked mapData.pois (string)', () => {
   const data = baseV10();
   data.schemaVersion = CURRENT_SCHEMA_VERSION;
   // The migration loop is skipped entirely; only the post-loop sanitizers
@@ -432,7 +432,7 @@ describe('Scenario 13: each hex centre, as an old-map position, migrates back to
 });
 
 describe('Scenario 14: malformed map elements are normalized to the shape the map draws', () => {
-  const migrated = migrateCharacter(baseV12({
+  const migrated = migrateCharacter(baseV13({
     pois: [{ id: 'p', hex: '0303', name: 'P', notes: 5 }, { hex: '0404', name: { a: 1 } }],
     fairyDoors: [
       { id: 'd0', hex: '0303', name: 'No destination', notes: '' },
@@ -509,7 +509,7 @@ describe('Scenario 15: duplicate ids are made unique', () => {
     assert.ok(existing?.id === 'p1' && legacy !== undefined && legacy.id !== 'p1');
   });
 
-  const c = migrateCharacter(baseV12({
+  const c = migrateCharacter(baseV13({
     pois: [{ id: 'x', hex: '0303', name: 'P', notes: '' }],
     fairyDoors: [{ id: 'x', hex: '0404', name: 'D', notes: '', destination: { kind: 'wild' } }],
     leyLines: [{ id: 'x', name: 'L', type: 'Ley line', color: '#c4a35a', hexes: ['0303', '0404'], notes: '' }],
@@ -539,11 +539,11 @@ describe('Scenario 16: text after the pins JSON is kept, and a repaired export c
   test('an unparseable marker is left in the notes', () => {
     assert.ok(c.otherNotes === 'Notes.<!--MAP_PINS-->[{"id":"a","label":"Inn","hex":"0507"' && c.mapData.pois.length === 0);
   });
-  // …they repair the exported (now v12) file and import it again:
+  // …they repair the exported (now v13) file and import it again:
   const repaired = clone(c);
   repaired.otherNotes = `${repaired.otherNotes}}]`;
   const d = migrateCharacter(repaired as never);
-  test('a repaired v12 export converts its pins on re-import', () => {
+  test('a repaired v13 export converts its pins on re-import', () => {
     assert.ok(d.mapData.pois.length === 1 && d.otherNotes === 'Notes.', JSON.stringify(d.otherNotes));
   });
 });
@@ -565,12 +565,12 @@ describe('Scenario 17: legacy pin fields are read strictly', () => {
 });
 
 describe('Scenario 18: migrating twice gives the same result', () => {
-  const noMap = baseV12(undefined);
+  const noMap = baseV13(undefined);
   delete noMap.mapData;
   noMap.currentLocationHex = '1313';
   const once = migrateCharacter(clone(noMap) as never);
-  test('a v12 save with no mapData still gets currentLocationHex repaired', () => assert.equal(once.currentLocationHex, ''));
-  const corrupt = baseV12('corrupt');
+  test('a v13 save with no mapData still gets currentLocationHex repaired', () => assert.equal(once.currentLocationHex, ''));
+  const corrupt = baseV13('corrupt');
   corrupt.currentLocationHex = 303;
   const c = migrateCharacter(clone(corrupt) as never);
   test('mapData "corrupt" + numeric currentLocationHex → empty map, ""', () => {
@@ -587,7 +587,7 @@ describe('Scenario 18: migrating twice gives the same result', () => {
 describe('Scenario 19: names inherited from Object.prototype are not hexes', () => {
   const bad = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'];
   const results = bad.map((k) => {
-    const d = baseV12({ pois: [{ id: 'p', hex: k, name: 'P', notes: '' }], fairyDoors: [], leyLines: [] });
+    const d = baseV13({ pois: [{ id: 'p', hex: k, name: 'P', notes: '' }], fairyDoors: [], leyLines: [] });
     d.currentLocationHex = k;
     const m = migrateCharacter(d as never);
     return m.currentLocationHex === '' && m.mapData.pois.length === 0;
@@ -622,7 +622,7 @@ describe('Scenario 21: printed hex 0111 is on the grid', () => {
 });
 
 describe('Scenario 22: fields the repair doesn\'t know about are kept', () => {
-  const data = baseV12({
+  const data = baseV13({
     pois: [{ id: 'p', hex: '0303', name: { bad: 1 }, notes: 5, visited: true, icon: 'skull' }],
     fairyDoors: [
       { id: 'a', hex: '0404', name: 'Oak', notes: '', discoveredOn: { day: 3, month: 1, year: 1 },
@@ -661,17 +661,17 @@ describe('Scenario 22: fields the repair doesn\'t know about are kept', () => {
 });
 
 describe('Scenario 23: text in map values of the wrong shape is kept in otherNotes', () => {
-  const textMap = migrateCharacter(baseV12('Remember the ford at 0606') as never);
+  const textMap = migrateCharacter(baseV13('Remember the ford at 0606') as never);
   test('a mapData that is text, not an object', () => {
     assert.equal(textMap.otherNotes, `${UNPLACED_HEADING}\n- Remember the ford at 0606`);
     assert.deepEqual(textMap.mapData, { pois: [], fairyDoors: [], leyLines: [] });
   });
   const old = baseV10();
   old.mapData = 'Remember the ford at 0606';
-  test('…also in a save from before v12, which the v11 → v12 migration used to overwrite', () => {
+  test('…also in a save from before v13, which the v12 → v13 migration used to overwrite', () => {
     assert.equal(migrateCharacter(old as never).otherNotes, `${UNPLACED_HEADING}\n- Remember the ford at 0606`);
   });
-  const lists = migrateCharacter(baseV12({
+  const lists = migrateCharacter(baseV13({
     pois: 'Shrine at 0303',
     fairyDoors: 42,
     leyLines: { route: '0303 to 0404' },
@@ -687,7 +687,7 @@ describe('Scenario 23: text in map values of the wrong shape is kept in otherNot
     ].join('\n'));
     assert.deepEqual(lists.mapData, { pois: [], fairyDoors: [], leyLines: [] });
   });
-  const empty = migrateCharacter(baseV12({ pois: null, fairyDoors: '', leyLines: '  ', draftLeyLine: null }) as never);
+  const empty = migrateCharacter(baseV13({ pois: null, fairyDoors: '', leyLines: '  ', draftLeyLine: null }) as never);
   test('values with no text add nothing', () => assert.equal(empty.otherNotes, ''));
   test('…nor do empty arrays and objects, however deeply nested', () => {
     const noText: unknown[] = [
@@ -696,7 +696,7 @@ describe('Scenario 23: text in map values of the wrong shape is kept in otherNot
       { pois: {}, fairyDoors: [[]], leyLines: { a: [] }, draftLeyLine: [] },
       { pois: [[], [{ a: [null, ' '] }]], fairyDoors: [], leyLines: [{ name: 'L', type: 'Ley line', hexes: {} }] },
     ];
-    const notes = noText.map((mapData) => migrateCharacter(baseV12(mapData) as never).otherNotes);
+    const notes = noText.map((mapData) => migrateCharacter(baseV13(mapData) as never).otherNotes);
     // The ley line with no hexes is itself listed, but without "(hexes {})".
     assert.deepEqual(notes, ['', '', '', `${UNPLACED_HEADING}\n- Ley line L`]);
     const pinsOnly = baseV10();
@@ -704,7 +704,7 @@ describe('Scenario 23: text in map values of the wrong shape is kept in otherNot
     assert.equal(migrateCharacter(pinsOnly as never).otherNotes, `Prose.\n\n${UNPLACED_HEADING}\n- text`);
   });
   test('…while text inside them is still kept', () => {
-    const m = migrateCharacter(baseV12({ pois: { a: [[], ['Ford at 0606']] }, fairyDoors: [], leyLines: [] }) as never);
+    const m = migrateCharacter(baseV13({ pois: { a: [[], ['Ford at 0606']] }, fairyDoors: [], leyLines: [] }) as never);
     assert.equal(m.otherNotes, `${UNPLACED_HEADING}\n- {"a":[[],["Ford at 0606"]]}`);
   });
   const pins = baseV10();

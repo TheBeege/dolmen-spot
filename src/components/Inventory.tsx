@@ -14,6 +14,7 @@ import {
 } from '@/lib/gamedata';
 import {
   calculateEncumbrance,
+  getOverloadNote,
   getContainerItems,
   getContainerLoad,
   EQUIPPED_SLOT_LIMIT,
@@ -96,6 +97,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   }, [containerDropdownOpen]);
 
   // ── Encumbrance calculations (with coins) ──
+  const encumbrance = calculateEncumbrance(character);
   const {
     coinWeight,
     coinSlots,
@@ -110,7 +112,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     equippedSlotsOverLimit,
     stowedSlotsOverLimit,
     overMaxLoad,
-  } = calculateEncumbrance(character);
+  } = encumbrance;
+  const overloadNote = getOverloadNote(encumbrance, encumbranceMethod);
 
   // ── Item handlers ──
   const handleAddItem = (equipped: boolean, containerId?: string) => {
@@ -417,8 +420,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <button
               type="button"
               onClick={() => handleDeleteItem(equipped, item.id)}
-              className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-              title="Delete spell book"
+              className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 px-1"
+              title={`Remove ${item.name.trim() || 'spell book'}`}
+              aria-label={`Remove ${item.name.trim() || 'spell book'}`}
             >
               &times;
             </button>
@@ -460,8 +464,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 <button
                   type="button"
                   onClick={() => handleSpellbookRemoveEntry(equipped, item.id, index)}
-                  className="text-[#8b2500] hover:text-[#b33a1a] text-sm shrink-0 px-1"
-                  title="Remove spell"
+                  className="text-[#ff6b4a] hover:text-[#f5e6c8] text-sm shrink-0 px-1"
+                  title={`Remove ${entry.name || 'spell'}`}
+                  aria-label={`Remove ${entry.name || 'spell'}`}
                 >
                   &times;
                 </button>
@@ -557,8 +562,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         <button
           type="button"
           onClick={() => handleDeleteItem(equipped, item.id)}
-          className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-          title="Delete scroll"
+          className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 px-1"
+          title={`Remove ${scroll.name ? `scroll of ${scroll.name}` : 'scroll'}`}
+          aria-label={`Remove ${scroll.name ? `scroll of ${scroll.name}` : 'scroll'}`}
         >
           &times;
         </button>
@@ -605,73 +611,110 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
-  const renderItemRow = (item: InventoryItem, equipped: boolean) => (
-    <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
-      <input
-        type="text"
-        value={item.name}
-        onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
-        placeholder="Item name"
-        className={`${inputClasses} flex-1 min-w-[120px]`}
-      />
-      <div className="flex items-center gap-2">
-        <input
-          type="number"
-          value={item.slots}
+  // From sm up: one line per item, under the column headers (which leave room for
+  // the move select when there are containers). On phones: the name, move select
+  // and × on the first line, then the labelled fields. The move select and × are
+  // rendered for each layout, with the other copy hidden (display: none), so the
+  // keyboard order always matches what's on screen.
+  const renderItemRow = (item: InventoryItem, equipped: boolean) => {
+    const itemName = item.name.trim() || 'item';
+    const moveSelect = (layoutClass: string) =>
+      !equipped && containers.length > 0 ? (
+        <select
+          value={item.containerId ?? ''}
           onChange={(e) =>
-            handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)
+            handleMoveToContainer(item.id, e.target.value || undefined)
           }
-          min={0}
-          title="Slots"
-          placeholder="Sl"
-          className={`${inputClasses} w-16 text-center`}
-        />
-        <input
-          type="number"
-          value={item.weight}
-          onChange={(e) =>
-            handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)
-          }
-          min={0}
-          title="Weight"
-          placeholder="Wt"
-          className={`${inputClasses} w-20 text-center`}
-        />
+          className={`${inputClasses} w-10 shrink-0 text-xs p-0.5 ${layoutClass}`}
+          title="Move to container"
+          aria-label={`Move ${itemName} to a container`}
+        >
+          <option value="">Loose</option>
+          {containers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      ) : null;
+    const removeButton = (layoutClass: string) => (
+      <button
+        type="button"
+        onClick={() => handleDeleteItem(equipped, item.id)}
+        className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${layoutClass}`}
+        title={`Remove ${itemName}`}
+        aria-label={`Remove ${itemName}`}
+      >
+        &times;
+      </button>
+    );
+    // Phones hide the column headers, so each field gets a short visible label there.
+    const phoneLabel = (text: string) => (
+      <span aria-hidden="true" className="sm:hidden text-[10px] uppercase tracking-wide text-[#f5e6c8]/70">
+        {text}
+      </span>
+    );
+
+    return (
+      <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
         <input
           type="text"
-          value={item.notes}
-          onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
-          placeholder="Notes"
-          className={`${inputClasses} w-32 min-w-0`}
+          value={item.name}
+          onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
+          placeholder="Item name"
+          aria-label="Item name"
+          className={`${inputClasses} flex-1 min-w-[120px]`}
         />
-        {!equipped && containers.length > 0 && (
-          <select
-            value={item.containerId ?? ''}
-            onChange={(e) =>
-              handleMoveToContainer(item.id, e.target.value || undefined)
-            }
-            className={`${inputClasses} w-10 text-xs p-0.5`}
-            title="Move to container"
-          >
-            <option value="">Loose</option>
-            {containers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-        <button
-          type="button"
-          onClick={() => handleDeleteItem(equipped, item.id)}
-          className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-          title="Delete item"
-        >
-          &times;
-        </button>
+        {moveSelect('sm:hidden')}
+        {removeButton('sm:hidden')}
+        <div className="flex items-end gap-2 w-full sm:w-auto sm:items-center">
+          <label className="flex flex-col gap-0.5">
+            {phoneLabel('Slots')}
+            <input
+              type="number"
+              value={item.slots}
+              onChange={(e) =>
+                handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)
+              }
+              min={0}
+              title="Slots"
+              placeholder="Sl"
+              aria-label={`${itemName} slots`}
+              className={`${inputClasses} w-16 text-center`}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            {phoneLabel('Weight')}
+            <input
+              type="number"
+              value={item.weight}
+              onChange={(e) =>
+                handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)
+              }
+              min={0}
+              title="Weight"
+              placeholder="Wt"
+              aria-label={`${itemName} weight`}
+              className={`${inputClasses} w-20 text-center`}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
+            {phoneLabel('Notes')}
+            <input
+              type="text"
+              value={item.notes}
+              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              placeholder="Notes"
+              aria-label={`${itemName} notes`}
+              className={`${inputClasses} w-full sm:w-32`}
+            />
+          </label>
+          {moveSelect('hidden sm:block')}
+        </div>
+        {removeButton('hidden sm:block')}
       </div>
-    </div>
-  );
+    );
+  };
 
   const renderStowedItemRow = (item: InventoryItem) => renderItemRow(item, false);
 
@@ -696,7 +739,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             {container ? container.name : 'Loose Items'}
           </span>
           {container && encumbranceMethod === 'weight' && (
-            <span className={`text-xs ${isOverCapacity ? 'text-[#b33a1a]' : 'text-[#f5e6c8]/50'}`}>
+            <span className={`text-xs ${isOverCapacity ? 'text-[#ff6b4a]' : 'text-[#f5e6c8]/50'}`}>
               ({usedWeight} / {capacity}w)
             </span>
           )}
@@ -707,8 +750,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 e.stopPropagation();
                 handleDeleteContainer(container.id);
               }}
-              className="text-[#8b2500] hover:text-[#b33a1a] text-xs ml-auto px-1"
-              title="Remove container"
+              className="text-[#ff6b4a] hover:text-[#f5e6c8] text-xs ml-auto px-1"
+              title={`Remove ${container.name}`}
+              aria-label={`Remove ${container.name}`}
             >
               &times;
             </button>
@@ -727,7 +771,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               />
             </div>
             {isOverCapacity && (
-              <p className="text-[#b33a1a] text-xs mt-0.5">Over capacity!</p>
+              <p className="text-[#ff6b4a] text-xs mt-0.5">Over capacity!</p>
             )}
           </div>
         )}
@@ -743,6 +787,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   <span className="w-16 text-center">Slots</span>
                   <span className="w-20 text-center">Weight</span>
                   <span className="w-32">Notes</span>
+                  {/* Stowed rows have a move-to-container select when there are containers */}
+                  {containers.length > 0 && <span className="w-10" />}
                   <span className="w-6" />
                 </div>
                 {containerItems.map((item) => renderInventoryItem(item, false))}
@@ -802,7 +848,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <button
               type="button"
               onClick={() => setCatalogOpen(false)}
-              className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg px-2"
+              className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg px-2"
+              title="Close equipment catalog"
+              aria-label="Close equipment catalog"
             >
               &times;
             </button>
@@ -909,6 +957,19 @@ export default function Inventory({ character, onChange }: InventoryProps) {
       </div>
     );
   };
+
+  // Speed is 0 over the maximum load (by either method): the character can't move.
+  const speedSummary = (
+    <div className="border-t border-[#5a3a28] pt-2 mt-2">
+      <div className="flex justify-between">
+        <span className="font-semibold">Calculated Speed:</span>
+        <span className={`font-bold ${calculatedSpeed === 0 ? 'text-[#ff6b4a]' : 'text-[#c4a35a]'}`}>{calculatedSpeed} ft</span>
+      </div>
+      {overloadNote && (
+        <p className="text-[#ff6b4a] text-xs italic text-right">{overloadNote}</p>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -1057,13 +1118,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="flex justify-between">
                 <span>Equipped Slots:</span>
                 <span
-                  className={equippedSlotsOverLimit ? 'text-[#b33a1a] font-bold' : ''}
+                  className={equippedSlotsOverLimit ? 'text-[#ff6b4a] font-bold' : ''}
                 >
                   {totalEquippedSlots} / {EQUIPPED_SLOT_LIMIT}
                 </span>
               </div>
               {equippedSlotsOverLimit && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard equipped limit ({EQUIPPED_SLOT_LIMIT} slots)</p>
+                <p className="text-[#ff6b4a] text-xs italic text-right">Over the maximum of {EQUIPPED_SLOT_LIMIT} equipped slots</p>
               )}
             </div>
             <div className="flex justify-between">
@@ -1080,19 +1141,16 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="flex justify-between">
                 <span>Total Stowed Slots:</span>
                 <span
-                  className={stowedSlotsOverLimit ? 'text-[#b33a1a] font-bold' : ''}
+                  className={stowedSlotsOverLimit ? 'text-[#ff6b4a] font-bold' : ''}
                 >
                   {totalStowedSlots} / {STOWED_SLOT_LIMIT}
                 </span>
               </div>
               {stowedSlotsOverLimit && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard stowed limit ({STOWED_SLOT_LIMIT} slots)</p>
+                <p className="text-[#ff6b4a] text-xs italic text-right">Over the maximum of {STOWED_SLOT_LIMIT} stowed slots</p>
               )}
             </div>
-            <div className="flex justify-between border-t border-[#5a3a28] pt-2 mt-2">
-              <span className="font-semibold">Calculated Speed:</span>
-              <span className="font-bold text-[#c4a35a]">{calculatedSpeed} ft</span>
-            </div>
+            {speedSummary}
           </div>
         ) : (
           <div className="space-y-2 text-[#f5e6c8]">
@@ -1107,15 +1165,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <div className="flex justify-between">
               <span>Total Weight:</span>
               <span
-                className={overMaxLoad ? 'text-[#b33a1a] font-bold' : ''}
+                className={overMaxLoad ? 'text-[#ff6b4a] font-bold' : ''}
               >
                 {totalWeight}
               </span>
             </div>
-            <div className="flex justify-between border-t border-[#5a3a28] pt-2 mt-2">
-              <span className="font-semibold">Calculated Speed:</span>
-              <span className="font-bold text-[#c4a35a]">{calculatedSpeed} ft</span>
-            </div>
+            {speedSummary}
           </div>
         )}
       </div>

@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Character, CharacterUpdater, KindredId, ClassId } from '@/lib/types';
 import {
   KINDREDS,
+  isKnownClassId,
+  isKnownKindredId,
   MOON_SIGNS,
   ALIGNMENTS,
   getAvailableClasses,
@@ -35,9 +37,14 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
   const selectedKindred = KINDREDS.find((k) => k.id === character.kindred);
   const availableClasses = getAvailableClasses(character.kindred);
   const selectedClassEntry = availableClasses.find((c) => c.class.id === character.class);
+  // Ids the app doesn't know (e.g. from a hand-edited save) stay as stored; the
+  // dropdowns show them, and nothing is calculated from them.
+  const isUnknownKindred = !!character.kindred && !isKnownKindredId(character.kindred);
+  const isUnknownClass = !!character.class && !isKnownClassId(character.class);
 
+  // null when there's nothing to calculate from; the stored modifier then stands.
   const calculated = calculateXpModifier(character.class, character.kindred, character.abilityScores);
-  const xpOutOfSync = character.xpModifier !== calculated.total;
+  const xpOutOfSync = calculated !== null && character.xpModifier !== calculated.total;
 
   const alignmentWarning = getAlignmentWarning(character.class, character.alignment);
   const hasMoonSign = canHaveMoonSign(character.kindred);
@@ -55,7 +62,8 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
   const handleKindredChange = (kindred: Character['kindred']) => {
     const newAvailable = getAvailableClasses(kindred);
-    const classStillValid = !character.class || newAvailable.some(c => c.class.id === character.class);
+    // A class id the app doesn't know is kept: it's never renamed or dropped.
+    const classStillValid = !character.class || isUnknownClass || newAvailable.some(c => c.class.id === character.class);
     const effectiveClass = classStillValid ? character.class : '';
 
     const newXp = calculateXpModifier(effectiveClass, kindred, character.abilityScores);
@@ -66,7 +74,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
     onChange({
       kindred,
       ...(classStillValid ? {} : { class: '' as const }),
-      xpModifier: newXp.total,
+      ...(newXp ? { xpModifier: newXp.total } : {}),
       ...(fairy ? { moonSign: '', moonPhase: '' as const } : {}),
       languages: newLanguages,
     });
@@ -78,13 +86,13 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
     onChange({
       class: classId,
-      xpModifier: newXp.total,
+      ...(newXp ? { xpModifier: newXp.total } : {}),
       languages: newLanguages,
     });
   };
 
   const handleRollEquipment = () => {
-    if (!character.class) return;
+    if (!isKnownClassId(character.class)) return;
     const table = STARTING_EQUIPMENT[character.class];
     // Roll armour
     const armourRoll = rollD6();
@@ -102,7 +110,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
     });
   };
 
-  const equipTable = character.class ? STARTING_EQUIPMENT[character.class] : null;
+  const equipTable = isKnownClassId(character.class) ? STARTING_EQUIPMENT[character.class] : null;
   const isSmallKindred = selectedKindred?.size === 'Small';
 
   return (
@@ -151,10 +159,18 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 {k.name}
               </option>
             ))}
+            {isUnknownKindred && (
+              <option value={character.kindred}>{character.kindred} (unknown kindred)</option>
+            )}
           </select>
           {selectedKindred && (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
               {selectedKindred.description}
+            </p>
+          )}
+          {isUnknownKindred && (
+            <p className="text-yellow-400 text-xs mt-1">
+              Dolmen Spot doesn&apos;t recognise this kindred, so it can&apos;t calculate kindred-based values. Choose a kindred from the list.
             </p>
           )}
         </div>
@@ -180,8 +196,15 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 {c.name}{restriction === 'rare' ? ' (rare)' : ''}
               </option>
             ))}
+            {isUnknownClass && (
+              <option value={character.class}>{character.class} (unknown class)</option>
+            )}
           </select>
-          {selectedClassEntry ? (
+          {isUnknownClass ? (
+            <p className="text-yellow-400 text-xs mt-1">
+              Dolmen Spot doesn&apos;t recognise this class, so it can&apos;t calculate class-based values. Choose a class from the list.
+            </p>
+          ) : selectedClassEntry ? (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
               {selectedClassEntry.class.description}
               {selectedClassEntry.restriction === 'rare' && (
@@ -192,9 +215,10 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             <p className="text-red-400 text-xs mt-1">
               Humans must select a class.
             </p>
-          ) : character.kindred && !character.class ? (
+          ) : selectedKindred && !character.class ? (
+            // Only a known kindred has a kindred-class (an unknown one gets its own note above).
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
-              Playing as a {selectedKindred?.name} kindred-class (see appendix).
+              Playing as a {selectedKindred.name} kindred-class (see appendix).
             </p>
           ) : null}
         </div>
@@ -322,7 +346,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
         {/* XP Modifier */}
         <div>
           <label className={labelClasses}>XP Modifier</label>
-          {character.class ? (
+          {calculated ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-[#f5e6c8]">
                 <span className="bg-[#1a1a2e] border border-[#5a3a28] rounded px-2 py-1">

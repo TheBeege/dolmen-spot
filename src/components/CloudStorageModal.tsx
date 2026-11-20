@@ -12,13 +12,19 @@ interface Props {
   authStates: Record<string, boolean>;
   onConnect(providerId: 'google-drive' | 'onedrive'): Promise<void>;
   onDisconnect(providerId: 'google-drive' | 'onedrive'): void;
-  onListFiles(providerId: 'google-drive' | 'onedrive'): Promise<CloudFile[]>;
+  /** The provider's files, or null if listing failed. */
+  onListFiles(providerId: 'google-drive' | 'onedrive'): Promise<CloudFile[] | null>;
   onSave(providerId: 'google-drive' | 'onedrive'): Promise<void>;
   onLoad(providerId: 'google-drive' | 'onedrive', fileId: string, fileName: string): Promise<void>;
   onDelete(providerId: 'google-drive' | 'onedrive', fileId: string): Promise<void>;
   onExportLocal(): void;
   onImportLocal(file: File): void;
-  loading: boolean;
+  /** Whether each provider has an operation in flight. */
+  loading: Record<'google-drive' | 'onedrive', boolean>;
+  /** Whether each provider has a save in flight. */
+  saving: Record<'google-drive' | 'onedrive', boolean>;
+  /** Whether each provider has a file list in flight. */
+  listing: Record<'google-drive' | 'onedrive', boolean>;
   error: string | null;
   onClearError(): void;
   characterName: string;
@@ -38,13 +44,19 @@ export default function CloudStorageModal({
   onExportLocal,
   onImportLocal,
   loading,
+  saving,
+  listing,
   error,
   onClearError,
   characterName,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('local');
-  const [files, setFiles] = useState<CloudFile[]>([]);
-  const [filesLoaded, setFilesLoaded] = useState(false);
+  // The last file list each provider returned while connected. A failed list leaves it as
+  // it was; Disconnect drops it.
+  const [filesByProvider, setFilesByProvider] = useState<Partial<Record<'google-drive' | 'onedrive', CloudFile[]>>>({});
+  // Bumped when a provider disconnects, so a list still in flight from before can't bring
+  // back the previous account's files.
+  const listGeneration = useRef({ 'google-drive': 0, 'onedrive': 0 });
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -55,13 +67,32 @@ export default function CloudStorageModal({
 
   const activeProviderId = activeTab !== 'local' ? (activeTab as 'google-drive' | 'onedrive') : null;
   const isConnected = activeProviderId ? authStates[activeProviderId] : false;
+  // Only this tab's provider: another provider finishing must not re-enable its buttons.
+  const busy = activeProviderId ? loading[activeProviderId] : false;
+  const isSaving = activeProviderId ? saving[activeProviderId] : false;
+  const isListing = activeProviderId ? listing[activeProviderId] : false;
+  const files = (activeProviderId && filesByProvider[activeProviderId]) || [];
 
   const loadFiles = useCallback(async (providerId: 'google-drive' | 'onedrive') => {
-    setFilesLoaded(false);
+    const generation = listGeneration.current[providerId];
     const result = await onListFiles(providerId);
-    setFiles(result);
-    setFilesLoaded(true);
+    // If listing failed (its message says why), keep the list already shown rather than
+    // replacing it with "No saved characters found."
+    if (result && listGeneration.current[providerId] === generation) {
+      setFilesByProvider(prev => ({ ...prev, [providerId]: result }));
+    }
   }, [onListFiles]);
+
+  const handleDisconnect = useCallback((providerId: 'google-drive' | 'onedrive') => {
+    // Forget this provider's list too: whoever connects next mustn't see these files.
+    listGeneration.current[providerId]++;
+    setFilesByProvider(prev => {
+      const next = { ...prev };
+      delete next[providerId];
+      return next;
+    });
+    onDisconnect(providerId);
+  }, [onDisconnect]);
 
   // Load files when switching to a connected provider tab
   useEffect(() => {
@@ -73,8 +104,7 @@ export default function CloudStorageModal({
   // Clear state when modal closes
   useEffect(() => {
     if (!open) {
-      setFiles([]);
-      setFilesLoaded(false);
+      setFilesByProvider({});
       setSuccessMessage(null);
       onClearError();
     }
@@ -150,7 +180,9 @@ export default function CloudStorageModal({
           <button
             type="button"
             onClick={onClose}
-            className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg px-2"
+            aria-label="Close Save / Load"
+            title="Close Save / Load"
+            className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg px-2"
           >
             &times;
           </button>
@@ -239,7 +271,7 @@ export default function CloudStorageModal({
           {/* Cloud Provider Tabs */}
           {activeProviderId && !isConnected && (
             <div className="text-center py-8">
-              <svg className="w-12 h-12 mx-auto mb-3 text-[#f5e6c8]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-12 h-12 mx-auto mb-3 text-[#f5e6c8]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
               </svg>
               <p className="text-[#f5e6c8]/60 text-sm mb-4">
@@ -247,12 +279,12 @@ export default function CloudStorageModal({
               </p>
               <button
                 onClick={handleConnect}
-                disabled={loading}
+                disabled={busy}
                 className="px-4 py-2 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-sm rounded transition-colors"
               >
-                {loading ? 'Connecting...' : 'Connect'}
+                {busy ? 'Connecting...' : 'Connect'}
               </button>
-              <p className="text-[#f5e6c8]/30 text-xs mt-4">
+              <p className="text-[#f5e6c8]/70 text-xs mt-4">
                 Your data stays in your own {activeProviderId === 'google-drive' ? 'Drive' : 'OneDrive'}. We only access files created by this app.
               </p>
             </div>
@@ -268,10 +300,10 @@ export default function CloudStorageModal({
                 </p>
                 <button
                   onClick={handleSave}
-                  disabled={loading}
+                  disabled={busy}
                   className="px-3 py-1.5 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-sm rounded transition-colors"
                 >
-                  {loading ? 'Saving...' : 'Save Character'}
+                  {isSaving ? 'Saving...' : 'Save Character'}
                 </button>
               </div>
 
@@ -281,17 +313,17 @@ export default function CloudStorageModal({
                   <h4 className="text-[#c4a35a] text-sm font-semibold">Saved Characters</h4>
                   <button
                     onClick={() => loadFiles(activeProviderId)}
-                    disabled={loading}
-                    className="text-xs text-[#f5e6c8]/40 hover:text-[#f5e6c8] transition-colors"
+                    disabled={busy}
+                    className="text-xs text-[#f5e6c8]/70 hover:text-[#f5e6c8] disabled:opacity-50 transition-colors"
                   >
                     Refresh
                   </button>
                 </div>
 
-                {!filesLoaded && loading ? (
-                  <p className="text-[#f5e6c8]/40 text-sm py-4 text-center">Loading files...</p>
+                {isListing ? (
+                  <p className="text-[#f5e6c8]/70 text-sm py-4 text-center">Loading files...</p>
                 ) : files.length === 0 ? (
-                  <p className="text-[#f5e6c8]/40 text-sm py-4 text-center">
+                  <p className="text-[#f5e6c8]/70 text-sm py-4 text-center">
                     No saved characters found.
                   </p>
                 ) : (
@@ -305,23 +337,24 @@ export default function CloudStorageModal({
                           <div className="text-sm text-[#f5e6c8] truncate">
                             {file.name.replace('.dolmenwood.json', '')}
                           </div>
-                          <div className="text-xs text-[#f5e6c8]/30">
+                          <div className="text-xs text-[#f5e6c8]/70">
                             {new Date(file.modifiedTime).toLocaleString()}
                           </div>
                         </div>
                         <div className="ml-2 flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => handleLoad(file.id, file.name)}
-                            disabled={loading}
+                            disabled={busy}
                             className="px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-xs rounded transition-colors"
                           >
                             Load
                           </button>
                           <button
                             onClick={() => handleDelete(file.id, file.name)}
-                            disabled={loading}
-                            className="text-[#8b2500] hover:text-[#b33a1a] disabled:opacity-50 text-xs transition-colors"
-                            title="Delete from cloud"
+                            disabled={busy}
+                            aria-label={`Delete ${file.name.replace('.dolmenwood.json', '')}`}
+                            title={`Delete ${file.name.replace('.dolmenwood.json', '')}`}
+                            className="text-[#ff9a85] hover:text-[#ffd0c4] disabled:opacity-50 text-xs transition-colors"
                           >
                             Del
                           </button>
@@ -332,11 +365,12 @@ export default function CloudStorageModal({
                 )}
               </div>
 
-              {/* Disconnect */}
+              {/* Disconnect: not while this provider is busy, so a save or load can't lose its sign-in midway */}
               <div className="border-t border-[#5a3a28] pt-4">
                 <button
-                  onClick={() => onDisconnect(activeProviderId)}
-                  className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
+                  onClick={() => handleDisconnect(activeProviderId)}
+                  disabled={busy}
+                  className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] disabled:opacity-50 transition-colors"
                 >
                   Disconnect {activeProviderId === 'google-drive' ? 'Google Drive' : 'OneDrive'}
                 </button>

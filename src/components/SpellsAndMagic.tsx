@@ -14,7 +14,6 @@ import {
   SpellStudyEntry,
   StudySource,
   ActiveSpellStudy,
-  CalendarDate,
 } from '@/lib/types';
 import {
   getCharacterMagicProfile,
@@ -28,9 +27,6 @@ import {
   MAGICIAN_STARTING_SPELL_BOOKS,
   findArcaneSpell,
   getStudyConfig,
-  weeksElapsed,
-  addDays,
-  formatCalendarDate,
 } from '@/lib/gamedata';
 import {
   countPreparedByRank,
@@ -43,6 +39,14 @@ import {
   FEATURE_NOTES,
   KNOWN_SPELL_SOURCE_LABELS,
 } from '@/lib/character-sheet';
+import {
+  formatFairyDate,
+  formatRecordDate,
+  getCurrentTimelinePoint,
+  getFairyVisits,
+  getStudyProgress,
+  getStudyStart,
+} from '@/lib/livedTime';
 
 interface SpellsAndMagicProps {
   character: Character;
@@ -64,6 +68,7 @@ const selectClasses =
 export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicProps) {
   const {
     profile,
+    unknownNote,
     hasNoMagic,
     hasSpells,
     hasGlamours,
@@ -171,6 +176,11 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
       <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
         Spells & Magic
       </h2>
+
+      {/* A class or kindred the app doesn't know: say so rather than guess */}
+      {unknownNote && (
+        <p className="text-yellow-400 text-sm mb-4">{unknownNote}</p>
+      )}
 
       {/* No magic message */}
       {hasNoMagic && (
@@ -679,12 +689,15 @@ function KnownSpellsBlock({
   const handleAdd = () => {
     const matched = findArcaneSpell(addName);
     if (!matched) return;
+    const now = getCurrentTimelinePoint(character);
     const newSpell: KnownSpell = {
       id: crypto.randomUUID(),
       name: matched.name,
       rank: matched.rank,
       source: addSource,
-      learnedAt: { ...character.currentDate },
+      learnedAt: now.date,
+      learnedInFairy: now.fairyDate,
+      sinceReturnFrom: now.sinceReturnFrom,
     };
     onChange({ knownSpells: [...character.knownSpells, newSpell] });
     setAddName('');
@@ -806,7 +819,10 @@ function KnownSpellsBlock({
             )}
             <span className="text-[#c4a35a] font-semibold shrink-0">R{k.rank}</span>
             <span className="text-[#f5e6c8] flex-1 min-w-[100px]">{k.name}</span>
-            <span className="text-[#f5e6c8]/40 text-xs shrink-0">
+            <span
+              className="text-[#f5e6c8]/40 text-xs shrink-0"
+              title={k.learnedAt ? `Learned on ${formatRecordDate(character, k.learnedAt, k.learnedInFairy)}` : undefined}
+            >
               {KNOWN_SOURCE_LABEL[k.source]}
             </span>
             <button
@@ -817,6 +833,11 @@ function KnownSpellsBlock({
             >
               X
             </button>
+            {k.learnedInFairy && (
+              <span className="basis-full text-[#c9b3f0]/80 text-xs pl-5">
+                Learned on {formatFairyDate(character, k.learnedInFairy, k.learnedAt)}
+              </span>
+            )}
           </div>
         ))}
       </div>
@@ -961,12 +982,13 @@ function SpellStudyBlock({
 
   const config = getStudyConfig(draftSource, draftRank);
 
-  // Clamp at 0 so a player rewinding the calendar doesn't produce an
-  // ugly "-3 / 6 weeks" display. The study is just "not ready".
-  const elapsedWeeks = active
-    ? Math.max(0, weeksElapsed(active.startedOn, character.currentDate))
-    : 0;
-  const studyReady = active ? elapsedWeeks >= active.weeksRequired : false;
+  // Counted in days the character has lived (time in Fairy included), and
+  // clamped at 0 so rewinding the calendar reads as "not ready" rather than
+  // "-3 / 6 weeks". See getStudyProgress.
+  const progress = getStudyProgress(character);
+  const elapsedWeeks = progress?.elapsedWeeks ?? 0;
+  const studyReady = progress?.ready ?? false;
+  const hasBeenToFairy = getFairyVisits(character).length > 0;
 
   const handleAddToQueue = () => {
     const trimmed = draftName.trim();
@@ -992,7 +1014,7 @@ function SpellStudyBlock({
     };
     if (!active) {
       // Promote directly to active
-      const promoted: ActiveSpellStudy = { ...entry, startedOn: { ...character.currentDate } };
+      const promoted: ActiveSpellStudy = { ...entry, ...getStudyStart(character) };
       onChange({ spellStudy: { active: promoted, queue } });
     } else {
       onChange({ spellStudy: { active, queue: [...queue, entry] } });
@@ -1002,20 +1024,21 @@ function SpellStudyBlock({
     setDraftNotes('');
   };
 
-  // Promote the head of the queue to active. Caller passes the calendar
-  // date the new study should be considered to have started on.
+  // Promote the head of the queue to active. Caller passes when the new
+  // study should be considered to have started (see getStudyStart).
   const promoteNext = (
     remainingQueue: SpellStudyEntry[],
-    startedOn: CalendarDate,
+    start: ReturnType<typeof getStudyStart>,
   ): { active: ActiveSpellStudy | null; queue: SpellStudyEntry[] } => {
     if (remainingQueue.length === 0) return { active: null, queue: [] };
     const [head, ...rest] = remainingQueue;
-    return { active: { ...head, startedOn: { ...startedOn } }, queue: rest };
+    return { active: { ...head, ...start }, queue: rest };
   };
 
   const completeStudy = (passed: boolean) => {
-    if (!active) return;
+    if (!active || !progress) return;
 
+    const now = getCurrentTimelinePoint(character);
     let updatedKnown = character.knownSpells;
     let updatedFailed = character.failedStudies;
     let updatedEquipped = character.equippedItems;
@@ -1035,7 +1058,9 @@ function SpellStudyBlock({
               : active.source === 'mentor' ? 'mentor'
               : active.source === 'research' ? 'research'
               : 'rewrite',
-            learnedAt: { ...character.currentDate },
+            learnedAt: now.date,
+            learnedInFairy: now.fairyDate,
+            sinceReturnFrom: now.sinceReturnFrom,
           },
         ];
       }
@@ -1070,11 +1095,12 @@ function SpellStudyBlock({
       ];
     }
 
-    // Stamp the next study's start at the actual handoff (start + weeks*7),
-    // not at currentDate. The player may have advanced past completion before
+    // Stamp the next study's start at the actual handoff (start + weeks*7
+    // lived days), not now. The player may have lived past completion before
     // clicking Complete; without this the next study would lose that gap.
-    const handoffDate = addDays(active.startedOn, active.weeksRequired * 7);
-    const next = promoteNext(queue, handoffDate);
+    // The handoff can fall inside a Fairy visit, so its date comes from the
+    // lived-time timeline rather than from adding days to startedOn.
+    const next = promoteNext(queue, getStudyStart(character, progress.completesOnLivedDay));
     onChange({
       knownSpells: updatedKnown,
       failedStudies: updatedFailed,
@@ -1087,7 +1113,7 @@ function SpellStudyBlock({
   const cancelActive = () => {
     if (!confirm('Abandon current study? Time spent so far is lost.')) return;
     // Abandon means the next study really does start fresh today.
-    const next = promoteNext(queue, character.currentDate);
+    const next = promoteNext(queue, getStudyStart(character));
     onChange({ spellStudy: next });
   };
 
@@ -1115,7 +1141,7 @@ function SpellStudyBlock({
             <span className="text-[#f5e6c8] font-semibold">{active.spellName}</span>
             <span className="text-[#f5e6c8]/60 text-xs">({active.source})</span>
             <span className="ml-auto text-[#f5e6c8]/60 text-xs">
-              started {formatCalendarDate(active.startedOn)}
+              started on {formatRecordDate(character, active.startedOn, active.startedInFairy)}
             </span>
           </div>
           <div className="text-[#f5e6c8] text-sm mb-2">
@@ -1125,6 +1151,11 @@ function SpellStudyBlock({
             </span>
             {active.goldCost > 0 && (
               <span className="text-[#f5e6c8]/50 text-xs ml-2">(cost: {active.goldCost}gp)</span>
+            )}
+            {hasBeenToFairy && (
+              <div className="text-[#f5e6c8]/80 text-xs mt-0.5">
+                Counts days you&apos;ve lived, including days in Fairy. Time that passes in Dolmenwood while you&apos;re away doesn&apos;t count.
+              </div>
             )}
           </div>
           {active.notes && (
@@ -1494,9 +1525,11 @@ function GlamourSection({
   updateGlamour: (id: string, updates: Partial<CharacterGlamour>) => void;
   deleteGlamour: (id: string) => void;
 }) {
+  // null when the maximum depends on a kindred the app doesn't know
   const maxGlamours = profile.glamourCount;
   const currentCount = character.glamours.length;
-  const isOver = currentCount > maxGlamours;
+  const isOver = maxGlamours !== null && currentCount > maxGlamours;
+  const atMax = maxGlamours !== null && currentCount >= maxGlamours;
   const pickedIds = new Set(character.glamours.map((g) => g.glamourId));
   const availableGlamours = GLAMOURS.filter((g) => !pickedIds.has(g.id));
 
@@ -1505,7 +1538,7 @@ function GlamourSection({
       <h3 className={sectionHeadingClasses}>Glamours</h3>
 
       <div className={`text-sm mb-2 ${isOver ? 'text-red-400' : 'text-[#f5e6c8]/70'}`}>
-        {currentCount}/{maxGlamours} glamours known
+        {maxGlamours === null ? currentCount : `${currentCount}/${maxGlamours}`} glamours known
         {isOver && ' (over maximum!)'}
       </div>
 
@@ -1539,7 +1572,7 @@ function GlamourSection({
         );
       })}
 
-      {availableGlamours.length > 0 && currentCount < maxGlamours && (
+      {availableGlamours.length > 0 && !atMax && (
         <select
           value=""
           onChange={(e) => {
@@ -1557,7 +1590,7 @@ function GlamourSection({
         </select>
       )}
 
-      {currentCount >= maxGlamours && availableGlamours.length > 0 && (
+      {atMax && availableGlamours.length > 0 && (
         <p className="text-[#f5e6c8]/40 text-xs italic mt-2">
           Maximum glamours known. Remove one to add another.
         </p>

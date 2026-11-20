@@ -1,10 +1,21 @@
-import type { Character, FairyDoor, FairyDoorDestination, HexCoord, LeyLine, MapPOI } from './types';
-import { createDefaultCharacter, MONTHS } from './gamedata';
+import type {
+  Character,
+  FairyDate,
+  FairyDoor,
+  FairyDoorDestination,
+  FairyEvent,
+  FairyVisit,
+  HexCoord,
+  LeyLine,
+  MapPOI,
+} from './types';
+import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, daysBetween } from './gamedata';
+import { fitCountingStart, getLivedDayAtDolmenwoodDate } from './livedTime';
 import { HEX_GRID_META } from './hex-grid';
 import { isValidHex, pixelToHex } from './hex';
 import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS } from './map-data';
 
-export const CURRENT_SCHEMA_VERSION = 12;
+export const CURRENT_SCHEMA_VERSION = 13;
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
 
@@ -12,7 +23,10 @@ const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
  * Coerce a value that's supposed to be a CalendarDate into a well-formed
  * one. Replaces malformed shapes and non-finite numeric subfields with
  * sensible defaults. `day` is bounded against the (clamped) month's
- * actual length so a stale `day: 50` can't survive into display.
+ * actual length so a stale `day: 50` can't survive into display. A date
+ * past the calendar's last day (Year MAX_YEAR) becomes that day, so loaded
+ * data stays within what the calendar and the Fairy dialogs accept, and
+ * dates keep their order.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeDate(d: any): { day: number; month: number; year: number } {
@@ -32,20 +46,23 @@ function sanitizeDate(d: any): { day: number; month: number; year: number } {
     ? Math.max(1, Math.min(monthDays, Math.floor(d.day)))
     : DEFAULT_CALENDAR_DATE.day;
   const year = Number.isFinite(d.year) ? Math.max(1, Math.floor(d.year)) : DEFAULT_CALENDAR_DATE.year;
+  if (year > MAX_YEAR) return { ...LATEST_DATE };
   return { day, month, year };
 }
 
-/**
- * Walk a character object and rewrite every persisted CalendarDate field
- * through sanitizeDate. Both the v10 → v11 migration and the final
- * post-migration pass call this so there's one canonical path for date
- * repair.
- */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function isPlainObject(v: any): boolean {
   return v != null && typeof v === 'object' && !Array.isArray(v);
 }
 
+/**
+ * Walk a character object and rewrite the CalendarDate fields that predate
+ * Fairy time (currentDate, journal entry dates, learnedAt, and the active
+ * study's startedOn) through sanitizeDate, repairing the shapes around them.
+ * Both the v10 → v11 migration and the final post-migration pass call this.
+ * The Fairy-time dates (visit dates and livedTimeStart) are repaired in
+ * sanitizeFairyTime, which runs right after it in that final pass.
+ */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeCharacterDates(data: any): void {
   // currentDate is a required top-level field; if missing,
@@ -102,6 +119,182 @@ function sanitizeCharacterDates(data: any): void {
     if (isPlainObject(data.spellStudy.active)) {
       data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
     }
+  }
+}
+
+/**
+ * Anchor an in-progress spell study on the lived-time clock (see
+ * src/lib/livedTime.ts), measured against the given well-formed visits.
+ * Leaves an existing anchor alone unless `force` is set, or unless the
+ * study began in Dolmenwood after the last return (stamped with that visit):
+ * then the anchor always comes from its date, which is exact for such a
+ * study. Editing that return works the study's start out again from the
+ * anchor, so a hand-edited anchor would otherwise block every edit.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anchorActiveStudy(data: any, fairyVisits: FairyVisit[], force = false): void {
+  const active = isPlainObject(data.spellStudy) ? data.spellStudy.active : null;
+  if (!isPlainObject(active)) return;
+  const stamp = typeof active.sinceReturnFrom === 'string' ? active.sinceReturnFrom : undefined;
+  const startedOn = sanitizeDate(active.startedOn);
+  const last = fairyVisits[fairyVisits.length - 1];
+  const sinceLastReturn =
+    !active.startedInFairy && stamp !== undefined && last?.id === stamp && last.returnedOn != null && daysBetween(last.returnedOn, startedOn) >= 0;
+  if (!force && !sinceLastReturn && Number.isFinite(active.startedLivedDay)) {
+    active.startedLivedDay = Math.max(0, Math.floor(active.startedLivedDay)); // a whole, non-negative lived day
+    return;
+  }
+  active.startedLivedDay = getLivedDayAtDolmenwoodDate({ fairyVisits }, startedOn, stamp);
+}
+
+/**
+ * Add Fairy time tracking: an empty visit list, the days-lived counter's
+ * start date (Year 1, 1 Grimvold), and a lived-day anchor on any
+ * in-progress spell study.
+ *
+ * A save from before this version can't hold real Fairy data, so anything
+ * already in those fields is a leftover from a hand edit: the visit list and
+ * counter start are replaced, and Fairy references on records are removed.
+ * The anchor is measured with no visits, where a date's lived day is just
+ * its days since Year 1, day 1. Progress, livedDays(now) - startedLivedDay,
+ * then equals daysBetween(startedOn, currentDate): exactly what the old app
+ * showed.
+ *
+ * Kept self-contained (no version numbers inside) so it can be renumbered
+ * if another schema bump lands first.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateAddFairyTime(data: any): any {
+  data.fairyVisits = [];
+  data.livedTimeStart = { ...DEFAULT_CALENDAR_DATE };
+  if (Array.isArray(data.journalEntries)) {
+    for (const entry of data.journalEntries.filter(isPlainObject)) {
+      delete entry.fairyDate;
+      delete entry.fairyEvent;
+      delete entry.sinceReturnFrom;
+    }
+  }
+  if (Array.isArray(data.knownSpells)) {
+    for (const spell of data.knownSpells.filter(isPlainObject)) {
+      delete spell.learnedInFairy;
+      delete spell.sinceReturnFrom;
+    }
+  }
+  if (isPlainObject(data.spellStudy) && isPlainObject(data.spellStudy.active)) {
+    delete data.spellStudy.active.startedInFairy;
+    delete data.spellStudy.active.sinceReturnFrom;
+  }
+  anchorActiveStudy(data, [], true);
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyDate(ref: any): FairyDate | undefined {
+  if (!isPlainObject(ref) || typeof ref.visitId !== 'string' || !Number.isFinite(ref.day)) return undefined;
+  return { visitId: ref.visitId, day: Math.max(1, Math.floor(ref.day)) };
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyEvent(event: any): FairyEvent | undefined {
+  if (!isPlainObject(event) || typeof event.visitId !== 'string') return undefined;
+  if (event.kind !== 'entered' && event.kind !== 'returned') return undefined;
+  return { visitId: event.visitId, kind: event.kind };
+}
+
+// Repair (or drop) the Fairy references a record can carry.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeRecordRefs(record: any, fairyDateKey: string, withEvent = false): void {
+  if (record[fairyDateKey] !== undefined) {
+    const ref = sanitizeFairyDate(record[fairyDateKey]);
+    if (ref) record[fairyDateKey] = ref; else delete record[fairyDateKey];
+  }
+  if (withEvent && record.fairyEvent !== undefined) {
+    const event = sanitizeFairyEvent(record.fairyEvent);
+    if (event) record.fairyEvent = event; else delete record.fairyEvent;
+  }
+  if (record.sinceReturnFrom !== undefined && typeof record.sinceReturnFrom !== 'string') delete record.sinceReturnFrom;
+}
+
+// A date with all three parts present as numbers (it may still need clamping).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function hasDateParts(d: any): boolean {
+  return isPlainObject(d) && Number.isFinite(d.day) && Number.isFinite(d.month) && Number.isFinite(d.year);
+}
+
+/**
+ * Repair Fairy-time data on a partially-trusted save (a hand-edited import
+ * can skip the migration loop), restoring the invariants the rest of the app
+ * relies on:
+ *   - visits have unique ids, whole non-negative days, and an entry date. A
+ *     visit with no usable entry date is dropped rather than placed on an
+ *     invented one;
+ *   - visits are in order: none begins before the previous one ended, and
+ *     none ends before it began; only the last can still be open;
+ *   - while the character is in Fairy, Dolmenwood's date is frozen on the
+ *     entry day; otherwise it's never before the last return (the calendar's
+ *     floor);
+ *   - the study's lived-day anchor is a whole, non-negative number.
+ * A counter start date later than today is valid; the counter shows 0 until
+ * the calendar reaches it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyTime(data: any): void {
+  if (data.fairyVisits !== undefined && !Array.isArray(data.fairyVisits)) data.fairyVisits = [];
+  if (Array.isArray(data.fairyVisits)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const visits: any[] = data.fairyVisits.filter((v: any) => isPlainObject(v) && hasDateParts(v.enteredOn));
+    const seenIds = new Set<string>();
+    let previousReturn: { day: number; month: number; year: number } | null = null;
+    visits.forEach((visit, i) => {
+      if (typeof visit.id !== 'string' || visit.id === '' || seenIds.has(visit.id)) visit.id = crypto.randomUUID();
+      seenIds.add(visit.id);
+      visit.enteredOn = sanitizeDate(visit.enteredOn);
+      if (previousReturn && daysBetween(previousReturn, visit.enteredOn) < 0) visit.enteredOn = { ...previousReturn };
+      if (visit.returnedOn == null) {
+        // Only the most recent visit can still be open; close any earlier
+        // one on the day it began, as if no time passed.
+        visit.returnedOn = i === visits.length - 1 ? null : { ...visit.enteredOn };
+      } else {
+        visit.returnedOn = sanitizeDate(visit.returnedOn);
+        if (daysBetween(visit.enteredOn, visit.returnedOn) < 0) visit.returnedOn = { ...visit.enteredOn };
+      }
+      visit.daysInFairy = Number.isFinite(visit.daysInFairy) ? Math.max(0, Math.floor(visit.daysInFairy)) : 0;
+      previousReturn = visit.returnedOn;
+    });
+    data.fairyVisits = visits;
+    const last = visits[visits.length - 1];
+    if (last && last.returnedOn === null) {
+      data.currentDate = { ...last.enteredOn };
+    } else if (last && (!isPlainObject(data.currentDate) || daysBetween(last.returnedOn, data.currentDate) < 0)) {
+      data.currentDate = { ...last.returnedOn };
+    }
+  }
+
+  // The counter's start; reconcileWithDefaults fills it in if missing. Its
+  // stamp stays only if it fits the visits; a day spent away in Fairy moves
+  // to the return date (see fitCountingStart).
+  if (data.livedTimeStart !== undefined) {
+    const raw = data.livedTimeStart;
+    const stamp = isPlainObject(raw) && typeof raw.sinceReturnFrom === 'string' ? raw.sinceReturnFrom : undefined;
+    data.livedTimeStart = fitCountingStart(
+      { fairyVisits: Array.isArray(data.fairyVisits) ? data.fairyVisits : [] },
+      { ...sanitizeDate(raw), ...(stamp ? { sinceReturnFrom: stamp } : {}) },
+    );
+  }
+
+  // Fairy references on records: keep well-formed ones, drop anything else.
+  // A reference to an unknown visit is kept; it still displays its day.
+  if (Array.isArray(data.journalEntries)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const entry of data.journalEntries as any[]) sanitizeRecordRefs(entry, 'fairyDate', true);
+  }
+  if (Array.isArray(data.knownSpells)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const spell of data.knownSpells as any[]) sanitizeRecordRefs(spell, 'learnedInFairy');
+  }
+  if (isPlainObject(data.spellStudy) && isPlainObject(data.spellStudy.active)) {
+    sanitizeRecordRefs(data.spellStudy.active, 'startedInFairy');
+    anchorActiveStudy(data, Array.isArray(data.fairyVisits) ? data.fairyVisits : []);
   }
 }
 
@@ -345,7 +538,7 @@ function endOfLeadingJsonArray(text: string): number {
 }
 
 /**
- * Hex under a pre-v12 map pin. The old map stored each pin's position as x/y
+ * Hex under a pre-v13 map pin. The old map stored each pin's position as x/y
  * percentages (0–100) of the printed map image (now scripts/dolmenwood-map.png).
  * hex-grid.json was extracted from that same image, so percentage × image
  * size is a point in pixelToHex's pixel space. Returns null when the position
@@ -359,7 +552,7 @@ function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
 }
 
 /**
- * Convert pins saved by the pre-v12 map, a <!--MAP_PINS--> marker followed by
+ * Convert pins saved by the pre-v13 map, a <!--MAP_PINS--> marker followed by
  * a JSON array in otherNotes, into POIs, which it returns for sanitizeMapData
  * to add. Each pin goes on the hex typed into the old "Hex #" field if that's
  * a hex on the map, otherwise on the hex under its position (keeping the
@@ -367,7 +560,7 @@ function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
  * `lost`. Text after the array is kept.
  *
  * Runs after the migration loop on every load and import, not only in
- * v11 → v12, so a save whose marker had to be repaired by hand still
+ * v12 → v13, so a save whose marker had to be repaired by hand still
  * converts when re-imported. A marker not followed by a complete array is
  * left alone so the player can recover it.
  */
@@ -533,13 +726,16 @@ const migrations: Record<number, (data: any) => any> = {
     sanitizeCharacterDates(data);
     return data;
   },
-  // v11 -> v12: Structured hex-map data. Adds mapData + currentLocationHex.
+  // v11 -> v12: Fairy time tracking. Adds fairyVisits and anchors any
+  // in-progress spell study on the lived-time clock (progress unchanged).
+  11: migrateAddFairyTime,
+  // v12 -> v13: Structured hex-map data. Adds mapData + currentLocationHex.
   // Pins from the old map (the <!--MAP_PINS--> marker in otherNotes) are
   // converted after the migration loop, by convertLegacyMapPins, so that a
   // save whose marker was repaired by hand still converts on re-import.
   // Values of the wrong shape are left for sanitizeMapData, which keeps any
   // text they hold.
-  11: (data) => {
+  12: (data) => {
     if (data.mapData === undefined) data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
     if (data.currentLocationHex === undefined) data.currentLocationHex = '';
     return data;
@@ -675,6 +871,7 @@ export function migrateCharacter(data: any): Character {
   // populated by sanitizers above are never undefined, so reconcile
   // won't overwrite them.
   sanitizeCharacterDates(data);
+  sanitizeFairyTime(data);
   const lostMapItems: string[] = [];
   const legacyPois = convertLegacyMapPins(data, lostMapItems);
   sanitizeMapData(data, lostMapItems, legacyPois);

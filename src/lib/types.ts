@@ -72,7 +72,9 @@ export interface KnownSpell {
   name: string;
   rank: number;
   source: KnownSpellSource;
-  learnedAt?: CalendarDate;
+  learnedAt?: CalendarDate;       // Dolmenwood date (frozen at the entry date while in Fairy)
+  learnedInFairy?: FairyDate;     // set when the spell was learned during a Fairy visit
+  sinceReturnFrom?: string;       // the Fairy visit the character had last come back from (see FairyVisit)
   notes?: string;
 }
 
@@ -90,7 +92,13 @@ export interface SpellStudyEntry {
 }
 
 export interface ActiveSpellStudy extends SpellStudyEntry {
-  startedOn: CalendarDate;
+  startedOn: CalendarDate;        // Dolmenwood date, for display (frozen at the entry date while in Fairy)
+  // Progress is measured on the character's own clock: the lived day the
+  // study began (see src/lib/livedTime.ts), so days spent in Fairy count
+  // and Dolmenwood time that passes while the character is away does not.
+  startedLivedDay: number;
+  startedInFairy?: FairyDate;     // set when the study began during a Fairy visit
+  sinceReturnFrom?: string;       // the Fairy visit the character had last come back from (see FairyVisit)
 }
 
 export interface SpellStudyState {
@@ -305,6 +313,21 @@ export interface Character {
   travelDaysWithoutRest: number;
   forcedMarchActive: boolean;
   travelPointsRemaining: number;
+
+  // Visits to Fairy, oldest first. Only the last one can still be open
+  // (returnedOn === null), which means the character is in Fairy now.
+  fairyVisits: FairyVisit[];
+  // The Dolmenwood date the days-lived counter counts from: when the
+  // character's story began. Defaults to Year 1, 1 Grimvold.
+  livedTimeStart: CountingStart;
+}
+
+// The days-lived counter's start. Like a record, it carries the Fairy visit
+// the character had last come back from by then (`sinceReturnFrom`, see
+// FairyVisit), so editing that return date moves the start with it and the
+// count stays the same. Never a day the character was away in Fairy.
+export interface CountingStart extends CalendarDate {
+  sinceReturnFrom?: string;
 }
 
 // Polymorphic onChange contract used by every character-tab component and
@@ -318,9 +341,42 @@ export type CharacterUpdater =
 
 export interface JournalEntry {
   id: string;
-  date: CalendarDate;
+  date: CalendarDate;      // Dolmenwood date (frozen at the entry date while in Fairy)
+  fairyDate?: FairyDate;   // set when the entry was written during a Fairy visit
+  fairyEvent?: FairyEvent; // set on the entries the app writes when entering or leaving Fairy
+  sinceReturnFrom?: string; // the Fairy visit the character had last come back from (see FairyVisit)
   location: string;
   text: string;
+}
+
+// Marks a journal entry as the automatic record of entering or leaving a
+// Fairy visit, so editing that visit's return date can update it.
+export interface FairyEvent {
+  visitId: string;
+  kind: 'entered' | 'returned';
+}
+
+// A trip into Fairy. Fairy is timeless: while the character is there,
+// Dolmenwood's calendar (Character.currentDate) stays on `enteredOn` and
+// only `daysInFairy` advances. On return the Referee decides how much
+// Dolmenwood time has passed, which sets `returnedOn`.
+//
+// Records made in Dolmenwood after a return, and a days-lived counter start
+// on or after it, carry that visit's id as `sinceReturnFrom`. Editing the
+// return date moves exactly those with it; a date alone can't tell "before
+// entering" from "after a same-day return".
+export interface FairyVisit {
+  id: string;
+  enteredOn: CalendarDate;          // Dolmenwood date the character entered Fairy
+  returnedOn: CalendarDate | null;  // Dolmenwood date they came back; null while still in Fairy
+  daysInFairy: number;              // days the character lived in Fairy on this visit
+}
+
+// A day inside a Fairy visit. Refers to the visit by id, so repeat visits
+// are never ambiguous. `day` is 1-based: day 1 is the day they entered.
+export interface FairyDate {
+  visitId: string;
+  day: number;
 }
 
 export interface Retainer {

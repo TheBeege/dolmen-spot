@@ -28,7 +28,8 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
     const xpMod = calculateXpModifier(character.class, character.kindred, newScores);
     onChange({
       abilityScores: newScores,
-      xpModifier: xpMod.total,
+      // Keep the stored modifier when there's nothing to calculate it from.
+      ...(xpMod ? { xpModifier: xpMod.total } : {}),
     });
   };
 

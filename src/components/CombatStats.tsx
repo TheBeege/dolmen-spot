@@ -49,7 +49,8 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
     character.class,
     character.level,
   );
-  const acOutOfSync = calcAC.ac !== character.armorClass;
+  // null with a kindred or class the app doesn't know: no sync offered
+  const acOutOfSync = calcAC !== null && calcAC.ac !== character.armorClass;
   const armourWarning = getArmourRestrictionWarning(character.class, character.equippedArmourName, character.hasShield);
 
   // --- Attack Bonus ---
@@ -61,7 +62,8 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
 
   // --- Magic Resistance ---
   const calcMR = calculateMagicResistance(character.abilityScores.wisdom, character.kindred);
-  const mrOutOfSync = calcMR.value !== character.magicResistance;
+  // null with a kindred the app doesn't know: no sync offered
+  const mrOutOfSync = calcMR !== null && calcMR.value !== character.magicResistance;
 
   return (
     <div className="space-y-4">
@@ -204,7 +206,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         <div className="flex items-center gap-3 mb-2">
           <span className="text-3xl font-bold text-[#f5e6c8]">{character.armorClass}</span>
           <div className="flex-1">
-            {acOutOfSync && (
+            {calcAC && acOutOfSync && (
               <button
                 type="button"
                 onClick={() => onChange({ armorClass: calcAC.ac })}
@@ -213,7 +215,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
                 Sync to {calcAC.ac}
               </button>
             )}
-            {calcAC.notes.length > 0 && (
+            {calcAC && calcAC.notes.length > 0 && (
               <p className="text-[#8b8b9e] text-xs mt-1">{calcAC.notes.join(', ')}</p>
             )}
           </div>
@@ -291,7 +293,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <div className="flex items-center gap-3 mb-2">
             <span className="text-3xl font-bold text-[#f5e6c8]">{formatModifier(character.magicResistance)}</span>
             <div className="flex-1">
-              {mrOutOfSync && (
+              {calcMR && mrOutOfSync && (
                 <button
                   type="button"
                   onClick={() => onChange({ magicResistance: calcMR.value })}
@@ -300,7 +302,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
                   Sync to {formatModifier(calcMR.value)}
                 </button>
               )}
-              {calcMR.notes.length > 0 && (
+              {calcMR && calcMR.notes.length > 0 && (
                 <p className="text-[#8b8b9e] text-xs mt-1">{calcMR.notes.join(', ')}</p>
               )}
             </div>
