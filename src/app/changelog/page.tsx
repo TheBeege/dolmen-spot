@@ -30,9 +30,9 @@ type ChangelogEntry = {
 // Write each bullet from the player's point of view — what changed for them, not what changed in code.
 const ENTRIES: ChangelogEntry[] = [
   {
-    date: '2026-11-20',
-    title: 'Printable character sheets, calendar fixes, and a site icon',
-    prNumbers: [10, 11, 18, 21],
+    date: '2026-11-21',
+    title: 'Hex map, time in Fairy, printable sheets, and safer saves',
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21],
     sections: [
       {
         heading: 'Printable PDF character sheets',
@@ -43,6 +43,39 @@ const ENTRIES: ChangelogEntry[] = [
           'Pages are printer-friendly with selectable text. Long inventories continue onto extra pages with their table headings repeated, and every page shows your character\'s name and a page number.',
           'Paper size follows your browser\'s language: Letter in the US, Canada, and other Letter-paper regions, A4 elsewhere.',
           'On phones, the header now hides the kindred and class and shortens long character names further, so its buttons always fit on screen.',
+        ],
+      },
+      {
+        heading: 'Hex map',
+        changes: [
+          'The Map tab is rebuilt as a hex grid of the printed Dolmenwood map, each hex 6 miles across. Tap a hex to see what\'s there, make it your current hex (marked with a gold star), and add Points of Interest or Fairy Doors. Changes save as you type.',
+          'Fairy Doors can be wild, leading into Fairy, or linked by a named fairy road to another door. Linked pairs are drawn on the map and stay paired as you edit them.',
+          'Trace ley lines, wards, old roads, or any other path hex by hex, with a name, colour, and notes.',
+          'Drag, pinch, scroll, or use the +/− buttons to move and zoom, or type a hex like "0303" into Go to hex. The map works on phones in portrait and landscape, and from the keyboard.',
+          'Pins from the old map move over automatically, onto the hex number you gave them or where you placed them. Any that can\'t be placed are listed in Other Notes.',
+        ],
+      },
+      {
+        heading: 'Time in Fairy',
+        changes: [
+          'Your character can enter Fairy from the Adventuring tab. Dolmenwood\'s date waits while you count days in Fairy, and when you return you pick the new date or say how much time passed, with an optional roll of 2d20 days.',
+          'Spell study counts the days your character actually lives: studying in Fairy makes progress, and coming back to find years have passed no longer finishes a study.',
+          'Got the return date wrong? Edit return date fixes it, and moves your journal entries, learned spells, and study since the return along with it.',
+          'Entering and leaving Fairy add journal entries, and anything learned or begun in Fairy is dated by visit and day.',
+          'A days-lived counter shows how long your character has lived, how much of it in Fairy, and how much Dolmenwood time passed while they were away.',
+          'An "In Fairy" badge appears by your character\'s name, and Dolmenwood\'s date, moon, and season are shown as you left them.',
+          'The calendar\'s Month, Day, and Year fields explain what\'s wrong instead of quietly changing what you typed.',
+        ],
+      },
+      {
+        heading: 'Safer saves',
+        changes: [
+          'If your saved characters can\'t be read, Dolmen Spot keeps a copy of the old data and lets you download it, instead of overwriting it with a new sheet.',
+          'If one character can\'t be opened (for example, because a newer version of Dolmen Spot saved it), your others still open, and it\'s kept unchanged in your browser until it can be.',
+          'If your browser\'s storage is full or blocked, the sheet keeps working, says your changes aren\'t being saved, and offers to export your characters. It also asks before you close a tab with unsaved changes.',
+          'Editing in two tabs no longer silently overwrites one with the other: the out-of-date tab stops saving and asks you to reload.',
+          'If part of the sheet fails to display, a recovery screen tells you whether your characters are still saved and lets you try again, reload, or download your save data and any unsaved changes.',
+          'Import Character accepts files with several characters, and explains when a file isn\'t a character file.',
         ],
       },
       {
@@ -66,11 +99,10 @@ const ENTRIES: ChangelogEntry[] = [
       {
         heading: 'Sturdier, easier-to-read sheet',
         changes: [
-          'A character saved with a class the sheet doesn\'t recognise (for example, from a hand-edited file) no longer blanks the whole app. Unrecognised classes and kindreds are shown as stored, such as "warlock (unknown class)", and the sheet doesn\'t guess values or magic it can\'t work out.',
-          'If part of the sheet fails to display, a recovery screen tells you whether your characters are still saved and lets you try again, reload, or download your save data. That save-data file is a backup, not a character file, and importing it says so.',
+          'A character saved with a class the sheet doesn\'t recognise (for example, from a hand-edited file) no longer blanks the whole app. Unrecognised classes and kindreds are shown as stored, and the sheet doesn\'t guess values or magic it can\'t work out.',
           'The header and character list show proper names, such as "Woodgrue Enchanter", instead of lowercase ids or "???".',
           'Inventory columns line up when you carry bags, sacks, or pouches, and on phones item rows fit the screen with each field labelled.',
-          'Warnings, the header\'s kindred and class, the Inventory\'s × buttons, and the character list\'s Del buttons are easier to read, and screen readers say what each of those buttons removes or deletes.',
+          'Warnings, the header\'s kindred and class, the Inventory\'s × buttons, the character list\'s Del buttons, and the Save / Load close button are easier to read, and screen readers say what each of those buttons does.',
         ],
       },
       {
