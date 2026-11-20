@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
+    "postinstall": "patch-package --error-on-fail",
     "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
@@ -29,6 +30,7 @@
     "eslint-config-next": "^16.4.6",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.1",
+    "patch-package": "^8.0.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",

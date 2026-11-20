@@ -11,15 +11,17 @@ import {
   ARCANE_SPELLS,
   findArcaneSpell,
   EquipmentEntry,
+  EQUIPPED_SLOT_LIMIT,
+  SPELLBOOK_CAPACITY,
+  STOWED_SLOT_LIMIT,
 } from '@/lib/gamedata';
 import {
   calculateEncumbrance,
   getOverloadNote,
   getContainerItems,
   getContainerLoad,
-  EQUIPPED_SLOT_LIMIT,
-  STOWED_SLOT_LIMIT,
 } from '@/lib/character-sheet';
+import { pluralize } from '@/lib/grammar';
 
 interface InventoryProps {
   character: Character;
@@ -203,7 +205,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const handleSpellbookAddEntry = (equipped: boolean, itemId: string) => {
     updateInventoryItem(equipped, itemId, (item) => {
       const contents = item.spellbookContents ?? [];
-      if (contents.length >= 3) return item;
+      if (contents.length >= SPELLBOOK_CAPACITY) return item;
       return { ...item, spellbookContents: [...contents, { name: '', rank: 1 }] };
     });
   };
@@ -363,7 +365,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const renderSpellbookItem = (item: InventoryItem, equipped: boolean) => {
     const contents = item.spellbookContents ?? [];
     const isCollapsed = collapsedSpellbooks.has(item.id);
-    const isFull = contents.length >= 3;
+    const isFull = contents.length >= SPELLBOOK_CAPACITY;
     return (
       <div key={item.id} className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1">
         {/* Header */}
@@ -385,7 +387,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             className={`${inputClasses} flex-1 min-w-[120px]`}
           />
           <span className="text-[#f5e6c8]/50 text-xs shrink-0">
-            {contents.length}/3
+            {contents.length}/{SPELLBOOK_CAPACITY}
           </span>
           <div className="flex items-center gap-2">
             <input
@@ -482,7 +484,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   : 'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8]'
               }`}
             >
-              {isFull ? 'Full (3/3)' : '+ Add spell'}
+              {isFull ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY})` : '+ Add spell'}
             </button>
             <textarea
               value={item.notes}
@@ -1134,7 +1136,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <div className="flex justify-between">
               <span>Coin Slots:</span>
               <span className="text-[#f5e6c8]/70">
-                {coinSlots} ({totalCoinCount} coins)
+                {coinSlots} ({pluralize(totalCoinCount, 'coin')})
               </span>
             </div>
             <div>
@@ -1160,7 +1162,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             </div>
             <div className="flex justify-between">
               <span>Coin Weight:</span>
-              <span className="text-[#f5e6c8]/70">{coinWeight} ({totalCoinCount} coins)</span>
+              <span className="text-[#f5e6c8]/70">{coinWeight} ({pluralize(totalCoinCount, 'coin')})</span>
             </div>
             <div className="flex justify-between">
               <span>Total Weight:</span>
@@ -1243,7 +1245,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         <div className="mt-3 text-xs text-[#f5e6c8]/60 space-y-1">
           <p>Exchange: 1pp = 5gp = 50sp = 500cp</p>
           <p>
-            Total: {totalCoinCount} coins ({getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)
+            Total: {pluralize(totalCoinCount, 'coin')} ({getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)
           </p>
         </div>
       </div>

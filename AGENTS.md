@@ -76,6 +76,7 @@ Character data is stored in localStorage and must survive schema changes across 
 
 - **Tech stack**: Next.js 16, TypeScript, Tailwind CSS v4 (utility classes only, no `@apply`)
 - **ESLint 10 overrides**: The `overrides` in `package.json` let eslint-plugin-import, eslint-plugin-jsx-a11y and eslint-plugin-react (from eslint-config-next) use ESLint 10 before their peer ranges allow it. Remove an entry once the version eslint-config-next installs accepts ESLint 10: delete the entry, run `npm update <plugin>`, then check that `npm ci` prints no ERESOLVE warning and `npm ls --all` exits 0
+- **Patched dependencies**: `patches/` holds fixes to `@react-pdf/textkit` and `@react-pdf/render`, which patch-package applies after every `npm install` and `npm ci` (the `postinstall` script). A patch that no longer applies fails the install, locally as well as in CI and on Vercel (`--error-on-fail`). When upgrading `@react-pdf/renderer` or changing a patch, follow the README's "Patched Dependencies" section. A changed patch only applies to a fresh copy of its package, so reinstall with `npm ci` rather than `npm install`; Vercel does the same (`installCommand` in `vercel.json`)
 - **State management**: React hooks + localStorage persistence via `src/hooks/useCharacter.ts`
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- base background `#1a1a2e`, cards `#2a2a3e`, text `#f5e6c8`, gold accent `#c4a35a`, warm-brown borders `#5a3a28`, written as arbitrary-value classes (e.g. `bg-[#2a2a3e]`)
