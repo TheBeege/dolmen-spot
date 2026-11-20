@@ -127,11 +127,12 @@ function newId(): string {
 // Markers and ley lines are buttons for keyboard and screen-reader users.
 // Their clicks and Enter/Space presses are handled once, on the SVG, by
 // reading their data-* attributes (see activateMapItem).
+const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2';
 const MAP_BUTTON_PROPS = {
   role: 'button',
   tabIndex: 0,
   style: { cursor: 'pointer' },
-  className: 'focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2',
+  className: FOCUS_RING,
 } as const;
 
 /** Image point shown at client point (cx, cy) for view `v` in an SVG with box `rect` (preserveAspectRatio meet). */
@@ -288,6 +289,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // is then scrolled into view.
   const [revealSeq, setRevealSeq] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLDivElement>(null);
@@ -319,6 +321,19 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       inspectorRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [revealSeq]);
+
+  // An action that removes the focused control (closing the inspector,
+  // adding or deleting an item, starting or ending a ley line) names, by its
+  // data-focus-key, where focus goes once the change is on screen, so that
+  // focus doesn't fall back to the page.
+  const [focusAfter, setFocusAfter] = useState<{ key: string; seq: number } | null>(null);
+  const moveFocusTo = (key: string) => setFocusAfter((f) => ({ key, seq: (f?.seq ?? 0) + 1 }));
+  useEffect(() => {
+    if (!focusAfter) return;
+    const el = rootRef.current?.querySelector<HTMLElement | SVGElement>(`[data-focus-key="${CSS.escape(focusAfter.key)}"]`);
+    el?.focus({ preventScroll: true });
+    el?.scrollIntoView({ block: 'nearest' });
+  }, [focusAfter]);
 
   // Every change to "what's selected" goes through these, so the selected
   // hex, selected ley line, focused item and open form stay consistent.
@@ -926,7 +941,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const toolButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 transition-colors';
 
   return (
-    <div className="space-y-4">
+    // scroll-mt keeps an element that focus moves to clear of the sticky header.
+    <div ref={rootRef} className="space-y-4 [&_[data-focus-key]]:scroll-mt-24">
       <div className="bg-[#2a2a3e] rounded-lg p-4">
         <div className="flex items-center justify-between mb-3 border-b border-[#5a3a28] pb-2 flex-wrap gap-2">
           <h2 className="text-lg font-bold text-[#c4a35a]">Dolmenwood Map</h2>
@@ -953,23 +969,41 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         </div>
         <div className="flex items-center gap-2 flex-wrap text-sm">
           {!draft ? (
-            <button type="button" onClick={startLeyLine} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors">
+            <button
+              type="button"
+              onClick={() => {
+                startLeyLine();
+                moveFocusTo('drawing-status');
+              }}
+              data-focus-key="draw-ley-line"
+              className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors"
+            >
               ≈ Draw Ley Line
             </button>
           ) : (
             <>
-              <span className="text-[#c4a35a] font-semibold">
+              <span role="status" tabIndex={-1} data-focus-key="drawing-status" className={`text-[#c4a35a] font-semibold ${FOCUS_RING}`}>
                 Drawing ley line ({draft.hexes.length} hex{draft.hexes.length === 1 ? '' : 'es'})
               </span>
               <button
                 type="button"
-                onClick={finishLeyLine}
+                onClick={() => {
+                  finishLeyLine();
+                  moveFocusTo('draw-ley-line');
+                }}
                 disabled={draft.hexes.length < 2}
                 className="bg-[#c4a35a] disabled:opacity-40 hover:bg-[#d4b66a] text-[#1a1a2e] font-semibold rounded px-3 py-1 transition-colors"
               >
                 Finish
               </button>
-              <button type="button" onClick={() => setDraftLeyLine(null)} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftLeyLine(null);
+                  moveFocusTo('draw-ley-line');
+                }}
+                className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors"
+              >
                 Cancel
               </button>
             </>
@@ -1006,6 +1040,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       >
         <svg
           ref={svgRef}
+          data-focus-key="map"
           viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
           xmlns="http://www.w3.org/2000/svg"
           role="group"
@@ -1051,7 +1086,11 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             currentLocationHex={currentHex}
             setCurrentLocation={setCurrentLocation}
             focus={focus}
-            onClose={clearSelection}
+            onClose={() => {
+              clearSelection();
+              moveFocusTo('map');
+            }}
+            moveFocusTo={moveFocusTo}
           />
         </div>
         <LeyLinesPanel
@@ -1059,6 +1098,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           updateMap={updateMap}
           selectedLeyLine={selectedLeyLine}
           onToggleSelected={(id) => (selectedLeyLine === id ? clearSelection() : selectLeyLine(id))}
+          moveFocusTo={moveFocusTo}
         />
       </div>
     </div>
@@ -1148,6 +1188,7 @@ function HexInspectorPanel({
   setCurrentLocation,
   focus,
   onClose,
+  moveFocusTo,
 }: {
   selectedHex: HexCoord | null;
   items: { pois: MapPOI[]; doors: FairyDoor[] } | undefined;
@@ -1159,6 +1200,7 @@ function HexInspectorPanel({
   setCurrentLocation: (h: HexCoord) => void;
   focus: { id: string; seq: number } | null;
   onClose: () => void;
+  moveFocusTo: (key: string) => void;
 }) {
   if (!selectedHex) {
     return (
@@ -1176,6 +1218,12 @@ function HexInspectorPanel({
   // The action buttons give way to the chosen form; Add or Cancel brings them back.
   const activeForm = pendingForm?.hex === selectedHex ? pendingForm.type : null;
   const actionButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors';
+  // After a delete, focus goes to the next item on the hex, or the title.
+  const itemIds = [...pois.map((p) => p.id), ...doors.map((d) => d.id)];
+  const focusAfterDelete = (id: string) => {
+    const next = itemIds[itemIds.indexOf(id) + 1];
+    moveFocusTo(next ? `item:${next}` : 'inspector-title');
+  };
 
   const savePoi = (id: string, patch: Partial<MapPOI>) =>
     updateMap((md) => ({ ...md, pois: md.pois.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
@@ -1193,7 +1241,9 @@ function HexInspectorPanel({
     <div className="bg-[#2a2a3e] rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between border-b border-[#5a3a28] pb-2">
         <div className="flex items-baseline gap-2 flex-wrap">
-          <h3 className="text-[#c4a35a] font-bold">Hex {selectedHex}</h3>
+          <h3 tabIndex={-1} data-focus-key="inspector-title" className={`text-[#c4a35a] font-bold ${FOCUS_RING}`}>
+            Hex {selectedHex}
+          </h3>
           <span className="text-[#f5e6c8]/60 text-xs">{terrain}</span>
           {isCurrent && <span className="text-[#c4a35a] text-xs">★ current</span>}
         </div>
@@ -1208,8 +1258,12 @@ function HexInspectorPanel({
           onSubmit={(poi) => {
             updateMap((md) => ({ ...md, pois: [...md.pois, poi] }));
             setPendingForm(null);
+            moveFocusTo(`item:${poi.id}`);
           }}
-          onCancel={() => setPendingForm(null)}
+          onCancel={() => {
+            setPendingForm(null);
+            moveFocusTo('add-poi');
+          }}
         />
       )}
       {activeForm === 'door' && (
@@ -1219,24 +1273,32 @@ function HexInspectorPanel({
           onSubmit={(door) => {
             updateMap((md) => ({ ...md, fairyDoors: upsertFairyDoor(md.fairyDoors, door) }));
             setPendingForm(null);
+            moveFocusTo(`item:${door.id}`);
           }}
-          onCancel={() => setPendingForm(null)}
+          onCancel={() => {
+            setPendingForm(null);
+            moveFocusTo('add-door');
+          }}
         />
       )}
       {activeForm === null && (
         <div className="grid grid-cols-3 gap-2 text-sm">
+          {/* aria-disabled, not disabled: a button disabled while it has
+              focus (it is, once clicked) drops focus to the page. */}
           <button
             type="button"
-            onClick={() => setCurrentLocation(selectedHex)}
-            disabled={isCurrent}
-            className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 disabled:hover:bg-[#2d4a2e] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
+            onClick={() => {
+              if (!isCurrent) setCurrentLocation(selectedHex);
+            }}
+            aria-disabled={isCurrent}
+            className="bg-[#2d4a2e] hover:bg-[#3d6b3e] aria-disabled:opacity-40 aria-disabled:hover:bg-[#2d4a2e] aria-disabled:cursor-default text-[#f5e6c8] rounded px-3 py-2 transition-colors"
           >
             📍 Set Current
           </button>
-          <button type="button" onClick={() => setPendingForm({ type: 'poi', hex: selectedHex })} className={actionButton}>
+          <button type="button" onClick={() => setPendingForm({ type: 'poi', hex: selectedHex })} data-focus-key="add-poi" className={actionButton}>
             + POI
           </button>
-          <button type="button" onClick={() => setPendingForm({ type: 'door', hex: selectedHex })} className={actionButton}>
+          <button type="button" onClick={() => setPendingForm({ type: 'door', hex: selectedHex })} data-focus-key="add-door" className={actionButton}>
             ✦ Fairy Door
           </button>
         </div>
@@ -1255,7 +1317,10 @@ function HexInspectorPanel({
                     singleton={singleton}
                     focusSeq={focusSeqFor(p.id)}
                     onSave={(patch) => savePoi(p.id, patch)}
-                    onDelete={() => updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }))}
+                    onDelete={() => {
+                      updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }));
+                      focusAfterDelete(p.id);
+                    }}
                   />
                 ))}
               </div>
@@ -1274,7 +1339,10 @@ function HexInspectorPanel({
                     focusSeq={focusSeqFor(d.id)}
                     onSaveText={(patch) => saveDoorText(d.id, patch)}
                     onSaveDestination={(destination) => saveDoorDestination(d.id, destination)}
-                    onDelete={() => updateMap((md) => ({ ...md, fairyDoors: deleteFairyDoor(md.fairyDoors, d.id) }))}
+                    onDelete={() => {
+                      updateMap((md) => ({ ...md, fairyDoors: deleteFairyDoor(md.fairyDoors, d.id) }));
+                      focusAfterDelete(d.id);
+                    }}
                   />
                 ))}
               </div>
@@ -1330,7 +1398,14 @@ function POIEditor({
   useFocusOnRequest(focusSeq, rootRef, nameRef);
   const label = poi.name || 'unnamed';
   return (
-    <div ref={rootRef} className="bg-[#1a1a2e] rounded p-2 space-y-1">
+    <div
+      ref={rootRef}
+      role="group"
+      aria-label={`Point of interest ${label}`}
+      tabIndex={-1}
+      data-focus-key={`item:${poi.id}`}
+      className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
+    >
       <div className="flex items-center gap-2">
         <span className="w-2.5 h-2.5 rounded-full bg-[#8b2500] shrink-0" aria-hidden="true" />
         <input
@@ -1494,7 +1569,14 @@ function DoorEditor({
   const label = door.name || 'unnamed';
 
   return (
-    <div ref={rootRef} className="bg-[#1a1a2e] rounded p-2 space-y-1">
+    <div
+      ref={rootRef}
+      role="group"
+      aria-label={`Fairy door ${label}`}
+      tabIndex={-1}
+      data-focus-key={`item:${door.id}`}
+      className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
+    >
       <div className="flex items-center gap-2">
         <span className="w-2.5 h-2.5 rounded-full bg-[#a774d6] shrink-0" aria-hidden="true" />
         <input
@@ -1584,20 +1666,28 @@ function LeyLinesPanel({
   updateMap,
   selectedLeyLine,
   onToggleSelected,
+  moveFocusTo,
 }: {
   leyLines: LeyLine[];
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
   selectedLeyLine: string | null;
   onToggleSelected: (id: string) => void;
+  moveFocusTo: (key: string) => void;
 }) {
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
-      <h3 className="text-[#c4a35a] text-sm font-semibold mb-2 border-b border-[#5a3a28] pb-1">Ley Lines &amp; Crossings</h3>
+      <h3
+        tabIndex={-1}
+        data-focus-key="ley-lines-title"
+        className={`text-[#c4a35a] text-sm font-semibold mb-2 border-b border-[#5a3a28] pb-1 ${FOCUS_RING}`}
+      >
+        Ley Lines &amp; Crossings
+      </h3>
       {leyLines.length === 0 ? (
         <div className="text-xs text-[#f5e6c8]/40 italic">None yet. Use “Draw Ley Line” above.</div>
       ) : (
         <div className="space-y-2">
-          {leyLines.map((ll) => (
+          {leyLines.map((ll, i) => (
             <LeyLineEditor
               key={ll.id}
               leyLine={ll}
@@ -1606,7 +1696,12 @@ function LeyLinesPanel({
               onSave={(patch) =>
                 updateMap((md) => ({ ...md, leyLines: md.leyLines.map((x) => (x.id === ll.id ? { ...x, ...patch } : x)) }))
               }
-              onDelete={() => updateMap((md) => ({ ...md, leyLines: md.leyLines.filter((x) => x.id !== ll.id) }))}
+              onDelete={() => {
+                updateMap((md) => ({ ...md, leyLines: md.leyLines.filter((x) => x.id !== ll.id) }));
+                // Focus goes to the next ley line, or the panel's title.
+                const next = leyLines[i + 1];
+                moveFocusTo(next ? `ley-line:${next.id}` : 'ley-lines-title');
+              }}
             />
           ))}
         </div>
@@ -1630,7 +1725,13 @@ function LeyLineEditor({
 }) {
   const label = leyLine.name || 'unnamed ley line';
   return (
-    <div className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${selected ? 'ring-1 ring-[#c4a35a]/60' : ''}`}>
+    <div
+      role="group"
+      aria-label={`${leyLine.type || DEFAULT_LEY_LINE_TYPE} ${leyLine.name || 'unnamed'}`}
+      tabIndex={-1}
+      data-focus-key={`ley-line:${leyLine.id}`}
+      className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${selected ? 'ring-1 ring-[#c4a35a]/60' : ''} ${FOCUS_RING}`}
+    >
       <div className="flex items-center gap-2">
         <button
           type="button"
