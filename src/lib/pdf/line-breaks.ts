@@ -5,7 +5,8 @@
  * hyphenation callback splits it, drawing a hyphen at the break. An empty
  * string between two parts is a break point that adds nothing (react-pdf
  * turns it into zero-width glue). That is how Japanese and Chinese, written
- * without spaces, get to wrap between characters.
+ * without spaces, get to wrap between characters, and how a name can wrap
+ * after one of its own hyphens without gaining a second one.
  */
 
 type Hyphenate = (word: string) => string[];
@@ -121,4 +122,35 @@ function needsCjkBreaks(word: string): boolean {
  */
 export function breakWords(word: string, hyphenate: Hyphenate = noHyphenation): string[] {
   return needsCjkBreaks(word) ? breakCjk(word, hyphenate) : hyphenate(word);
+}
+
+/** A part of a name this long (in characters) seldom fits a line, so it may break anywhere. */
+const LONG_NAME_PART = 20;
+
+/**
+ * For names: never split at syllables ("Montfau-con"). A name may wrap after
+ * a hyphen it already has, without adding another, and a part too long to
+ * fit a line may break anywhere. Korean, Japanese and Chinese break as usual.
+ */
+export function breakName(word: string): string[] {
+  const pieces: string[] = [];
+  let piece = '';
+  for (const ch of word) {
+    piece += ch;
+    if (ch === '-' || ch === '\u{2010}') {
+      pieces.push(piece);
+      piece = '';
+    }
+  }
+  if (piece) pieces.push(piece);
+
+  const parts: string[] = [];
+  pieces.forEach((p, i) => {
+    if (i > 0) parts.push('');
+    const units = p.match(UNITS) ?? [p];
+    if (needsCjkBreaks(p)) parts.push(...breakCjk(p, noHyphenation));
+    else if (units.length <= LONG_NAME_PART) parts.push(p);
+    else parts.push(...units); // react-pdf adds a hyphen where it breaks
+  });
+  return parts;
 }

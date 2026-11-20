@@ -81,6 +81,7 @@ import {
 } from '@/lib/character-sheet';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import type { SheetFonts } from './fonts';
+import { breakName } from './line-breaks';
 import type { PdfPageSize } from './page-size';
 import { createPdfText } from './text';
 
@@ -402,7 +403,10 @@ function Field({ label, value, note, warn, last }: {
   return (
     <View style={[s.field, last ? s.fieldLast : {}]}>
       <Text style={s.fieldLabel}>{upper(label)}</Text>
-      <Text style={s.fieldValue}>{text(value) || EMPTY}</Text>
+      {/* Mostly names (affiliation, moon sign...), so no syllable hyphenation. */}
+      <Text style={s.fieldValue} hyphenationCallback={breakName}>
+        {text(value) || EMPTY}
+      </Text>
       {note ? <ItalicNote>{note}</ItalicNote> : null}
       {warn ? <Text style={s.warn}>{warn}</Text> : null}
     </View>
@@ -442,6 +446,8 @@ interface Column<T> {
   header: string;
   width: number;
   align?: 'left' | 'center' | 'right';
+  /** Line breaking for this column's text, e.g. breakName for names. */
+  breaks?: (word: string) => string[];
   cell: (row: T) => ReactNode;
 }
 
@@ -490,7 +496,12 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
                 ]}
               >
                 {typeof content === 'string' || typeof content === 'number' ? (
-                  <Text style={{ textAlign: align }}>{content}</Text>
+                  <Text
+                    style={{ textAlign: align }}
+                    hyphenationCallback={col.breaks}
+                  >
+                    {content}
+                  </Text>
                 ) : (
                   content
                 )}
@@ -562,7 +573,9 @@ function Header({ c, exportedOn }: { c: Character; exportedOn: string }) {
   return (
     <View style={s.header} wrap={false}>
       <View style={s.headerMain}>
-        <Text style={[s.name, { fontFamily: fonts.serif }]}>{name}</Text>
+        <Text style={[s.name, { fontFamily: fonts.serif }]} hyphenationCallback={breakName}>
+          {name}
+        </Text>
         <Text style={s.identity}>{identityLine(c)}</Text>
       </View>
       <View style={s.headerSide}>
@@ -890,7 +903,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
       key: 'companion',
       title: 'Animal Companion',
       body: companion ? (
-        <Text style={s.body}>
+        <Text style={s.body} hyphenationCallback={breakName}>
           <Text style={s.bold}>{companion.name || EMPTY}</Text>
           {`  ${companion.type || 'Unknown type'} · HP ${companion.hp}`}
           {companion.notes ? <Text style={s.note}>{`  ${companion.notes}`}</Text> : null}
@@ -1056,7 +1069,7 @@ function RetainersTable({ c, maxRetainers }: { c: Character; maxRetainers: numbe
         rows={c.retainers}
         rowKey={(r) => r.id}
         columns={[
-          { header: 'Name', width: 3, cell: (r) => r.name || EMPTY },
+          { header: 'Name', width: 3, breaks: breakName, cell: (r) => r.name || EMPTY },
           { header: 'Class', width: 2, cell: (r) => r.class },
           { header: 'Level', width: 1, align: 'center', cell: (r) => r.level },
           { header: 'HP', width: 1, align: 'center', cell: (r) => r.hp },
