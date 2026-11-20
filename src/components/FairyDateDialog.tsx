@@ -22,6 +22,8 @@ import {
 import { pluralize } from '@/lib/grammar';
 import {
   canReturnOn,
+  describeReturnPlace,
+  getReturnPlace,
   isWithinCalendar,
   planReturnEdit,
   returnFromFairy,
@@ -60,6 +62,10 @@ const ELAPSED_FIELDS: { key: keyof ElapsedTime; label: string }[] = [
 ];
 
 const BLANK_ELAPSED: Record<keyof ElapsedTime, NumberField> = { years: BLANK, months: BLANK, weeks: BLANK, days: BLANK };
+
+// Screen readers hear the preview this long after it last changed, so not at
+// every letter typed.
+const PREVIEW_READ_OUT_DELAY_MS = 800;
 
 // "a", "a and b", "a, b and c".
 function listOf(parts: string[]): string {
@@ -161,6 +167,32 @@ export default function FairyDateDialog({
   const editMoves = plan && target && visit.returnedOn && daysBetween(visit.returnedOn, target) !== 0
     ? describeEditMoves(plan, daysSinceReturn)
     : [];
+  // On a return, where the party will be, worked out as the return will:
+  // said once the hex typed is one on the map, or blank.
+  const hexReading = editing ? null : readHexInput(hexText);
+  const placeText =
+    hexReading && hexReading.error === undefined
+      ? describeReturnPlace(getReturnPlace(character, hexReading.hex), character.currentLocation)
+      : '';
+  const problem =
+    beforeEntry && target
+      ? `${formatShortDate(target)} is before you entered Fairy (${formatShortDate(visit.enteredOn)}). Pick that day or later.`
+      : pastCalendar
+        ? `That's after ${formatShortDate(LATEST_DATE)}, the calendar's last day.`
+        : movesPastCalendar
+          ? `${todayPastCalendar ? "Today's date" : 'Something dated after today'} would move past ${formatShortDate(LATEST_DATE)}, the calendar's last day. Pick an earlier date.`
+          : null;
+  // The preview in words, read out once it has settled; not on opening, when
+  // the dialog itself is read out.
+  const previewText =
+    valid && target
+      ? [`Back in Dolmenwood on ${formatCalendarDate(target)}.`, `${passedText}.`, ...editMoves, placeText].filter(Boolean).join(' ')
+      : problem ?? 'Fix the fields marked above to see the date.';
+  const [readOut, setReadOut] = useState(previewText);
+  useEffect(() => {
+    const timer = setTimeout(() => setReadOut(previewText), PREVIEW_READ_OUT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [previewText]);
 
   // ── Actions ──
   const close = (outcome: DialogOutcome) => {
@@ -368,9 +400,9 @@ export default function FairyDateDialog({
             </div>
           )}
 
+          {/* The outcome, updated as the fields change. Screen readers get it
+              from the region after it, once it settles. */}
           <div
-            aria-live="polite"
-            aria-atomic="true"
             className={`rounded p-3 text-center ${valid || target === undefined ? 'bg-[#1a1a2e]' : 'bg-[#8b2500]/20 border border-[#8b2500]/40'}`}
           >
             {valid && target ? (
@@ -383,25 +415,17 @@ export default function FairyDateDialog({
                     {line}
                   </div>
                 ))}
+                {placeText && <div className="text-[#f5e6c8] text-sm mt-1 [overflow-wrap:anywhere]">{placeText}</div>}
               </>
-            ) : beforeEntry && target ? (
-              <div className="text-[#ff8a6a] text-sm">
-                {formatShortDate(target)} is before you entered Fairy ({formatShortDate(visit.enteredOn)}). Pick that
-                day or later.
-              </div>
-            ) : pastCalendar ? (
-              <div className="text-[#ff8a6a] text-sm">
-                That&apos;s after {formatShortDate(LATEST_DATE)}, the calendar&apos;s last day.
-              </div>
-            ) : movesPastCalendar ? (
-              <div className="text-[#ff8a6a] text-sm">
-                {todayPastCalendar ? "Today's date" : 'Something dated after today'} would move past{' '}
-                {formatShortDate(LATEST_DATE)}, the calendar&apos;s last day. Pick an earlier date.
-              </div>
+            ) : problem ? (
+              <div className="text-[#ff8a6a] text-sm">{problem}</div>
             ) : (
               <div className="text-[#f5e6c8]/80 text-sm">Fix the fields marked above to see the date.</div>
             )}
           </div>
+          <p aria-live="polite" aria-atomic="true" className="sr-only">
+            {readOut}
+          </p>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 p-4 border-t border-[#5a3a28] shrink-0">

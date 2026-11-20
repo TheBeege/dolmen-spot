@@ -3,7 +3,15 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultCharacter } from './gamedata';
-import { editReturnDate, enterFairy, returnFromFairy, setDaysInFairy } from './livedTime';
+import {
+  describeReturnPlace,
+  editReturnDate,
+  enterFairy,
+  getReturnPlace,
+  returnFromFairy,
+  setDaysInFairy,
+  type ReturnPlace,
+} from './livedTime';
 import {
   countEntriesByHex,
   createJournalEntry,
@@ -25,7 +33,7 @@ import {
   withEntryHex,
   type TextRange,
 } from './journal';
-import type { CalendarDate, Character, CharacterMapData, JournalEntry } from './types';
+import type { CalendarDate, Character, CharacterMapData, HexCoord, JournalEntry } from './types';
 
 const date = (day: number, month: number, year: number): CalendarDate => ({ day, month, year });
 
@@ -370,6 +378,54 @@ describe('the hex an entry is written in', () => {
       assert.deepEqual([last(c).location, c.currentLocation, c.currentLocationHex], ['', '', ''], cameBackIn);
       assert.deepEqual(placeOfNext(c), ['', null], cameBackIn);
     }
+  });
+
+  test('where the return dialog says the party will be is where the return puts them', () => {
+    // Left from 0606, at "The Ring", and typed a place in Fairy on Adventuring while away.
+    const away = (extra: Partial<Character> = {}) => {
+      let c = character({ currentLocation: 'The Ring', currentLocationHex: '0606', mapData: marked, ...extra });
+      c = apply(c, enterFairy(c));
+      return { ...c, currentLocation: 'Court of the Queen' };
+    };
+    const cases: [string, Character, HexCoord | '' | undefined, ReturnPlace, string][] = [
+      ['back in the hex they left from', away(), undefined, { hex: '0606', location: 'The Ring', sameHex: true }, 'Back at The Ring, hex 0606.'],
+      ['the same hex, typed', away(), '0606', { hex: '0606', location: 'The Ring', sameHex: true }, 'Back at The Ring, hex 0606.'],
+      ['another hex, with a place marked', away(), '1106', { hex: '1106', location: 'Old Mill', sameHex: false }, 'At Old Mill, hex 1106.'],
+      ['another hex, nothing marked', away(), '0707', { hex: '0707', location: '', sameHex: false }, 'In hex 0707. Your location will be cleared.'],
+      ['no hex, having left from one', away(), '', { hex: '', location: '', sameHex: false }, "Your location and the map's current hex will be cleared."],
+      ['no hex either way', away({ currentLocation: 'Prigwort', currentLocationHex: '' }), '', { hex: '', location: 'Prigwort', sameHex: true }, 'Back at Prigwort.'],
+      [
+        'back in the hex they left from, with "Entered Fairy" deleted',
+        (() => {
+          const c = away();
+          return { ...c, journalEntries: c.journalEntries.filter((e) => e.fairyEvent?.kind !== 'entered') };
+        })(),
+        undefined,
+        { hex: '0606', location: 'Court of the Queen', sameHex: true },
+        'Back at Court of the Queen, hex 0606.',
+      ],
+    ];
+    for (const [name, c, cameBackIn, place, said] of cases) {
+      assert.deepEqual(getReturnPlace(c, cameBackIn), place, name);
+      assert.equal(describeReturnPlace(place, c.currentLocation), said, name);
+      const after = apply(c, returnFromFairy(c, date(5, 0, 1), cameBackIn));
+      assert.deepEqual(
+        [after.currentLocation, after.currentLocationHex, last(after).location, last(after).hex ?? ''],
+        [place.location, place.hex, place.location, place.hex],
+        name,
+      );
+    }
+  });
+
+  test('saying what a return clears, or nothing when nothing changes', () => {
+    const place = (hex: HexCoord | '', location: string, sameHex: boolean): ReturnPlace => ({ hex, location, sameHex });
+    assert.equal(describeReturnPlace(place('0606', '', true), 'Court'), 'Back in hex 0606. Your location will be cleared.');
+    assert.equal(describeReturnPlace(place('0606', '', true), ''), 'Back in hex 0606.');
+    assert.equal(describeReturnPlace(place('0707', '', false), '  '), 'In hex 0707.');
+    assert.equal(describeReturnPlace(place('', '', false), ''), "The map's current hex will be cleared.");
+    assert.equal(describeReturnPlace(place('', '', true), 'Court'), 'Your location will be cleared.');
+    assert.equal(describeReturnPlace(place('', '  ', true), ''), '', 'nothing before or after');
+    assert.equal(describeReturnPlace(place('1106', ' Old Mill ', false), ''), 'At Old Mill, hex 1106.');
   });
 
   test('editing the return date leaves the hex and the location alone', () => {
