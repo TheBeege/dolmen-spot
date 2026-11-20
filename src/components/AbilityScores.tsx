@@ -130,8 +130,9 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
           Save Targets
         </h2>
         {/* Five inputs don't fit side by side on a phone, so they take three
-            columns there, or two when three don't fit (a large default font). */}
-        <div className="grid grid-cols-2 min-[17rem]:grid-cols-3 sm:grid-cols-5 gap-3 mt-3">
+            columns there, two when three don't fit (a large default font),
+            and one when even two don't (a very large one). */}
+        <div className="grid grid-cols-1 min-[11.5rem]:grid-cols-2 min-[17rem]:grid-cols-3 sm:grid-cols-5 gap-3 mt-3">
           {SAVE_TARGET_INFO.map((save) => (
             <div key={save.key} className="flex flex-col items-center gap-1">
               <label className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide">

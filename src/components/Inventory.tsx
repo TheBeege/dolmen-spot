@@ -1252,10 +1252,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
         <div className="flex flex-wrap gap-4">
           {/* Copper */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#b87333' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#b87333' }}>
               Copper
-            </label>
+            </span>
             <input
               type="number"
               min={0}
@@ -1264,13 +1264,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               aria-label="Copper pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
 
           {/* Silver */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#c0c0c0' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#c0c0c0' }}>
               Silver
-            </label>
+            </span>
             <input
               type="number"
               min={0}
@@ -1279,13 +1279,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               aria-label="Silver pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
 
           {/* Gold */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#c4a35a' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#c4a35a' }}>
               Gold
-            </label>
+            </span>
             <input
               type="number"
               min={0}
@@ -1294,13 +1294,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               aria-label="Gold pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
 
           {/* Pellucidium */}
-          <div className="flex flex-col items-center">
-            <label className="text-sm font-semibold mb-1" style={{ color: '#8b6aab' }}>
+          <label className="flex flex-col items-center">
+            <span className="text-sm font-semibold mb-1" style={{ color: '#8b6aab' }}>
               Pellucidium
-            </label>
+            </span>
             <input
               type="number"
               min={0}
@@ -1311,7 +1311,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               aria-label="Pellucidium pieces"
               className={`${inputClasses} w-20 text-center`}
             />
-          </div>
+          </label>
         </div>
 
         {/* Coin summary & exchange reference */}
