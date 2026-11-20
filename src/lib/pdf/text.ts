@@ -184,7 +184,12 @@ export function createPdfText(hasGlyph: HasGlyph): (value: unknown) => string {
       else append('?', false);
     });
 
-    return out;
+    // Dropping an invisible character can bring an accent next to its letter
+    // ("a", a joiner, U+0301), so compose the result again, as the input was;
+    // a second pass then changes nothing. Should the fonts lack a composed
+    // letter, the decomposed one stays, since that prints.
+    const composed = out.normalize('NFC');
+    return composed === out || Array.from(composed).every((ch) => hasGlyph(ch.codePointAt(0) ?? 0)) ? composed : out;
   };
 }
 
