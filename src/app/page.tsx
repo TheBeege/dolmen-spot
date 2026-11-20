@@ -179,8 +179,9 @@ export default function Home() {
                             deleteCharacter(c.id);
                           }
                         }}
-                        className="text-[#8b2500] hover:text-[#b33a1a] text-xs ml-2 shrink-0"
+                        className="text-[#ff9a85] hover:text-[#ffd0c4] text-xs ml-2 shrink-0"
                         title="Delete character"
+                        aria-label={`Delete ${c.name || 'this character'}`}
                       >
                         Del
                       </button>

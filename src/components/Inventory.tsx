@@ -420,8 +420,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <button
               type="button"
               onClick={() => handleDeleteItem(equipped, item.id)}
-              className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-              title="Delete spell book"
+              className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 px-1"
+              title={`Remove ${item.name.trim() || 'spell book'}`}
+              aria-label={`Remove ${item.name.trim() || 'spell book'}`}
             >
               &times;
             </button>
@@ -463,8 +464,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 <button
                   type="button"
                   onClick={() => handleSpellbookRemoveEntry(equipped, item.id, index)}
-                  className="text-[#8b2500] hover:text-[#b33a1a] text-sm shrink-0 px-1"
-                  title="Remove spell"
+                  className="text-[#ff6b4a] hover:text-[#f5e6c8] text-sm shrink-0 px-1"
+                  title={`Remove ${entry.name || 'spell'}`}
+                  aria-label={`Remove ${entry.name || 'spell'}`}
                 >
                   &times;
                 </button>
@@ -560,8 +562,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         <button
           type="button"
           onClick={() => handleDeleteItem(equipped, item.id)}
-          className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-          title="Delete scroll"
+          className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 px-1"
+          title={`Remove ${scroll.name ? `scroll of ${scroll.name}` : 'scroll'}`}
+          aria-label={`Remove ${scroll.name ? `scroll of ${scroll.name}` : 'scroll'}`}
         >
           &times;
         </button>
@@ -639,7 +642,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         type="button"
         onClick={() => handleDeleteItem(equipped, item.id)}
         className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${layoutClass}`}
-        title="Delete item"
+        title={`Remove ${itemName}`}
         aria-label={`Remove ${itemName}`}
       >
         &times;
@@ -747,8 +750,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 e.stopPropagation();
                 handleDeleteContainer(container.id);
               }}
-              className="text-[#8b2500] hover:text-[#b33a1a] text-xs ml-auto px-1"
-              title="Remove container"
+              className="text-[#ff6b4a] hover:text-[#f5e6c8] text-xs ml-auto px-1"
+              title={`Remove ${container.name}`}
+              aria-label={`Remove ${container.name}`}
             >
               &times;
             </button>
@@ -844,7 +848,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <button
               type="button"
               onClick={() => setCatalogOpen(false)}
-              className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg px-2"
+              className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg px-2"
+              title="Close"
+              aria-label="Close equipment catalog"
             >
               &times;
             </button>
