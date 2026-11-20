@@ -12,6 +12,7 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 - Support for all 6 kindreds (Breggle, Elf, Grimalkin, Human, Mossling, Woodgrue) and 9 classes (Bard, Cleric, Enchanter, Fighter, Friar, Hunter, Knight, Magician, Thief)
 - Kindred-class combinations with dedicated advancement tables
 - Multi-character support with import/export (JSON)
+- Printable PDF character sheet (Letter or A4, chosen from your browser's language)
 - Optional cloud save to Google Drive or OneDrive
 
 ### Auto-Calculated Stats
@@ -71,11 +72,15 @@ src/
   app/          # Next.js app router (sheet, /about, /changelog, layout, global styles)
   components/   # Tab components (CharacterInfo, CombatStats, Inventory, etc.)
   hooks/        # useCharacter (state + localStorage) and useCloudStorage
-  lib/          # Types, game data, save migrations, and cloud providers
+  lib/          # Types, game data, shared sheet calculations, save migrations, cloud providers, and the PDF export
 docs/
   DEPLOYMENT-PHASES.md  # Feature roadmap
   rules/                # Extracted rule reference (gitignored — copyrighted, local only)
+scripts/
+  generate-icons.mjs    # Rebuilds the raster app icons from src/app/icon.svg
 ```
+
+The app icon is drawn in `src/app/icon.svg`. After changing it, run `node scripts/generate-icons.mjs` to rebuild `src/app/favicon.ico` (16, 32 and 48 px) and `src/app/apple-icon.png` (180 px, for iOS home screens) from it, and commit all three. Next.js adds the `<link>` tags for them automatically.
 
 ## Disclaimer
 
