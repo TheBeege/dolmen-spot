@@ -19,10 +19,12 @@ let sharp;
 try {
   ({ default: sharp } = await import('sharp'));
 } catch (error) {
-  // Any other failure, such as sharp's native binary not loading after an
-  // install on another OS, comes with sharp's own explanation and fix.
+  // A missing module, whether sharp itself or one of its dependencies, means
+  // the install is incomplete. Any other failure, such as sharp's native
+  // binary not loading after an install on another OS, comes with sharp's own
+  // explanation and fix.
   if (error?.code !== 'ERR_MODULE_NOT_FOUND') throw error;
-  console.error('generate-icons: sharp is not installed. Run `npm ci` first.');
+  console.error(`generate-icons: ${error.message}. Run \`npm ci\` first.`);
   process.exit(1);
 }
 
