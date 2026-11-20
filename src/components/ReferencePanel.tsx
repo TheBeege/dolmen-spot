@@ -9,6 +9,7 @@ import {
   COMMON_LANGUAGES,
   OBSCURE_LANGUAGES,
   MONTHS,
+  DAY_NAMES,
   FESTIVALS,
   FESTIVAL_DESCRIPTIONS,
   CELESTIAL_EVENTS,
@@ -257,11 +258,18 @@ export default function ReferencePanel() {
             )}
           </div>
 
+          {/* Week rules */}
+          <div className="bg-[#1a1a2e] rounded p-3 text-xs text-[#f5e6c8]/70">
+            <div className="text-[#c4a35a] text-sm font-semibold mb-1">Weeks</div>
+            <div>{DAY_NAMES.join(', ')}</div>
+            <div>Every month is 4 weeks starting on Colly. Wysendays follow the 28th and are not part of any week.</div>
+          </div>
+
           {/* Moon phase rules */}
           <div className="bg-[#1a1a2e] rounded p-3 text-xs text-[#f5e6c8]/70">
             <div className="text-[#c4a35a] text-sm font-semibold mb-1">Moon Phases</div>
-            <div>Lunar cycle: 29&#x2153; days (12 lunar months per year)</div>
-            <div>Three phases: Waxing (13 days), Full (3 days), Waning (13 days)</div>
+            <div>Lunar cycle: 29&#x2153; days (12 lunar months per year), so new and full moons fall on the same dates every year</div>
+            <div>Three phases: Waxing (about 13 days), Full (3 days), Waning (about 13 days)</div>
           </div>
         </div>
       )}
