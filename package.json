@@ -16,7 +16,6 @@
     "@azure/msal-browser": "^5.30.0",
     "@react-pdf/renderer": "^4.9.0",
     "@vercel/analytics": "^2.0.1",
-    "lucide-react": "^1.77.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
@@ -32,6 +31,23 @@
     "lint-staged": "^17.6.1",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
-    "typescript": "^6.0.3"
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "overrides": {
+    "eslint-plugin-import": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
+  },
+  "allowScripts": {
+    "esbuild": false
   }
 }
