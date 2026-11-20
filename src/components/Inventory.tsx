@@ -608,76 +608,110 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
-  // One line per item from sm up, under the column headers (which leave room for
-  // the move select when there are containers). On phones the × sits beside the
-  // name and the other fields take a full-width second line.
-  const renderItemRow = (item: InventoryItem, equipped: boolean) => (
-    <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
-      <input
-        type="text"
-        value={item.name}
-        onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
-        placeholder="Item name"
-        className={`${inputClasses} flex-1 min-w-[120px]`}
-      />
-      <div className="flex items-center gap-2 order-last w-full sm:order-none sm:w-auto">
-        <input
-          type="number"
-          value={item.slots}
+  // From sm up: one line per item, under the column headers (which leave room for
+  // the move select when there are containers). On phones: the name, move select
+  // and × on the first line, then the labelled fields. The move select and × are
+  // rendered for each layout, with the other copy hidden (display: none), so the
+  // keyboard order always matches what's on screen.
+  const renderItemRow = (item: InventoryItem, equipped: boolean) => {
+    const itemName = item.name.trim() || 'item';
+    const moveSelect = (layoutClass: string) =>
+      !equipped && containers.length > 0 ? (
+        <select
+          value={item.containerId ?? ''}
           onChange={(e) =>
-            handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)
+            handleMoveToContainer(item.id, e.target.value || undefined)
           }
-          min={0}
-          title="Slots"
-          placeholder="Sl"
-          className={`${inputClasses} w-16 text-center`}
-        />
-        <input
-          type="number"
-          value={item.weight}
-          onChange={(e) =>
-            handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)
-          }
-          min={0}
-          title="Weight"
-          placeholder="Wt"
-          className={`${inputClasses} w-20 text-center`}
-        />
-        <input
-          type="text"
-          value={item.notes}
-          onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
-          placeholder="Notes"
-          className={`${inputClasses} flex-1 min-w-0 sm:flex-none sm:w-32`}
-        />
-        {!equipped && containers.length > 0 && (
-          <select
-            value={item.containerId ?? ''}
-            onChange={(e) =>
-              handleMoveToContainer(item.id, e.target.value || undefined)
-            }
-            className={`${inputClasses} w-10 shrink-0 text-xs p-0.5`}
-            title="Move to container"
-          >
-            <option value="">Loose</option>
-            {containers.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        )}
-      </div>
+          className={`${inputClasses} w-10 shrink-0 text-xs p-0.5 ${layoutClass}`}
+          title="Move to container"
+          aria-label={`Move ${itemName} to a container`}
+        >
+          <option value="">Loose</option>
+          {containers.map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
+      ) : null;
+    const removeButton = (layoutClass: string) => (
       <button
         type="button"
         onClick={() => handleDeleteItem(equipped, item.id)}
-        className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 w-6"
+        className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${layoutClass}`}
         title="Delete item"
+        aria-label={`Remove ${itemName}`}
       >
         &times;
       </button>
-    </div>
-  );
+    );
+    // Phones hide the column headers, so each field gets a short visible label there.
+    const phoneLabel = (text: string) => (
+      <span aria-hidden="true" className="sm:hidden text-[10px] uppercase tracking-wide text-[#f5e6c8]/70">
+        {text}
+      </span>
+    );
+
+    return (
+      <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
+        <input
+          type="text"
+          value={item.name}
+          onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
+          placeholder="Item name"
+          aria-label="Item name"
+          className={`${inputClasses} flex-1 min-w-[120px]`}
+        />
+        {moveSelect('sm:hidden')}
+        {removeButton('sm:hidden')}
+        <div className="flex items-end gap-2 w-full sm:w-auto sm:items-center">
+          <label className="flex flex-col gap-0.5">
+            {phoneLabel('Slots')}
+            <input
+              type="number"
+              value={item.slots}
+              onChange={(e) =>
+                handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)
+              }
+              min={0}
+              title="Slots"
+              placeholder="Sl"
+              aria-label={`${itemName} slots`}
+              className={`${inputClasses} w-16 text-center`}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5">
+            {phoneLabel('Weight')}
+            <input
+              type="number"
+              value={item.weight}
+              onChange={(e) =>
+                handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)
+              }
+              min={0}
+              title="Weight"
+              placeholder="Wt"
+              aria-label={`${itemName} weight`}
+              className={`${inputClasses} w-20 text-center`}
+            />
+          </label>
+          <label className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
+            {phoneLabel('Notes')}
+            <input
+              type="text"
+              value={item.notes}
+              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              placeholder="Notes"
+              aria-label={`${itemName} notes`}
+              className={`${inputClasses} w-full sm:w-32`}
+            />
+          </label>
+          {moveSelect('hidden sm:block')}
+        </div>
+        {removeButton('hidden sm:block')}
+      </div>
+    );
+  };
 
   const renderStowedItemRow = (item: InventoryItem) => renderItemRow(item, false);
 
