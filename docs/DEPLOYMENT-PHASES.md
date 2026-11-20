@@ -182,8 +182,8 @@ Phased feature plan for the Dolmenwood Character Sheet, ordered by dependency ch
 - [x] MONTHS enhanced with moonName and wysendays fields for all 12 months
 - [x] Fixed 2 missing festivals: Feast of Cats (2 Symswald) and Feast of St Clewyd (25 Reedwryme)
 - [x] Festival descriptions for 4 notable festivals (Green Man, Winter Hart, Feast of Cats, Feast of St Clewyd)
-- [x] Moon phase calculator (29⅓ day cycle: 13 waxing / 3 full / 13 waning) with display in Adventuring tab
-- [x] Wysenday badge shown on festival days in Adventuring tab calendar
+- [x] Moon phase calculator with display in Adventuring tab: new and full moons fall on the days marked on the official calendar, the same every year (`MONTHS[].newMoon`/`.fullMoon`; 29⅓-day cycle, 12 moons a year). Waxing from the new moon, Full for 3 days centred on the full moon, then Waning until the next new moon (13–14 / 3 / 12–13 days). Each moon is named for the month of its new moon, so the days before it show the previous moon, waning
+- [x] Wysenday badge shown on Wysendays (days 29+, which have their own names and are not part of any week) in Adventuring tab calendar; weekdays restart on Colly every month
 - [x] Festival alert banner shown prominently when current date falls on a festival day
 - [x] Noble houses reference: House Brackenwold (ruling) + 8 lower houses with alignment, head, seat, character
 - [x] Religion reference: 4 faiths (Pluritine Church, Gwyrae, Aud Frengd Hlerr, Mogba) with collapsible details

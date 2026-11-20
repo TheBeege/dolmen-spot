@@ -18,8 +18,10 @@ import {
   FORAGING_YIELDS,
   getHungerEffects,
   getMoonPhaseLabel,
+  getMoonName,
   weeksElapsed,
   addDays,
+  isWysenday,
 } from '@/lib/gamedata';
 
 interface AdventuringProps {
@@ -58,6 +60,17 @@ function getFestivalsForMonth(month: number): { day: number; name: string }[] {
 
 function getCelestialEventsForMonth(month: number): { day: number; name: string }[] {
   return CELESTIAL_EVENTS.filter((e) => e.month === month);
+}
+
+// Day of the month as an ordinal: 3 -> "3rd", 4 -> "4th", 21 -> "21st".
+function ordinal(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`;
+  switch (n % 10) {
+    case 1: return `${n}st`;
+    case 2: return `${n}nd`;
+    case 3: return `${n}rd`;
+    default: return `${n}th`;
+  }
 }
 
 export default function Adventuring({ character, onChange }: AdventuringProps) {
@@ -165,6 +178,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const celestialThisMonth = getCelestialEventsForMonth(currentDate.month);
   const foragingYield = FORAGING_YIELDS[season];
 
+  const moonName = getMoonName(currentDate);
   const moonPhaseLabel = getMoonPhaseLabel(currentDate);
   const todaysFestivals = (FESTIVALS.festivals || []).filter(
     (f) => f.month === currentDate.month && f.day === currentDate.day
@@ -172,10 +186,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const todaysCelestial = CELESTIAL_EVENTS.filter(
     (e) => e.month === currentDate.month && e.day === currentDate.day
   );
-  const isWysenday = currentMonth.wysendays.some((w) => {
-    // Check if today matches a festival that corresponds to a wysenday
-    return todaysFestivals.some((f) => f.name.includes(w) || w.includes(f.name));
-  });
+  const todayIsWysenday = isWysenday(currentDate);
 
   const exhaustionText = character.exhaustionLevel > 0
     ? `-${character.exhaustionLevel} to Attack & Damage`
@@ -236,10 +247,10 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
           {/* Moon info */}
           <div className="text-[#f5e6c8]/70 text-sm mt-1">
-            {currentMonth.moonName} &middot; {moonPhaseLabel}
+            {moonName} &middot; {moonPhaseLabel}
           </div>
           {/* Wysenday badge */}
-          {isWysenday && (
+          {todayIsWysenday && (
             <span className="inline-block mt-2 bg-[#c4a35a]/20 text-[#c4a35a] text-xs font-semibold px-3 py-1 rounded-full border border-[#c4a35a]/40">
               Wysenday
             </span>
@@ -833,10 +844,24 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         <div className="text-[#f5e6c8] text-sm mb-2">
           {currentMonth.days} days &middot; {currentMonth.description}
         </div>
+        {/* Lines may break before "(new …)" and between Wysendays, never inside them. */}
         <div className="text-[#f5e6c8]/60 text-sm mb-2">
-          Moon: {currentMonth.moonName}
+          <div>
+            Moon: {currentMonth.moonName}{' '}
+            <span className="whitespace-nowrap">
+              (new {ordinal(currentMonth.newMoon)}, full {ordinal(currentMonth.fullMoon)})
+            </span>
+          </div>
           {currentMonth.wysendays.length > 0 && (
-            <span> &middot; Wysendays: {currentMonth.wysendays.join(', ')}</span>
+            <div>
+              Wysendays:{' '}
+              {currentMonth.wysendays.map((w, i) => (
+                <span key={w}>
+                  {i > 0 && ', '}
+                  <span className="whitespace-nowrap">{w}</span>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
