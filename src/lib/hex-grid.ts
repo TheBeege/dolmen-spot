@@ -39,7 +39,6 @@ if (
   process.env.NODE_ENV !== 'production' &&
   HEX_GRID_META.cellCount !== ALL_HEXES.length
 ) {
-  // eslint-disable-next-line no-console
   console.warn(
     `hex-grid.json: meta.cellCount (${HEX_GRID_META.cellCount}) does not match ` +
     `the number of loaded hexes (${ALL_HEXES.length}). The manifest may be ` +

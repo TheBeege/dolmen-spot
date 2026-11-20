@@ -208,14 +208,18 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   // Clear focusedItemId once the item it points at no longer exists (e.g.
   // the user deleted it via the inspector). Without this the id sits stale
-  // until the next focus/close.
-  useEffect(() => {
-    if (focusedItemId === null) return;
-    const stillExists =
-      mapData.pois.some((p) => p.id === focusedItemId) ||
-      mapData.fayeDoors.some((d) => d.id === focusedItemId);
-    if (!stillExists) setFocusedItemId(null);
-  }, [focusedItemId, mapData.pois, mapData.fayeDoors]);
+  // until the next focus/close. Adjusted during render rather than in an
+  // effect, so the inspector never commits a frame with a dangling id; the
+  // guard makes React settle after one extra pass. (Not derived instead of
+  // stored: HexMap isn't remounted per character, so a cleared focus must
+  // stay cleared even if a later character switch brings that id back.)
+  if (
+    focusedItemId !== null &&
+    !mapData.pois.some((p) => p.id === focusedItemId) &&
+    !mapData.fayeDoors.some((d) => d.id === focusedItemId)
+  ) {
+    setFocusedItemId(null);
+  }
 
   const panRef = useRef<{
     startX: number;
@@ -1326,6 +1330,23 @@ function POIForm({
   );
 }
 
+// Expanded state for an inspector editor. Starts at `initiallyExpanded` and
+// expands whenever that prop flips on (e.g. marker click while the editor is
+// already mounted). We never auto-collapse — the user can do that.
+//
+// This hook and the editors below react to prop changes by storing the
+// previous value in state and updating during render, instead of syncing
+// in an effect: https://react.dev/reference/react/useState#storing-information-from-previous-renders
+function useAutoExpand(initiallyExpanded: boolean) {
+  const [expanded, setExpanded] = useState(initiallyExpanded);
+  const [prevInitiallyExpanded, setPrevInitiallyExpanded] = useState(initiallyExpanded);
+  if (initiallyExpanded !== prevInitiallyExpanded) {
+    setPrevInitiallyExpanded(initiallyExpanded);
+    if (initiallyExpanded) setExpanded(true);
+  }
+  return [expanded, setExpanded] as const;
+}
+
 function POIEditor({
   poi,
   initiallyExpanded = false,
@@ -1339,20 +1360,17 @@ function POIEditor({
 }) {
   const [name, setName] = useState(poi.name);
   const [notes, setNotes] = useState(poi.notes);
-  const [expanded, setExpanded] = useState(initiallyExpanded);
-  const dirty = name !== poi.name || notes !== poi.notes;
+  const [expanded, setExpanded] = useAutoExpand(initiallyExpanded);
   // Sync local edit state when the underlying poi prop changes externally
   // (e.g. another writer mutated the same record, or the user clicked a
   // marker that re-focuses this editor with a fresh poi reference).
-  useEffect(() => {
+  const [syncedPoi, setSyncedPoi] = useState(poi);
+  if (poi.id !== syncedPoi.id || poi.name !== syncedPoi.name || poi.notes !== syncedPoi.notes) {
+    setSyncedPoi(poi);
     setName(poi.name);
     setNotes(poi.notes);
-  }, [poi.id, poi.name, poi.notes]);
-  // Expand when `initiallyExpanded` flips on (e.g. marker click while the
-  // editor is already mounted). We never auto-collapse — the user can do that.
-  useEffect(() => {
-    if (initiallyExpanded) setExpanded(true);
-  }, [initiallyExpanded]);
+  }
+  const dirty = name !== poi.name || notes !== poi.notes;
   return (
     <div className="bg-[#1a1a2e] rounded p-2 space-y-1">
       <div className="flex items-center gap-2">
@@ -1524,11 +1542,20 @@ function DoorEditor({
   const [roadName, setRoadName] = useState(
     door.destination.kind === 'roaded' ? door.destination.roadName : '',
   );
-  const [expanded, setExpanded] = useState(initiallyExpanded);
+  const [expanded, setExpanded] = useAutoExpand(initiallyExpanded);
 
   // Sync local state with external prop changes (another writer, or a marker
   // click bringing this editor into focus with a fresh door reference).
-  useEffect(() => {
+  // `destination` is compared by reference: any write that replaces it
+  // (a destination save, or a partner re-pointing this door) re-syncs.
+  const [syncedDoor, setSyncedDoor] = useState(door);
+  if (
+    door.id !== syncedDoor.id ||
+    door.name !== syncedDoor.name ||
+    door.notes !== syncedDoor.notes ||
+    door.destination !== syncedDoor.destination
+  ) {
+    setSyncedDoor(door);
     setName(door.name);
     setNotes(door.notes);
     setDestKind(door.destination.kind);
@@ -1536,10 +1563,7 @@ function DoorEditor({
       setPairedDoorId(door.destination.pairedDoorId);
       setRoadName(door.destination.roadName);
     }
-  }, [door.id, door.name, door.notes, door.destination]);
-  useEffect(() => {
-    if (initiallyExpanded) setExpanded(true);
-  }, [initiallyExpanded]);
+  }
 
   const partner = useMemo(() => {
     if (door.destination.kind !== 'roaded') return null;
@@ -1736,12 +1760,20 @@ function LaylineEditor({
   // Sync local state with external prop changes (parity with POIEditor and
   // DoorEditor). Today no path mutates a layline outside this editor, but
   // an import or multi-tab write could desync otherwise.
-  useEffect(() => {
+  const [syncedLayline, setSyncedLayline] = useState(layline);
+  if (
+    layline.id !== syncedLayline.id ||
+    layline.name !== syncedLayline.name ||
+    layline.type !== syncedLayline.type ||
+    layline.color !== syncedLayline.color ||
+    layline.notes !== syncedLayline.notes
+  ) {
+    setSyncedLayline(layline);
     setName(layline.name);
     setType(layline.type);
     setColor(layline.color);
     setNotes(layline.notes);
-  }, [layline.id, layline.name, layline.type, layline.color, layline.notes]);
+  }
   return (
     <div className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${selected ? 'ring-1 ring-[#c4a35a]/60' : ''}`}>
       <div className="flex items-center gap-2">
