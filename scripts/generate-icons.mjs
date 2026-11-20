@@ -6,8 +6,9 @@
 // Usage (after `npm ci`):  node scripts/generate-icons.mjs
 //
 // Next.js picks all three files up by its metadata file conventions and adds
-// the <link> tags itself. The SVG is rasterized with sharp (librsvg), which npm
-// installs alongside Next.js, so no system tools are needed. Each size is
+// the <link> tags itself. The SVG is rasterized with sharp (librsvg), a
+// devDependency on the same version range as Next.js's own sharp, so npm
+// installs a single copy and no system tools are needed. Each size is
 // rendered straight from the vector, never resampled, and the output is
 // byte-for-byte reproducible for a given sharp version.
 
@@ -18,7 +19,7 @@ let sharp;
 try {
   ({ default: sharp } = await import('sharp'));
 } catch {
-  console.error('generate-icons: sharp is missing. It is installed with Next.js; run `npm ci` first.');
+  console.error('generate-icons: sharp is not installed. Run `npm ci` first.');
   process.exit(1);
 }
 
