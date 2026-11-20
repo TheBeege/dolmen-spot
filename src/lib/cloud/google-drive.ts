@@ -61,7 +61,13 @@ export function createGoogleDriveProvider(): CloudProvider | null {
     displayName: 'Google Drive',
 
     isAuthenticated(): boolean {
-      return getStoredToken() !== null;
+      try {
+        return getStoredToken() !== null;
+      } catch {
+        // The browser blocks site data, so no token can have been kept. (The
+        // sheet still runs then, in memory, and asks this at startup.)
+        return false;
+      }
     },
 
     authenticate(): Promise<void> {

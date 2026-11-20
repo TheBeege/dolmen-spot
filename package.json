@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
+    "test": "tsx --test src/lib/*.test.ts",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
     "prepare": "node .husky/install.mjs"
   },
@@ -30,6 +31,7 @@
     "lint-staged": "^17.6.1",
     "sharp": "^0.35.5",
     "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
   "engines": {
@@ -45,5 +47,8 @@
     "eslint-plugin-react": {
       "eslint": "$eslint"
     }
+  },
+  "allowScripts": {
+    "esbuild": false
   }
 }
