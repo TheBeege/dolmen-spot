@@ -8,9 +8,10 @@ import {
   HOLY_SPELLS,
   HOLY_SPELL_SUMMARIES,
   MAGICIAN_STARTING_SPELL_BOOKS,
+  findSpell,
   getSpellSummary,
-  type SpellSummary,
 } from './gamedata';
+import type { SpellSummary } from './types';
 
 const SAVE_CATEGORIES = ['Doom', 'Ray', 'Hold', 'Blast', 'Spell'];
 
@@ -98,19 +99,24 @@ describe('spell summaries', () => {
   });
 });
 
-describe('getSpellSummary', () => {
-  test('finds a spell whatever its case or surrounding spaces', () => {
+describe('findSpell and getSpellSummary', () => {
+  test('find a spell whatever its case or surrounding spaces', () => {
+    assert.equal(findSpell('holy', ' hold person ')?.name, 'Hold Person');
+    assert.equal(findSpell('arcane', 'IGNITE/EXTINGUISH')?.name, 'Ignite/Extinguish');
     assert.equal(getSpellSummary('arcane', '  fireball '), ARCANE_SPELL_SUMMARIES['Fireball']);
     assert.equal(getSpellSummary('holy', 'LESSER HEALING'), HOLY_SPELL_SUMMARIES['Lesser Healing']);
   });
-  test('only looks in the list for the given kind of magic', () => {
+  test('only look in the list for the given kind of magic', () => {
+    assert.equal(findSpell('holy', 'Fireball'), undefined);
     assert.equal(getSpellSummary('holy', 'Fireball'), undefined);
     assert.equal(getSpellSummary('arcane', 'Bless'), undefined);
   });
-  test("returns nothing for a name that isn't a spell", () => {
+  test("return nothing for a name that isn't a spell", () => {
     for (const name of ['', '   ', 'Firebal', 'constructor', 'toString', '__proto__']) {
-      assert.equal(getSpellSummary('arcane', name), undefined, name);
-      assert.equal(getSpellSummary('holy', name), undefined, name);
+      for (const spellType of ['arcane', 'holy'] as const) {
+        assert.equal(findSpell(spellType, name), undefined, name);
+        assert.equal(getSpellSummary(spellType, name), undefined, name);
+      }
     }
   });
   test("every spell in a magician's starting spell book has a summary", () => {

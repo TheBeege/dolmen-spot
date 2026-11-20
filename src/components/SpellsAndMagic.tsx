@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Character,
   CharacterUpdater,
@@ -14,6 +14,7 @@ import {
   SpellStudyEntry,
   StudySource,
   ActiveSpellStudy,
+  SpellType,
 } from '@/lib/types';
 import {
   getCharacterMagicProfile,
@@ -48,6 +49,7 @@ import {
   getStudyProgress,
   getStudyStart,
 } from '@/lib/livedTime';
+import { ChosenSpellSummary, SpellInfo, SpellSummaryPanel, useSpellDisclosures } from '@/components/SpellInfo';
 
 interface SpellsAndMagicProps {
   character: Character;
@@ -65,6 +67,19 @@ const buttonClasses =
 
 const selectClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+
+// The part of a spell row (in a flex-wrap row) holding the spell's name, its
+// Rank and info button. It takes the width its contents need, so on a narrow
+// screen the row's other controls wrap below it instead of squeezing the name;
+// only a name too long for the whole row wraps onto a second line.
+const rowNameClasses = 'flex flex-auto min-w-0 items-center gap-2';
+// The rest of such a row: kept to the right, and wrapping onto further lines
+// itself only if it can't fit on one.
+const rowControlsClasses = 'ml-auto flex flex-wrap items-center justify-end gap-2 min-w-0';
+// A spell's summary panel in such a row. It comes straight after the info
+// button in the page, so a screen reader reaches it next, but shows on a line
+// of its own below the rest of the row.
+const rowPanelClasses = 'basis-full order-last';
 
 export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicProps) {
   const {
@@ -329,8 +344,10 @@ function SpellCasterSection({
 }) {
   const spellsPerDay = profile.spellsPerDay;
   const isArcane = profile.spellType === 'arcane';
+  const spellType: SpellType = isArcane ? 'arcane' : 'holy';
   const isMagician = character.class === 'magician';
   const maxRank = profile.maxSpellRank || 6;
+  const spellInfo = useSpellDisclosures();
 
   // Count prepared spells by rank
   const preparedByRank = countPreparedByRank(character.spells);
@@ -386,7 +403,10 @@ function SpellCasterSection({
             ))}
           </select>
           {character.startingSpellBook && (
-            <ApplyStartingBookButton character={character} onChange={onChange} />
+            <>
+              <StartingBookSpells bookName={character.startingSpellBook} />
+              <ApplyStartingBookButton character={character} onChange={onChange} />
+            </>
           )}
         </div>
       )}
@@ -400,76 +420,94 @@ function SpellCasterSection({
         </div>
 
         {/* Memorised spell slots */}
-        {character.spells.map((spell) => (
-          <div
-            key={spell.id}
-            className={`flex items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1 ${
-              spell.cast ? 'opacity-50' : ''
-            }`}
-          >
-            {isArcane ? (
-              <>
-                <span className="text-[#c4a35a] font-semibold shrink-0">R{spell.rank}</span>
-                <span className="text-[#f5e6c8] flex-1 min-w-[100px]">{spell.name}</span>
-              </>
-            ) : (
-              <>
-                <input
-                  type="text"
-                  value={spell.name}
-                  onChange={(e) => updateSpell(spell.id, { name: e.target.value })}
-                  placeholder="Spell name"
-                  className={`${inputClasses} flex-1 min-w-0`}
-                />
-                <input
-                  type="number"
-                  min={1}
-                  max={maxRank}
-                  value={spell.rank}
-                  onChange={(e) =>
-                    updateSpell(spell.id, {
-                      rank: Math.min(maxRank, Math.max(1, parseInt(e.target.value) || 1)),
-                    })
-                  }
-                  title="Rank"
-                  className={`${inputClasses} w-14 text-center`}
-                />
-              </>
-            )}
-            <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={spell.prepared}
-                onChange={(e) => updateSpell(spell.id, { prepared: e.target.checked })}
-                className="accent-[#c4a35a]"
-              />
-              Prep
-            </label>
-            <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={spell.cast}
-                onChange={(e) => updateSpell(spell.id, { cast: e.target.checked })}
-                className="accent-[#c4a35a]"
-              />
-              Cast
-            </label>
-            <input
-              type="text"
-              value={spell.notes}
-              onChange={(e) => updateSpell(spell.id, { notes: e.target.value })}
-              placeholder="Notes"
-              className={`${inputClasses} flex-1 min-w-0`}
-            />
-            <button
-              onClick={() => deleteSpell(spell.id)}
-              className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-              title="Delete spell"
+        {character.spells.map((spell) => {
+          const info = spellInfo(spell.id);
+          return (
+            <div
+              key={spell.id}
+              className={`bg-[#1a1a2e] p-2 rounded mb-1 ${spell.cast ? 'opacity-50' : ''}`}
             >
-              X
-            </button>
-          </div>
-        ))}
+              <div className="flex flex-wrap items-center gap-2">
+                <div className={rowNameClasses}>
+                  {isArcane ? (
+                    <>
+                      <span className="text-[#c4a35a] font-semibold shrink-0">R{spell.rank}</span>
+                      <span className="text-[#f5e6c8] min-w-0">
+                        <SpellInfo spellType={spellType} name={spell.name} disclosure={info}>
+                          {spell.name}
+                        </SpellInfo>
+                      </span>
+                    </>
+                  ) : (
+                    <>
+                      <input
+                        type="text"
+                        value={spell.name}
+                        onChange={(e) => updateSpell(spell.id, { name: e.target.value })}
+                        placeholder="Spell name"
+                        className={`${inputClasses} flex-1 min-w-0`}
+                      />
+                      {/* The button appears once the name matches a holy spell; its
+                          space is kept either way so the row doesn't shift as you type. */}
+                      <SpellInfo spellType={spellType} name={spell.name} disclosure={info} className="w-6 h-6 shrink-0" />
+                      <input
+                        type="number"
+                        min={1}
+                        max={maxRank}
+                        value={spell.rank}
+                        onChange={(e) =>
+                          updateSpell(spell.id, {
+                            rank: Math.min(maxRank, Math.max(1, parseInt(e.target.value) || 1)),
+                          })
+                        }
+                        title="Rank"
+                        className={`${inputClasses} w-14 text-center`}
+                      />
+                    </>
+                  )}
+                </div>
+                <SpellSummaryPanel spellType={spellType} name={spell.name} disclosure={info} className={rowPanelClasses} />
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={spell.prepared}
+                      onChange={(e) => updateSpell(spell.id, { prepared: e.target.checked })}
+                      className="accent-[#c4a35a]"
+                    />
+                    Prep
+                  </label>
+                  <label className="flex items-center gap-1 text-[#f5e6c8] text-sm shrink-0 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={spell.cast}
+                      onChange={(e) => updateSpell(spell.id, { cast: e.target.checked })}
+                      className="accent-[#c4a35a]"
+                    />
+                    Cast
+                  </label>
+                </div>
+                {/* Wide enough to type in before it wraps to a line of its own */}
+                <div className="flex flex-1 min-w-28 items-center gap-2">
+                  <input
+                    type="text"
+                    value={spell.notes}
+                    onChange={(e) => updateSpell(spell.id, { notes: e.target.value })}
+                    placeholder="Notes"
+                    className={`${inputClasses} flex-1 min-w-0`}
+                  />
+                  <button
+                    onClick={() => deleteSpell(spell.id)}
+                    className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
+                    title="Delete spell"
+                  >
+                    X
+                  </button>
+                </div>
+              </div>
+            </div>
+          );
+        })}
 
         {/* Arcane: auto-listed scrolls from inventory */}
         {isArcane && <InventoryScrollsList character={character} onChange={onChange} />}
@@ -530,6 +568,7 @@ function InventoryScrollsList({
   character: Character;
   onChange: (updates: CharacterUpdater) => void;
 }) {
+  const spellInfo = useSpellDisclosures();
   const scrolls = getScrollItems(character).filter((s) => s.scrollSpell?.name);
   if (scrolls.length === 0) return null;
 
@@ -549,25 +588,57 @@ function InventoryScrollsList({
       <div className="text-[#c4a35a]/70 text-xs font-semibold mt-2 mb-1">
         Scrolls in inventory · one-shot
       </div>
-      {scrolls.map((s) => (
-        <div
-          key={s.id}
-          className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] border border-[#5a3a28]/40 p-2 rounded mb-1"
-        >
-          <span className="text-[#c4a35a] text-sm shrink-0" title="One-shot scroll">📜</span>
-          <span className="text-[#c4a35a] font-semibold shrink-0">R{s.scrollSpell!.rank}</span>
-          <span className="text-[#f5e6c8] flex-1 min-w-[120px]">{s.scrollSpell!.name}</span>
-          <button
-            type="button"
-            onClick={() => castScroll(s.id)}
-            className="bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-3 py-1 rounded shrink-0"
-            title="Cast from scroll (consumes it)"
+      {scrolls.map((s) => {
+        const info = spellInfo(s.id);
+        return (
+          <div
+            key={s.id}
+            className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] border border-[#5a3a28]/40 p-2 rounded mb-1"
           >
-            Cast
-          </button>
-        </div>
-      ))}
+            <span className={rowNameClasses}>
+              <span className="text-[#c4a35a] text-sm shrink-0" title="One-shot scroll">📜</span>
+              <span className="text-[#c4a35a] font-semibold shrink-0">R{s.scrollSpell!.rank}</span>
+              <span className="text-[#f5e6c8] min-w-0">
+                <SpellInfo spellType="arcane" name={s.scrollSpell!.name} disclosure={info}>
+                  {s.scrollSpell!.name}
+                </SpellInfo>
+              </span>
+            </span>
+            <SpellSummaryPanel spellType="arcane" name={s.scrollSpell!.name} disclosure={info} className={rowPanelClasses} />
+            <button
+              type="button"
+              onClick={() => castScroll(s.id)}
+              className="ml-auto bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-3 py-1 rounded shrink-0"
+              title="Cast from scroll (consumes it)"
+            >
+              Cast
+            </button>
+          </div>
+        );
+      })}
     </>
+  );
+}
+
+// The chosen starting book's spells, each with what it does, since the
+// dropdown's options can only list their names.
+function StartingBookSpells({ bookName }: { bookName: string }) {
+  const spellInfo = useSpellDisclosures();
+  const book = MAGICIAN_STARTING_SPELL_BOOKS.find((b) => b.name === bookName);
+  if (!book) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-2 text-sm text-[#f5e6c8]">
+      <span className="text-[#f5e6c8]/70">Spells:</span>
+      {book.spells.map((name) => {
+        const info = spellInfo(name);
+        return (
+          <Fragment key={name}>
+            <SpellInfo spellType="arcane" name={name} disclosure={info}>{name}</SpellInfo>
+            <SpellSummaryPanel spellType="arcane" name={name} disclosure={info} className="basis-full" />
+          </Fragment>
+        );
+      })}
+    </div>
   );
 }
 
@@ -652,6 +723,7 @@ function KnownSpellsBlock({
   const [showAdd, setShowAdd] = useState(false);
   const [addName, setAddName] = useState('');
   const [addSource, setAddSource] = useState<KnownSpellSource>('manual');
+  const spellInfo = useSpellDisclosures();
 
   const ranks = Array.from({ length: maxRank }, (_, i) => i + 1);
 
@@ -803,43 +875,53 @@ function KnownSpellsBlock({
         </p>
       )}
       <div className="space-y-1">
-        {filtered.map((k) => (
-          <div
-            key={k.id}
-            className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm"
-          >
-            <span
-              className="shrink-0 text-xs"
-              title={k.inBook ? 'Spell book is in inventory' : 'No spell book in inventory contains this spell'}
+        {filtered.map((k) => {
+          const info = spellInfo(k.id);
+          return (
+            <div
+              key={k.id}
+              className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm"
             >
-              {k.inBook ? '📕' : '⚠'}
-            </span>
-            {k.onScroll && (
-              <span className="shrink-0 text-xs" title="Also available as a scroll">📜</span>
-            )}
-            <span className="text-[#c4a35a] font-semibold shrink-0">R{k.rank}</span>
-            <span className="text-[#f5e6c8] flex-1 min-w-[100px]">{k.name}</span>
-            <span
-              className="text-[#f5e6c8]/40 text-xs shrink-0"
-              title={k.learnedAt ? `Learned on ${formatRecordDate(character, k.learnedAt, k.learnedInFairy)}` : undefined}
-            >
-              {KNOWN_SPELL_SOURCE_LABELS[k.source]}
-            </span>
-            <button
-              type="button"
-              onClick={() => handleDelete(k.id)}
-              className="text-red-400 hover:text-red-300 text-xs px-1 shrink-0"
-              title="Remove from known spells"
-            >
-              X
-            </button>
-            {k.learnedInFairy && (
-              <span className="basis-full text-[#c9b3f0]/80 text-xs pl-5">
-                Learned on {formatFairyDate(character, k.learnedInFairy, k.learnedAt)}
+              <span className={rowNameClasses}>
+                <span
+                  className="shrink-0 text-xs"
+                  title={k.inBook ? 'Spell book is in inventory' : 'No spell book in inventory contains this spell'}
+                >
+                  {k.inBook ? '📕' : '⚠'}
+                </span>
+                {k.onScroll && (
+                  <span className="shrink-0 text-xs" title="Also available as a scroll">📜</span>
+                )}
+                <span className="text-[#c4a35a] font-semibold shrink-0">R{k.rank}</span>
+                <span className="text-[#f5e6c8] min-w-0">
+                  <SpellInfo spellType="arcane" name={k.name} disclosure={info}>{k.name}</SpellInfo>
+                </span>
               </span>
-            )}
-          </div>
-        ))}
+              <SpellSummaryPanel spellType="arcane" name={k.name} disclosure={info} className={`${rowPanelClasses} mb-1`} />
+              <span className={rowControlsClasses}>
+                <span
+                  className="text-[#f5e6c8]/40 text-xs"
+                  title={k.learnedAt ? `Learned on ${formatRecordDate(character, k.learnedAt, k.learnedInFairy)}` : undefined}
+                >
+                  {KNOWN_SPELL_SOURCE_LABELS[k.source]}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(k.id)}
+                  className="text-red-400 hover:text-red-300 text-xs px-1"
+                  title="Remove from known spells"
+                >
+                  X
+                </button>
+              </span>
+              {k.learnedInFairy && (
+                <span className="basis-full text-[#c9b3f0]/80 text-xs pl-5">
+                  Learned on {formatFairyDate(character, k.learnedInFairy, k.learnedAt)}
+                </span>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       {/* Add manual */}
@@ -895,6 +977,7 @@ function KnownSpellsBlock({
             >
               Cancel
             </button>
+            <ChosenSpellSummary spellType="arcane" name={addName} className="basis-full" />
           </div>
         )}
       </div>
@@ -922,6 +1005,7 @@ function SpellStudyBlock({
   const [draftSource, setDraftSource] = useState<StudySource>('book');
   const [draftBookId, setDraftBookId] = useState('');
   const [draftNotes, setDraftNotes] = useState('');
+  const spellInfo = useSpellDisclosures();
 
   const availableBooks = useMemo(
     () => getSpellbooks(character).filter((b) => (b.spellbookContents?.length ?? 0) < SPELLBOOK_CAPACITY),
@@ -1138,7 +1222,17 @@ function SpellStudyBlock({
         <div className={`bg-[#2a2a3e]/60 border rounded p-2 mb-2 ${studyReady ? 'border-[#c4a35a]' : 'border-[#5a3a28]/60'}`}>
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-[#c4a35a] font-semibold">R{active.rank}</span>
-            <span className="text-[#f5e6c8] font-semibold">{active.spellName}</span>
+            <span className="text-[#f5e6c8] font-semibold">
+              <SpellInfo spellType="arcane" name={active.spellName} disclosure={spellInfo(active.id)}>
+                {active.spellName}
+              </SpellInfo>
+            </span>
+            <SpellSummaryPanel
+              spellType="arcane"
+              name={active.spellName}
+              disclosure={spellInfo(active.id)}
+              className={rowPanelClasses}
+            />
             <span className="text-[#f5e6c8]/60 text-xs">({active.source})</span>
             <span className="ml-auto text-[#f5e6c8]/60 text-xs">
               started on {formatRecordDate(character, active.startedOn, active.startedInFairy)}
@@ -1247,36 +1341,48 @@ function SpellStudyBlock({
         <div className="mb-3">
           <div className="text-[#c4a35a] text-xs font-semibold mb-1">Queue</div>
           <div className="space-y-1">
-            {queue.map((q, i) => (
-              <div key={q.id} className="flex items-center gap-2 bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
-                <span className="text-[#c4a35a] text-xs">{i + 1}.</span>
-                <span className="text-[#c4a35a] font-semibold">R{q.rank}</span>
-                <span className="text-[#f5e6c8] flex-1">{q.spellName}</span>
-                <span className="text-[#f5e6c8]/50 text-xs">{q.source} · {q.weeksRequired}w</span>
-                <button
-                  type="button"
-                  onClick={() => moveInQueue(i, -1)}
-                  disabled={i === 0}
-                  className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] disabled:opacity-30 text-xs px-1"
-                  title="Move up"
-                >▲</button>
-                <button
-                  type="button"
-                  onClick={() => moveInQueue(i, 1)}
-                  disabled={i === queue.length - 1}
-                  className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] disabled:opacity-30 text-xs px-1"
-                  title="Move down"
-                >▼</button>
-                <button
-                  type="button"
-                  onClick={() => removeFromQueue(q.id)}
-                  className="text-red-400 hover:text-red-300 text-xs px-1"
-                  title="Remove from queue"
-                >
-                  X
-                </button>
-              </div>
-            ))}
+            {queue.map((q, i) => {
+              const info = spellInfo(q.id);
+              return (
+                <div key={q.id} className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={rowNameClasses}>
+                      <span className="text-[#c4a35a] text-xs">{i + 1}.</span>
+                      <span className="text-[#c4a35a] font-semibold">R{q.rank}</span>
+                      <span className="text-[#f5e6c8] min-w-0">
+                        <SpellInfo spellType="arcane" name={q.spellName} disclosure={info}>{q.spellName}</SpellInfo>
+                      </span>
+                    </span>
+                    <SpellSummaryPanel spellType="arcane" name={q.spellName} disclosure={info} className={rowPanelClasses} />
+                    <span className={rowControlsClasses}>
+                      <span className="text-[#f5e6c8]/50 text-xs">{q.source} · {q.weeksRequired}w</span>
+                      <button
+                        type="button"
+                        onClick={() => moveInQueue(i, -1)}
+                        disabled={i === 0}
+                        className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] disabled:opacity-30 text-xs px-1"
+                        title="Move up"
+                      >▲</button>
+                      <button
+                        type="button"
+                        onClick={() => moveInQueue(i, 1)}
+                        disabled={i === queue.length - 1}
+                        className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] disabled:opacity-30 text-xs px-1"
+                        title="Move down"
+                      >▼</button>
+                      <button
+                        type="button"
+                        onClick={() => removeFromQueue(q.id)}
+                        className="text-red-400 hover:text-red-300 text-xs px-1"
+                        title="Remove from queue"
+                      >
+                        X
+                      </button>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}
@@ -1341,6 +1447,7 @@ function SpellStudyBlock({
           {draftName && (
             <span className="text-[#c4a35a] text-xs shrink-0">R{draftRank}</span>
           )}
+          <ChosenSpellSummary spellType="arcane" name={draftName} className="basis-full" />
         </div>
         {draftSource === 'book' && (
           <div className="text-[#f5e6c8]/50 text-xs italic mb-2">
@@ -1419,6 +1526,7 @@ function MemorisePicker({
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const spellInfo = useSpellDisclosures();
 
   // Dismiss on outside click
   useEffect(() => {
@@ -1469,7 +1577,9 @@ function MemorisePicker({
         + Memorise ▾
       </button>
       {open && !noOptions && (
-        <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-50 min-w-64 max-h-96 overflow-y-auto">
+        // No wider than the screen less the page's side padding, so it doesn't
+        // run off a narrow screen with a large font
+        <div className="absolute left-0 top-full mt-1 bg-[#2a2a3e] border border-[#5a3a28] rounded shadow-lg z-50 min-w-[min(16rem,calc(100vw_-_3rem))] max-w-[calc(100vw_-_3rem)] max-h-96 overflow-y-auto">
           <div className="px-3 py-1 text-[#c4a35a] text-xs font-semibold border-b border-[#5a3a28]/40">
             Known · In hand
           </div>
@@ -1477,33 +1587,39 @@ function MemorisePicker({
             const cap = capFor(k.rank);
             const atCap = isAtCap(k.rank);
             const hasNoSlots = cap === 0;
+            const info = spellInfo(k.id);
             return (
-              <button
-                key={k.id}
-                type="button"
-                disabled={atCap}
-                onClick={() => memoriseKnown(k)}
-                className={`block w-full text-left px-3 py-1.5 text-sm ${
-                  atCap
-                    ? 'text-[#f5e6c8]/30 cursor-not-allowed'
-                    : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
-                }`}
-                title={
-                  hasNoSlots
-                    ? `No Rank ${k.rank} slots at your level yet`
-                    : atCap
-                      ? `Rank ${k.rank} slots full (${preparedByRank[k.rank] ?? 0}/${cap})`
-                      : ''
-                }
-              >
-                <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
-                {k.name}
-                {atCap && (
-                  <span className="text-[#f5e6c8]/40 text-xs ml-2">
-                    {hasNoSlots ? '(no slots yet)' : `(R${k.rank} full)`}
-                  </span>
-                )}
-              </button>
+              <div key={k.id}>
+                <div className="flex items-center pr-2">
+                  <button
+                    type="button"
+                    disabled={atCap}
+                    onClick={() => memoriseKnown(k)}
+                    className={`flex-1 min-w-0 break-words text-left px-3 py-1.5 text-sm ${
+                      atCap
+                        ? 'text-[#f5e6c8]/30 cursor-not-allowed'
+                        : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
+                    }`}
+                    title={
+                      hasNoSlots
+                        ? `No Rank ${k.rank} slots at your level yet`
+                        : atCap
+                          ? `Rank ${k.rank} slots full (${preparedByRank[k.rank] ?? 0}/${cap})`
+                          : ''
+                    }
+                  >
+                    <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
+                    {k.name}
+                    {atCap && (
+                      <span className="text-[#f5e6c8]/40 text-xs ml-2">
+                        {hasNoSlots ? '(no slots yet)' : `(R${k.rank} full)`}
+                      </span>
+                    )}
+                  </button>
+                  <SpellInfo spellType="arcane" name={k.name} disclosure={info} />
+                </div>
+                <SpellSummaryPanel spellType="arcane" name={k.name} disclosure={info} className="mx-3 mb-2" />
+              </div>
             );
           })}
         </div>
@@ -1814,11 +1930,12 @@ function KnackSection({
 // Collapsible Reference Panels
 // ════════════════════════════════════════════════════════════
 
-function SpellReference({ spellType }: { spellType: 'arcane' | 'holy' | null }) {
+function SpellReference({ spellType }: { spellType: SpellType | null }) {
+  const spellInfo = useSpellDisclosures();
   if (!spellType) return null;
 
   const isArcane = spellType === 'arcane';
-  const spells = isArcane ? ARCANE_SPELLS : HOLY_SPELLS;
+  const spells: readonly { name: string; rank: number; saint?: string }[] = isArcane ? ARCANE_SPELLS : HOLY_SPELLS;
   const maxRank = isArcane ? 6 : 5;
 
   return (
@@ -1827,28 +1944,26 @@ function SpellReference({ spellType }: { spellType: 'arcane' | 'holy' | null }) 
         {isArcane ? 'Arcane' : 'Holy'} Spell Reference
       </summary>
       <div className="bg-[#1a1a2e] rounded p-3 mt-1 text-sm">
-        {Array.from({ length: maxRank }, (_, i) => i + 1).map((rank) => {
-          const rankSpells = spells.filter((s) => s.rank === rank);
-          return (
-            <div key={rank} className="mb-2">
-              <div className="text-[#c4a35a] font-semibold text-xs mb-1">Rank {rank}</div>
-              <div className="text-[#f5e6c8]/70 text-xs">
-                {rankSpells.map((s, i) => (
-                  <span key={s.name}>
-                    {s.name}
-                    {'saint' in s && (
-                      <span className="text-[#f5e6c8]/40">
-                        {' '}
-                        ({(s as { saint: string }).saint})
-                      </span>
-                    )}
-                    {i < rankSpells.length - 1 ? ', ' : ''}
-                  </span>
-                ))}
-              </div>
+        {Array.from({ length: maxRank }, (_, i) => i + 1).map((rank) => (
+          <div key={rank} className="mb-2">
+            <div className="text-[#c4a35a] font-semibold text-xs mb-1">Rank {rank}</div>
+            {/* An open summary takes a line of its own, under its spell. */}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[#f5e6c8]/80 text-xs">
+              {spells.filter((s) => s.rank === rank).map((s) => {
+                const info = spellInfo(s.name);
+                return (
+                  <Fragment key={s.name}>
+                    <SpellInfo spellType={spellType} name={s.name} disclosure={info}>
+                      {s.name}
+                      {s.saint && <span className="text-[#f5e6c8]/60"> ({s.saint})</span>}
+                    </SpellInfo>
+                    <SpellSummaryPanel spellType={spellType} name={s.name} disclosure={info} className="basis-full" />
+                  </Fragment>
+                );
+              })}
             </div>
-          );
-        })}
+          </div>
+        ))}
       </div>
     </details>
   );

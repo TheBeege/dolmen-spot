@@ -461,3 +461,18 @@ export interface ClassInfo {
   weapons: string;
   allowedKindreds?: string;
 }
+
+// The spells cast from a list of named spells: arcane (magicians, and breggles
+// from Level 4) and holy (clerics and friars).
+export type SpellType = 'arcane' | 'holy';
+
+// What a spell does, shown on the Spells & Magic tab (ARCANE_SPELL_SUMMARIES
+// and HOLY_SPELL_SUMMARIES in gamedata.ts).
+export interface SpellSummary {
+  /** e.g. "30'", 'Touch', 'The caster'. */
+  range: string;
+  /** e.g. '6 Turns', '1 Round/Level', 'Instant'. */
+  duration: string;
+  /** Who or what it affects, any save, damage and numbers, in a sentence or two. */
+  effect: string;
+}

@@ -1,4 +1,4 @@
-import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile } from './types';
+import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile, SpellSummary, SpellType } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 import { pluralize } from './grammar';
 
@@ -2413,17 +2413,6 @@ export function findHolySpell(name: string): { name: string; rank: number; saint
 // in our own words with no flavour text, so players can check a spell without
 // the book. Keyed by the exact names in ARCANE_SPELLS and HOLY_SPELLS.
 // Source: the spell entries in the Player's Book (pp80-91 arcane, pp102-111 holy).
-export type SpellType = 'arcane' | 'holy';
-
-export interface SpellSummary {
-  /** e.g. "30'", 'Touch', 'The caster'. */
-  range: string;
-  /** e.g. '6 Turns', '1 Round/Level', 'Instant'. */
-  duration: string;
-  /** Who or what it affects, any save, damage and numbers, in a sentence or two. */
-  effect: string;
-}
-
 export const ARCANE_SPELL_SUMMARIES: Record<string, SpellSummary> = {
   // Rank 1
   'Crystal Resonance': {
@@ -2865,14 +2854,16 @@ export const HOLY_SPELL_SUMMARIES: Record<string, SpellSummary> = {
   },
 };
 
-/** The summary of an arcane or holy spell, matching its name case-insensitively. */
+/** The arcane or holy spell with this name, ignoring case and surrounding spaces. */
+export function findSpell(spellType: SpellType, name: string): { name: string; rank: number } | undefined {
+  return spellType === 'arcane' ? findArcaneSpell(name) : findHolySpell(name);
+}
+
+/** What an arcane or holy spell does, looked up by name as findSpell does. */
 export function getSpellSummary(spellType: SpellType, name: string): SpellSummary | undefined {
-  if (spellType === 'arcane') {
-    const spell = findArcaneSpell(name);
-    return spell ? ARCANE_SPELL_SUMMARIES[spell.name] : undefined;
-  }
-  const spell = findHolySpell(name);
-  return spell ? HOLY_SPELL_SUMMARIES[spell.name] : undefined;
+  const spell = findSpell(spellType, name);
+  if (!spell) return undefined;
+  return (spellType === 'arcane' ? ARCANE_SPELL_SUMMARIES : HOLY_SPELL_SUMMARIES)[spell.name];
 }
 
 // 5C: Glamour List (20 glamours)
@@ -3029,7 +3020,7 @@ export interface MagicProfile {
   hasRunes: boolean;
   hasKnacks: boolean;
   hasDivineResistance: boolean;
-  spellType: 'arcane' | 'holy' | null;
+  spellType: SpellType | null;
 }
 
 export function getCharacterMagicProfile(kindred: KindredId | '', classId: ClassId | '', level: number): MagicProfile {
