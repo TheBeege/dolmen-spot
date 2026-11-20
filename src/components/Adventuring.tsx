@@ -18,6 +18,7 @@ import {
   FORAGING_YIELDS,
   getHungerEffects,
   getMoonPhaseLabel,
+  getMoonName,
   weeksElapsed,
   addDays,
   isWysenday,
@@ -166,6 +167,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const celestialThisMonth = getCelestialEventsForMonth(currentDate.month);
   const foragingYield = FORAGING_YIELDS[season];
 
+  const moonName = getMoonName(currentDate);
   const moonPhaseLabel = getMoonPhaseLabel(currentDate);
   const todaysFestivals = (FESTIVALS.festivals || []).filter(
     (f) => f.month === currentDate.month && f.day === currentDate.day
@@ -234,7 +236,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
           {/* Moon info */}
           <div className="text-[#f5e6c8]/70 text-sm mt-1">
-            {currentMonth.moonName} &middot; {moonPhaseLabel}
+            {moonName} &middot; {moonPhaseLabel}
           </div>
           {/* Wysenday badge */}
           {todayIsWysenday && (
