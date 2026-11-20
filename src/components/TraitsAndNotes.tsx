@@ -51,7 +51,12 @@ const cardClasses =
 
 function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
   const totalSlots = getFighterTalentCount(character.level);
-  const selections = character.selectedCombatTalents;
+  // One entry per unlocked slot. Pad a copy: the stored array is a prop and
+  // must not be changed while rendering.
+  const stored = character.selectedCombatTalents;
+  const selections = stored.length >= totalSlots
+    ? stored
+    : [...stored, ...Array.from({ length: totalSlots - stored.length }, () => ({ talentId: '', specification: '' }))];
 
   const updateTalent = (index: number, talentId: string) => {
     const next = [...selections];
@@ -64,11 +69,6 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
     next[index] = { ...next[index], specification };
     onChange({ selectedCombatTalents: next });
   };
-
-  // Ensure array is the right length
-  while (selections.length < totalSlots) {
-    selections.push({ talentId: '', specification: '' });
-  }
 
   if (totalSlots === 0) {
     return (
