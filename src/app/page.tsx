@@ -16,6 +16,7 @@ import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
 import ExportPdfButton from '@/components/ExportPdfButton';
 import StorageBanner from '@/components/StorageBanner';
+import { ImportError } from '@/lib/storage';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
@@ -63,7 +64,14 @@ export default function Home() {
 
   const handleCloudLoad = useCallback(async (providerId: 'google-drive' | 'onedrive', fileId: string, fileName: string) => {
     const json = await cloud.loadCharacter(providerId, fileId);
-    const newCharId = importCharacterFromJson(json);
+    let newCharId: string;
+    try {
+      newCharId = importCharacterFromJson(json);
+    } catch (err) {
+      // Nothing was added. Say why, then let the modal stay open.
+      alert(err instanceof ImportError ? err.message : 'Invalid character file.');
+      throw err;
+    }
     cloud.setMetadata(newCharId, providerId, fileId, fileName);
   }, [cloud, importCharacterFromJson]);
 

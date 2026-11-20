@@ -2,64 +2,68 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Character } from '@/lib/types';
-import { createNewAdventurer, getCharacterStore, parseImportedCharacter } from '@/lib/storage';
+import { createNewAdventurer, getCharacterStore, ImportError, parseImportedCharacters } from '@/lib/storage';
 
-// Never throws; skipped while saving is paused (see lib/storage.ts).
-function saveActiveId(id: string) {
-  getCharacterStore().saveActiveId(id);
+interface CharacterSession {
+  characters: Character[];
+  activeId: string | null;
 }
 
 export function useCharacter() {
-  const [characters, setCharacters] = useState<Character[]>([]);
-  const [activeId, setActiveId] = useState<string | null>(null);
+  // One state value, so every change below is a single functional update.
+  const [session, setSession] = useState<CharacterSession>({ characters: [], activeId: null });
   const [loaded, setLoaded] = useState(false);
+  const { characters, activeId } = session;
 
   useEffect(() => {
-    // load() never throws, and never overwrites saved data it couldn't read.
-    // Problems are reported through the store's status (see <StorageBanner>).
-    const { characters: chars, activeId: id } = getCharacterStore().load();
-    setCharacters(chars);
-    setActiveId(id);
+    // load() never throws and never overwrites saved data it couldn't read.
+    // While changes aren't being saved it hands back this tab's characters,
+    // so remounting (e.g. after visiting the changelog) keeps unsaved work.
+    setSession(getCharacterStore().load());
     setLoaded(true);
   }, []);
 
   // Persist every change. Saving is a side effect, so it lives here rather
   // than inside the state updaters below, which React may call more than
-  // once. saveCharacters() never throws: a failed save is reported through
-  // the store's status, and the banner warns the player.
+  // once. Neither call throws: problems are reported through the store's
+  // status, and the storage banner warns the player.
   useEffect(() => {
     if (loaded) getCharacterStore().saveCharacters(characters);
   }, [characters, loaded]);
 
+  useEffect(() => {
+    if (loaded && activeId) getCharacterStore().saveActiveId(activeId);
+  }, [activeId, loaded]);
+
   const activeCharacter = characters.find(c => c.id === activeId) ?? null;
 
   const updateCharacter = useCallback((updates: Partial<Character>) => {
-    setCharacters(prev => prev.map(c =>
-      c.id === activeId ? { ...c, ...updates } : c
-    ));
-  }, [activeId]);
+    setSession(prev => ({
+      ...prev,
+      characters: prev.characters.map(c =>
+        c.id === prev.activeId ? { ...c, ...updates } : c
+      ),
+    }));
+  }, []);
 
   const createCharacter = useCallback(() => {
     const newChar = createNewAdventurer();
-    setCharacters(prev => [...prev, newChar]);
-    setActiveId(newChar.id);
-    saveActiveId(newChar.id);
+    setSession(prev => ({ characters: [...prev.characters, newChar], activeId: newChar.id }));
     return newChar;
   }, []);
 
   const deleteCharacter = useCallback((id: string) => {
-    const next = characters.filter(c => c.id !== id);
-    if (next.length === 0) next.push(createNewAdventurer());
-    setCharacters(next);
-    if (activeId === id) {
-      setActiveId(next[0].id);
-      saveActiveId(next[0].id);
-    }
-  }, [characters, activeId]);
+    // Made out here so a repeated call of the updater gives the same result.
+    const replacement = createNewAdventurer();
+    setSession(prev => {
+      const remaining = prev.characters.filter(c => c.id !== id);
+      const next = remaining.length > 0 ? remaining : [replacement];
+      return { characters: next, activeId: prev.activeId === id ? next[0].id : prev.activeId };
+    });
+  }, []);
 
   const switchCharacter = useCallback((id: string) => {
-    setActiveId(id);
-    saveActiveId(id);
+    setSession(prev => ({ ...prev, activeId: id }));
   }, []);
 
   const exportCharacter = useCallback(() => {
@@ -76,15 +80,15 @@ export function useCharacter() {
   const importCharacter = useCallback((file: File) => {
     const reader = new FileReader();
     reader.onload = (e) => {
+      let imported: Character[];
       try {
         // Throws on a bad file before anything is added.
-        const data = parseImportedCharacter(e.target?.result as string);
-        setCharacters(prev => [...prev, data]);
-        setActiveId(data.id);
-        saveActiveId(data.id);
-      } catch {
-        alert('Invalid character file.');
+        imported = parseImportedCharacters(String(e.target?.result ?? ''), { allowMany: true });
+      } catch (err) {
+        alert(err instanceof ImportError ? err.message : 'Invalid character file.');
+        return;
       }
+      setSession(prev => ({ characters: [...prev.characters, ...imported], activeId: imported[0].id }));
     };
     reader.readAsText(file);
   }, []);
@@ -95,11 +99,9 @@ export function useCharacter() {
   }, [activeCharacter]);
 
   const importCharacterFromJson = useCallback((json: string): string => {
-    // Throws on a bad file before anything is added.
-    const data = parseImportedCharacter(json);
-    setCharacters(prev => [...prev, data]);
-    setActiveId(data.id);
-    saveActiveId(data.id);
+    // Throws (an ImportError for a bad file) before anything is added.
+    const [data] = parseImportedCharacters(json);
+    setSession(prev => ({ characters: [...prev.characters, data], activeId: data.id }));
     return data.id;
   }, []);
 
