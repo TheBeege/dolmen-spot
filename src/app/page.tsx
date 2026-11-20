@@ -265,6 +265,8 @@ export default function Home() {
             onExportLocal={exportCharacter}
             onImportLocal={importCharacter}
             loading={cloud.loading}
+            saving={cloud.saving}
+            listing={cloud.listing}
             error={cloud.error}
             onClearError={cloud.clearError}
             characterName={activeCharacter.name}
