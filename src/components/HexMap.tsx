@@ -85,13 +85,12 @@ const CURRENT_LINE_PX = 3;
 // --- Smallest on-screen sizes, in CSS pixels ---
 // Zoomed out, the image sizes above get too small to see (a hex is about
 // 20 px across at the whole-map view on a phone), so overlays grow to stay
-// at least this big (markers and the star: markerGrowth). Labels that would
-// be smaller are hidden instead.
+// at least this big (markers, the star and combined markers: markerGrowth).
+// Labels that would be smaller are hidden instead.
 const MIN_LEY_LINE_PX = 2.5;
 const MIN_ROAD_LINE_PX = 1.5;
 const MIN_STEP_FONT_PX = 10; // step numbers of a ley line being drawn
 const MIN_LABEL_FONT_PX = 8; // hex coordinates and fairy road names
-const MIN_COUNT_PX = 10; // item count over the star when the current hex's markers are combined
 const COORD_LABEL_OPACITY = 0.7;
 
 // --- Navigation ---
@@ -985,9 +984,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   ) => {
     const names = items.map((e) => e.item.name || 'Unnamed').join(', ');
     const label = `${items.length} ${items.length === 1 ? 'item' : 'items'} on hex ${hex}: ${names}`;
-    const r = onCurrent
-      ? Math.max(BADGE_RADIUS * 0.6, pxPerUnit ? MIN_COUNT_PX / 2 / pxPerUnit : 0)
-      : Math.min(BADGE_RADIUS * size.marker, HEX_INNER_RADIUS);
+    const r = onCurrent ? growth.countRadius : growth.combinedRadius;
     const o = onCurrent ? countOnStar(starRadius, r, HEX_INNER_RADIUS) : { x: 0, y: 0 };
     const fill = onCurrent || !items.every((e) => e.kind === items[0].kind) ? NIGHT : items[0].kind === 'poi' ? POI_FILL : DOOR_FILL;
     return (
@@ -999,7 +996,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           y={c.y + o.y + r * 0.5}
           textAnchor="middle"
           fontSize={r * 1.4}
-          fill={PARCHMENT}
+          // Dark on the pale door fill, like a door's ✦; pale on the others.
+          fill={fill === DOOR_FILL ? NIGHT : PARCHMENT}
           fontWeight="bold"
           pointerEvents="none"
           aria-hidden="true"

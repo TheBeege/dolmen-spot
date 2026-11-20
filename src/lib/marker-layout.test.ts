@@ -35,17 +35,27 @@ for (let n = 1; n <= 4; n++) for (let doors = 0; doors <= n; doors++) MIXES.push
 const SCALES = Array.from({ length: 80 }, (_, i) => 0.03 * 1.06 ** i);
 
 describe('markerGrowth', () => {
+  const FULL_SIZE = { marker: 1, starRadius: 42, combinedRadius: 24, countRadius: 24 * 0.6 };
   test('nothing grows at full size, or before the map is measured', () => {
-    assert.deepEqual(markerGrowth(null), { marker: 1, starRadius: 42 });
-    assert.deepEqual(markerGrowth(1), { marker: 1, starRadius: 42 });
+    assert.deepEqual(markerGrowth(null), FULL_SIZE);
+    assert.deepEqual(markerGrowth(1), FULL_SIZE);
   });
-  test('zoomed out, markers and the star grow to their smallest on-screen sizes', () => {
-    const g = markerGrowth(PHONE_390);
-    assert.ok(Math.abs(22 * g.marker * PHONE_390 - 6) < 1e-9, 'a POI is 12 px across');
-    assert.ok(Math.abs(g.starRadius * PHONE_390 - 7) < 1e-9, 'the star is 14 px across');
+  test('zoomed out, markers, the star and combined markers grow to their smallest on-screen sizes', () => {
+    for (const px of [PHONE_320, PHONE_390]) {
+      const g = markerGrowth(px);
+      assert.ok(Math.abs(22 * g.marker * px - 6) < 1e-9, 'a POI is 12 px across');
+      assert.ok(Math.abs(g.starRadius * px - 7) < 1e-9, 'the star is 14 px across');
+      assert.ok(Math.abs(g.countRadius * px - 6) < 1e-9, "the current hex's count is 12 px across");
+      assert.ok(Math.abs(g.combinedRadius * px - (6 * 24) / 22) < 1e-9, 'a combined marker is as big as a "+N" badge');
+    }
   });
-  test('the star never gets wider than its hex', () => {
-    assert.equal(markerGrowth(0.001).starRadius, INNER);
+  test('none of them ever gets wider than its hex', () => {
+    for (const px of [0.001, ...SCALES]) {
+      const g = markerGrowth(px);
+      for (const r of [g.starRadius, g.combinedRadius, g.countRadius]) assert.ok(r <= INNER, `px=${px}`);
+    }
+    const far = markerGrowth(0.001);
+    assert.deepEqual([far.starRadius, far.combinedRadius, far.countRadius], [INNER, INNER, INNER]);
   });
 });
 
@@ -116,14 +126,11 @@ describe('layoutRing at every zoom', () => {
 describe('countOnStar', () => {
   test('the count sits over the star, inside the hex', () => {
     for (const px of SCALES) {
-      const star = markerGrowth(px).starRadius;
-      for (const count of [14.4, 5 / px]) {
-        if (count > INNER) continue;
-        const o = countOnStar(star, count, INNER);
-        assert.ok(dist(o) + count <= INNER + 1e-9, `px=${px.toFixed(3)} count ${count.toFixed(1)}`);
-        assert.ok(dist(o) <= star * (1 - MAX_MARKER_OVERLAP) + 1e-9);
-        assert.ok(o.x >= 0 && o.y >= 0, 'lower right');
-      }
+      const { starRadius: star, countRadius: count } = markerGrowth(px);
+      const o = countOnStar(star, count, INNER);
+      assert.ok(dist(o) + count <= INNER + 1e-9, `px=${px.toFixed(3)} count ${count.toFixed(1)}`);
+      assert.ok(dist(o) <= star * (1 - MAX_MARKER_OVERLAP) + 1e-9);
+      assert.ok(o.x >= 0 && o.y >= 0, 'lower right');
     }
   });
 });

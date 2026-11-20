@@ -18,6 +18,9 @@ export const CURRENT_RING_GAP = DOOR_RADIUS + 4;
 // Smallest on-screen sizes, in CSS px.
 export const MIN_MARKER_PX = 12; // POI diameter; doors, badges and rings grow with it
 export const MIN_STAR_PX = 14; // star diameter
+// The count over the star when the current hex's markers are combined. Its
+// digit is 0.7 of this, so it's no smaller than the map's other text (8 px).
+export const MIN_COUNT_PX = 12;
 
 export interface Offset {
   x: number;
@@ -29,19 +32,26 @@ export interface MarkerGrowth {
   marker: number;
   /** The star's radius. */
   starRadius: number;
+  /** Radius of a hex's combined marker, in the middle of the hex. */
+  combinedRadius: number;
+  /** Radius of the current hex's combined marker, its count over the star. */
+  countRadius: number;
 }
 
 /**
  * How big markers and the star are drawn at a scale of `pxPerUnit` CSS px per
  * image unit (null before the map has been measured): full size, or bigger
- * where that would be under MIN_MARKER_PX or MIN_STAR_PX across. The star is
- * never wider than its hex.
+ * where that would be under MIN_MARKER_PX, MIN_STAR_PX or MIN_COUNT_PX across.
+ * None of them is ever wider than its hex.
  */
 export function markerGrowth(pxPerUnit: number | null): MarkerGrowth {
   const atLeast = (units: number, minPx: number) => (pxPerUnit ? Math.max(units, minPx / pxPerUnit) : units);
+  const marker = atLeast(POI_RADIUS, MIN_MARKER_PX / 2) / POI_RADIUS;
   return {
-    marker: atLeast(POI_RADIUS, MIN_MARKER_PX / 2) / POI_RADIUS,
+    marker,
     starRadius: Math.min(atLeast(STAR_RADIUS, MIN_STAR_PX / 2), HEX_INNER_RADIUS),
+    combinedRadius: Math.min(BADGE_RADIUS * marker, HEX_INNER_RADIUS),
+    countRadius: Math.min(atLeast(BADGE_RADIUS * 0.6, MIN_COUNT_PX / 2), HEX_INNER_RADIUS),
   };
 }
 
