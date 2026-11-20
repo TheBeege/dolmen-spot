@@ -254,17 +254,26 @@ function useExpanded(singleton: boolean, focusSeq: number | undefined) {
   return [expanded, setExpanded] as const;
 }
 
-/** On each focus request (a new `focusSeq`), bring the editor into view and focus its name. */
+/**
+ * A request, from a marker, to show its item's editor. `seq` is new for each
+ * request. `target` is what gets focus: the name field, or for a tap, the
+ * editor itself, so that a phone doesn't raise its keyboard.
+ */
+type FocusRequest = { seq: number; target: 'name' | 'item' };
+
+/** On each focus request, bring the editor into view and focus its target. */
 function useFocusOnRequest(
-  focusSeq: number | undefined,
+  request: FocusRequest | undefined,
   rootRef: React.RefObject<HTMLElement | null>,
   inputRef: React.RefObject<HTMLInputElement | null>,
 ) {
+  const seq = request?.seq;
+  const target = request?.target;
   useEffect(() => {
-    if (focusSeq === undefined) return;
+    if (seq === undefined) return;
     rootRef.current?.scrollIntoView({ block: 'nearest' });
-    inputRef.current?.focus({ preventScroll: true });
-  }, [focusSeq, rootRef, inputRef]);
+    (target === 'item' ? rootRef.current : inputRef.current)?.focus({ preventScroll: true });
+  }, [seq, target, rootRef, inputRef]);
 }
 
 export default function HexMap({ character, onChange }: HexMapProps) {
@@ -283,7 +292,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const [selectedLeyLine, setSelectedLeyLine] = useState<string | null>(null);
   // Set by a marker click: the inspector opens, scrolls to and focuses that
   // item's editor. `seq` changes on every click, even of the same marker.
-  const [focus, setFocus] = useState<{ id: string; seq: number } | null>(null);
+  const [focus, setFocus] = useState<({ id: string } & FocusRequest) | null>(null);
   const [pendingForm, setPendingForm] = useState<{ type: 'poi' | 'door'; hex: HexCoord } | null>(null);
   // Bumped when a hex is picked; on phones the inspector (below the map)
   // is then scrolled into view.
@@ -337,12 +346,12 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   // Every change to "what's selected" goes through these, so the selected
   // hex, selected ley line, focused item and open form stay consistent.
-  const selectHex = (hex: HexCoord, focusId?: string) => {
+  const selectHex = (hex: HexCoord, focusId?: string, focusTarget: FocusRequest['target'] = 'name') => {
     setSelectedHex(hex);
     setSelectedLeyLine(null);
     setPendingForm(null);
     if (focusId) {
-      setFocus((f) => ({ id: focusId, seq: (f?.seq ?? 0) + 1 }));
+      setFocus((f) => ({ id: focusId, seq: (f?.seq ?? 0) + 1, target: focusTarget }));
     } else {
       setFocus(null);
       setRevealSeq((n) => n + 1);
@@ -435,6 +444,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // over: a touch drag fires no click, and a flag left set would swallow the
   // next click that comes without a press (from assistive technology).
   const suppressClickRef = useRef(false);
+  // The pointer type of the last press, for clicks that don't report one.
+  const lastPointerTypeRef = useRef('');
 
   const startPan = (start: Point, v: View, moved = false) => {
     const rect = svgRef.current!.getBoundingClientRect();
@@ -448,6 +459,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   };
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    lastPointerTypeRef.current = e.pointerType;
     // A new interaction: forget a suppression left by an earlier drag.
     suppressClickRef.current = false;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
@@ -587,12 +599,12 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // hexes. Markers add their hex to a ley line being drawn, otherwise they
   // open their hex with their own editor focused; ley lines toggle their
   // highlight; hexes are inspected (or added to the line being drawn).
-  const activateMapItem = (target: Element) => {
+  const activateMapItem = (target: Element, focusTarget: FocusRequest['target'] = 'name') => {
     const marker = target.closest('[data-marker]');
     if (marker) {
       const hex = marker.getAttribute('data-marker-hex')!;
       if (draft) handleHexClick(hex);
-      else selectHex(hex, marker.getAttribute('data-marker')!);
+      else selectHex(hex, marker.getAttribute('data-marker')!, focusTarget);
       return;
     }
     const line = target.closest('[data-ley-line]')?.getAttribute('data-ley-line');
@@ -611,7 +623,11 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       suppressClickRef.current = false;
       return;
     }
-    activateMapItem(e.target as Element);
+    // A tap on a marker focuses its editor, not the name field, so that a
+    // phone or tablet doesn't raise its keyboard. Current browsers make the
+    // click a PointerEvent; for others, the last press's type stands in.
+    const pointerType = (e.nativeEvent as Partial<PointerEvent>).pointerType ?? lastPointerTypeRef.current;
+    activateMapItem(e.target as Element, pointerType === 'touch' || pointerType === 'pen' ? 'item' : 'name');
   };
 
   // Keyboard: Enter/Space activate the focused marker or line; when the map
@@ -1047,7 +1063,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           aria-label="Dolmenwood hex map. Arrow keys pan, plus and minus zoom."
           tabIndex={0}
           className="w-full h-full select-none touch-none focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:-outline-offset-2"
-          style={{ cursor: isPanning ? 'grabbing' : undefined }}
+          // No grey flash over the whole map on each tap in iOS Safari.
+          style={{ cursor: isPanning ? 'grabbing' : undefined, WebkitTapHighlightColor: 'transparent' }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
@@ -1198,7 +1215,7 @@ function HexInspectorPanel({
   setPendingForm: (f: { type: 'poi' | 'door'; hex: HexCoord } | null) => void;
   currentLocationHex: HexCoord | '';
   setCurrentLocation: (h: HexCoord) => void;
-  focus: { id: string; seq: number } | null;
+  focus: ({ id: string } & FocusRequest) | null;
   onClose: () => void;
   moveFocusTo: (key: string) => void;
 }) {
@@ -1214,7 +1231,8 @@ function HexInspectorPanel({
   const singleton = pois.length + doors.length === 1;
   const terrain = HEX_CELLS[selectedHex]?.terrain;
   const isCurrent = currentLocationHex === selectedHex;
-  const focusSeqFor = (id: string) => (focus?.id === id ? focus.seq : undefined);
+  const focusRequestFor = (id: string): FocusRequest | undefined =>
+    focus?.id === id ? { seq: focus.seq, target: focus.target } : undefined;
   // The action buttons give way to the chosen form; Add or Cancel brings them back.
   const activeForm = pendingForm?.hex === selectedHex ? pendingForm.type : null;
   const actionButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors';
@@ -1315,7 +1333,7 @@ function HexInspectorPanel({
                     key={p.id}
                     poi={p}
                     singleton={singleton}
-                    focusSeq={focusSeqFor(p.id)}
+                    focusRequest={focusRequestFor(p.id)}
                     onSave={(patch) => savePoi(p.id, patch)}
                     onDelete={() => {
                       updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }));
@@ -1336,7 +1354,7 @@ function HexInspectorPanel({
                     door={d}
                     allDoors={allDoors}
                     singleton={singleton}
-                    focusSeq={focusSeqFor(d.id)}
+                    focusRequest={focusRequestFor(d.id)}
                     onSaveText={(patch) => saveDoorText(d.id, patch)}
                     onSaveDestination={(destination) => saveDoorDestination(d.id, destination)}
                     onDelete={() => {
@@ -1382,20 +1400,20 @@ function POIForm({ hex, onSubmit, onCancel }: { hex: HexCoord; onSubmit: (p: Map
 function POIEditor({
   poi,
   singleton,
-  focusSeq,
+  focusRequest,
   onSave,
   onDelete,
 }: {
   poi: MapPOI;
   singleton: boolean;
-  focusSeq: number | undefined;
+  focusRequest: FocusRequest | undefined;
   onSave: (patch: Partial<MapPOI>) => void;
   onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = useExpanded(singleton, focusSeq);
+  const [expanded, setExpanded] = useExpanded(singleton, focusRequest?.seq);
   const rootRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  useFocusOnRequest(focusSeq, rootRef, nameRef);
+  useFocusOnRequest(focusRequest, rootRef, nameRef);
   const label = poi.name || 'unnamed';
   return (
     <div
@@ -1534,7 +1552,7 @@ function DoorEditor({
   door,
   allDoors,
   singleton,
-  focusSeq,
+  focusRequest,
   onSaveText,
   onSaveDestination,
   onDelete,
@@ -1542,15 +1560,15 @@ function DoorEditor({
   door: FairyDoor;
   allDoors: FairyDoor[];
   singleton: boolean;
-  focusSeq: number | undefined;
+  focusRequest: FocusRequest | undefined;
   onSaveText: (patch: Partial<Pick<FairyDoor, 'name' | 'notes'>>) => void;
   onSaveDestination: (d: FairyDoorDestination) => void;
   onDelete: () => void;
 }) {
-  const [expanded, setExpanded] = useExpanded(singleton, focusSeq);
+  const [expanded, setExpanded] = useExpanded(singleton, focusRequest?.seq);
   const rootRef = useRef<HTMLDivElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
-  useFocusOnRequest(focusSeq, rootRef, nameRef);
+  useFocusOnRequest(focusRequest, rootRef, nameRef);
   // Name and notes save as you type. The destination is edited here and
   // only saved with "Save destination", since it changes other doors too.
   // Re-sync the edit when the saved destination changes underneath it (e.g.
