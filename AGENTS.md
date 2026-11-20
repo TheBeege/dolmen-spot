@@ -63,6 +63,7 @@ Character data is stored in localStorage and must survive schema changes across 
 
 ### Testing migrations:
 
+- Add a scenario to the relevant `src/lib/*.test.ts` file (the hex map's are in `src/lib/map-migration.test.ts`) and run `npm test`, which runs every `src/lib/*.test.ts` file with Node's test runner (via `tsx`). CI runs it on every PR. `src/lib/migrations.test.ts` also fails if `CURRENT_SCHEMA_VERSION` isn't one more than the last migration's version, which catches a bump lost when two branches that each add a migration merge
 - Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
 - Test import/export round-trip with old-format files
 - Verify `npm run build` passes after any schema change
@@ -75,7 +76,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- base background `#1a1a2e`, cards `#2a2a3e`, text `#f5e6c8`, gold accent `#c4a35a`, warm-brown borders `#5a3a28`, written as arbitrary-value classes (e.g. `bg-[#2a2a3e]`)
 - **Types**: All game interfaces live in `src/lib/types.ts`
-- **Game data**: All static game data lives in `src/lib/gamedata.ts`
+- **Game data**: All static game data lives in `src/lib/gamedata.ts`, except the hex-map manifest `src/lib/hex-grid.json`. It is generated from the printed map by `scripts/extract_hex_grid.py` (don't edit it by hand) and loaded through `src/lib/hex-grid.ts`; its types are in `types.ts` like the rest
 
 ## Pre-commit Hook & CI
 
@@ -85,7 +86,7 @@ Next.js 16's `next build` no longer lints, so these checks do instead:
   - ESLint on staged `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` files.
   - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
   - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
-- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck` and `npm run check:msal-bridge`.
+- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`.
   - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
   - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
 

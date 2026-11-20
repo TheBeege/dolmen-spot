@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Character,
+  CharacterUpdater,
   SpellSlot,
   CharacterGlamour,
   CharacterRune,
@@ -49,7 +50,7 @@ import {
 
 interface SpellsAndMagicProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =
@@ -324,7 +325,7 @@ function SpellCasterSection({
   addSpell: () => void;
   deleteSpell: (id: string) => void;
   resetAllCast: () => void;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const spellsPerDay = profile.spellsPerDay;
   const isArcane = profile.spellType === 'arcane';
@@ -527,7 +528,7 @@ function InventoryScrollsList({
   onChange,
 }: {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const scrolls = getScrollItems(character).filter((s) => s.scrollSpell?.name);
   if (scrolls.length === 0) return null;
@@ -579,7 +580,7 @@ function ApplyStartingBookButton({
   onChange,
 }: {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const book = MAGICIAN_STARTING_SPELL_BOOKS.find((b) => b.name === character.startingSpellBook);
   if (!book) return null;
@@ -641,7 +642,7 @@ function KnownSpellsBlock({
 }: {
   character: Character;
   maxRank: number;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const [sort, setSort] = useState<KnownSort>('rank-asc');
   const [avail, setAvail] = useState<AvailFilter>('all');
@@ -911,7 +912,7 @@ function SpellStudyBlock({
 }: {
   character: Character;
   maxRank: number;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const study = character.spellStudy ?? { active: null, queue: [] };
   const active = study.active;
@@ -1414,7 +1415,7 @@ function MemorisePicker({
   character: Character;
   spellsPerDay: number[] | null;
   preparedByRank: Record<number, number>;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -1728,7 +1729,7 @@ function KnackSection({
   character: Character;
   selectKnack: (knackId: number) => void;
   clearKnack: () => void;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }) {
   const knack = character.knack;
   const level = character.level;

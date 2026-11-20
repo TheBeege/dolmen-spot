@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Character } from '@/lib/types';
+import { Character, CharacterUpdater } from '@/lib/types';
 import { createDefaultCharacter } from '@/lib/gamedata';
 import { migrateCharacter } from '@/lib/migrations';
 import { isSaveDataFile, SAVE_DATA_IMPORT_MESSAGE } from '@/lib/save-data-file';
@@ -63,15 +63,24 @@ export function useCharacter() {
 
   const activeCharacter = characters.find(c => c.id === activeId) ?? null;
 
-  const updateCharacter = useCallback((updates: Partial<Character>) => {
-    setCharacters(prev => {
-      const next = prev.map(c =>
-        c.id === activeId ? { ...c, ...updates } : c
-      );
-      saveCharacters(next);
-      return next;
-    });
-  }, [activeId]);
+  // `updates` may be either a partial-character object or a function that
+  // receives the current character and returns one. The functional form is
+  // necessary when multiple in-tick writes need to compose without losing
+  // each other — the second writer otherwise reads a stale snapshot.
+  const updateCharacter = useCallback(
+    (updates: CharacterUpdater) => {
+      setCharacters(prev => {
+        const next = prev.map(c => {
+          if (c.id !== activeId) return c;
+          const patch = typeof updates === 'function' ? updates(c) : updates;
+          return { ...c, ...patch };
+        });
+        saveCharacters(next);
+        return next;
+      });
+    },
+    [activeId],
+  );
 
   const createCharacter = useCallback(() => {
     const newChar = createDefaultCharacter();
