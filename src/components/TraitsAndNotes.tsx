@@ -461,7 +461,9 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
 // ── Woodgrue Mad Revelry ───────────────────────────────────
 
 function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
-  const maxUses = getMaxMadRevelryUses(character.level);
+  const maxUses = getMaxMadRevelryUses(character);
+  // A count saved under the old one-use-per-level rule can be above the real maximum.
+  const usesLeft = Math.min(character.madRevelryUsesRemaining, maxUses);
   const [selectedMelody, setSelectedMelody] = useState('');
 
   const melody = MAD_REVELRY_MELODIES.find(m => m.id === selectedMelody);
@@ -469,19 +471,19 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <label className={labelClasses}>
-        Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{character.madRevelryUsesRemaining}/{maxUses} uses</span>
+        Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{usesLeft}/{maxUses} uses</span>
       </label>
       <div className="flex items-center gap-2 mb-2">
         <button
           type="button"
-          onClick={() => onChange({ madRevelryUsesRemaining: Math.max(0, character.madRevelryUsesRemaining - 1) })}
-          disabled={character.madRevelryUsesRemaining <= 0}
+          onClick={() => onChange({ madRevelryUsesRemaining: Math.max(0, usesLeft - 1) })}
+          disabled={usesLeft <= 0}
           className={btnClasses}
         >
           Use
         </button>
         <span className="text-[#f5e6c8] font-semibold text-sm">
-          {character.madRevelryUsesRemaining} / {maxUses}
+          {usesLeft} / {maxUses}
         </span>
         <button
           type="button"

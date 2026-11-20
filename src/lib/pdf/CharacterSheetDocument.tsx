@@ -906,10 +906,11 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
   }
 
   if (profile.hasMadRevelry) {
+    const maxRevelry = getMaxMadRevelryUses(c);
     blocks.push({
       key: 'revelry',
       title: 'Mad Revelry',
-      note: `${c.madRevelryUsesRemaining}/${getMaxMadRevelryUses(c.level)} uses`,
+      note: `${Math.min(c.madRevelryUsesRemaining, maxRevelry)}/${maxRevelry} uses`,
       body: (
         <>
           <Text style={s.note}>{FEATURE_NOTES.madRevelry}</Text>
