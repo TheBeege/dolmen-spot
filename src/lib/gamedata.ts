@@ -2022,9 +2022,16 @@ export function calculateXpToNextLevel(kindred: KindredId | '', classId: ClassId
   return nextRow ? nextRow.xp : null;
 }
 
-// 2h. Speed Functions (shared between CombatStats and Inventory)
-// Above the maximum load (10 equipped slots, 16 stowed slots or 1,600 coins of
-// weight) a character can't move, so Speed is 0. Source: docs/rules/08-adventuring.md
+// 2h. Speed Functions (used by calculateEncumbrance in character-sheet.ts, for
+// the Inventory tab and the PDF)
+// Above the maximum load Speed is 0:
+// - Weight: "The maximum load any character can carry is 1,600 coins of weight.
+//   Characters carrying more than this cannot move." (Player's Book p148;
+//   docs/rules/08-adventuring.md)
+// - Slots: "A character cannot carry more than 10 slots of equipped items" and
+//   "cannot carry more than a total of 16 slots of stowed items" (p149). The
+//   book doesn't give a Speed above those; treating it like the weight limit
+//   (can't move) is this app's interpretation.
 export function getSpeedByEquippedSlots(equippedSlots: number): number {
   if (equippedSlots <= 3) return 40;
   if (equippedSlots <= 5) return 30;

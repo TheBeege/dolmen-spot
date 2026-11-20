@@ -69,6 +69,7 @@ import {
   getMaxFungalSymbiosisUses,
   getMaxGazeUses,
   getMaxMadRevelryUses,
+  getOverloadNote,
   getRetainerLimits,
   getScrollItems,
   getSkillTargetLayout,
@@ -1394,6 +1395,7 @@ function ContainerGroup({ c, container }: { c: Character; container: CharacterCo
 
 function InventorySection({ c }: { c: Character }) {
   const enc = calculateEncumbrance(c);
+  const overloadNote = getOverloadNote(enc, c.encumbranceMethod);
   const slotsMode = c.encumbranceMethod === 'slots';
   const { coins } = c;
 
@@ -1435,7 +1437,7 @@ function InventorySection({ c }: { c: Character }) {
                 warn={enc.equippedSlotsOverLimit}
               />
               {enc.equippedSlotsOverLimit ? (
-                <Text style={s.warn}>{`Exceeds standard equipped limit (${EQUIPPED_SLOT_LIMIT} slots)`}</Text>
+                <Text style={s.warn}>{`Over the maximum of ${EQUIPPED_SLOT_LIMIT} equipped slots`}</Text>
               ) : null}
               <SummaryRow label="Stowed slots (items)" value={String(enc.itemStowedSlots)} />
               <SummaryRow label="Coin slots" value={`${enc.coinSlots} (${enc.totalCoinCount} coins)`} />
@@ -1445,7 +1447,7 @@ function InventorySection({ c }: { c: Character }) {
                 warn={enc.stowedSlotsOverLimit}
               />
               {enc.stowedSlotsOverLimit ? (
-                <Text style={s.warn}>{`Exceeds standard stowed limit (${STOWED_SLOT_LIMIT} slots)`}</Text>
+                <Text style={s.warn}>{`Over the maximum of ${STOWED_SLOT_LIMIT} stowed slots`}</Text>
               ) : null}
             </>
           ) : (
@@ -1456,9 +1458,7 @@ function InventorySection({ c }: { c: Character }) {
             </>
           )}
           <SummaryRow label="Calculated speed" value={`${enc.speed} ft`} total warn={enc.speed === 0} />
-          {enc.speed === 0 ? (
-            <Text style={s.warn}>Over maximum load: can&apos;t move until items are dropped.</Text>
-          ) : null}
+          {overloadNote ? <Text style={s.warn}>{overloadNote}</Text> : null}
         </View>
         <View style={s.col}>
           <Text style={s.caption}>Coins</Text>

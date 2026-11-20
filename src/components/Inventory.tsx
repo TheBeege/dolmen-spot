@@ -14,6 +14,7 @@ import {
 } from '@/lib/gamedata';
 import {
   calculateEncumbrance,
+  getOverloadNote,
   getContainerItems,
   getContainerLoad,
   EQUIPPED_SLOT_LIMIT,
@@ -96,6 +97,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   }, [containerDropdownOpen]);
 
   // ── Encumbrance calculations (with coins) ──
+  const encumbrance = calculateEncumbrance(character);
   const {
     coinWeight,
     coinSlots,
@@ -110,7 +112,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     equippedSlotsOverLimit,
     stowedSlotsOverLimit,
     overMaxLoad,
-  } = calculateEncumbrance(character);
+  } = encumbrance;
+  const overloadNote = getOverloadNote(encumbrance, encumbranceMethod);
 
   // ── Item handlers ──
   const handleAddItem = (equipped: boolean, containerId?: string) => {
@@ -922,8 +925,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         <span className="font-semibold">Calculated Speed:</span>
         <span className={`font-bold ${calculatedSpeed === 0 ? 'text-[#b33a1a]' : 'text-[#c4a35a]'}`}>{calculatedSpeed} ft</span>
       </div>
-      {calculatedSpeed === 0 && (
-        <p className="text-[#b33a1a] text-xs italic text-right">Over maximum load: can&apos;t move until items are dropped.</p>
+      {overloadNote && (
+        <p className="text-[#b33a1a] text-xs italic text-right">{overloadNote}</p>
       )}
     </div>
   );
@@ -1081,7 +1084,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 </span>
               </div>
               {equippedSlotsOverLimit && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard equipped limit ({EQUIPPED_SLOT_LIMIT} slots)</p>
+                <p className="text-[#b33a1a] text-xs italic text-right">Over the maximum of {EQUIPPED_SLOT_LIMIT} equipped slots</p>
               )}
             </div>
             <div className="flex justify-between">
@@ -1104,7 +1107,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 </span>
               </div>
               {stowedSlotsOverLimit && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard stowed limit ({STOWED_SLOT_LIMIT} slots)</p>
+                <p className="text-[#b33a1a] text-xs italic text-right">Over the maximum of {STOWED_SLOT_LIMIT} stowed slots</p>
               )}
             </div>
             {speedSummary}
