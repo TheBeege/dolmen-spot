@@ -1,7 +1,8 @@
 /**
  * The fonts the PDF is drawn with. They are fetched from /fonts/pdf/ (same
  * origin) only when the player exports a sheet; scripts/build-pdf-fonts.py
- * builds them and documents what each covers.
+ * builds them, documents what each covers, and names each file after its
+ * content (font-files.ts), so browsers may cache them for good.
  *
  * Every export uses Noto Sans (regular, bold, italic) and Noto Serif Bold for
  * the headings: Latin, Greek and Cyrillic, about 0.8 MB together. A sheet
@@ -12,6 +13,7 @@
  */
 import { Font } from '@react-pdf/renderer';
 import { PDF_FONT_LOAD_ERROR } from './errors';
+import { PDF_FONT_FILES } from './font-files';
 import { breakWords } from './line-breaks';
 import type { HasGlyph } from './text';
 
@@ -23,13 +25,13 @@ const FONT_DIR = '/fonts/pdf/';
 // style's list must have a face for that style, and the CJK fonts have no italic.
 const FACES = {
   sans: [
-    { file: 'NotoSans-Regular.ttf', fontWeight: 400 },
-    { file: 'NotoSans-Bold.ttf', fontWeight: 700 },
+    { file: PDF_FONT_FILES['NotoSans-Regular'], fontWeight: 400 },
+    { file: PDF_FONT_FILES['NotoSans-Bold'], fontWeight: 700 },
   ],
-  italic: [{ file: 'NotoSans-Italic.ttf', fontWeight: 400 }],
-  serif: [{ file: 'NotoSerif-Bold.ttf', fontWeight: 700 }],
-  hangul: [{ file: 'NotoSansCJK-Hangul.otf', fontWeight: 400 }],
-  hanKana: [{ file: 'NotoSansCJK-HanKana.otf', fontWeight: 400 }],
+  italic: [{ file: PDF_FONT_FILES['NotoSans-Italic'], fontWeight: 400 }],
+  serif: [{ file: PDF_FONT_FILES['NotoSerif-Bold'], fontWeight: 700 }],
+  hangul: [{ file: PDF_FONT_FILES['NotoSansCJK-Hangul'], fontWeight: 400 }],
+  hanKana: [{ file: PDF_FONT_FILES['NotoSansCJK-HanKana'], fontWeight: 400 }],
 } as const;
 
 type FamilyKey = keyof typeof FACES;

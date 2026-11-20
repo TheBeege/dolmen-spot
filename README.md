@@ -90,9 +90,11 @@ The "Download PDF" export draws the sheet with fonts from `public/fonts/pdf/`, w
 
 | File | Covers | Size | Fetched |
 |------|--------|------|---------|
-| `NotoSans-Regular.ttf`, `NotoSans-Bold.ttf`, `NotoSans-Italic.ttf`, `NotoSerif-Bold.ttf` | Latin (incl. Latin Extended and Vietnamese), Greek (incl. polytonic), Cyrillic | 0.78 MB together | on every export |
-| `NotoSansCJK-Hangul.otf` | Korean Hangul | 1.2 MB | only for sheets with Korean text |
-| `NotoSansCJK-HanKana.otf` | Japanese kana and the Han characters of JIS X 0208, GB 2312, Big5 level 1 and KS X 1001 | 2.4 MB | only for sheets with Japanese or Chinese text |
+| `NotoSans-Regular`, `NotoSans-Bold`, `NotoSans-Italic`, `NotoSerif-Bold` | Latin (incl. Latin Extended and Vietnamese), Greek (incl. polytonic), Cyrillic | 0.78 MB together | on every export |
+| `NotoSansCJK-Hangul` | Korean Hangul | 1.2 MB | only for sheets with Korean text |
+| `NotoSansCJK-HanKana` | Japanese kana and the Han characters of JIS X 0208, GB 2312, Big5 level 1 and KS X 1001 | 2.4 MB | only for sheets with Japanese or Chinese text |
+
+Each file is named after its content (`NotoSans-Regular.<hash>.ttf`), and `next.config.ts` lets browsers cache these files for a year, so each one is downloaded once. The script writes the current names to `src/lib/pdf/font-files.ts`, which the app imports.
 
 They are subsets of [Noto Sans, Noto Serif](https://github.com/notofonts/latin-greek-cyrillic) 2.015 and [Noto Sans CJK](https://github.com/notofonts/noto-cjk) 2.004, licensed under the SIL Open Font License 1.1 (`public/fonts/pdf/LICENSE-*.txt`). Emoji are left out, and letters from scripts the fonts don't cover (Arabic, Hebrew, Devanagari, Thai...) print as `?`.
 
@@ -100,7 +102,7 @@ To rebuild them (for example to cover more characters), edit and run the script.
 
 ```bash
 pip install 'fonttools==4.63.0'
-python3 scripts/build-pdf-fonts.py          # rebuild public/fonts/pdf/
+python3 scripts/build-pdf-fonts.py          # rebuild public/fonts/pdf/ and src/lib/pdf/font-files.ts
 python3 scripts/build-pdf-fonts.py --check  # verify the committed files are up to date
 ```
 
