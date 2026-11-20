@@ -3,11 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Character, InventoryItem, Coins, CharacterContainer, SpellbookEntry } from '@/lib/types';
 import {
-  getSpeedBySlots,
-  getSpeedByWeight,
-  getCoinWeight,
-  getCoinSlots,
-  getTotalCoinCount,
   getCoinGpEquivalent,
   EQUIPMENT_CATALOG,
   EQUIPMENT_CATEGORIES,
@@ -17,6 +12,13 @@ import {
   findArcaneSpell,
   EquipmentEntry,
 } from '@/lib/gamedata';
+import {
+  calculateEncumbrance,
+  getContainerItems,
+  getContainerLoad,
+  EQUIPPED_SLOT_LIMIT,
+  STOWED_SLOT_LIMIT,
+} from '@/lib/character-sheet';
 
 interface InventoryProps {
   character: Character;
@@ -94,22 +96,21 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   }, [containerDropdownOpen]);
 
   // ── Encumbrance calculations (with coins) ──
-  const coinWeight = getCoinWeight(coins);
-  const coinSlots = getCoinSlots(coins);
-  const totalCoinCount = getTotalCoinCount(coins);
-
-  const itemEquippedWeight = equippedItems.reduce((sum, item) => sum + item.weight, 0);
-  const itemStowedWeight = stowedItems.reduce((sum, item) => sum + item.weight, 0);
-  const totalWeight = itemEquippedWeight + itemStowedWeight + coinWeight;
-
-  const totalEquippedSlots = equippedItems.reduce((sum, item) => sum + item.slots, 0);
-  const itemStowedSlots = stowedItems.reduce((sum, item) => sum + item.slots, 0);
-  const totalStowedSlots = itemStowedSlots + coinSlots;
-
-  const calculatedSpeed =
-    encumbranceMethod === 'slots'
-      ? getSpeedBySlots(totalEquippedSlots, totalStowedSlots)
-      : getSpeedByWeight(totalWeight);
+  const {
+    coinWeight,
+    coinSlots,
+    totalCoinCount,
+    itemEquippedWeight,
+    itemStowedWeight,
+    totalWeight,
+    totalEquippedSlots,
+    itemStowedSlots,
+    totalStowedSlots,
+    speed: calculatedSpeed,
+    equippedSlotsOverLimit,
+    stowedSlotsOverLimit,
+    overMaxLoad,
+  } = calculateEncumbrance(character);
 
   // ── Item handlers ──
   const handleAddItem = (equipped: boolean, containerId?: string) => {
@@ -313,12 +314,6 @@ export default function Inventory({ character, onChange }: InventoryProps) {
       return next;
     });
   };
-
-  // ── Container weight helpers ──
-  const getContainerUsedWeight = (containerId: string) =>
-    stowedItems
-      .filter((item) => item.containerId === containerId)
-      .reduce((sum, item) => sum + item.weight, 0);
 
   // ── Catalog data ──
   const containerCatalogEntries = EQUIPMENT_CATALOG.filter((e) => e.category === 'container' && e.capacity && e.capacity > 0);
@@ -682,15 +677,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   const renderContainerGroup = (container: CharacterContainer | null) => {
     const containerId = container?.id;
-    const containerItems = stowedItems.filter((item) =>
-      containerId ? item.containerId === containerId : !item.containerId
-    );
+    const containerItems = getContainerItems(stowedItems, containerId);
     const isCollapsed = containerId ? collapsedContainers.has(containerId) : false;
 
-    const usedWeight = containerId ? getContainerUsedWeight(containerId) : 0;
-    const capacity = container?.capacity ?? 0;
-    const fillPercent = capacity > 0 ? Math.min(100, (usedWeight / capacity) * 100) : 0;
-    const isOverCapacity = capacity > 0 && usedWeight > capacity;
+    const { usedWeight, capacity, fillPercent, isOverCapacity } = getContainerLoad(container, stowedItems);
 
     return (
       <div key={containerId ?? 'loose'} className="mb-3">
@@ -1067,13 +1057,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="flex justify-between">
                 <span>Equipped Slots:</span>
                 <span
-                  className={totalEquippedSlots > 10 ? 'text-[#b33a1a] font-bold' : ''}
+                  className={equippedSlotsOverLimit ? 'text-[#b33a1a] font-bold' : ''}
                 >
-                  {totalEquippedSlots} / 10
+                  {totalEquippedSlots} / {EQUIPPED_SLOT_LIMIT}
                 </span>
               </div>
-              {totalEquippedSlots > 10 && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard equipped limit (10 slots)</p>
+              {equippedSlotsOverLimit && (
+                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard equipped limit ({EQUIPPED_SLOT_LIMIT} slots)</p>
               )}
             </div>
             <div className="flex justify-between">
@@ -1090,13 +1080,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="flex justify-between">
                 <span>Total Stowed Slots:</span>
                 <span
-                  className={totalStowedSlots > 16 ? 'text-[#b33a1a] font-bold' : ''}
+                  className={stowedSlotsOverLimit ? 'text-[#b33a1a] font-bold' : ''}
                 >
-                  {totalStowedSlots} / 16
+                  {totalStowedSlots} / {STOWED_SLOT_LIMIT}
                 </span>
               </div>
-              {totalStowedSlots > 16 && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard stowed limit (16 slots)</p>
+              {stowedSlotsOverLimit && (
+                <p className="text-[#b33a1a] text-xs italic text-right">Exceeds standard stowed limit ({STOWED_SLOT_LIMIT} slots)</p>
               )}
             </div>
             <div className="flex justify-between border-t border-[#5a3a28] pt-2 mt-2">
@@ -1117,7 +1107,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <div className="flex justify-between">
               <span>Total Weight:</span>
               <span
-                className={totalWeight > 1600 ? 'text-[#b33a1a] font-bold' : ''}
+                className={overMaxLoad ? 'text-[#b33a1a] font-bold' : ''}
               >
                 {totalWeight}
               </span>

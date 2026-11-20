@@ -6,12 +6,12 @@ import {
   formatModifier,
   ARMOUR_TABLE,
   calculateAC,
-  calculateAttackBonus,
   calculateMagicResistance,
   calculateMeleeModifier,
   calculateMissileModifier,
   getArmourRestrictionWarning,
 } from '@/lib/gamedata';
+import { getCalculatedAttackBonus } from '@/lib/character-sheet';
 
 interface CombatStatsProps {
   character: Character;
@@ -40,10 +40,6 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
     onChange({ currentHp: newHp });
   };
 
-  // Determine if we have enough data for auto-calc
-  const hasClassOrKindredClass = !!(character.class || (character.kindred && character.kindred !== 'human' && !character.class));
-  const hasAutoCalcData = hasClassOrKindredClass && character.level >= 1;
-
   // --- AC ---
   const calcAC = calculateAC(
     character.equippedArmourName,
@@ -57,7 +53,8 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
   const armourWarning = getArmourRestrictionWarning(character.class, character.equippedArmourName, character.hasShield);
 
   // --- Attack Bonus ---
-  const calcAttack = hasAutoCalcData ? calculateAttackBonus(character.kindred, character.class, character.level) : null;
+  // null when there's no class or kindred-class to look the bonus up from
+  const calcAttack = getCalculatedAttackBonus(character);
   const attackOutOfSync = calcAttack !== null && calcAttack !== character.attackBonus;
   const meleeModifier = calculateMeleeModifier(character.attackBonus, character.abilityScores.strength);
   const missileModifier = calculateMissileModifier(character.attackBonus, character.abilityScores.dexterity, character.class);

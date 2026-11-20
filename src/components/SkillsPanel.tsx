@@ -3,10 +3,10 @@
 import { useState } from 'react';
 import { Character, SkillTargets } from '@/lib/types';
 import {
-  calculateSkillTargets,
   skillNameToKey,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
+import { getSkillTargetLayout, hasClassOrKindredClass, isSkillOutOfSync } from '@/lib/character-sheet';
 
 interface SkillsPanelProps {
   character: Character;
@@ -20,29 +20,9 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
   const [showAddSkill, setShowAddSkill] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
 
-  const hasClassOrKindredClass = !!(
-    character.class ||
-    (character.kindred && character.kindred !== 'human' && !character.class)
-  );
-
-  const calculated = calculateSkillTargets(
-    character.kindred,
-    character.class,
-    character.level,
-  );
-
-  // Determine which stored skills are auto-calculated vs custom
-  const autoKeys = Array.from(calculated.autoSkillKeys).sort();
-  const customKeys = Object.keys(character.skillTargets)
-    .filter(key => !calculated.autoSkillKeys.has(key))
-    .sort();
-
-  // Check if any auto-calculated skill is out of sync
-  const outOfSyncKeys = autoKeys.filter(key => {
-    const stored = character.skillTargets[key];
-    const calc = calculated.targets[key];
-    return stored === undefined || stored !== calc;
-  });
+  // Which stored skills are auto-calculated vs custom, and which auto ones
+  // are out of sync with the calculated targets
+  const { calculated, autoKeys, customKeys, outOfSyncKeys } = getSkillTargetLayout(character);
   const hasOutOfSync = outOfSyncKeys.length > 0;
 
   const handleSyncAll = () => {
@@ -90,7 +70,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
         <h2 className="text-lg font-bold text-[#c4a35a]">
           Skill Targets
         </h2>
-        {hasClassOrKindredClass && hasOutOfSync && (
+        {hasClassOrKindredClass(character) && hasOutOfSync && (
           <button
             type="button"
             onClick={handleSyncAll}
@@ -114,7 +94,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
         {autoKeys.map(key => {
           const stored = character.skillTargets[key];
           const calc = calculated.targets[key];
-          const isOff = stored === undefined || stored !== calc;
+          const isOff = isSkillOutOfSync(stored, calc);
           const displayName = skillKeyToDisplayName(key);
           return (
             <div key={key} className="flex flex-col items-center gap-1">

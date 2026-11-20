@@ -3,11 +3,8 @@
 import { useState } from 'react';
 import { Character, Retainer, Trophy } from '@/lib/types';
 import {
-  getCharacterLanguages,
   getCharacterFeatureProfile,
-  getAbilityModifier,
   BREGGLE_HORN_PROGRESSION,
-  BREGGLE_GAZE_PER_DAY,
   GRIMALKIN_FORMS,
   MAD_REVELRY_MELODIES,
   FIGHTER_COMBAT_TALENTS,
@@ -17,6 +14,16 @@ import {
   NOBLE_HOUSES,
   SYMBIOTIC_FLESH_TABLE,
 } from '@/lib/gamedata';
+import {
+  getLanguageBreakdown,
+  getMaxFungalSymbiosisUses,
+  getMaxGazeUses,
+  getMaxMadRevelryUses,
+  getRetainerLimits,
+  hasAnyClassFeature,
+  hasAnyKindredFeature,
+  FEATURE_NOTES,
+} from '@/lib/character-sheet';
 
 interface TraitsAndNotesProps {
   character: Character;
@@ -119,7 +126,7 @@ function TurningUndead() {
     <div className={cardClasses}>
       <label className={labelClasses}>Turning the Undead</label>
       <p className="text-[#f5e6c8]/50 text-xs mb-2">
-        Present holy symbol, roll 2d6 within 30&apos;. {TURNING_UNDEAD_TABLE.frequency}.
+        {FEATURE_NOTES.turningUndead} {TURNING_UNDEAD_TABLE.frequency}.
       </p>
       <div className="flex items-center gap-2 mb-2">
         <label className="text-[#f5e6c8]/60 text-xs">Undead HD:</label>
@@ -211,8 +218,8 @@ function KnightLiegeHouse({ character, onChange }: TraitsAndNotesProps) {
           The Code of Chivalry
         </summary>
         <div className="text-[#f5e6c8]/60 text-xs mt-1 space-y-0.5">
-          <p>Honour, Service, Glory, Protecting the weak, Hierarchy</p>
-          <p className="text-[#f5e6c8]/40 italic">Must match liege&apos;s alignment. Cannot use missile weapons. Scorn light armour.</p>
+          <p>{FEATURE_NOTES.chivalryVirtues}</p>
+          <p className="text-[#f5e6c8]/40 italic">{FEATURE_NOTES.chivalryRules}</p>
         </div>
       </details>
     </div>
@@ -238,7 +245,7 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <label className={labelClasses}>
-        Trophies <span className="text-[#f5e6c8]/40 font-normal">+1 Attack/Save per creature type</span>
+        Trophies <span className="text-[#f5e6c8]/40 font-normal">{FEATURE_NOTES.trophies}</span>
       </label>
       {character.trophies.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
@@ -331,7 +338,7 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
 
 function BreggleFeatures({ character, onChange }: TraitsAndNotesProps) {
   const profile = getCharacterFeatureProfile(character.kindred, character.class, character.level);
-  const maxGaze = BREGGLE_GAZE_PER_DAY[Math.min(character.level, 15)] ?? 0;
+  const maxGaze = getMaxGazeUses(character.level);
 
   return (
     <div className="space-y-3">
@@ -454,7 +461,7 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
 // ── Woodgrue Mad Revelry ───────────────────────────────────
 
 function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
-  const maxUses = character.level; // 1x/day per level
+  const maxUses = getMaxMadRevelryUses(character.level);
   const [selectedMelody, setSelectedMelody] = useState('');
 
   const melody = MAD_REVELRY_MELODIES.find(m => m.id === selectedMelody);
@@ -498,7 +505,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
         <p className="text-[#f5e6c8]/60 text-xs mt-1">{melody.effect}</p>
       )}
       <p className="text-[#f5e6c8]/40 text-xs mt-1">
-        30&apos; range, affects all living creatures (including allies). Save vs Spell. Fairies/demi-fey +2 to save.
+        {FEATURE_NOTES.madRevelry}
       </p>
     </div>
   );
@@ -508,7 +515,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
 
 function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
   const profile = getCharacterFeatureProfile(character.kindred, character.class, character.level);
-  const maxFungal = Math.floor(character.level / 2);
+  const maxFungal = getMaxFungalSymbiosisUses(character.level);
 
   const addTrait = (roll: number) => {
     onChange({ symbioticFleshTraits: [...character.symbioticFleshTraits, roll] });
@@ -595,7 +602,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
             </button>
           </div>
           <p className="text-[#f5e6c8]/40 text-xs mt-1">
-            Spend 1 Turn to bond with non-hostile monstrous fungus (3+ levels below you). Save vs Spell.
+            {FEATURE_NOTES.fungalSymbiosis}
           </p>
         </div>
       )}
@@ -606,9 +613,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
 // ── Retainers ──────────────────────────────────────────────
 
 function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
-  const chaMod = getAbilityModifier(character.abilityScores.charisma);
-  const maxRetainers = Math.max(1, 4 + chaMod);
-  const baseLoyalty = 7 + chaMod;
+  const { maxRetainers, baseLoyalty } = getRetainerLimits(character.abilityScores.charisma);
 
   const addRetainer = () => {
     const retainer: Retainer = {
@@ -704,26 +709,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
 
   const profile = getCharacterFeatureProfile(character.kindred, character.class, character.level);
 
-  const langInfo = getCharacterLanguages(
-    character.kindred,
-    character.class,
-    character.abilityScores.intelligence,
-  );
-
-  // Parse current languages string to figure out bonus languages
-  const currentLangs = character.languages
-    .split(',')
-    .map(l => l.trim())
-    .filter(Boolean);
-
-  const requiredLangs = [...langInfo.nativeLanguages, ...langInfo.classLanguages];
-  const bonusLangs = currentLangs.filter(l => !requiredLangs.includes(l));
+  const { langInfo, currentLangs, bonusLangs, allKnown, availableCommon, availableObscure } =
+    getLanguageBreakdown(character);
   const bonusUsed = bonusLangs.length;
-
-  // Filter available languages to exclude already-known
-  const allKnown = new Set(currentLangs);
-  const availableCommon = langInfo.availableCommon.filter(l => !allKnown.has(l));
-  const availableObscure = langInfo.availableObscure.filter(l => !allKnown.has(l));
 
   const handleAddBonusLang = (lang: string) => {
     if (!lang || allKnown.has(lang)) return;
@@ -737,8 +725,8 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
     onChange({ languages: newLangs });
   };
 
-  const hasClassFeatures = profile.hasCombatTalents || profile.hasHolyOrder || profile.hasTurning || profile.hasChivalricCode || profile.hasTrophies || profile.hasCompanion;
-  const hasKindredFeatures = profile.hasHorns || profile.hasFormShift || profile.hasMadRevelry || profile.hasSymbioticFlesh;
+  const hasClassFeatures = hasAnyClassFeature(profile);
+  const hasKindredFeatures = hasAnyKindredFeature(profile);
 
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
