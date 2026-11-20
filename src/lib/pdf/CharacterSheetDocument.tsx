@@ -475,9 +475,9 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
   return (
     <View style={s.table}>
       <View style={s.thead} fixed>
-        {columns.map((col) => (
+        {columns.map((col, c) => (
           <Text
-            key={col.header}
+            key={c}
             style={[s.th, { flexGrow: col.width, flexShrink: 1, flexBasis: 0, textAlign: col.align ?? 'left' }]}
           >
             {upper(col.header)}
@@ -490,12 +490,12 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
           style={[s.tr, i % 2 === 1 ? s.trAlt : {}, dimRow?.(row) ? s.trDim : {}]}
           wrap={false}
         >
-          {columns.map((col) => {
+          {columns.map((col, c) => {
             const content = col.cell(row);
             const align = col.align ?? 'left';
             return (
               <View
-                key={col.header}
+                key={c}
                 style={[
                   s.td,
                   {
@@ -681,7 +681,7 @@ function AbilitiesSection({ c }: { c: Character }) {
 function SavesSection({ c }: { c: Character }) {
   return (
     <View wrap={false}>
-      <SectionTitle>Saving Throws</SectionTitle>
+      <SectionTitle>Save Targets</SectionTitle>
       <View style={s.boxRow}>
         {SAVE_TARGET_INFO.map((save) => (
           <StatBox key={save.key} label={save.label} value={c.saveTargets[save.key] ? String(c.saveTargets[save.key]) : ''} />
@@ -992,7 +992,8 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
     blocks.push({
       key: 'forms',
       title: 'Current Form',
-      note: c.wilderUsedToday ? 'Wilder used today.' : undefined,
+      // As on the Traits tab: only worth saying while in another form.
+      note: c.wilderUsedToday && c.currentForm !== 'wilder' ? 'Wilder used today.' : undefined,
       body: (
         <>
           <View style={s.miniGrid}>
