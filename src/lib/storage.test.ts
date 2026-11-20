@@ -1071,6 +1071,29 @@ test('an entry nested too deeply to save again makes the whole value unreadable:
   assert.deepEqual(stored(ls).map((c) => c.name), ['After']);
 });
 
+test('nesting deeper than any real character counts as unreadable, even where this engine could still save it', () => {
+  let deep = '0';
+  for (let i = 0; i < 500; i++) deep = `[${deep}]`;
+  const raw = `[${JSON.stringify(makeChar('Aldric'))},{"name":"Deep","level":1,"x":${deep}}]`;
+  assert.doesNotThrow(() => JSON.stringify(JSON.parse(raw)), 'Node can still write this one; Chrome sometimes can too');
+  const ls = new FakeStorage({ [CHARS]: raw });
+  createCharacterStore(ls).load();
+  const entry = asWhole(ls.records()[0].entries[0]);
+  assert.equal(entry.raw, raw);
+  assert.match(entry.error, /nested more than 100 levels/);
+
+  assert.throws(() => parseImportedCharacter(`{"name":"Deep","level":1,"x":${deep}}`), isImportError(IMPORT_MESSAGES.notCharacter));
+
+  const deepRecord = JSON.stringify({
+    format: 'dolmen-spot-recovery', version: 1, savedAt: 'x',
+    entries: [{ kind: 'character', index: 0, error: 'e', value: JSON.parse(deep) }],
+  });
+  const ls2 = new FakeStorage({ [CHARS]: JSON.stringify([makeChar('A')]), [`${PREFIX}deep`]: deepRecord });
+  const s2 = createCharacterStore(ls2);
+  s2.load();
+  assert.equal(s2.getStatus().backups[0].record, null, 'a deeply nested record is listed as damaged');
+});
+
 test('a save that cannot be serialised is reported, not thrown', () => {
   const a = makeChar('Aldric');
   const ls = new FakeStorage({ [CHARS]: JSON.stringify([a]), [ACTIVE]: a.id });

@@ -248,7 +248,7 @@ export function parseImportedCharacters(
   if (items.length === 0) throw new ImportError(IMPORT_MESSAGES.empty);
   items.forEach((item, i) => {
     if (isRecoveryFile(item)) throw new ImportError(IMPORT_MESSAGES.recoveryFile);
-    if (!looksLikeCharacter(item)) {
+    if (!looksLikeCharacter(item) || nestsDeeperThan(item, MAX_NESTING)) {
       throw new ImportError(many ? `Entry ${i + 1} in that file isn't a character, so nothing was imported.` : IMPORT_MESSAGES.notCharacter);
     }
     if (isFromNewerVersion(item, CURRENT_SCHEMA_VERSION)) throw new ImportError(IMPORT_MESSAGES.newerVersion);
@@ -742,12 +742,10 @@ function readCharacters(
   if (!Array.isArray(parsed)) {
     return { characters, entries, whole: unreadableWhole('Saved data is not a list of characters') };
   }
-  try {
-    // A value nested too deeply to write back (only a hostile edit makes one)
-    // would make every later save throw, so the whole value counts as unreadable.
-    JSON.stringify(parsed);
-  } catch (err) {
-    return { characters, entries, whole: unreadableWhole(describeError(err)) };
+  if (nestsDeeperThan(parsed, MAX_NESTING)) {
+    // Only a hostile edit nests this deep. Writing such a value back can throw
+    // (when depends on the engine and the stack), so the whole value counts as unreadable.
+    return { characters, entries, whole: unreadableWhole(`Saved data is nested more than ${MAX_NESTING} levels deep`) };
   }
 
   parsed.forEach((item: unknown, index) => {
@@ -794,12 +792,12 @@ function parseRecord(raw: string): RecoveryRecord | null {
   let data: unknown;
   try {
     data = JSON.parse(raw);
-    // Entries must also be writable again (a hostile, deeply nested one isn't).
-    if (isPlainObject(data)) JSON.stringify(data.entries);
   } catch {
     return null;
   }
   if (
+    // A hostile, deeply nested record couldn't be written back safely.
+    nestsDeeperThan(data, MAX_NESTING) ||
     !isPlainObject(data) ||
     data.format !== RECOVERY_FORMAT ||
     data.version !== 1 ||
@@ -831,6 +829,23 @@ function readDismissed(store: StorageLike): Set<string> {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/** Real characters nest a few levels deep. Anything past this is hostile data. */
+const MAX_NESTING = 100;
+
+/**
+ * Whether parsed JSON nests more than `limit` arrays/objects deep. Iterative,
+ * so it never overflows the stack itself, and the same in every engine.
+ */
+function nestsDeeperThan(value: unknown, limit: number): boolean {
+  const stack: Array<{ value: unknown; depth: number }> = [{ value, depth: 0 }];
+  for (let next = stack.pop(); next; next = stack.pop()) {
+    if (next.value === null || typeof next.value !== 'object') continue;
+    if (next.depth >= limit) return true;
+    for (const child of Object.values(next.value)) stack.push({ value: child, depth: next.depth + 1 });
+  }
+  return false;
 }
 
 function describeError(err: unknown): string {
