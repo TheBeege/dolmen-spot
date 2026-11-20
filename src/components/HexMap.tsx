@@ -20,7 +20,7 @@ import type {
   MapPOI,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
-import { gridBounds, hexCenter, hexVertices, parseCoord, pixelToHex } from '@/lib/hex';
+import { gridBounds, hexCenter, hexVertices, isValidHex, parseCoord, pixelToHex } from '@/lib/hex';
 
 interface HexMapProps {
   character: Character;
@@ -269,10 +269,12 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     [updateMap],
   );
 
+  // Sets only the map's current hex (the star). The Adventuring tab's
+  // free-text location is the player's own wording and is left alone.
   const setCurrentLocation = useCallback(
     (hex: HexCoord) => {
-      if (!(hex in HEX_CELLS)) return;
-      onChange({ currentLocationHex: hex, currentLocation: `Hex ${hex}` });
+      if (!isValidHex(hex)) return;
+      onChange({ currentLocationHex: hex });
     },
     [onChange],
   );
