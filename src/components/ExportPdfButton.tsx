@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Character } from '@/lib/types';
 
 type ExportState =
@@ -8,9 +8,13 @@ type ExportState =
   | { status: 'busy' }
   | { status: 'error'; message: string };
 
-const ERROR_DISMISS_MS = 8000;
+// A click this soon after a PDF was saved belongs to the same action: the
+// second half of a double-click, or a tap the browser queued while the page
+// was busy rendering and delivered late.
+const REPEAT_CLICK_MS = 1000;
 
-function isChunkLoadError(err: unknown): boolean {
+/** The PDF code couldn't be downloaded: offline, or replaced by a newer deployment. */
+function isLoadError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   return (
     err.name === 'ChunkLoadError' ||
@@ -30,49 +34,51 @@ function nextPaint(): Promise<void> {
 export default function ExportPdfButton({ character }: { character: Character }) {
   const [state, setState] = useState<ExportState>({ status: 'idle' });
   const inFlight = useRef(false);
-  const dismissTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(() => () => {
-    if (dismissTimer.current) clearTimeout(dismissTimer.current);
-  }, []);
+  const lastSuccessAt = useRef(-Infinity);
+  const buttonRef = useRef<HTMLButtonElement>(null);
 
   const busy = state.status === 'busy';
   const label = busy ? 'Preparing PDF…' : 'Download PDF';
 
   const handleExport = async () => {
-    if (inFlight.current) return;
+    // While busy the button is only aria-disabled (so it keeps keyboard focus); ignore clicks here.
+    if (inFlight.current || performance.now() - lastSuccessAt.current < REPEAT_CLICK_MS) return;
     inFlight.current = true;
-    if (dismissTimer.current) clearTimeout(dismissTimer.current);
     setState({ status: 'busy' });
     try {
       await nextPaint();
       const { downloadCharacterPdf } = await import('@/lib/pdf/download');
       await downloadCharacterPdf(character);
+      lastSuccessAt.current = performance.now();
       setState({ status: 'idle' });
     } catch (err) {
       console.error('PDF export failed', err);
       setState({
         status: 'error',
-        message: isChunkLoadError(err)
-          ? "Couldn't load the PDF tools. Check your connection and try again."
+        message: isLoadError(err)
+          ? "Couldn't load the PDF tools. Check your connection or reload the page, then try again."
           : "Couldn't create the PDF. Please try again.",
       });
-      dismissTimer.current = setTimeout(() => setState({ status: 'idle' }), ERROR_DISMISS_MS);
     } finally {
       inFlight.current = false;
     }
   };
 
+  const dismissError = () => {
+    setState({ status: 'idle' });
+    buttonRef.current?.focus();
+  };
+
   return (
     <div className="relative">
       <button
+        ref={buttonRef}
         type="button"
         onClick={handleExport}
-        disabled={busy}
-        aria-busy={busy}
+        aria-disabled={busy || undefined}
         aria-label={label}
         title="Download a printable PDF of this character"
-        className="text-xs px-2 py-1 bg-[#5a3a28] hover:bg-[#7a5a38] disabled:hover:bg-[#5a3a28] disabled:cursor-wait text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
+        className="text-xs px-2 py-1 bg-[#5a3a28] hover:bg-[#7a5a38] aria-disabled:cursor-wait aria-disabled:hover:bg-[#5a3a28] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
       >
         {busy ? (
           <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
@@ -84,7 +90,11 @@ export default function ExportPdfButton({ character }: { character: Character })
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
           </svg>
         )}
-        <span className="hidden sm:inline">{label}</span>
+        {/* Both labels share one grid cell, so the button keeps the wider one's width. */}
+        <span className="hidden sm:grid" aria-hidden="true">
+          <span className={`col-start-1 row-start-1 ${busy ? 'invisible' : ''}`}>Download PDF</span>
+          <span className={`col-start-1 row-start-1 ${busy ? '' : 'invisible'}`}>Preparing PDF…</span>
+        </span>
       </button>
       <span className="sr-only" aria-live="polite">
         {busy ? 'Preparing PDF' : ''}
@@ -97,8 +107,8 @@ export default function ExportPdfButton({ character }: { character: Character })
           <span className="flex-1">{state.message}</span>
           <button
             type="button"
-            onClick={() => setState({ status: 'idle' })}
-            className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] leading-none px-1"
+            onClick={dismissError}
+            className="-m-1 w-6 h-6 shrink-0 flex items-center justify-center rounded text-sm leading-none text-[#f5e6c8]/60 hover:text-[#f5e6c8]"
             aria-label="Dismiss"
           >
             &times;
