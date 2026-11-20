@@ -172,6 +172,9 @@ CJK_PUNCTUATION = ranges(
     (0xFE30, 0xFE4F),  # CJK Compatibility Forms
     (0xFF01, 0xFF64),  # Fullwidth ASCII and halfwidth CJK punctuation
     (0xFFE0, 0xFFEE),  # Fullwidth signs
+    # "…", which react-pdf draws in the font of the text it cuts off at a line
+    # limit (maxLines), so every font needs one.
+    (0x2026, 0x2026),
 )
 HANGUL = ranges(
     (0x1100, 0x11FF),  # Hangul Jamo
@@ -335,14 +338,19 @@ def subset_font(source_path, unicodes, *, layout_features, ascender, descender, 
 
 
 def build_symbols(cache_dir):
-    """One font with every symbol in SYMBOLS, merged from Noto Sans Symbols 2 and Symbols."""
+    """One font with every symbol in SYMBOLS, merged from Noto Sans Symbols 2 and Symbols.
+
+    Plus Noto Sans's "…": react-pdf draws it in the font of the text it cuts
+    off at a line limit (maxLines), and neither symbols font has one.
+    """
     symbols2 = fetch(cache_dir, 'NotoSansSymbols2-Regular.ttf')
     symbols1 = fetch(cache_dir, 'NotoSansSymbols-Regular.ttf')
     in2 = SYMBOLS & set(TTFont(symbols2, lazy=True).getBestCmap())
     in1 = (SYMBOLS - in2) & set(TTFont(symbols1, lazy=True).getBestCmap())
     assert in1 | in2 == SYMBOLS, f'no source font has {sorted(map(hex, SYMBOLS - in1 - in2))}'
     parts = []
-    for source, unicodes in [(symbols2, in2), (symbols1, in1)]:
+    sans = fetch(cache_dir, 'NotoSans-Regular.ttf')
+    for source, unicodes in [(symbols2, in2), (symbols1, in1), (sans, {0x2026})]:
         data, _ = subset_font(source, unicodes, layout_features=[], ascender=900, descender=-200,
                               drop_tables=['GDEF', 'GPOS', 'GSUB', 'vhea', 'vmtx'])
         parts.append(io.BytesIO(data))
