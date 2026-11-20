@@ -1,13 +1,6 @@
 'use client';
 
-import React, {
-  MouseEvent as ReactMouseEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
+import React, { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
 import type {
   Character,
   CharacterMapData,
@@ -20,234 +13,289 @@ import type {
   MapPOI,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
-import { gridBounds, hexCenter, hexVertices, isValidHex, parseCoord, pixelToHex } from '@/lib/hex';
+import { gridBounds, hexCenterOf, hexPath, hexVertices, isValidHex, pixelToHex } from '@/lib/hex';
+import {
+  DEFAULT_LEY_LINE_TYPE,
+  EMPTY_MAP_DATA,
+  LEY_LINE_COLORS,
+  deleteFairyDoor,
+  pairableDoors,
+  upsertFairyDoor,
+} from '@/lib/map-data';
 
 interface HexMapProps {
   character: Character;
   onChange: (updates: CharacterUpdater) => void;
 }
 
-const TERRAIN_FILL: Record<string, string> = {
-  woods: '#2d4a2e',
-  open: '#4a3a26',
-  edge: '#1a1a2e',
-};
+// --- Colours ---
+const TERRAIN_FILL = { woods: '#2d4a2e', open: '#4a3a26' } as const;
+const GRID_STROKE = '#5a3a28';
+const GOLD = '#c4a35a';
+const PARCHMENT = '#f5e6c8';
+const NIGHT = '#1a1a2e';
+const POI_FILL = '#8b2500';
+const DOOR_FILL = '#a774d6';
 
-const TERRAIN_STROKE = '#5a3a28';
-const DEFAULT_LEY_LINE_COLORS = ['#c4a35a', '#7a5fc4', '#5fa3c4', '#c45f7a', '#7ac45f'];
+// --- Sizes in image units (the printed map's pixels); they scale with zoom ---
+const HEX_SIZE = HEX_GRID_META.hexSize;
+const MARKER_RING_RADIUS = 42; // markers sharing a hex fan out on this circle
+const POI_RADIUS = 22;
+const DOOR_RADIUS = 26;
+const BADGE_RADIUS = 24;
+const STAR_RADIUS = 42;
+// On the current hex the star takes the middle, so markers circle it.
+const CURRENT_HEX_RING_RADIUS = STAR_RADIUS + DOOR_RADIUS + 4;
+const MAX_VISIBLE_MARKERS = 4; // more than this collapse into a "+N" badge
+const LEY_LINE_WIDTH = 14;
+const CONNECTOR_WIDTH = 8;
+const COORD_LABEL_FONT = 30;
+const COORD_LABEL_OFFSET = HEX_SIZE * 0.55; // label sits this far above the centre
+const DRAFT_STEP_FONT = 50;
+const ROAD_LABEL_FONT = 34;
+const DOOR_GLYPH_FONT = 38; // the ✦ on a fairy door marker
+const BADGE_FONT = 28; // the "+N" overflow badge
+const STAR_GLYPH_FONT = 56; // the ★ of the current location
+const MARKER_RIM = 4; // pale rim around markers
+const TEXT_HALO = 8; // dark outline that keeps draft step numbers legible
 
-// Hex-coord label opacity ramps from MIN at view.w ≥ COORD_LABEL_FADE_AT
-// (zoomed out) to MAX at view.w → 0 (fully zoomed in). With the default
-// view.w == baseBounds.w, the formula yields ~0.29 → above the MIN floor;
-// the floor only kicks in if the user expands view.w beyond baseBounds.w.
+// --- Line widths in CSS pixels (non-scaling), so outlines stay visible at any zoom ---
+const GRID_LINE_PX = 1;
+const HIGHLIGHT_LINE_PX = 2.5;
+const CURRENT_LINE_PX = 3;
+
+// Hex-coordinate labels fade from MIN (zoomed out to COORD_LABEL_FADE_AT ×
+// the full map's width or more) up to MAX as you zoom in.
 const COORD_LABEL_OPACITY_MIN = 0.15;
 const COORD_LABEL_OPACITY_MAX = 0.7;
-const COORD_LABEL_FADE_AT = 1.4; // multiplier on baseBounds.w
-// Cursor must travel this many screen pixels during a shift-drag for the
-// gesture to be treated as a "real pan" (vs. an unintentional micro-shift
-// before a click). Suppresses the synthetic click at the end of the drag.
-const PAN_DRAG_THRESHOLD_PX = 3;
+const COORD_LABEL_FADE_AT = 1.4;
+
+// --- Navigation ---
+const PAN_THRESHOLD_PX = 4; // movement before a press becomes a pan, so taps still select
+const MIN_VIEW_FRACTION = 0.05; // most zoomed in: 5% of the map's width
+const MAX_VIEW_FRACTION = 1.5; // most zoomed out
+const WHEEL_ZOOM_PER_PX = 0.0015; // a 100 px mouse-wheel notch zooms ~16%
+const WHEEL_DELTA_CAP_PX = 100; // per event, so one large jump can't zoom far
+const WHEEL_LINE_PX = 16; // wheel deltaMode 1 (lines) → pixels
+const BUTTON_ZOOM_FACTOR = 1.25;
+const ARROW_PAN_FRACTION = 0.1; // arrow keys pan by this much of the view
+const NARROW_SCREEN_QUERY = '(max-width: 767px)';
+
+// Inputs are 16 px on phones so iOS doesn't zoom the page when they get focus.
+const INPUT_BASE =
+  'border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-base md:text-sm focus:outline-none focus:border-[#c4a35a]';
+const INPUT_ON_CARD = `bg-[#1a1a2e] ${INPUT_BASE}`; // on a #2a2a3e card
+const INPUT_ON_ITEM = `bg-[#2a2a3e] ${INPUT_BASE}`; // inside a #1a1a2e item box
+
+type View = { x: number; y: number; w: number; h: number };
+type Point = { x: number; y: number };
+
+// Polygon points and outline paths, computed once for every hex.
+const HEX_POINTS: ReadonlyMap<HexCoord, string> = new Map(
+  ALL_HEXES.map((h) => [
+    h,
+    hexVertices(HEX_CELLS[h].col, HEX_CELLS[h].row).map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(' '),
+  ]),
+);
+const HEX_PATHS: ReadonlyMap<HexCoord, string> = new Map(
+  ALL_HEXES.map((h) => [h, hexPath(HEX_CELLS[h].col, HEX_CELLS[h].row)]),
+);
 
 function newId(): string {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) return crypto.randomUUID();
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
   return `id-${Math.random().toString(36).slice(2)}`;
 }
 
-/**
- * Doors a given `selfId` can be paired with without breaking another
- * door's existing symmetric link. Includes wild doors that aren't already
- * claimed by anyone (other than self), and roaded doors whose current
- * partner is missing or is the self.
- */
-function pairableDoors(allDoors: FairyDoor[], selfId: string | null): FairyDoor[] {
-  // Build reverse index: doorId -> set of other doors targeting it.
-  const targetedBy = new Map<string, Set<string>>();
-  for (const d of allDoors) {
-    if (d.destination.kind === 'roaded') {
-      const set = targetedBy.get(d.destination.pairedDoorId) ?? new Set<string>();
-      set.add(d.id);
-      targetedBy.set(d.destination.pairedDoorId, set);
-    }
-  }
-  return allDoors.filter((d) => {
-    if (d.id === selfId) return false;
-    if (d.destination.kind === 'wild') {
-      const claims = targetedBy.get(d.id);
-      if (!claims || claims.size === 0) return true;
-      // Asymmetric pre-existing data: another door points at this wild
-      // door. Only pairable if that "other" is self (and nobody else).
-      return selfId !== null && claims.size === 1 && claims.has(selfId);
-    }
-    // Roaded: pairable if mutually-linked to self, or if its partner is gone.
-    const partnerId = d.destination.pairedDoorId;
-    if (selfId !== null && partnerId === selfId) return true;
-    return !allDoors.some((x) => x.id === partnerId);
-  });
+// Markers and ley lines are buttons for keyboard and screen-reader users.
+// Their clicks and Enter/Space presses are handled once, on the SVG, by
+// reading their data-* attributes (see activateMapItem).
+const MAP_BUTTON_PROPS = {
+  role: 'button',
+  tabIndex: 0,
+  style: { cursor: 'pointer' },
+  className: 'focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2',
+} as const;
+
+/** Image point shown at client point (cx, cy) for view `v` in an SVG with box `rect` (preserveAspectRatio meet). */
+function clientToImage(v: View, rect: DOMRect, cx: number, cy: number): Point {
+  const s = Math.min(rect.width / v.w, rect.height / v.h);
+  return {
+    x: v.x + (cx - rect.left - (rect.width - v.w * s) / 2) / s,
+    y: v.y + (cy - rect.top - (rect.height - v.h * s) / 2) / s,
+  };
 }
 
 /**
- * Compute every door record that must change when `selfId`'s destination
- * is reassigned to `nextDestination`. Handles three transition shapes:
- *   wild → roaded(P): point P back at self; if P was already paired with
- *     a different Q, mark Q wild (otherwise Q is left dangling at P).
- *   roaded(P) → wild: mark P wild.
- *   roaded(P) → roaded(Q): mark P wild and the same P/Q clean-up as the
- *     wild→roaded case for Q's prior partner.
- * The self record is NOT included in the returned list — caller writes it.
+ * `v` scaled by `factor` (> 1 zooms out) about image point `anchor`, which
+ * stays at the same place on screen. Width and height share one clamped
+ * factor, so the view's aspect ratio never drifts.
  */
-function computePartnerUpdates(
-  selfId: string,
-  selfPrev: FairyDoorDestination,
-  nextDestination: FairyDoorDestination,
-  allDoors: FairyDoor[],
-): FairyDoor[] {
-  const updates = new Map<string, FairyDoor>();
-  const setWild = (doorId: string) => {
-    if (doorId === selfId || updates.has(doorId)) return;
-    const door = allDoors.find((d) => d.id === doorId);
-    if (!door) return;
-    if (door.destination.kind === 'wild') return; // already wild — no change
-    updates.set(doorId, { ...door, destination: { kind: 'wild' } });
-  };
+function zoomView(v: View, factor: number, anchor: Point, base: View): View {
+  const minF = Math.max((base.w * MIN_VIEW_FRACTION) / v.w, (base.h * MIN_VIEW_FRACTION) / v.h);
+  const maxF = Math.min((base.w * MAX_VIEW_FRACTION) / v.w, (base.h * MAX_VIEW_FRACTION) / v.h);
+  const f = Math.min(maxF, Math.max(minF, factor));
+  return { x: anchor.x - (anchor.x - v.x) * f, y: anchor.y - (anchor.y - v.y) * f, w: v.w * f, h: v.h * f };
+}
 
-  // Self's previous partner (if any) loses its link.
-  if (selfPrev.kind === 'roaded') {
-    const oldId = selfPrev.pairedDoorId;
-    if (oldId && (nextDestination.kind !== 'roaded' || nextDestination.pairedDoorId !== oldId)) {
-      setWild(oldId);
-    }
+// Pointer capture throws if the pointer is no longer active (e.g. a touch
+// the browser already cancelled); a lost capture only costs the pan.
+function capturePointer(el: Element | null, id: number) {
+  try {
+    if (el && !el.hasPointerCapture(id)) el.setPointerCapture(id);
+  } catch {
+    /* pointer already gone */
   }
-
-  if (nextDestination.kind === 'roaded') {
-    const newPartnerId = nextDestination.pairedDoorId;
-    const newPartner = allDoors.find((d) => d.id === newPartnerId);
-    if (newPartner) {
-      // If new partner was already paired with someone else, that someone
-      // is now orphaned — clear them too.
-      if (
-        newPartner.destination.kind === 'roaded' &&
-        newPartner.destination.pairedDoorId !== selfId
-      ) {
-        setWild(newPartner.destination.pairedDoorId);
-      }
-      // Point new partner back at self.
-      updates.set(newPartnerId, {
-        ...newPartner,
-        destination: {
-          kind: 'roaded',
-          pairedDoorId: selfId,
-          roadName: nextDestination.roadName,
-        },
-      });
-    }
+}
+function releasePointer(el: Element | null, id: number) {
+  try {
+    if (el?.hasPointerCapture(id)) el.releasePointerCapture(id);
+  } catch {
+    /* pointer already gone */
   }
+}
 
-  return Array.from(updates.values());
+const viewCenter = (v: View): Point => ({ x: v.x + v.w / 2, y: v.y + v.h / 2 });
+const inView = (v: View, p: Point) => p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h;
+
+// --- Static layers: drawn once, never re-rendered by hovering or panning ---
+
+const HexCell = memo(function HexCell({ coord, isCurrent }: { coord: HexCoord; isCurrent: boolean }) {
+  const { terrain } = HEX_CELLS[coord];
+  return (
+    <polygon
+      data-hex={coord}
+      points={HEX_POINTS.get(coord)}
+      fill={TERRAIN_FILL[terrain]}
+      stroke={GRID_STROKE}
+      strokeWidth={GRID_LINE_PX}
+      vectorEffect="non-scaling-stroke"
+      // role="img" + aria-label announces the hex but keeps all 200 hexes out
+      // of the Tab order; markers and lines are the tabbable items, and
+      // "Go to hex" reaches any hex from the keyboard.
+      role="img"
+      aria-label={`Hex ${coord}${isCurrent ? ', current location' : ''}, terrain ${terrain}`}
+    />
+  );
+});
+
+const HexGridLayer = memo(function HexGridLayer({ currentHex }: { currentHex: HexCoord | '' }) {
+  return ALL_HEXES.map((h) => <HexCell key={h} coord={h} isCurrent={h === currentHex} />);
+});
+
+const CoordLabels = memo(function CoordLabels() {
+  return ALL_HEXES.map((h) => {
+    const c = hexCenterOf(h)!;
+    return (
+      <text key={h} x={c.x} y={c.y - COORD_LABEL_OFFSET} textAnchor="middle" fontSize={COORD_LABEL_FONT} fill={PARCHMENT}>
+        {h}
+      </text>
+    );
+  });
+});
+
+/**
+ * Open/closed state of an inspector editor. Starts open if the hex holds only
+ * this item or its marker was just clicked; opens again whenever the hex comes
+ * down to this one item or the marker is clicked (each click gives a new
+ * `focusSeq`). It never closes by itself. Reacts to the props by keeping their
+ * previous values in state instead of using an effect:
+ * https://react.dev/reference/react/useState#storing-information-from-previous-renders
+ */
+function useExpanded(singleton: boolean, focusSeq: number | undefined) {
+  const [expanded, setExpanded] = useState(singleton || focusSeq !== undefined);
+  const [prev, setPrev] = useState({ singleton, focusSeq });
+  if (prev.singleton !== singleton || prev.focusSeq !== focusSeq) {
+    setPrev({ singleton, focusSeq });
+    if ((singleton && !prev.singleton) || (focusSeq !== undefined && focusSeq !== prev.focusSeq)) setExpanded(true);
+  }
+  return [expanded, setExpanded] as const;
+}
+
+/** On each focus request (a new `focusSeq`), bring the editor into view and focus its name. */
+function useFocusOnRequest(
+  focusSeq: number | undefined,
+  rootRef: React.RefObject<HTMLElement | null>,
+  inputRef: React.RefObject<HTMLInputElement | null>,
+) {
+  useEffect(() => {
+    if (focusSeq === undefined) return;
+    rootRef.current?.scrollIntoView({ block: 'nearest' });
+    inputRef.current?.focus({ preventScroll: true });
+  }, [focusSeq, rootRef, inputRef]);
 }
 
 export default function HexMap({ character, onChange }: HexMapProps) {
-  // Migration v11→v12 + reconcileWithDefaults guarantee mapData is a
-  // well-shaped object, so we can read it directly.
-  const mapData = character.mapData;
-  const drawingLeyLine = mapData.draftLeyLine ?? null;
-  // gridBounds() returns a module-level frozen constant; no useMemo needed.
+  // Migration + sanitizer guarantee a well-formed mapData, but stay defensive.
+  const mapData: CharacterMapData = character.mapData ?? EMPTY_MAP_DATA;
+  const pois = mapData.pois ?? [];
+  const doors = mapData.fairyDoors ?? [];
+  const leyLines = mapData.leyLines ?? [];
+  const draft = mapData.draftLeyLine ?? null;
+  const currentHex = character.currentLocationHex ?? '';
   const baseBounds = gridBounds();
 
-  const [view, setView] = useState({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
+  const [view, setView] = useState<View>({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
   const [hoverHex, setHoverHex] = useState<HexCoord | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
   const [selectedLeyLine, setSelectedLeyLine] = useState<string | null>(null);
-  // When the user clicks a specific marker (POI or door) on the map, we
-  // record its id so the inspector knows which editor to auto-expand. Also
-  // used as the trigger for "auto-expand singletons" when there's only one
-  // item on the hex.
-  const [focusedItemId, setFocusedItemId] = useState<string | null>(null);
-  const [pendingForm, setPendingForm] = useState<
-    | { type: 'poi'; hex: HexCoord }
-    | { type: 'door'; hex: HexCoord }
-    | null
-  >(null);
-
-  // Single-source-of-truth selection helpers. Every entry point that
-  // changes "what's currently selected" goes through one of these so the
-  // four selection-state fields (selectedHex, selectedLeyLine,
-  // focusedItemId, pendingForm) stay mutually consistent.
-  const selectHex = useCallback((hex: HexCoord | null, focusedId: string | null = null) => {
-    setSelectedHex(hex);
-    setFocusedItemId(focusedId);
-    setSelectedLeyLine(null);
-    setPendingForm(null);
-  }, []);
-  const selectLeyLine = useCallback((id: string | null) => {
-    setSelectedLeyLine(id);
-    setSelectedHex(null);
-    setFocusedItemId(null);
-    setPendingForm(null);
-  }, []);
-  const clearSelection = useCallback(() => {
-    setSelectedHex(null);
-    setSelectedLeyLine(null);
-    setFocusedItemId(null);
-    setPendingForm(null);
-  }, []);
-
-  // Convenience: used by marker onClick handlers (select hex + remember
-  // which item the user clicked so the inspector auto-expands its editor).
-  const focusItemOnMap = useCallback((hex: HexCoord, itemId: string) => {
-    selectHex(hex, itemId);
-  }, [selectHex]);
-
-  // Re-center the view on a specific hex without changing zoom. Used by
-  // jump-to-hex so a coord typed off-screen brings the hex into view.
-  const recenterOnHex = useCallback((hex: HexCoord) => {
-    const p = parseCoord(hex);
-    if (!p) return;
-    const c = hexCenter(p.col, p.row);
-    setView((v) => ({ ...v, x: c.x - v.w / 2, y: c.y - v.h / 2 }));
-  }, []);
-
-  // Clear focusedItemId once the item it points at no longer exists (e.g.
-  // the user deleted it via the inspector). Without this the id sits stale
-  // until the next focus/close. Adjusted during render rather than in an
-  // effect, so the inspector never commits a frame with a dangling id; the
-  // guard makes React settle after one extra pass. (Not derived instead of
-  // stored: HexMap isn't remounted per character, so a cleared focus must
-  // stay cleared even if a later character switch brings that id back.)
-  if (
-    focusedItemId !== null &&
-    !mapData.pois.some((p) => p.id === focusedItemId) &&
-    !mapData.fairyDoors.some((d) => d.id === focusedItemId)
-  ) {
-    setFocusedItemId(null);
-  }
-
-  const panRef = useRef<{
-    startX: number;
-    startY: number;
-    viewX: number;
-    viewY: number;
-    scale: number;
-    moved: boolean;
-  } | null>(null);
-  // Set true on the mouseup at the end of a real (moved) pan. Consumed
-  // (and cleared) by the very next polygon onClick to suppress the
-  // accidental hex selection that would otherwise fire when the user
-  // releases shift-drag over a hex.
-  const suppressNextClickRef = useRef(false);
-  // Separate boolean state mirrors `panRef.current != null` so the cursor
-  // style re-renders during a drag. Refs alone don't trigger re-renders,
-  // so reading panRef in JSX would always show the pre-drag cursor.
+  // Set by a marker click: the inspector opens, scrolls to and focuses that
+  // item's editor. `seq` changes on every click, even of the same marker.
+  const [focus, setFocus] = useState<{ id: string; seq: number } | null>(null);
+  const [pendingForm, setPendingForm] = useState<{ type: 'poi' | 'door'; hex: HexCoord } | null>(null);
+  // Bumped when a hex is picked; on phones the inspector (below the map)
+  // is then scrolled into view.
+  const [revealSeq, setRevealSeq] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  const inspectorRef = useRef<HTMLDivElement>(null);
 
-  // `updateMap` and `setDraftLeyLine` route through the functional form of
-  // onChange so that multiple writes in one event tick compose correctly
-  // (the second update reads the result of the first, not a stale render
-  // snapshot). Without this, a fast typist + Finish click can lose the
-  // in-flight keystroke.
+  // Drop selections whose item no longer exists (deleted, or gone in a
+  // re-import). Adjusted during render rather than in an effect; each guard
+  // settles after one extra pass.
+  if (focus && !pois.some((p) => p.id === focus.id) && !doors.some((d) => d.id === focus.id)) {
+    setFocus(null);
+  }
+  if (selectedLeyLine !== null && !leyLines.some((l) => l.id === selectedLeyLine)) {
+    setSelectedLeyLine(null);
+  }
+
+  useEffect(() => {
+    if (revealSeq > 0 && window.matchMedia(NARROW_SCREEN_QUERY).matches) {
+      inspectorRef.current?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [revealSeq]);
+
+  // Every change to "what's selected" goes through these, so the selected
+  // hex, selected ley line, focused item and open form stay consistent.
+  const selectHex = (hex: HexCoord, focusId?: string) => {
+    setSelectedHex(hex);
+    setSelectedLeyLine(null);
+    setPendingForm(null);
+    if (focusId) {
+      setFocus((f) => ({ id: focusId, seq: (f?.seq ?? 0) + 1 }));
+    } else {
+      setFocus(null);
+      setRevealSeq((n) => n + 1);
+    }
+  };
+  const selectLeyLine = (id: string) => {
+    setSelectedLeyLine(id);
+    setSelectedHex(null);
+    setFocus(null);
+    setPendingForm(null);
+  };
+  const clearSelection = () => {
+    setSelectedHex(null);
+    setSelectedLeyLine(null);
+    setFocus(null);
+    setPendingForm(null);
+  };
+
+  // Map writes go through the functional form of onChange so that several
+  // writes in one event tick compose (each reads the result of the last).
   const updateMap = useCallback(
     (updater: (md: CharacterMapData) => CharacterMapData) => {
-      onChange((prev) => ({ mapData: updater(prev.mapData) }));
+      onChange((prev) => ({ mapData: updater(prev.mapData ?? EMPTY_MAP_DATA) }));
     },
     [onChange],
   );
@@ -258,10 +306,9 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         const resolved = typeof next === 'function' ? next(md.draftLeyLine ?? null) : next;
         if (resolved === null) {
           if (md.draftLeyLine === undefined) return md;
-          // Strip draftLeyLine from the object so JSON-serialised state
-          // doesn't carry a stale draft. Destructure drops the key cleanly.
+          // Drop the key so the saved JSON doesn't carry a stale draft.
           const { draftLeyLine: _drop, ...rest } = md;
-          return rest as CharacterMapData;
+          return rest;
         }
         return { ...md, draftLeyLine: resolved };
       });
@@ -279,181 +326,153 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     [onChange],
   );
 
-  const screenToImage = useCallback(
-    (clientX: number, clientY: number): { x: number; y: number } | null => {
-      const svg = svgRef.current;
-      if (!svg) return null;
-      // Use the SVG's own coordinate transform so we account for
-      // preserveAspectRatio="meet" letterboxing. Naive (clientX - rect.left)
-      // / rect.width math would put the cursor at the wrong image coord
-      // whenever the SVG element's aspect ratio doesn't match viewBox.
-      const ctm = svg.getScreenCTM();
-      if (!ctm) return null;
-      const pt = svg.createSVGPoint();
-      pt.x = clientX;
-      pt.y = clientY;
-      const local = pt.matrixTransform(ctm.inverse());
-      return { x: local.x, y: local.y };
-    },
-    [],
-  );
+  const recenterOnHex = (hex: HexCoord) => {
+    const c = hexCenterOf(hex);
+    if (!c) return;
+    setView((v) => ({ ...v, x: c.x - v.w / 2, y: c.y - v.h / 2 }));
+  };
 
-  const handleMouseMove = useCallback(
-    (e: ReactMouseEvent<SVGSVGElement>) => {
-      if (panRef.current) {
-        // Convert the screen-pixel drag delta into image units using the
-        // letterbox-aware uniform scale. (Naive view.w / rect.width would
-        // be wrong whenever the SVG's aspect ratio doesn't match viewBox.)
-        const dxPx = e.clientX - panRef.current.startX;
-        const dyPx = e.clientY - panRef.current.startY;
-        // Mark this pan as "really moved" once the cursor has travelled
-        // more than 3px from the start, so that mouseup can decide whether
-        // to suppress the impending polygon click.
-        if (!panRef.current.moved && Math.hypot(dxPx, dyPx) > PAN_DRAG_THRESHOLD_PX) {
-          panRef.current.moved = true;
-        }
-        const dx = dxPx * panRef.current.scale;
-        const dy = dyPx * panRef.current.scale;
-        setView((v) => ({ ...v, x: panRef.current!.viewX - dx, y: panRef.current!.viewY - dy }));
-        return;
+  const handleHexClick = (hex: HexCoord) => {
+    if (draft) {
+      setDraftLeyLine((d) => {
+        if (!d) return d;
+        // The last hex again: undo it.
+        if (d.hexes[d.hexes.length - 1] === hex) return { ...d, hexes: d.hexes.slice(0, -1) };
+        // An earlier hex of the draft: cut the line back to it.
+        const idx = d.hexes.indexOf(hex);
+        if (idx >= 0) return { ...d, hexes: d.hexes.slice(0, idx + 1) };
+        return { ...d, hexes: [...d.hexes, hex] };
+      });
+      return;
+    }
+    selectHex(hex);
+  };
+
+  // --- Pan, pinch and hover (Pointer Events: mouse, pen and touch) ---
+  // A press becomes a pan once it moves PAN_THRESHOLD_PX, so taps and clicks
+  // still select. The pointer is captured only then, so a plain click still
+  // reaches the hex or marker under it. Two fingers pinch-zoom around their
+  // midpoint. Gesture values are copied into locals before any state update
+  // is queued; no ref is read inside a state updater.
+  const pointersRef = useRef(new Map<number, Point>());
+  const gestureRef = useRef<
+    | { kind: 'pan'; start: Point; view: View; scale: number; moved: boolean }
+    | { kind: 'pinch'; startDist: number; startMid: Point; anchor: Point; view: View; rect: DOMRect }
+    | null
+  >(null);
+  // Set after a real pan/pinch; the click that ends it must not select anything.
+  const suppressClickRef = useRef(false);
+
+  const startPan = (start: Point, v: View) => {
+    const rect = svgRef.current!.getBoundingClientRect();
+    gestureRef.current = {
+      kind: 'pan',
+      start,
+      view: v,
+      scale: 1 / Math.min(rect.width / v.w, rect.height / v.h), // image units per CSS px
+      moved: false,
+    };
+  };
+
+  const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
+    // A new interaction: forget a suppression left by an earlier drag.
+    suppressClickRef.current = false;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    const pts = [...pointersRef.current.values()];
+    if (pts.length === 1) {
+      startPan(pts[0], view);
+    } else if (pts.length === 2) {
+      const rect = svgRef.current!.getBoundingClientRect();
+      const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+      gestureRef.current = {
+        kind: 'pinch',
+        startDist: Math.max(1, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y)),
+        startMid: mid,
+        anchor: clientToImage(view, rect, mid.x, mid.y),
+        view,
+        rect,
+      };
+      for (const id of pointersRef.current.keys()) {
+        capturePointer(svgRef.current, id);
       }
-      const img = screenToImage(e.clientX, e.clientY);
-      if (!img) return;
-      const hex = pixelToHex(img.x, img.y);
-      setHoverHex(hex);
-    },
-    [screenToImage],
-  );
+      setIsPanning(true);
+    }
+  };
 
-  const handleMouseDown = useCallback(
-    (e: ReactMouseEvent<SVGSVGElement>) => {
-      // A fresh interaction (any button) starts — clear any stale
-      // click-suppression flag left over from a previous shift-drag that
-      // ended over a non-clickable element (the SVG backdrop rect or the
-      // letterbox padding). Cleared before the left-button check so a
-      // right-click between a stranded drag and the next normal click
-      // doesn't leave the flag set.
-      suppressNextClickRef.current = false;
-      if (e.button !== 0) return;
-      // Shift+drag pans the view. Plain clicks fall through to the polygon's
-      // own onClick so the user can select a hex. Shift+click WITHOUT
-      // movement also falls through (treated as a hex selection).
-      // A shift-drag that actually moves the cursor sets `moved` so the
-      // mouseup-then-click sequence at the end of the drag can be
-      // suppressed (otherwise we'd accidentally select the hex the user
-      // released over).
-      if (e.shiftKey) {
-        const svg = svgRef.current;
-        if (!svg) return;
-        const rect = svg.getBoundingClientRect();
-        // Image-units per screen pixel under preserveAspectRatio="meet":
-        // the renderer applies a single uniform scale = min(rw/w, rh/h),
-        // so its reciprocal is the screen→image conversion factor.
-        const scale = 1 / Math.min(rect.width / view.w, rect.height / view.h);
-        panRef.current = {
-          startX: e.clientX,
-          startY: e.clientY,
-          viewX: view.x,
-          viewY: view.y,
-          scale,
-          moved: false,
-        };
+  const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    const g = gestureRef.current;
+    if (!pointersRef.current.has(e.pointerId) || !g) {
+      if (e.pointerType === 'mouse') {
+        const rect = svgRef.current!.getBoundingClientRect();
+        const p = clientToImage(view, rect, e.clientX, e.clientY);
+        setHoverHex(pixelToHex(p.x, p.y));
+      }
+      return;
+    }
+    pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (g.kind === 'pan') {
+      const dx = e.clientX - g.start.x;
+      const dy = e.clientY - g.start.y;
+      if (!g.moved) {
+        if (Math.hypot(dx, dy) <= PAN_THRESHOLD_PX) return;
+        g.moved = true;
+        capturePointer(svgRef.current, e.pointerId);
         setIsPanning(true);
-        e.preventDefault();
       }
-    },
-    [view.x, view.y, view.w, view.h],
-  );
-
-  const handleMouseUp = useCallback(() => {
-    if (panRef.current?.moved) {
-      // We just finished a real drag — suppress the click that browsers
-      // dispatch on the element under cursor on mouseup, so the hex
-      // doesn't get auto-selected at the drag's destination.
-      suppressNextClickRef.current = true;
+      const { view: v0, scale } = g;
+      setView({ ...v0, x: v0.x - dx * scale, y: v0.y - dy * scale });
+      return;
     }
-    panRef.current = null;
-    setIsPanning(false);
-  }, []);
+    // Pinch: zoom about the image point first under the fingers, keep it
+    // under their midpoint as they move.
+    const pts = [...pointersRef.current.values()];
+    if (pts.length < 2) return;
+    const dist = Math.max(1, Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y));
+    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    const zoomed = zoomView(g.view, g.startDist / dist, g.anchor, baseBounds);
+    const s = Math.min(g.rect.width / zoomed.w, g.rect.height / zoomed.h);
+    setView({ ...zoomed, x: zoomed.x - (mid.x - g.startMid.x) / s, y: zoomed.y - (mid.y - g.startMid.y) / s });
+  };
 
-  const handleMouseLeave = useCallback(() => {
-    if (panRef.current?.moved) {
-      suppressNextClickRef.current = true;
+  const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
+    if (!pointersRef.current.has(e.pointerId)) return;
+    pointersRef.current.delete(e.pointerId);
+    const g = gestureRef.current;
+    const gestured = g !== null && (g.kind === 'pinch' || g.moved);
+    if (gestured) suppressClickRef.current = true;
+    releasePointer(svgRef.current, e.pointerId);
+    const rest = [...pointersRef.current.values()];
+    if (rest.length === 1 && g?.kind === 'pinch') {
+      // One finger left after a pinch: carry on panning from where it is.
+      startPan(rest[0], view);
+      (gestureRef.current as { moved: boolean }).moved = true;
+    } else if (rest.length === 0) {
+      gestureRef.current = null;
+      setIsPanning(false);
     }
-    panRef.current = null;
-    setIsPanning(false);
-    setHoverHex(null);
-  }, []);
+  };
 
+  // Wheel / trackpad zoom about the cursor, scaled by how far the wheel
+  // moved. Horizontal-only scrolls (deltaY 0) are left to the page. Attached
+  // natively because React's wheel listener is passive (can't preventDefault).
   const handleWheel = useCallback(
     (e: WheelEvent) => {
+      if (e.deltaY === 0) return;
       e.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
-      // Cursor's image-coord under the CURRENT view; SVG CTM handles
-      // letterboxing so this is the actual point the cursor sits over.
-      const cursorImage = screenToImage(e.clientX, e.clientY);
-      if (!cursorImage) return;
       const rect = svg.getBoundingClientRect();
-      const rawFactor = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+      const px = e.deltaY * (e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? rect.height : 1);
+      const factor = Math.exp(Math.max(-WHEEL_DELTA_CAP_PX, Math.min(WHEEL_DELTA_CAP_PX, px)) * WHEEL_ZOOM_PER_PX);
+      const { clientX, clientY } = e;
       setView((v) => {
-        // Couple the two dimensions: instead of clamping w and h
-        // independently (which could warp the aspect ratio over time),
-        // pick a single scale factor that respects BOTH clamps. Today
-        // view.w/view.h is held equal to baseBounds.w/baseBounds.h, so
-        // both per-dim clamps yield the same factor; coupling here keeps
-        // any future code that nudges one dimension from drifting the
-        // viewBox aspect ratio.
-        //
-        // For zoom-out (rawFactor > 1) the tighter clamp is the smaller
-        // factor; for zoom-in (rawFactor < 1) the tighter clamp is the
-        // larger factor (closer to 1). Pick accordingly.
-        const wFactor = Math.max(
-          baseBounds.w * 0.05 / v.w,
-          Math.min(baseBounds.w * 1.5 / v.w, rawFactor),
-        );
-        const hFactor = Math.max(
-          baseBounds.h * 0.05 / v.h,
-          Math.min(baseBounds.h * 1.5 / v.h, rawFactor),
-        );
-        const factor = rawFactor > 1
-          ? Math.min(wFactor, hFactor)
-          : Math.max(wFactor, hFactor);
-        const newW = v.w * factor;
-        const newH = v.h * factor;
-        // Guard: if the cursor sits inside the letterbox PADDING area
-        // (rare with a near-square viewBox but possible), cursorImage
-        // is outside the viewBox bounds. Anchoring such a point under
-        // the new view would drift the viewBox far from the content
-        // after a few wheel ticks. Fall back to centred zoom in that case.
-        const cursorInView =
-          cursorImage.x >= v.x && cursorImage.x <= v.x + v.w &&
-          cursorImage.y >= v.y && cursorImage.y <= v.y + v.h;
-        if (!cursorInView) {
-          // Center-anchored zoom around the existing viewBox center.
-          return {
-            x: v.x + (v.w - newW) / 2,
-            y: v.y + (v.h - newH) / 2,
-            w: newW,
-            h: newH,
-          };
-        }
-        // Place the new viewBox so cursorImage maps back to the same
-        // client coords under the new CTM. Worked out analytically for
-        // preserveAspectRatio="xMidYMid meet": scale is uniform =
-        // min(rw/w, rh/h), viewBox is centered in the leftover space.
-        const newScale = Math.min(rect.width / newW, rect.height / newH);
-        const offsetX = (rect.width - newW * newScale) / 2;
-        const offsetY = (rect.height - newH * newScale) / 2;
-        return {
-          x: cursorImage.x - (e.clientX - rect.left - offsetX) / newScale,
-          y: cursorImage.y - (e.clientY - rect.top - offsetY) / newScale,
-          w: newW,
-          h: newH,
-        };
+        const p = clientToImage(v, rect, clientX, clientY);
+        // Over the letterbox padding (outside the map): zoom about the centre.
+        return zoomView(v, factor, inView(v, p) ? p : viewCenter(v), baseBounds);
       });
     },
-    [baseBounds.w, baseBounds.h, screenToImage],
+    [baseBounds],
   );
 
   useEffect(() => {
@@ -463,266 +482,219 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     return () => svg.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  const handleHexClick = useCallback(
-    (hex: HexCoord) => {
-      if (drawingLeyLine) {
-        setDraftLeyLine((draft) => {
-          if (!draft) return draft;
-          // Click last-added hex: remove it (one-step undo).
-          if (draft.hexes[draft.hexes.length - 1] === hex) {
-            return { ...draft, hexes: draft.hexes.slice(0, -1) };
-          }
-          // Click a hex already in the middle of the draft: truncate the
-          // draft up to that hex. Lets the user fix a mistaken middle hex
-          // without canceling and starting over.
-          const idx = draft.hexes.indexOf(hex);
-          if (idx >= 0) {
-            return { ...draft, hexes: draft.hexes.slice(0, idx + 1) };
-          }
-          return { ...draft, hexes: [...draft.hexes, hex] };
-        });
-        return;
-      }
-      // A polygon click selects the hex (no specific item focus). Goes
-      // through the unified selection helper so all four selection-state
-      // fields stay consistent.
-      selectHex(hex);
-    },
-    [drawingLeyLine, setDraftLeyLine, selectHex],
-  );
+  const zoomBy = (factor: number) => setView((v) => zoomView(v, factor, viewCenter(v), baseBounds));
+  const resetView = () => setView({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
+
+  // One handler for everything clickable on the map, found from the click
+  // target's data-* attributes: markers and ley lines (drawn on top), then
+  // hexes. Markers add their hex to a ley line being drawn, otherwise they
+  // open their hex with their own editor focused; ley lines toggle their
+  // highlight; hexes are inspected (or added to the line being drawn).
+  const activateMapItem = (target: Element) => {
+    const marker = target.closest('[data-marker]');
+    if (marker) {
+      const hex = marker.getAttribute('data-marker-hex')!;
+      if (draft) handleHexClick(hex);
+      else selectHex(hex, marker.getAttribute('data-marker')!);
+      return;
+    }
+    const line = target.closest('[data-ley-line]')?.getAttribute('data-ley-line');
+    if (line) {
+      if (selectedLeyLine === line) clearSelection();
+      else selectLeyLine(line);
+      return;
+    }
+    const hex = target.closest('[data-hex]')?.getAttribute('data-hex');
+    if (hex) handleHexClick(hex);
+  };
+
+  const handleMapClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    // The click that ends a pan or pinch isn't a selection.
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    activateMapItem(e.target as Element);
+  };
+
+  // Keyboard: Enter/Space activate the focused marker or line; when the map
+  // itself has focus, arrow keys pan and + / - zoom.
+  const handleMapKeyDown = (e: React.KeyboardEvent<SVGSVGElement>) => {
+    if ((e.key === 'Enter' || e.key === ' ') && e.target !== e.currentTarget) {
+      e.preventDefault();
+      activateMapItem(e.target as Element);
+      return;
+    }
+    const pan = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (pan) {
+      e.preventDefault();
+      setView((v) => ({
+        ...v,
+        x: v.x + pan[0] * v.w * ARROW_PAN_FRACTION,
+        y: v.y + pan[1] * v.h * ARROW_PAN_FRACTION,
+      }));
+    } else if (e.key === '+' || e.key === '=') {
+      e.preventDefault();
+      zoomBy(1 / BUTTON_ZOOM_FACTOR);
+    } else if (e.key === '-' || e.key === '_') {
+      e.preventDefault();
+      zoomBy(BUTTON_ZOOM_FACTOR);
+    }
+  };
 
   const finishLeyLine = useCallback(() => {
-    // Compute the ID once, OUTSIDE the updater, so React StrictMode's
-    // double-invocation of the updater produces identical results (same
-    // ID both times) — React picks one and we never see a duplicate.
-    // Generating inside would mint two different IDs per click.
+    // Mint the id outside the updater: StrictMode runs updaters twice, and
+    // both runs must produce the same line.
     const newLineId = newId();
     updateMap((md) => {
-      // Read everything from `md` (the fresh state React passes us); no
-      // render-closure variables in the commit path, so a keystroke that
-      // lands between render and click can't be lost.
+      // Read the draft from `md` (fresh state), not from this render, so a
+      // keystroke that lands just before the click isn't lost.
       const fresh = md.draftLeyLine;
-      // Nothing to commit AND nothing to clear → return the same `md` so
-      // React skips the state update and we don't churn localStorage.
       if (!fresh) return md;
-      // Drop the draft from the mapData object on commit.
       const { draftLeyLine: _drop, ...rest } = md;
-      // Below-2-hex finish behaves like a cancel — clear the draft only.
-      if (fresh.hexes.length < 2) return rest as CharacterMapData;
+      // Fewer than 2 hexes: Finish acts like Cancel.
+      if (fresh.hexes.length < 2) return rest;
       const newLine: LeyLine = {
         id: newLineId,
-        type: fresh.type || 'Ley line',
+        type: fresh.type || DEFAULT_LEY_LINE_TYPE,
         name: fresh.name || 'Unnamed Ley Line',
         color: fresh.color,
         hexes: fresh.hexes,
         notes: fresh.notes,
       };
-      return { ...rest, leyLines: [...md.leyLines, newLine] };
+      return { ...rest, leyLines: [...(md.leyLines ?? []), newLine] };
     });
   }, [updateMap]);
 
-  const cancelLeyLine = useCallback(() => setDraftLeyLine(null), [setDraftLeyLine]);
-
-  const contentsByHex = useMemo(() => {
-    const map = new Map<HexCoord, { pois: MapPOI[]; doors: FairyDoor[] }>();
-    for (const p of mapData.pois) {
-      const e = map.get(p.hex) ?? { pois: [], doors: [] };
-      e.pois.push(p);
-      map.set(p.hex, e);
-    }
-    for (const d of mapData.fairyDoors) {
-      const e = map.get(d.hex) ?? { pois: [], doors: [] };
-      e.doors.push(d);
-      map.set(d.hex, e);
-    }
-    return map;
-  }, [mapData]);
-
-  const renderHex = (coord: HexCoord) => {
-    const cell = HEX_CELLS[coord];
-    const verts = hexVertices(cell.col, cell.row);
-    const points = verts.map((v) => `${v.x.toFixed(1)},${v.y.toFixed(1)}`).join(' ');
-    const isCurrent = character.currentLocationHex === coord;
-    const isHover = hoverHex === coord;
-    const isSelected = selectedHex === coord;
-    const isInDraft = drawingLeyLine?.hexes.includes(coord) ?? false;
-    const center = hexCenter(cell.col, cell.row);
-
-    return (
-      <g key={coord}>
-        <polygon
-          points={points}
-          fill={TERRAIN_FILL[cell.terrain] ?? TERRAIN_FILL.open}
-          stroke={isCurrent ? '#c4a35a' : isHover || isSelected ? '#f5e6c8' : TERRAIN_STROKE}
-          strokeWidth={isCurrent ? 6 : isHover || isSelected ? 4 : 2}
-          opacity={isInDraft ? 0.85 : 1}
-          // role="img" + aria-label exposes the hex to screen readers but
-          // keeps it OUT of the keyboard tab order — putting all ~200 hex
-          // polygons in the tab sequence would dominate every Tab press
-          // across the page. Markers (POIs / fairy doors / ley lines) ARE
-          // tabbable since there are only a handful of those per character.
-          // Mouse / touch users keep direct activation via the click handler.
-          role="img"
-          aria-label={`Hex ${coord}${isCurrent ? ', current location' : ''}, terrain ${cell.terrain}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            // Drop the synthetic click that fires at the end of a shift-drag
-            // pan; otherwise the destination hex gets accidentally selected.
-            if (suppressNextClickRef.current) {
-              suppressNextClickRef.current = false;
-              return;
-            }
-            handleHexClick(coord);
-          }}
-          style={{ cursor: drawingLeyLine ? 'crosshair' : 'pointer' }}
-        />
-        {isInDraft && (
-          <text
-            x={center.x}
-            y={center.y + HEX_GRID_META.hexSize * 0.1}
-            textAnchor="middle"
-            fontSize="50"
-            fill="#1a1a2e"
-            fontWeight="bold"
-            pointerEvents="none"
-          >
-            {drawingLeyLine!.hexes.indexOf(coord) + 1}
-          </text>
-        )}
-        {/* Coordinate label near the top of the hex. Always rendered;
-            opacity fades out at low zoom so dense maps don't drown in text. */}
-        <text
-          x={center.x}
-          y={center.y - HEX_GRID_META.hexSize * 0.55}
-          textAnchor="middle"
-          fontSize="30"
-          fill="#f5e6c8"
-          opacity={Math.max(
-            COORD_LABEL_OPACITY_MIN,
-            Math.min(COORD_LABEL_OPACITY_MAX, 1 - view.w / (baseBounds.w * COORD_LABEL_FADE_AT)),
-          )}
-          pointerEvents="none"
-        >
-          {coord}
-        </text>
-      </g>
-    );
+  const startLeyLine = () => {
+    setDraftLeyLine({
+      name: '',
+      type: DEFAULT_LEY_LINE_TYPE,
+      color: LEY_LINE_COLORS[leyLines.length % LEY_LINE_COLORS.length],
+      notes: '',
+      hexes: [],
+    });
+    clearSelection();
   };
+
+  // Items on each hex, in order: POIs first, then doors.
+  const itemsByHex = new Map<HexCoord, { pois: MapPOI[]; doors: FairyDoor[] }>();
+  for (const p of pois) {
+    const e = itemsByHex.get(p.hex) ?? { pois: [], doors: [] };
+    e.pois.push(p);
+    itemsByHex.set(p.hex, e);
+  }
+  for (const d of doors) {
+    const e = itemsByHex.get(d.hex) ?? { pois: [], doors: [] };
+    e.doors.push(d);
+    itemsByHex.set(d.hex, e);
+  }
 
   const polylinePoints = (hexes: HexCoord[]) =>
     hexes
-      .map((h) => {
-        const p = parseCoord(h);
-        if (!p) return null;
-        const c = hexCenter(p.col, p.row);
-        return `${c.x.toFixed(1)},${c.y.toFixed(1)}`;
-      })
-      .filter((s): s is string => s !== null)
+      .map((h) => hexCenterOf(h))
+      .filter((c): c is Point => c !== null)
+      .map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`)
       .join(' ');
 
-  const renderLeyLines = () => {
-    const lines: React.ReactElement[] = [];
-    for (const ll of mapData.leyLines) {
-      if (ll.hexes.length < 2) continue;
+  const renderLeyLines = () =>
+    leyLines.map((ll) => {
+      if (ll.hexes.length < 2) return null;
       const notesSnippet = ll.notes ? ` — ${ll.notes.slice(0, 120)}` : '';
-      const label = `${ll.type || 'Ley line'}: ${ll.name || 'Unnamed'}${notesSnippet}`;
-      const toggleSelect = () => {
-        // Drop the synthetic click that ends a shift-drag pan.
-        if (suppressNextClickRef.current) {
-          suppressNextClickRef.current = false;
-          return;
-        }
-        // Toggle: clicking the already-selected ley line deselects it.
-        // Goes through the unified selection helpers so the hex inspector
-        // and focused-item state are cleared in lock-step.
-        if (selectedLeyLine === ll.id) clearSelection();
-        else selectLeyLine(ll.id);
-      };
-      lines.push(
-        <g key={ll.id} role="button" tabIndex={0} aria-label={label}
-          style={{ cursor: 'pointer' }}
-          className="focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2"
-          onClick={(e) => { e.stopPropagation(); toggleSelect(); }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              e.stopPropagation();
-              toggleSelect();
-            }
-          }}>
+      const label = `${ll.type || DEFAULT_LEY_LINE_TYPE}: ${ll.name || 'Unnamed'}${notesSnippet}`;
+      return (
+        <g
+          key={ll.id}
+          {...MAP_BUTTON_PROPS}
+          data-ley-line={ll.id}
+          aria-label={label}
+          aria-pressed={selectedLeyLine === ll.id}
+          // While drawing, existing lines must not catch the clicks meant
+          // for the hexes under them.
+          pointerEvents={draft ? 'none' : undefined}
+        >
           <title>{label}</title>
           <polyline
             points={polylinePoints(ll.hexes)}
             fill="none"
             stroke={ll.color}
-            strokeWidth={14}
+            strokeWidth={LEY_LINE_WIDTH}
             strokeLinejoin="round"
             strokeLinecap="round"
             opacity={selectedLeyLine && selectedLeyLine !== ll.id ? 0.35 : 0.9}
           />
-        </g>,
+        </g>
       );
-    }
-    if (drawingLeyLine && drawingLeyLine.hexes.length >= 2) {
-      lines.push(
-        <polyline
-          key="draft"
-          points={polylinePoints(drawingLeyLine.hexes)}
-          fill="none"
-          stroke={drawingLeyLine.color}
-          strokeWidth={14}
-          strokeDasharray="20 12"
-          strokeLinejoin="round"
-          strokeLinecap="round"
-          opacity={0.85}
-          pointerEvents="none"
-        />,
-      );
-    }
-    return lines;
+    });
+
+  const renderDraft = () => {
+    if (!draft) return null;
+    return (
+      <g pointerEvents="none" aria-hidden="true">
+        {draft.hexes.map((h) => (
+          <path key={`fill-${h}`} d={HEX_PATHS.get(h)} fill={PARCHMENT} fillOpacity={0.12} />
+        ))}
+        {draft.hexes.length >= 2 && (
+          <polyline
+            points={polylinePoints(draft.hexes)}
+            fill="none"
+            stroke={draft.color}
+            strokeWidth={LEY_LINE_WIDTH}
+            strokeDasharray="20 12"
+            strokeLinejoin="round"
+            strokeLinecap="round"
+            opacity={0.85}
+          />
+        )}
+        {draft.hexes.map((h, i) => {
+          const c = hexCenterOf(h);
+          if (!c) return null;
+          return (
+            <text
+              key={`step-${h}`}
+              x={c.x}
+              y={c.y + DRAFT_STEP_FONT * 0.35}
+              textAnchor="middle"
+              fontSize={DRAFT_STEP_FONT}
+              fontWeight="bold"
+              fill={PARCHMENT}
+              stroke={NIGHT}
+              strokeWidth={TEXT_HALO}
+              paintOrder="stroke"
+            >
+              {i + 1}
+            </text>
+          );
+        })}
+      </g>
+    );
   };
 
   const renderDoorConnectors = () => {
     const seen = new Set<string>();
     const out: React.ReactElement[] = [];
-    for (const d of mapData.fairyDoors) {
+    for (const d of doors) {
       if (d.destination.kind !== 'roaded') continue;
       const otherId = d.destination.pairedDoorId;
       const pairKey = [d.id, otherId].sort().join('|');
       if (seen.has(pairKey)) continue;
       seen.add(pairKey);
-      const other = mapData.fairyDoors.find((x) => x.id === otherId);
-      if (!other) continue;
-      const a = parseCoord(d.hex);
-      const b = parseCoord(other.hex);
-      if (!a || !b) continue;
-      const ca = hexCenter(a.col, a.row);
-      const cb = hexCenter(b.col, b.row);
-      const mx = (ca.x + cb.x) / 2;
-      const my = (ca.y + cb.y) / 2;
+      const other = doors.find((x) => x.id === otherId);
+      const ca = hexCenterOf(d.hex);
+      const cb = other ? hexCenterOf(other.hex) : null;
+      if (!ca || !cb) continue;
       out.push(
-        <g key={pairKey}>
-          <line
-            x1={ca.x}
-            y1={ca.y}
-            x2={cb.x}
-            y2={cb.y}
-            stroke="#a774d6"
-            strokeWidth={8}
-            strokeDasharray="20 14"
-            opacity={0.75}
-            pointerEvents="none"
-          />
+        <g key={pairKey} pointerEvents="none">
+          <line x1={ca.x} y1={ca.y} x2={cb.x} y2={cb.y} stroke={DOOR_FILL} strokeWidth={CONNECTOR_WIDTH} strokeDasharray="20 14" opacity={0.75} />
           {d.destination.roadName && (
             <text
-              x={mx}
-              y={my - 14}
+              x={(ca.x + cb.x) / 2}
+              y={(ca.y + cb.y) / 2 - 14}
               textAnchor="middle"
-              fontSize="34"
-              fill="#a774d6"
+              fontSize={ROAD_LABEL_FONT}
+              fill={DOOR_FILL}
               fontWeight="bold"
-              pointerEvents="none"
-              style={{ paintOrder: 'stroke fill', stroke: '#1a1a2e', strokeWidth: 6 }}
+              style={{ paintOrder: 'stroke fill', stroke: NIGHT, strokeWidth: 6 }}
             >
               {d.destination.roadName}
             </text>
@@ -735,118 +707,49 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const renderMarkers = () => {
     const els: React.ReactElement[] = [];
-    if (character.currentLocationHex) {
-      const cl = parseCoord(character.currentLocationHex);
-      if (cl) {
-        const { x, y } = hexCenter(cl.col, cl.row);
-        els.push(
-          <circle
-            key="current-loc"
-            cx={x}
-            cy={y}
-            r={42}
-            fill="#c4a35a"
-            stroke="#f5e6c8"
-            strokeWidth={6}
-            pointerEvents="none"
-          />,
-          <text
-            key="current-loc-icon"
-            x={x}
-            y={y + 18}
-            textAnchor="middle"
-            fontSize="56"
-            fill="#1a1a2e"
-            fontWeight="bold"
-            pointerEvents="none"
-          >
-            ★
-          </text>,
-        );
-      }
-    }
-    // Show at most this many markers per hex; the rest collapse into a
-    // "+N" badge so a busy hex doesn't degenerate into overlapping circles.
-    const MAX_VISIBLE_MARKERS = 4;
-    contentsByHex.forEach((bucket, hex) => {
-      const p = parseCoord(hex);
-      if (!p) return;
-      const { x, y } = hexCenter(p.col, p.row);
+    itemsByHex.forEach((bucket, hex) => {
+      const c = hexCenterOf(hex);
+      if (!c) return;
       const items = [
         ...bucket.pois.map((poi) => ({ kind: 'poi' as const, item: poi })),
         ...bucket.doors.map((door) => ({ kind: 'door' as const, item: door })),
       ];
       const visible = items.slice(0, MAX_VISIBLE_MARKERS);
       const overflow = items.length - visible.length;
-      const slotCount = visible.length + (overflow > 0 ? 1 : 0);
+      const slots = visible.length + (overflow > 0 ? 1 : 0);
+      // A lone marker sits in the middle. On the current hex the star has
+      // the middle, so markers ring it, starting at the right (clear of the
+      // coordinate label above).
+      const onCurrent = hex === currentHex;
+      const radius = onCurrent ? CURRENT_HEX_RING_RADIUS : slots === 1 ? 0 : MARKER_RING_RADIUS;
+      const firstAngle = onCurrent ? 0 : -Math.PI / 2;
+      const slotAt = (i: number) => {
+        const angle = firstAngle + (i / slots) * Math.PI * 2;
+        return { x: c.x + radius * Math.cos(angle), y: c.y + radius * Math.sin(angle) };
+      };
       visible.forEach((entry, i) => {
-        const angle = slotCount === 1 ? -Math.PI / 2 : -Math.PI / 2 + (i / slotCount) * Math.PI * 2;
-        const r = slotCount === 1 ? 0 : 42;
-        const mx = x + r * Math.cos(angle);
-        const my = y + r * Math.sin(angle);
-        // Marker activation routes to either focusItemOnMap (default) or
-        // handleHexClick (when a ley line draft is in progress, so the user
-        // can include a decorated hex in their ley line without the marker
-        // hijacking the click). Also drops the synthetic click that ends
-        // a shift-drag pan, matching the polygon click handler.
-        const activateMarker = (itemId: string) => {
-          if (suppressNextClickRef.current) {
-            suppressNextClickRef.current = false;
-            return;
-          }
-          if (drawingLeyLine) {
-            handleHexClick(hex);
-          } else {
-            focusItemOnMap(hex, itemId);
-          }
-        };
-
+        const m = slotAt(i);
+        const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
         if (entry.kind === 'poi') {
-          // SVG <title> renders as a native browser tooltip on hover.
-          // `role="button"` + `tabIndex` + `aria-label` make the marker
-          // keyboard-operable and announceable.
           const notesSnippet = entry.item.notes ? ` — ${entry.item.notes.slice(0, 120)}` : '';
           const label = `POI: ${entry.item.name || 'Unnamed'}${notesSnippet}`;
           els.push(
-            <g key={`poi-${entry.item.id}`} role="button" tabIndex={0} aria-label={label}
-              style={{ cursor: 'pointer' }}
-              className="focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2"
-              onClick={(e) => { e.stopPropagation(); activateMarker(entry.item.id); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  activateMarker(entry.item.id);
-                }
-              }}>
+            <g key={`poi-${entry.item.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
-              <circle cx={mx} cy={my} r={22} fill="#8b2500" stroke="#f5e6c8" strokeWidth={4} />
+              <circle cx={m.x} cy={m.y} r={POI_RADIUS} fill={POI_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM} />
             </g>,
           );
         } else {
           const door = entry.item;
           const dest = door.destination;
-          const destLabel = dest.kind === 'wild'
-            ? 'wild → Fairy'
-            : `roaded${dest.roadName ? ` via "${dest.roadName}"` : ''}`;
+          const destLabel = dest.kind === 'wild' ? 'wild → Fairy' : `roaded${dest.roadName ? ` via "${dest.roadName}"` : ''}`;
           const notesSnippet = door.notes ? ` — ${door.notes.slice(0, 120)}` : '';
           const label = `Fairy Door: ${door.name || 'Unnamed'} (${destLabel})${notesSnippet}`;
           els.push(
-            <g key={`door-${door.id}`} role="button" tabIndex={0} aria-label={label}
-              style={{ cursor: 'pointer' }}
-              className="focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2"
-              onClick={(e) => { e.stopPropagation(); activateMarker(door.id); }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  activateMarker(door.id);
-                }
-              }}>
+            <g key={`door-${door.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
-              <circle cx={mx} cy={my} r={26} fill="#a774d6" stroke="#f5e6c8" strokeWidth={4} />
-              <text x={mx} y={my + 12} textAnchor="middle" fontSize="38" fill="#1a1a2e" fontWeight="bold"
-                pointerEvents="none">
+              <circle cx={m.x} cy={m.y} r={DOOR_RADIUS} fill={DOOR_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM} />
+              <text x={m.x} y={m.y + DOOR_GLYPH_FONT * 0.32} textAnchor="middle" fontSize={DOOR_GLYPH_FONT} fill={NIGHT} fontWeight="bold" pointerEvents="none" aria-hidden="true">
                 ✦
               </text>
             </g>,
@@ -854,15 +757,11 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         }
       });
       if (overflow > 0) {
-        // Overflow badge sits in the slot after the last visible marker.
-        const i = visible.length;
-        const angle = -Math.PI / 2 + (i / slotCount) * Math.PI * 2;
-        const mx = x + 42 * Math.cos(angle);
-        const my = y + 42 * Math.sin(angle);
+        const b = slotAt(visible.length);
         els.push(
-          <g key={`overflow-${hex}`} pointerEvents="none">
-            <circle cx={mx} cy={my} r={24} fill="#1a1a2e" stroke="#f5e6c8" strokeWidth={3} />
-            <text x={mx} y={my + 10} textAnchor="middle" fontSize="28" fill="#f5e6c8" fontWeight="bold">
+          <g key={`overflow-${hex}`} pointerEvents="none" role="img" aria-label={`${overflow} more on hex ${hex}`}>
+            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS} fill={NIGHT} stroke={PARCHMENT} strokeWidth={3} />
+            <text x={b.x} y={b.y + BADGE_FONT * 0.36} textAnchor="middle" fontSize={BADGE_FONT} fill={PARCHMENT} fontWeight="bold">
               +{overflow}
             </text>
           </g>,
@@ -872,129 +771,171 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     return els;
   };
 
-  const resetView = () => setView({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
-
-  const startLeyLine = () => {
-    setDraftLeyLine({
-      name: '',
-      type: 'Ley line',
-      color: DEFAULT_LEY_LINE_COLORS[mapData.leyLines.length % DEFAULT_LEY_LINE_COLORS.length],
-      notes: '',
-      hexes: [],
-    });
-    // Use the unified helper so focusedItemId / pendingForm get cleared
-    // alongside the hex+ley line selection (otherwise a partly-filled door
-    // form or marker focus would survive into the draft session).
-    clearSelection();
+  const renderCurrentLocation = () => {
+    const c = currentHex ? hexCenterOf(currentHex) : null;
+    if (!c) return null;
+    return (
+      <g pointerEvents="none" aria-hidden="true">
+        <circle cx={c.x} cy={c.y} r={STAR_RADIUS} fill={GOLD} stroke={PARCHMENT} strokeWidth={6} />
+        <text x={c.x} y={c.y + STAR_GLYPH_FONT * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT} fill={NIGHT} fontWeight="bold">
+          ★
+        </text>
+      </g>
+    );
   };
+
+  // Outlines for the current, selected and hovered hexes, drawn over every
+  // hex (an outline on a hex's own polygon is painted over by later hexes).
+  const renderOutlines = () => (
+    <g fill="none" pointerEvents="none" aria-hidden="true">
+      {currentHex && HEX_PATHS.has(currentHex) && (
+        <path d={HEX_PATHS.get(currentHex)} stroke={GOLD} strokeWidth={CURRENT_LINE_PX} vectorEffect="non-scaling-stroke" />
+      )}
+      {hoverHex && hoverHex !== selectedHex && (
+        <path d={HEX_PATHS.get(hoverHex)} stroke={PARCHMENT} strokeOpacity={0.7} strokeWidth={HIGHLIGHT_LINE_PX} vectorEffect="non-scaling-stroke" />
+      )}
+      {selectedHex && HEX_PATHS.has(selectedHex) && (
+        <path d={HEX_PATHS.get(selectedHex)} stroke={PARCHMENT} strokeWidth={HIGHLIGHT_LINE_PX} vectorEffect="non-scaling-stroke" />
+      )}
+    </g>
+  );
+
+  const labelOpacity = Math.max(
+    COORD_LABEL_OPACITY_MIN,
+    Math.min(COORD_LABEL_OPACITY_MAX, 1 - view.w / (baseBounds.w * COORD_LABEL_FADE_AT)),
+  );
+  const zoomPercent = Math.round((baseBounds.w / view.w) * 100);
+  const toolButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 transition-colors';
 
   return (
     <div className="space-y-4">
       <div className="bg-[#2a2a3e] rounded-lg p-4">
         <div className="flex items-center justify-between mb-3 border-b border-[#5a3a28] pb-2 flex-wrap gap-2">
           <h2 className="text-lg font-bold text-[#c4a35a]">Dolmenwood Map</h2>
-          <div className="flex items-center gap-3 text-xs text-[#f5e6c8]/80">
+          <div className="flex items-center gap-3 text-xs text-[#f5e6c8]/80 flex-wrap">
             <div className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded-sm" style={{ background: TERRAIN_FILL.woods }} /> Woods
             </div>
             <div className="flex items-center gap-1">
               <span className="inline-block w-3 h-3 rounded-sm" style={{ background: TERRAIN_FILL.open }} /> Open
             </div>
-            <button onClick={resetView} className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 transition-colors">
+            <div className="flex items-center gap-1" role="group" aria-label="Zoom">
+              <button type="button" onClick={() => zoomBy(BUTTON_ZOOM_FACTOR)} aria-label="Zoom out" className={`${toolButton} w-7`}>
+                −
+              </button>
+              <span className="min-w-[3rem] text-center tabular-nums" aria-live="polite">{zoomPercent}%</span>
+              <button type="button" onClick={() => zoomBy(1 / BUTTON_ZOOM_FACTOR)} aria-label="Zoom in" className={`${toolButton} w-7`}>
+                +
+              </button>
+            </div>
+            <button type="button" onClick={resetView} className={toolButton}>
               Reset View
             </button>
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-sm">
-          {!drawingLeyLine ? (
-            <button onClick={startLeyLine} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors">
+          {!draft ? (
+            <button type="button" onClick={startLeyLine} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors">
               ≈ Draw Ley Line
             </button>
           ) : (
             <>
               <span className="text-[#c4a35a] font-semibold">
-                Drawing ley line ({drawingLeyLine.hexes.length} hex{drawingLeyLine.hexes.length === 1 ? '' : 'es'})
+                Drawing ley line ({draft.hexes.length} hex{draft.hexes.length === 1 ? '' : 'es'})
               </span>
               <button
+                type="button"
                 onClick={finishLeyLine}
-                disabled={drawingLeyLine.hexes.length < 2}
+                disabled={draft.hexes.length < 2}
                 className="bg-[#c4a35a] disabled:opacity-40 hover:bg-[#d4b66a] text-[#1a1a2e] font-semibold rounded px-3 py-1 transition-colors"
               >
                 Finish
               </button>
-              <button onClick={cancelLeyLine} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
+              <button type="button" onClick={() => setDraftLeyLine(null)} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
                 Cancel
               </button>
             </>
           )}
-          {/* Keyboard entry point: hex polygons aren't in the tab order
-              (199 of them would dominate every Tab press), so this input
-              lets keyboard-only users open the inspector for any hex by
-              typing its coord (e.g. "0303"). Routes through handleHexClick
-              so it respects the ley-line-draft branch and the unified
-              selection contract. Also re-centres the viewBox so a jumped
-              hex doesn't sit off-screen. */}
           <JumpToHexInput
-            drafting={drawingLeyLine !== null}
-            onJump={(hex) => { recenterOnHex(hex); handleHexClick(hex); }}
+            drafting={draft !== null}
+            onJump={(hex) => {
+              recenterOnHex(hex);
+              handleHexClick(hex);
+            }}
           />
-          {/* Draft-specific guidance lives inside LeyLineDraftForm; the
-              toolbar hint is suppressed while drafting to avoid duplicating
-              the same message in two places. */}
-          {!drawingLeyLine && (
-            <span className="text-[#f5e6c8]/40 text-xs ml-auto basis-full md:basis-auto md:whitespace-nowrap">
-              Scroll to zoom · Shift-drag to pan · Click a hex to inspect · Hover a marker for details
+          {!draft && (
+            <span className="text-[#f5e6c8]/40 text-xs ml-auto basis-full md:basis-auto">
+              <span className="pointer-coarse:hidden">
+                Drag to pan · Scroll or +/− to zoom · Click a hex to inspect · Hover a marker for details
+              </span>
+              <span className="hidden pointer-coarse:inline">Drag to pan · Pinch or +/− to zoom · Tap a hex or marker to inspect</span>
+              {' · '}Each hex is 6 miles across.
             </span>
           )}
         </div>
-        {drawingLeyLine && <LeyLineDraftForm draft={drawingLeyLine} setDraft={setDraftLeyLine} />}
+        {draft && <LeyLineDraftForm draft={draft} setDraft={setDraftLeyLine} />}
       </div>
 
-      <div className="bg-[#1a1a2e] rounded-lg overflow-hidden relative" style={{ height: '60vh' }}>
+      {/* On phones the box follows the grid's shape so the inspector below
+          stays close; from md up it's a fixed 60vh. */}
+      <div
+        className="bg-[#1a1a2e] rounded-lg overflow-hidden relative w-full aspect-(--map-aspect) md:aspect-auto md:h-[60vh]"
+        style={{ '--map-aspect': `${baseBounds.w} / ${baseBounds.h}` } as React.CSSProperties}
+      >
         <svg
           ref={svgRef}
           viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
           xmlns="http://www.w3.org/2000/svg"
-          className="w-full h-full select-none"
-          style={{ cursor: isPanning ? 'grabbing' : drawingLeyLine ? 'crosshair' : 'default' }}
-          onMouseMove={handleMouseMove}
-          onMouseDown={handleMouseDown}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          role="group"
+          aria-label="Dolmenwood hex map. Arrow keys pan, plus and minus zoom."
+          tabIndex={0}
+          className="w-full h-full select-none touch-none focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:-outline-offset-2"
+          style={{ cursor: isPanning ? 'grabbing' : undefined }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerEnd}
+          onPointerCancel={handlePointerEnd}
+          onPointerLeave={(e) => {
+            if (e.pointerType === 'mouse' && !gestureRef.current) setHoverHex(null);
+          }}
+          onClick={handleMapClick}
+          onKeyDown={handleMapKeyDown}
         >
-          <rect
-            x={baseBounds.x}
-            y={baseBounds.y}
-            width={baseBounds.w}
-            height={baseBounds.h}
-            fill="#1a1a2e"
-          />
-          <g>{ALL_HEXES.map(renderHex)}</g>
+          <rect x={baseBounds.x} y={baseBounds.y} width={baseBounds.w} height={baseBounds.h} fill={NIGHT} />
+          <g style={{ cursor: draft ? 'crosshair' : 'pointer' }}>
+            <HexGridLayer currentHex={currentHex} />
+          </g>
+          <g opacity={labelOpacity} pointerEvents="none" aria-hidden="true">
+            <CoordLabels />
+          </g>
           <g>{renderLeyLines()}</g>
+          {renderDraft()}
           <g>{renderDoorConnectors()}</g>
           <g>{renderMarkers()}</g>
+          {renderCurrentLocation()}
+          {renderOutlines()}
         </svg>
       </div>
 
       <div className="grid md:grid-cols-2 gap-4">
-        <HexInspectorPanel
-          selectedHex={selectedHex}
-          mapData={mapData}
-          contentsByHex={contentsByHex}
-          updateMap={updateMap}
-          pendingForm={pendingForm}
-          setPendingForm={setPendingForm}
-          currentLocationHex={character.currentLocationHex}
-          setCurrentLocation={setCurrentLocation}
-          focusedItemId={focusedItemId}
-          onClose={clearSelection}
-        />
+        <div ref={inspectorRef} className="scroll-mt-4">
+          <HexInspectorPanel
+            selectedHex={selectedHex}
+            items={selectedHex ? itemsByHex.get(selectedHex) : undefined}
+            allDoors={doors}
+            updateMap={updateMap}
+            pendingForm={pendingForm}
+            setPendingForm={setPendingForm}
+            currentLocationHex={currentHex}
+            setCurrentLocation={setCurrentLocation}
+            focus={focus}
+            onClose={clearSelection}
+          />
+        </div>
         <LeyLinesPanel
-          mapData={mapData}
+          leyLines={leyLines}
           updateMap={updateMap}
           selectedLeyLine={selectedLeyLine}
-          // Toggle through the unified selection helpers so the hex
-          // inspector / focused-item / pending form clear in lock-step.
           onToggleSelected={(id) => (selectedLeyLine === id ? clearSelection() : selectLeyLine(id))}
         />
       </div>
@@ -1002,97 +943,72 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   );
 }
 
-// --- Ley line draft form ---
-// --- Jump-to-hex input (toolbar) ---
-// Accessibility entry point: lets keyboard-only users open the inspector
-// for any hex by typing its 4-digit coord. Short input (e.g. "33") is
-// left-padded to "0033" so casual typing works. Invalid input (out-of-
-// manifest coord or non-numeric) sets a transient `invalid` flag that
-// the caller can see via aria-invalid + a red border; cleared on the
-// next keystroke or after a short timeout.
-function JumpToHexInput({
-  drafting,
-  onJump,
-}: {
-  drafting: boolean;
-  onJump: (hex: HexCoord) => void;
-}) {
+// --- Go to hex (toolbar) ---
+// Reaches any hex from the keyboard (hexes aren't in the Tab order): type a
+// coordinate and press Enter or Go. Short input is left-padded ("303" →
+// "0303"). While drawing a ley line it adds the hex to the line instead. Bad
+// input keeps a red border and a status message until the text is edited.
+function JumpToHexInput({ drafting, onJump }: { drafting: boolean; onJump: (hex: HexCoord) => void }) {
   const [value, setValue] = useState('');
-  const [invalid, setInvalid] = useState(false);
-  const submit = () => {
+  const [error, setError] = useState<string | null>(null);
+  const statusId = useId();
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
     const raw = value.trim();
-    const ok = /^\d{1,4}$/.test(raw);
-    const hex = ok ? raw.padStart(4, '0') : raw;
-    if (!ok || !(hex in HEX_CELLS)) {
-      setInvalid(true);
+    const hex = /^\d{1,4}$/.test(raw) ? raw.padStart(4, '0') : '';
+    if (!isValidHex(hex)) {
+      setError(raw ? `No hex "${raw}" on the map` : 'Type a hex number, like 0303');
       return;
     }
     onJump(hex);
     setValue('');
-    setInvalid(false);
+    setError(null);
   };
+  const border = error ? 'border-[#d4553a] focus:border-[#d4553a]' : 'border-[#5a3a28] focus:border-[#c4a35a]';
   return (
-    <input
-      type="text"
-      inputMode="numeric"
-      value={value}
-      onChange={(e) => {
-        setValue(e.target.value);
-        if (invalid) setInvalid(false);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter') {
-          e.preventDefault();
-          submit();
-        }
-      }}
-      placeholder={drafting ? 'Add to ley line' : 'Go to hex'}
-      aria-label={
-        drafting
-          ? 'Add a hex to the in-progress ley line by typing its coordinate'
-          : 'Jump to a hex by typing its 4-digit coordinate'
-      }
-      aria-invalid={invalid || undefined}
-      className={`bg-[#1a1a2e] border ${invalid ? 'border-[#8b2500]' : 'border-[#5a3a28]'} text-[#f5e6c8] rounded px-2 py-1 text-xs w-28 focus:outline-none focus:border-[#c4a35a]`}
-    />
+    <form onSubmit={submit} className="flex items-center gap-1 flex-wrap">
+      <input
+        type="text"
+        inputMode="numeric"
+        enterKeyHint="go"
+        value={value}
+        onChange={(e) => {
+          setValue(e.target.value);
+          if (error) setError(null);
+        }}
+        placeholder={drafting ? 'Add to ley line' : 'Go to hex'}
+        aria-label={drafting ? 'Add a hex to the ley line by typing its coordinate' : 'Jump to a hex by typing its 4-digit coordinate'}
+        aria-invalid={error ? true : undefined}
+        aria-describedby={statusId}
+        className={`bg-[#1a1a2e] border ${border} text-[#f5e6c8] rounded px-2 py-1 text-base md:text-xs w-28 focus:outline-none`}
+      />
+      <button type="submit" className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 text-xs transition-colors">
+        Go
+      </button>
+      <span id={statusId} role="status" className="text-xs text-[#ff8a70]">
+        {error ?? ''}
+      </span>
+    </form>
   );
 }
 
+// --- Ley line draft form ---
 function LeyLineDraftForm({
   draft,
   setDraft,
 }: {
   draft: LeyLineDraft;
-  setDraft: (d: LeyLineDraft) => void;
+  setDraft: (next: (prev: LeyLineDraft | null) => LeyLineDraft | null) => void;
 }) {
+  const edit = (patch: Partial<LeyLineDraft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
   return (
     <div className="mt-3 pt-3 border-t border-[#5a3a28] grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
-      <input
-        value={draft.name}
-        onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-        placeholder="Name"
-        className="bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]"
-      />
-      <input
-        value={draft.type}
-        onChange={(e) => setDraft({ ...draft, type: e.target.value })}
-        placeholder="Type (Ley line, Ward…)"
-        className="bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]"
-      />
-      <input
-        type="color"
-        value={draft.color}
-        onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-        className="bg-[#1a1a2e] border border-[#5a3a28] rounded h-8 w-full"
-      />
-      <input
-        value={draft.notes}
-        onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
-        placeholder="Notes"
-        className="bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]"
-      />
+      <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name" aria-label="Ley line name" className={INPUT_ON_CARD} />
+      <input value={draft.type} onChange={(e) => edit({ type: e.target.value })} placeholder="Type (Ley line, Ward…)" aria-label="Ley line type" className={INPUT_ON_CARD} />
+      <input type="color" value={draft.color} onChange={(e) => edit({ color: e.target.value })} aria-label="Ley line colour" className="bg-[#1a1a2e] border border-[#5a3a28] rounded h-8 w-full" />
+      <input value={draft.notes} onChange={(e) => edit({ notes: e.target.value })} placeholder="Notes" aria-label="Ley line notes" className={INPUT_ON_CARD} />
       <div className="col-span-full text-xs text-[#f5e6c8]/60">
-        Click hexes in order. Click the last-added hex to undo it; click any earlier draft hex to truncate from that point.
+        Click hexes in order. Click the last-added hex to undo it; click any earlier hex of the line to cut it back to there.
       </div>
     </div>
   );
@@ -1101,25 +1017,25 @@ function LeyLineDraftForm({
 // --- Hex inspector ---
 function HexInspectorPanel({
   selectedHex,
-  mapData,
-  contentsByHex,
+  items,
+  allDoors,
   updateMap,
   pendingForm,
   setPendingForm,
   currentLocationHex,
   setCurrentLocation,
-  focusedItemId,
+  focus,
   onClose,
 }: {
   selectedHex: HexCoord | null;
-  mapData: CharacterMapData;
-  contentsByHex: Map<HexCoord, { pois: MapPOI[]; doors: FairyDoor[] }>;
+  items: { pois: MapPOI[]; doors: FairyDoor[] } | undefined;
+  allDoors: FairyDoor[];
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
   pendingForm: { type: 'poi' | 'door'; hex: HexCoord } | null;
   setPendingForm: (f: { type: 'poi' | 'door'; hex: HexCoord } | null) => void;
   currentLocationHex: HexCoord | '';
   setCurrentLocation: (h: HexCoord) => void;
-  focusedItemId: string | null;
+  focus: { id: string; seq: number } | null;
   onClose: () => void;
 }) {
   if (!selectedHex) {
@@ -1129,31 +1045,37 @@ function HexInspectorPanel({
       </div>
     );
   }
-  const bucket = contentsByHex.get(selectedHex);
-  const pois = bucket?.pois ?? [];
-  const doors = bucket?.doors ?? [];
-  const cell = HEX_CELLS[selectedHex];
+  const pois = items?.pois ?? [];
+  const doors = items?.doors ?? [];
+  const singleton = pois.length + doors.length === 1;
+  const terrain = HEX_CELLS[selectedHex]?.terrain;
   const isCurrent = currentLocationHex === selectedHex;
-
-  // The action area at the top is either:
-  //   - the action button row (default), OR
-  //   - the active form (POI / Door), which takes its place when the user
-  //     picks an action. Submit/Cancel returns to the button row.
+  const focusSeqFor = (id: string) => (focus?.id === id ? focus.seq : undefined);
+  // The action buttons give way to the chosen form; Add or Cancel brings them back.
   const activeForm = pendingForm?.hex === selectedHex ? pendingForm.type : null;
+  const actionButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors';
+
+  const savePoi = (id: string, patch: Partial<MapPOI>) =>
+    updateMap((md) => ({ ...md, pois: md.pois.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const saveDoorText = (id: string, patch: Partial<Pick<FairyDoor, 'name' | 'notes'>>) =>
+    updateMap((md) => ({ ...md, fairyDoors: md.fairyDoors.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  // Pairing is validated and both ends updated from the doors as they are
+  // when the update runs, not as this render saw them.
+  const saveDoorDestination = (id: string, destination: FairyDoorDestination) =>
+    updateMap((md) => {
+      const door = md.fairyDoors.find((x) => x.id === id);
+      return door ? { ...md, fairyDoors: upsertFairyDoor(md.fairyDoors, { ...door, destination }) } : md;
+    });
 
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between border-b border-[#5a3a28] pb-2">
         <div>
           <span className="text-[#c4a35a] font-bold">Hex {selectedHex}</span>
-          <span className="text-[#f5e6c8]/60 text-xs ml-2">{cell?.terrain}</span>
+          <span className="text-[#f5e6c8]/60 text-xs ml-2">{terrain}</span>
           {isCurrent && <span className="text-[#c4a35a] text-xs ml-2">★ current</span>}
         </div>
-        <button
-          onClick={onClose}
-          aria-label="Close hex inspector"
-          className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] text-xs transition-colors"
-        >
+        <button type="button" onClick={onClose} aria-label="Close hex inspector" className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] text-xs transition-colors">
           ✕
         </button>
       </div>
@@ -1171,15 +1093,9 @@ function HexInspectorPanel({
       {activeForm === 'door' && (
         <DoorForm
           hex={selectedHex}
-          existingDoors={mapData.fairyDoors}
-          onSubmit={(door, pairUpdates) => {
-            updateMap((md) => ({
-              ...md,
-              fairyDoors: [
-                ...md.fairyDoors.map((x) => pairUpdates.find((u) => u.id === x.id) ?? x),
-                door,
-              ],
-            }));
+          allDoors={allDoors}
+          onSubmit={(door) => {
+            updateMap((md) => ({ ...md, fairyDoors: upsertFairyDoor(md.fairyDoors, door) }));
             setPendingForm(null);
           }}
           onCancel={() => setPendingForm(null)}
@@ -1188,22 +1104,17 @@ function HexInspectorPanel({
       {activeForm === null && (
         <div className="grid grid-cols-3 gap-2 text-sm">
           <button
+            type="button"
             onClick={() => setCurrentLocation(selectedHex)}
             disabled={isCurrent}
             className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 disabled:hover:bg-[#2d4a2e] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
           >
             📍 Set Current
           </button>
-          <button
-            onClick={() => setPendingForm({ type: 'poi', hex: selectedHex })}
-            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
-          >
+          <button type="button" onClick={() => setPendingForm({ type: 'poi', hex: selectedHex })} className={actionButton}>
             + POI
           </button>
-          <button
-            onClick={() => setPendingForm({ type: 'door', hex: selectedHex })}
-            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
-          >
+          <button type="button" onClick={() => setPendingForm({ type: 'door', hex: selectedHex })} className={actionButton}>
             ✦ Fairy Door
           </button>
         </div>
@@ -1213,26 +1124,16 @@ function HexInspectorPanel({
         <div className="space-y-3 pt-1 border-t border-[#5a3a28]">
           {pois.length > 0 && (
             <div>
-              <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">
-                Points of Interest
-              </h4>
+              <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">Points of Interest</h4>
               <div className="space-y-2">
                 {pois.map((p) => (
                   <POIEditor
                     key={p.id}
                     poi={p}
-                    // Auto-expand when this is the focused item (user clicked
-                    // its marker) or when it's the only POI on the hex.
-                    initiallyExpanded={focusedItemId === p.id || (pois.length === 1 && doors.length === 0)}
-                    onSave={(updated) =>
-                      updateMap((md) => ({
-                        ...md,
-                        pois: md.pois.map((x) => (x.id === updated.id ? updated : x)),
-                      }))
-                    }
-                    onDelete={() =>
-                      updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }))
-                    }
+                    singleton={singleton}
+                    focusSeq={focusSeqFor(p.id)}
+                    onSave={(patch) => savePoi(p.id, patch)}
+                    onDelete={() => updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }))}
                   />
                 ))}
               </div>
@@ -1240,39 +1141,18 @@ function HexInspectorPanel({
           )}
           {doors.length > 0 && (
             <div>
-              <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">
-                Fairy Doors
-              </h4>
+              <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">Fairy Doors</h4>
               <div className="space-y-2">
                 {doors.map((d) => (
                   <DoorEditor
                     key={d.id}
                     door={d}
-                    allDoors={mapData.fairyDoors}
-                    initiallyExpanded={focusedItemId === d.id || (doors.length === 1 && pois.length === 0)}
-                    onSave={(updated, pairUpdates) =>
-                      updateMap((md) => ({
-                        ...md,
-                        fairyDoors: md.fairyDoors.map((x) => {
-                          if (x.id === updated.id) return updated;
-                          const u = pairUpdates.find((p) => p.id === x.id);
-                          return u ?? x;
-                        }),
-                      }))
-                    }
-                    onDelete={() =>
-                      updateMap((md) => ({
-                        ...md,
-                        fairyDoors: md.fairyDoors
-                          .filter((x) => x.id !== d.id)
-                          .map((x) => {
-                            if (x.destination.kind === 'roaded' && x.destination.pairedDoorId === d.id) {
-                              return { ...x, destination: { kind: 'wild' } };
-                            }
-                            return x;
-                          }),
-                      }))
-                    }
+                    allDoors={allDoors}
+                    singleton={singleton}
+                    focusSeq={focusSeqFor(d.id)}
+                    onSaveText={(patch) => saveDoorText(d.id, patch)}
+                    onSaveDestination={(destination) => saveDoorDestination(d.id, destination)}
+                    onDelete={() => updateMap((md) => ({ ...md, fairyDoors: deleteFairyDoor(md.fairyDoors, d.id) }))}
                   />
                 ))}
               </div>
@@ -1285,126 +1165,74 @@ function HexInspectorPanel({
 }
 
 // --- POI form / editor ---
-function POIForm({
-  hex,
-  onSubmit,
-  onCancel,
-}: {
-  hex: HexCoord;
-  onSubmit: (p: MapPOI) => void;
-  onCancel: () => void;
-}) {
+function POIForm({ hex, onSubmit, onCancel }: { hex: HexCoord; onSubmit: (p: MapPOI) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
   const [notes, setNotes] = useState('');
-  const submit = () => {
-    if (!name.trim()) return onCancel();
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
     onSubmit({ id: newId(), hex, name: name.trim(), notes: notes.trim() });
   };
   return (
-    <div className="bg-[#1a1a2e] rounded p-2 mb-2 space-y-1">
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        onKeyDown={(e) => e.key === 'Enter' && submit()}
-        placeholder="Name"
-        className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a]"
-      />
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes"
-        rows={2}
-        className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a]"
-      />
+    <form onSubmit={submit} className="bg-[#1a1a2e] rounded p-2 mb-2 space-y-1">
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Point of interest name" className={`w-full ${INPUT_ON_ITEM}`} />
+      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" aria-label="Point of interest notes" rows={2} className={`w-full ${INPUT_ON_ITEM}`} />
       <div className="flex justify-end gap-2 text-xs">
-        <button onClick={onCancel} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
+        <button type="button" onClick={onCancel} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
           Cancel
         </button>
-        <button
-          onClick={submit}
-          className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors"
-        >
+        <button type="submit" disabled={!name.trim()} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 text-[#f5e6c8] rounded px-3 py-1 transition-colors">
           Add
         </button>
       </div>
-    </div>
+    </form>
   );
-}
-
-// Expanded state for an inspector editor. Starts at `initiallyExpanded` and
-// expands whenever that prop flips on (e.g. marker click while the editor is
-// already mounted). We never auto-collapse — the user can do that.
-//
-// This hook and the editors below react to prop changes by storing the
-// previous value in state and updating during render, instead of syncing
-// in an effect: https://react.dev/reference/react/useState#storing-information-from-previous-renders
-function useAutoExpand(initiallyExpanded: boolean) {
-  const [expanded, setExpanded] = useState(initiallyExpanded);
-  const [prevInitiallyExpanded, setPrevInitiallyExpanded] = useState(initiallyExpanded);
-  if (initiallyExpanded !== prevInitiallyExpanded) {
-    setPrevInitiallyExpanded(initiallyExpanded);
-    if (initiallyExpanded) setExpanded(true);
-  }
-  return [expanded, setExpanded] as const;
 }
 
 function POIEditor({
   poi,
-  initiallyExpanded = false,
+  singleton,
+  focusSeq,
   onSave,
   onDelete,
 }: {
   poi: MapPOI;
-  initiallyExpanded?: boolean;
-  onSave: (p: MapPOI) => void;
+  singleton: boolean;
+  focusSeq: number | undefined;
+  onSave: (patch: Partial<MapPOI>) => void;
   onDelete: () => void;
 }) {
-  const [name, setName] = useState(poi.name);
-  const [notes, setNotes] = useState(poi.notes);
-  const [expanded, setExpanded] = useAutoExpand(initiallyExpanded);
-  // Sync local edit state when the underlying poi prop changes externally
-  // (e.g. another writer mutated the same record, or the user clicked a
-  // marker that re-focuses this editor with a fresh poi reference).
-  const [syncedPoi, setSyncedPoi] = useState(poi);
-  if (poi.id !== syncedPoi.id || poi.name !== syncedPoi.name || poi.notes !== syncedPoi.notes) {
-    setSyncedPoi(poi);
-    setName(poi.name);
-    setNotes(poi.notes);
-  }
-  const dirty = name !== poi.name || notes !== poi.notes;
+  const [expanded, setExpanded] = useExpanded(singleton, focusSeq);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useFocusOnRequest(focusSeq, rootRef, nameRef);
+  const label = poi.name || 'unnamed';
   return (
-    <div className="bg-[#1a1a2e] rounded p-2 space-y-1">
+    <div ref={rootRef} className="bg-[#1a1a2e] rounded p-2 space-y-1">
       <div className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#8b2500] shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#8b2500] shrink-0" aria-hidden="true" />
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => dirty && onSave({ ...poi, name, notes })}
-          className="flex-1 bg-transparent text-[#f5e6c8] text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
+          ref={nameRef}
+          value={poi.name}
+          onChange={(e) => onSave({ name: e.target.value })}
+          aria-label="Point of interest name"
+          className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
-        <button
-          onClick={() => setExpanded((x) => !x)}
-          className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors"
-        >
+        <button type="button" onClick={() => setExpanded((x) => !x)} aria-expanded={expanded} className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
           {expanded ? 'Less' : 'Notes'}
         </button>
-        <button
-          onClick={onDelete}
-          aria-label={`Delete POI ${poi.name || 'unnamed'}`}
-          className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
-        >
+        <button type="button" onClick={onDelete} aria-label={`Delete POI ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
           Del
         </button>
       </div>
       {expanded && (
         <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => dirty && onSave({ ...poi, name, notes })}
+          value={poi.notes}
+          onChange={(e) => onSave({ notes: e.target.value })}
           placeholder="Notes"
+          aria-label={`Notes for ${label}`}
           rows={3}
-          className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-xs focus:outline-none focus:border-[#c4a35a]"
+          className={`w-full ${INPUT_ON_ITEM}`}
         />
       )}
     </div>
@@ -1412,15 +1240,38 @@ function POIEditor({
 }
 
 // --- Fairy door form / editor ---
+
+/** Wild/roaded radio pair; one `name` per form so they act as one group. */
+function DestinationKindRadios({ kind, onChange, wildLabel, roadedLabel }: {
+  kind: 'wild' | 'roaded';
+  onChange: (k: 'wild' | 'roaded') => void;
+  wildLabel: string;
+  roadedLabel: string;
+}) {
+  const name = useId();
+  return (
+    <div className="flex gap-3 text-xs" role="radiogroup" aria-label="Where the door leads">
+      <label className="flex items-center gap-1 cursor-pointer">
+        <input type="radio" name={name} checked={kind === 'wild'} onChange={() => onChange('wild')} />
+        {wildLabel}
+      </label>
+      <label className="flex items-center gap-1 cursor-pointer">
+        <input type="radio" name={name} checked={kind === 'roaded'} onChange={() => onChange('roaded')} />
+        {roadedLabel}
+      </label>
+    </div>
+  );
+}
+
 function DoorForm({
   hex,
-  existingDoors,
+  allDoors,
   onSubmit,
   onCancel,
 }: {
   hex: HexCoord;
-  existingDoors: FairyDoor[];
-  onSubmit: (d: FairyDoor, pairUpdates: FairyDoor[]) => void;
+  allDoors: FairyDoor[];
+  onSubmit: (d: FairyDoor) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState('');
@@ -1428,62 +1279,27 @@ function DoorForm({
   const [kind, setKind] = useState<'wild' | 'roaded'>('wild');
   const [pairedDoorId, setPairedDoorId] = useState('');
   const [roadName, setRoadName] = useState('');
+  // Recomputed every render from the live doors, so a partner deleted while
+  // the form is open drops out of the list (and the choice is cleared).
+  const pairable = pairableDoors(allDoors, null);
+  const partnerOk = pairable.some((d) => d.id === pairedDoorId);
+  const canAdd = name.trim() !== '' && (kind === 'wild' || partnerOk);
 
-  // Excludes wild doors already targeted by another door and roaded doors
-  // still attached to a live partner; selfId is null because this is a
-  // brand-new door that doesn't yet exist in existingDoors.
-  const pairable = pairableDoors(existingDoors, null);
-
-  const submit = () => {
-    if (!name.trim()) return onCancel();
-    const newDoorId = newId();
-    let destination: FairyDoorDestination;
-    if (kind === 'wild') {
-      destination = { kind: 'wild' };
-    } else {
-      // Belt-and-suspenders: the Save / Add button is `disabled` whenever
-      // pairedDoorId is empty in roaded mode, so this silent return is
-      // only reachable if a future change loses that disabled state or
-      // someone activates the button programmatically.
-      if (!pairedDoorId) return;
-      destination = { kind: 'roaded', pairedDoorId, roadName: roadName.trim() };
-    }
-    // The new door starts wild from the partner-update calculation's
-    // perspective; computePartnerUpdates handles re-pointing the chosen
-    // partner and clearing any prior partner of theirs.
-    const pairUpdates = computePartnerUpdates(newDoorId, { kind: 'wild' }, destination, existingDoors);
-    onSubmit(
-      { id: newDoorId, hex, name: name.trim(), notes: notes.trim(), destination },
-      pairUpdates,
-    );
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!canAdd) return;
+    const destination: FairyDoorDestination =
+      kind === 'wild' ? { kind: 'wild' } : { kind: 'roaded', pairedDoorId, roadName: roadName.trim() };
+    onSubmit({ id: newId(), hex, name: name.trim(), notes: notes.trim(), destination });
   };
 
   return (
-    <div className="bg-[#1a1a2e] rounded p-2 mb-2 space-y-2">
-      <input
-        autoFocus
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-        placeholder="Name (e.g. Door in the Old Oak)"
-        className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a]"
-      />
-      <div className="flex gap-3 text-xs">
-        <label className="flex items-center gap-1 cursor-pointer">
-          <input type="radio" checked={kind === 'wild'} onChange={() => setKind('wild')} />
-          Wild (into Fairy)
-        </label>
-        <label className="flex items-center gap-1 cursor-pointer">
-          <input type="radio" checked={kind === 'roaded'} onChange={() => setKind('roaded')} />
-          Roaded (paired)
-        </label>
-      </div>
+    <form onSubmit={submit} className="bg-[#1a1a2e] rounded p-2 mb-2 space-y-2">
+      <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name (e.g. Door in the Old Oak)" aria-label="Fairy door name" className={`w-full ${INPUT_ON_ITEM}`} />
+      <DestinationKindRadios kind={kind} onChange={setKind} wildLabel="Wild (into Fairy)" roadedLabel="Roaded (paired)" />
       {kind === 'roaded' && (
         <div className="space-y-1">
-          <select
-            value={pairedDoorId}
-            onChange={(e) => setPairedDoorId(e.target.value)}
-            className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm"
-          >
+          <select value={partnerOk ? pairedDoorId : ''} onChange={(e) => setPairedDoorId(e.target.value)} aria-label="Fairy door at the other end of the road" className={`w-full ${INPUT_ON_ITEM}`}>
             <option value="">— pick the door at the other end —</option>
             {pairable.map((d) => (
               <option key={d.id} value={d.id}>
@@ -1491,168 +1307,95 @@ function DoorForm({
               </option>
             ))}
           </select>
-          <input
-            value={roadName}
-            onChange={(e) => setRoadName(e.target.value)}
-            placeholder="Road name (e.g. The Silver Road)"
-            className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a]"
-          />
+          <input value={roadName} onChange={(e) => setRoadName(e.target.value)} placeholder="Road name (e.g. The Silver Road)" aria-label="Fairy road name" className={`w-full ${INPUT_ON_ITEM}`} />
         </div>
       )}
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        placeholder="Notes"
-        rows={2}
-        className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a]"
-      />
+      <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" aria-label="Fairy door notes" rows={2} className={`w-full ${INPUT_ON_ITEM}`} />
       <div className="flex justify-end gap-2 text-xs">
-        <button onClick={onCancel} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
+        <button type="button" onClick={onCancel} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
           Cancel
         </button>
-        <button
-          onClick={submit}
-          disabled={kind === 'roaded' && !pairedDoorId}
-          className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 text-[#f5e6c8] rounded px-3 py-1 transition-colors"
-        >
+        <button type="submit" disabled={!canAdd} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 text-[#f5e6c8] rounded px-3 py-1 transition-colors">
           Add
         </button>
       </div>
-    </div>
+    </form>
   );
 }
+
+type DestinationDraft = { kind: 'wild' | 'roaded'; pairedDoorId: string; roadName: string };
+const destinationDraft = (d: FairyDoorDestination): DestinationDraft =>
+  d.kind === 'roaded' ? { kind: 'roaded', pairedDoorId: d.pairedDoorId, roadName: d.roadName } : { kind: 'wild', pairedDoorId: '', roadName: '' };
 
 function DoorEditor({
   door,
   allDoors,
-  initiallyExpanded = false,
-  onSave,
+  singleton,
+  focusSeq,
+  onSaveText,
+  onSaveDestination,
   onDelete,
 }: {
   door: FairyDoor;
   allDoors: FairyDoor[];
-  initiallyExpanded?: boolean;
-  onSave: (d: FairyDoor, pairUpdates: FairyDoor[]) => void;
+  singleton: boolean;
+  focusSeq: number | undefined;
+  onSaveText: (patch: Partial<Pick<FairyDoor, 'name' | 'notes'>>) => void;
+  onSaveDestination: (d: FairyDoorDestination) => void;
   onDelete: () => void;
 }) {
-  const [name, setName] = useState(door.name);
-  const [notes, setNotes] = useState(door.notes);
-  const [destKind, setDestKind] = useState<'wild' | 'roaded'>(door.destination.kind);
-  const [pairedDoorId, setPairedDoorId] = useState(
-    door.destination.kind === 'roaded' ? door.destination.pairedDoorId : '',
-  );
-  const [roadName, setRoadName] = useState(
-    door.destination.kind === 'roaded' ? door.destination.roadName : '',
-  );
-  const [expanded, setExpanded] = useAutoExpand(initiallyExpanded);
-
-  // Sync local state with external prop changes (another writer, or a marker
-  // click bringing this editor into focus with a fresh door reference).
-  // `destination` is compared by reference: any write that replaces it
-  // (a destination save, or a partner re-pointing this door) re-syncs.
-  const [syncedDoor, setSyncedDoor] = useState(door);
-  if (
-    door.id !== syncedDoor.id ||
-    door.name !== syncedDoor.name ||
-    door.notes !== syncedDoor.notes ||
-    door.destination !== syncedDoor.destination
-  ) {
-    setSyncedDoor(door);
-    setName(door.name);
-    setNotes(door.notes);
-    setDestKind(door.destination.kind);
-    if (door.destination.kind === 'roaded') {
-      setPairedDoorId(door.destination.pairedDoorId);
-      setRoadName(door.destination.roadName);
-    }
+  const [expanded, setExpanded] = useExpanded(singleton, focusSeq);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
+  useFocusOnRequest(focusSeq, rootRef, nameRef);
+  // Name and notes save as you type. The destination is edited here and
+  // only saved with "Save destination", since it changes other doors too.
+  // Re-sync the edit when the saved destination changes underneath it (e.g.
+  // another door re-pointed this one); compared by reference.
+  const [draft, setDraft] = useState(() => destinationDraft(door.destination));
+  const [syncedDestination, setSyncedDestination] = useState(door.destination);
+  if (syncedDestination !== door.destination) {
+    setSyncedDestination(door.destination);
+    setDraft(destinationDraft(door.destination));
   }
-
-  const partner = useMemo(() => {
-    if (door.destination.kind !== 'roaded') return null;
-    const paired = door.destination.pairedDoorId;
-    return allDoors.find((d) => d.id === paired) ?? null;
-  }, [door.destination, allDoors]);
-  const pairable = useMemo(() => pairableDoors(allDoors, door.id), [allDoors, door.id]);
-
-  // Text-only save: persists name/notes without touching destination or partners.
-  // Used by onBlur on the name/notes inputs so a half-typed roaded form
-  // (no pair selected yet) doesn't drop edits, and so partner records aren't
-  // churned with redundant pair-updates on every keystroke.
-  const saveText = () => {
-    if (name === door.name && notes === door.notes) return;
-    onSave({ ...door, name, notes }, []);
-  };
-
-  // Full save: applies destination changes and keeps both sides of every
-  // affected pair in sync via computePartnerUpdates (which also handles
-  // clearing a *new* partner's prior partner — that orphan case the
-  // previous code missed).
-  const saveAll = () => {
-    let destination: FairyDoorDestination;
-    if (destKind === 'wild') {
-      destination = { kind: 'wild' };
-    } else {
-      // Belt-and-suspenders: the Save / Add button is `disabled` whenever
-      // pairedDoorId is empty in roaded mode, so this silent return is
-      // only reachable if a future change loses that disabled state or
-      // someone activates the button programmatically.
-      if (!pairedDoorId) return;
-      destination = { kind: 'roaded', pairedDoorId, roadName: roadName.trim() };
-    }
-    const pairUpdates = computePartnerUpdates(door.id, door.destination, destination, allDoors);
-    onSave({ ...door, name, notes, destination }, pairUpdates);
-  };
+  const pairable = pairableDoors(allDoors, door.id);
+  const partnerOk = pairable.some((d) => d.id === draft.pairedDoorId);
+  const canSave = draft.kind === 'wild' || partnerOk;
+  const partnerId = door.destination.kind === 'roaded' ? door.destination.pairedDoorId : null;
+  const partner = partnerId ? allDoors.find((d) => d.id === partnerId) ?? null : null;
+  const label = door.name || 'unnamed';
 
   return (
-    <div className="bg-[#1a1a2e] rounded p-2 space-y-1">
+    <div ref={rootRef} className="bg-[#1a1a2e] rounded p-2 space-y-1">
       <div className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#a774d6] shrink-0" />
+        <span className="w-2.5 h-2.5 rounded-full bg-[#a774d6] shrink-0" aria-hidden="true" />
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={saveText}
-          className="flex-1 bg-transparent text-[#f5e6c8] text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
+          ref={nameRef}
+          value={door.name}
+          onChange={(e) => onSaveText({ name: e.target.value })}
+          aria-label="Fairy door name"
+          className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
-        <span className="text-xs text-[#f5e6c8]/40">
-          {door.destination.kind === 'wild' ? 'wild' : `→ ${partner?.hex ?? '?'}`}
-        </span>
-        <button
-          onClick={() => setExpanded((x) => !x)}
-          className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors"
-        >
+        <span className="text-xs text-[#f5e6c8]/40">{door.destination.kind === 'wild' ? 'wild' : `→ ${partner?.hex ?? '?'}`}</span>
+        <button type="button" onClick={() => setExpanded((x) => !x)} aria-expanded={expanded} className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
           {expanded ? 'Less' : 'Edit'}
         </button>
-        <button
-          onClick={onDelete}
-          aria-label={`Delete fairy door ${door.name || 'unnamed'}`}
-          className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
-        >
+        <button type="button" onClick={onDelete} aria-label={`Delete fairy door ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
           Del
         </button>
       </div>
       {expanded && (
         <div className="space-y-1 pt-1">
-          {/* When the user toggles back to roaded after going wild, the prior
-              pairedDoorId/roadName values stay in local state — pleasant UX
-              for "I changed my mind." If the prior partner is gone, the
-              <select> below shows "— pick paired door —" because the option
-              list filters to live, pairable doors. */}
-          <div className="flex gap-3 text-xs">
-            <label className="flex items-center gap-1 cursor-pointer">
-              <input type="radio" checked={destKind === 'wild'} onChange={() => setDestKind('wild')} />
-              Wild
-            </label>
-            <label className="flex items-center gap-1 cursor-pointer">
-              <input type="radio" checked={destKind === 'roaded'} onChange={() => setDestKind('roaded')} />
-              Roaded
-            </label>
-          </div>
-          {destKind === 'roaded' && (
+          {/* Switching back to Roaded restores the last pick if that door is
+              still pairable; otherwise the list shows "— pick paired door —". */}
+          <DestinationKindRadios kind={draft.kind} onChange={(kind) => setDraft((d) => ({ ...d, kind }))} wildLabel="Wild" roadedLabel="Roaded" />
+          {draft.kind === 'roaded' && (
             <>
               <select
-                value={pairedDoorId}
-                onChange={(e) => setPairedDoorId(e.target.value)}
-                className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-xs"
+                value={partnerOk ? draft.pairedDoorId : ''}
+                onChange={(e) => setDraft((d) => ({ ...d, pairedDoorId: e.target.value }))}
+                aria-label={`Fairy door at the other end of ${label}'s road`}
+                className={`w-full ${INPUT_ON_ITEM}`}
               >
                 <option value="">— pick paired door —</option>
                 {pairable.map((d) => (
@@ -1662,25 +1405,34 @@ function DoorEditor({
                 ))}
               </select>
               <input
-                value={roadName}
-                onChange={(e) => setRoadName(e.target.value)}
+                value={draft.roadName}
+                onChange={(e) => setDraft((d) => ({ ...d, roadName: e.target.value }))}
                 placeholder="Road name"
-                className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-xs focus:outline-none focus:border-[#c4a35a]"
+                aria-label={`Road name for ${label}`}
+                className={`w-full ${INPUT_ON_ITEM}`}
               />
             </>
           )}
           <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            onBlur={saveText}
+            value={door.notes}
+            onChange={(e) => onSaveText({ notes: e.target.value })}
             placeholder="Notes"
+            aria-label={`Notes for ${label}`}
             rows={2}
-            className="w-full bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-xs focus:outline-none focus:border-[#c4a35a]"
+            className={`w-full ${INPUT_ON_ITEM}`}
           />
           <div className="flex justify-end">
             <button
-              onClick={saveAll}
-              disabled={destKind === 'roaded' && !pairedDoorId}
+              type="button"
+              onClick={() => {
+                if (!canSave) return;
+                onSaveDestination(
+                  draft.kind === 'wild'
+                    ? { kind: 'wild' }
+                    : { kind: 'roaded', pairedDoorId: draft.pairedDoorId, roadName: draft.roadName.trim() },
+                );
+              }}
+              disabled={!canSave}
               className="bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-40 text-[#f5e6c8] rounded px-3 py-1 text-xs transition-colors"
             >
               Save destination
@@ -1694,46 +1446,33 @@ function DoorEditor({
 
 // --- Ley lines list panel ---
 function LeyLinesPanel({
-  mapData,
+  leyLines,
   updateMap,
   selectedLeyLine,
   onToggleSelected,
 }: {
-  mapData: CharacterMapData;
+  leyLines: LeyLine[];
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
   selectedLeyLine: string | null;
-  // Toggle this ley line's selected state. Goes through the parent's
-  // unified selection helpers so all four selection-state fields stay
-  // mutually consistent.
   onToggleSelected: (id: string) => void;
 }) {
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
-      <h3 className="text-[#c4a35a] text-sm font-semibold mb-2 border-b border-[#5a3a28] pb-1">
-        Ley Lines &amp; Crossings
-      </h3>
-      {mapData.leyLines.length === 0 ? (
+      <h3 className="text-[#c4a35a] text-sm font-semibold mb-2 border-b border-[#5a3a28] pb-1">Ley Lines &amp; Crossings</h3>
+      {leyLines.length === 0 ? (
         <div className="text-xs text-[#f5e6c8]/40 italic">None yet. Use “Draw Ley Line” above.</div>
       ) : (
         <div className="space-y-2">
-          {mapData.leyLines.map((ll) => (
+          {leyLines.map((ll) => (
             <LeyLineEditor
               key={ll.id}
               leyLine={ll}
               selected={selectedLeyLine === ll.id}
               onSelect={() => onToggleSelected(ll.id)}
-              onSave={(updated) =>
-                updateMap((md) => ({
-                  ...md,
-                  leyLines: md.leyLines.map((x) => (x.id === updated.id ? updated : x)),
-                }))
+              onSave={(patch) =>
+                updateMap((md) => ({ ...md, leyLines: md.leyLines.map((x) => (x.id === ll.id ? { ...x, ...patch } : x)) }))
               }
-              onDelete={() =>
-                updateMap((md) => ({
-                  ...md,
-                  leyLines: md.leyLines.filter((x) => x.id !== ll.id),
-                }))
-              }
+              onDelete={() => updateMap((md) => ({ ...md, leyLines: md.leyLines.filter((x) => x.id !== ll.id) }))}
             />
           ))}
         </div>
@@ -1752,84 +1491,38 @@ function LeyLineEditor({
   leyLine: LeyLine;
   selected: boolean;
   onSelect: () => void;
-  onSave: (l: LeyLine) => void;
+  onSave: (patch: Partial<LeyLine>) => void;
   onDelete: () => void;
 }) {
-  const [name, setName] = useState(leyLine.name);
-  const [type, setType] = useState(leyLine.type);
-  const [color, setColor] = useState(leyLine.color);
-  const [notes, setNotes] = useState(leyLine.notes);
-  // Sync local state with external prop changes (parity with POIEditor and
-  // DoorEditor). Today no path mutates a ley line outside this editor, but
-  // an import or multi-tab write could desync otherwise.
-  const [syncedLeyLine, setSyncedLeyLine] = useState(leyLine);
-  if (
-    leyLine.id !== syncedLeyLine.id ||
-    leyLine.name !== syncedLeyLine.name ||
-    leyLine.type !== syncedLeyLine.type ||
-    leyLine.color !== syncedLeyLine.color ||
-    leyLine.notes !== syncedLeyLine.notes
-  ) {
-    setSyncedLeyLine(leyLine);
-    setName(leyLine.name);
-    setType(leyLine.type);
-    setColor(leyLine.color);
-    setNotes(leyLine.notes);
-  }
+  const label = leyLine.name || 'unnamed ley line';
   return (
     <div className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${selected ? 'ring-1 ring-[#c4a35a]/60' : ''}`}>
       <div className="flex items-center gap-2">
         <button
+          type="button"
           onClick={onSelect}
           aria-pressed={selected}
-          aria-label={`Toggle highlight for ${leyLine.name || 'unnamed ley line'}`}
+          aria-label={`Toggle highlight for ${label}`}
           className="w-3 h-3 rounded-full shrink-0 border border-[#f5e6c8]/40"
-          style={{ background: color }}
+          style={{ background: leyLine.color }}
         />
         <input
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onBlur={() => onSave({ ...leyLine, name, type, color, notes })}
-          className="flex-1 bg-transparent text-[#f5e6c8] text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
+          value={leyLine.name}
+          onChange={(e) => onSave({ name: e.target.value })}
+          aria-label="Ley line name"
+          className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
         <span className="text-xs text-[#f5e6c8]/40">
           {leyLine.hexes.length} hex{leyLine.hexes.length === 1 ? '' : 'es'}
         </span>
-        <button
-          onClick={onDelete}
-          aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`}
-          className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
-        >
+        <button type="button" onClick={onDelete} aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
           Del
         </button>
       </div>
-      <div className="grid grid-cols-3 gap-1 text-xs">
-        <input
-          value={type}
-          onChange={(e) => setType(e.target.value)}
-          onBlur={() => onSave({ ...leyLine, name, type, color, notes })}
-          placeholder="Type"
-          className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-0.5 focus:outline-none focus:border-[#c4a35a]"
-        />
-        <input
-          type="color"
-          value={color}
-          // Save via onChange (which fires continuously while the picker is
-          // open, giving a live preview); no onBlur — that would just
-          // duplicate the final write.
-          onChange={(e) => {
-            setColor(e.target.value);
-            onSave({ ...leyLine, name, type, color: e.target.value, notes });
-          }}
-          className="bg-[#2a2a3e] border border-[#5a3a28] rounded h-6 w-full"
-        />
-        <input
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => onSave({ ...leyLine, name, type, color, notes })}
-          placeholder="Notes"
-          className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-0.5 focus:outline-none focus:border-[#c4a35a]"
-        />
+      <div className="grid grid-cols-3 gap-1">
+        <input value={leyLine.type} onChange={(e) => onSave({ type: e.target.value })} placeholder="Type" aria-label={`Type of ${label}`} className={INPUT_ON_ITEM} />
+        <input type="color" value={leyLine.color} onChange={(e) => onSave({ color: e.target.value })} aria-label={`Colour of ${label}`} className="bg-[#2a2a3e] border border-[#5a3a28] rounded h-8 md:h-6 w-full" />
+        <input value={leyLine.notes} onChange={(e) => onSave({ notes: e.target.value })} placeholder="Notes" aria-label={`Notes for ${label}`} className={INPUT_ON_ITEM} />
       </div>
       <div className="text-[10px] text-[#f5e6c8]/40 truncate">{leyLine.hexes.join(' → ')}</div>
     </div>
