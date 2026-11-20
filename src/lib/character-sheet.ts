@@ -20,6 +20,9 @@ import type {
 } from './types';
 import {
   BREGGLE_GAZE_PER_DAY,
+  EQUIPPED_SLOT_LIMIT,
+  MAX_LOAD_WEIGHT,
+  STOWED_SLOT_LIMIT,
   calculateAttackBonus,
   calculateSkillTargets,
   getAbilityModifier,
@@ -65,22 +68,16 @@ export const KNOWN_SPELL_SOURCE_LABELS: Record<KnownSpellSource, string> = {
   manual: 'Manual',
 };
 
-/** Rules reminders the Traits and Spells tabs print beside a feature. */
-export const FEATURE_NOTES = {
-  turningUndead: "Present holy symbol, roll 2d6 within 30'.",
-  trophies: '+1 Attack/Save per creature type',
-  chivalryVirtues: 'Honour, Service, Glory, Protecting the weak, Hierarchy',
-  chivalryRules: "Must match liege's alignment. Cannot use missile weapons. Scorn light armour.",
-  madRevelry: "30' range, affects all living creatures (including allies). Save vs Spell. Fairies/demi-fey +2 to save.",
-  fungalSymbiosis: 'Spend 1 Turn to bond with non-hostile monstrous fungus (3+ levels below you). Save vs Spell.',
-  divineResistance: 'Immune to holy magic effects (blessings and curses). Holy healing works at half effect.',
-} as const;
-
 // ── Character ────────────────────────────────────────────────
+
+/** True for a non-human kindred with no class: the character plays its kindred-class. */
+export function isKindredClass(character: Pick<Character, 'kindred' | 'class'>): boolean {
+  return !!character.kindred && character.kindred !== 'human' && !character.class;
+}
 
 /** True when the sheet has a class, or a non-human kindred playing its kindred-class. */
 export function hasClassOrKindredClass(character: Pick<Character, 'kindred' | 'class'>): boolean {
-  return !!(character.class || (character.kindred && character.kindred !== 'human' && !character.class));
+  return !!character.class || isKindredClass(character);
 }
 
 export function formatXpPercent(val: number): string {
@@ -119,10 +116,6 @@ export function getSkillTargetLayout(character: Pick<Character, 'kindred' | 'cla
 }
 
 // ── Inventory & encumbrance ──────────────────────────────────
-
-export const EQUIPPED_SLOT_LIMIT = 10;
-export const STOWED_SLOT_LIMIT = 16;
-export const MAX_LOAD_WEIGHT = 1600;
 
 export interface Encumbrance {
   coinWeight: number;
@@ -186,7 +179,7 @@ export function getContainerItems(stowedItems: InventoryItem[], containerId: str
   );
 }
 
-export function getContainerUsedWeight(stowedItems: InventoryItem[], containerId: string): number {
+function getContainerUsedWeight(stowedItems: InventoryItem[], containerId: string): number {
   return stowedItems
     .filter((item) => item.containerId === containerId)
     .reduce((sum, item) => sum + item.weight, 0);
@@ -206,7 +199,7 @@ export function getContainerLoad(container: CharacterContainer | null, stowedIte
 
 type InventoryHolder = Pick<Character, 'equippedItems' | 'stowedItems'>;
 
-export function getAllInventoryItems(c: InventoryHolder): InventoryItem[] {
+function getAllInventoryItems(c: InventoryHolder): InventoryItem[] {
   return [...c.equippedItems, ...c.stowedItems];
 }
 

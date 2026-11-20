@@ -18,7 +18,9 @@ import {
   BREGGLE_HORN_PROGRESSION,
   CLASSES,
   CLERIC_HOLY_ORDERS,
+  EQUIPPED_SLOT_LIMIT,
   FAIRY_RUNES,
+  FEATURE_NOTES,
   FIGHTER_COMBAT_TALENTS,
   GLAMOURS,
   GRIMALKIN_FORMS,
@@ -28,6 +30,8 @@ import {
   MOON_PHASES,
   MOSSLING_KNACKS,
   NOBLE_HOUSES,
+  SPELLBOOK_CAPACITY,
+  STOWED_SLOT_LIMIT,
   SYMBIOTIC_FLESH_TABLE,
   TURNING_UNDEAD_TABLE,
   calculateAC,
@@ -49,11 +53,8 @@ import {
 } from '@/lib/gamedata';
 import {
   ABILITY_SCORE_INFO,
-  EQUIPPED_SLOT_LIMIT,
-  FEATURE_NOTES,
   KNOWN_SPELL_SOURCE_LABELS,
   SAVE_TARGET_INFO,
-  STOWED_SLOT_LIMIT,
   calculateEncumbrance,
   countPreparedByRank,
   formatXpPercent,
@@ -70,6 +71,7 @@ import {
   getSkillTargetLayout,
   hasAnyClassFeature,
   hasAnyKindredFeature,
+  isKindredClass,
   isSpellInAnyBook,
   isSpellOnScroll,
   isStartingBookApplied,
@@ -310,6 +312,10 @@ const s = StyleSheet.create({
   summaryTotal: { fontWeight: 700, color: COLOR.brown },
 });
 
+// Spell table column widths; the scrolls table's name column spans all but the rank.
+const SPELL_COLUMNS = { rank: 0.8, spell: 4, prepared: 0.8, cast: 0.8, notes: 5 };
+const SCROLL_NAME_WIDTH = SPELL_COLUMNS.spell + SPELL_COLUMNS.prepared + SPELL_COLUMNS.cast + SPELL_COLUMNS.notes;
+
 // ── Small building blocks ────────────────────────────────────
 
 const EMPTY = '—'; // em dash
@@ -477,12 +483,8 @@ function className(c: Character): string {
   return CLASSES.find((cl) => cl.id === c.class)?.name ?? '';
 }
 
-function isKindredClass(c: Character): boolean {
-  return !!c.kindred && c.kindred !== 'human' && !c.class;
-}
-
 /** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" */
-export function identityLine(c: Character): string {
+function identityLine(c: Character): string {
   const parts = [`Level ${c.level}`];
   const kindred = kindredName(c);
   const cls = className(c);
@@ -526,7 +528,7 @@ function CharacterSection({ c }: { c: Character }) {
     classWarn = 'Humans must select a class.';
   } else if (isKindredClass(c)) {
     classValue = 'Kindred-class';
-    classNote = `Playing as a ${kindred?.name ?? ''} kindred-class (see appendix).`;
+    classNote = `Playing as a ${kindredName(c)} kindred-class (see appendix).`;
   }
 
   const hasMoonSign = canHaveMoonSign(c.kindred);
@@ -553,7 +555,7 @@ function CharacterSection({ c }: { c: Character }) {
     <View wrap={false}>
       <SectionTitle>Character</SectionTitle>
       <View style={s.fieldGrid}>
-        <Field label="Kindred" value={kindred?.name ?? ''} note={kindred?.description} />
+        <Field label="Kindred" value={kindredName(c)} note={kindred?.description} />
         <Field label="Class" value={classValue} note={classNote} warn={classWarn} />
         <Field label="Level" value={c.level} />
         <Field label="Background" value={c.background} />
@@ -1127,11 +1129,11 @@ function SpellcastingBlock({
           rowKey={(sp) => sp.id}
           dimRow={(sp) => sp.cast}
           columns={[
-            { header: 'Rank', width: 0.8, align: 'center', cell: (sp) => `R${sp.rank}` },
-            { header: 'Spell', width: 4, cell: (sp) => sp.name || EMPTY },
-            { header: 'Prep', width: 0.8, align: 'center', cell: (sp) => <Checkbox checked={sp.prepared} /> },
-            { header: 'Cast', width: 0.8, align: 'center', cell: (sp) => <Checkbox checked={sp.cast} /> },
-            { header: 'Notes', width: 5, cell: (sp) => sp.notes },
+            { header: 'Rank', width: SPELL_COLUMNS.rank, align: 'center', cell: (sp) => `R${sp.rank}` },
+            { header: 'Spell', width: SPELL_COLUMNS.spell, cell: (sp) => sp.name || EMPTY },
+            { header: 'Prep', width: SPELL_COLUMNS.prepared, align: 'center', cell: (sp) => <Checkbox checked={sp.prepared} /> },
+            { header: 'Cast', width: SPELL_COLUMNS.cast, align: 'center', cell: (sp) => <Checkbox checked={sp.cast} /> },
+            { header: 'Notes', width: SPELL_COLUMNS.notes, cell: (sp) => sp.notes },
           ]}
         />
       ) : null}
@@ -1144,8 +1146,8 @@ function SpellcastingBlock({
             rows={scrolls}
             rowKey={(sc) => sc.id}
             columns={[
-              { header: 'Rank', width: 0.8, align: 'center', cell: (sc) => `R${sc.scrollSpell?.rank ?? ''}` },
-              { header: 'Scroll', width: 10.6, cell: (sc) => sc.scrollSpell?.name ?? '' },
+              { header: 'Rank', width: SPELL_COLUMNS.rank, align: 'center', cell: (sc) => `R${sc.scrollSpell?.rank ?? ''}` },
+              { header: 'Scroll', width: SCROLL_NAME_WIDTH, cell: (sc) => sc.scrollSpell?.name ?? '' },
             ]}
           />
         </>
@@ -1328,7 +1330,7 @@ function ItemCell({ item }: { item: InventoryItem }) {
       {item.kind === 'spellbook' ? (
         <Text style={s.cellSub}>
           {t(
-            `Spell book (${contents.length}/3)${
+            `Spell book (${contents.length}/${SPELLBOOK_CAPACITY})${
               contents.length > 0
                 ? `: ${contents.map((e) => (e.name ? `R${e.rank} ${e.name}` : EMPTY)).join(', ')}`
                 : ': no spells recorded'

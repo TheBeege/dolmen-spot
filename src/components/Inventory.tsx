@@ -11,13 +11,14 @@ import {
   ARCANE_SPELLS,
   findArcaneSpell,
   EquipmentEntry,
+  EQUIPPED_SLOT_LIMIT,
+  SPELLBOOK_CAPACITY,
+  STOWED_SLOT_LIMIT,
 } from '@/lib/gamedata';
 import {
   calculateEncumbrance,
   getContainerItems,
   getContainerLoad,
-  EQUIPPED_SLOT_LIMIT,
-  STOWED_SLOT_LIMIT,
 } from '@/lib/character-sheet';
 
 interface InventoryProps {
@@ -200,7 +201,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const handleSpellbookAddEntry = (equipped: boolean, itemId: string) => {
     updateInventoryItem(equipped, itemId, (item) => {
       const contents = item.spellbookContents ?? [];
-      if (contents.length >= 3) return item;
+      if (contents.length >= SPELLBOOK_CAPACITY) return item;
       return { ...item, spellbookContents: [...contents, { name: '', rank: 1 }] };
     });
   };
@@ -360,7 +361,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const renderSpellbookItem = (item: InventoryItem, equipped: boolean) => {
     const contents = item.spellbookContents ?? [];
     const isCollapsed = collapsedSpellbooks.has(item.id);
-    const isFull = contents.length >= 3;
+    const isFull = contents.length >= SPELLBOOK_CAPACITY;
     return (
       <div key={item.id} className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1">
         {/* Header */}
@@ -382,7 +383,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             className={`${inputClasses} flex-1 min-w-[120px]`}
           />
           <span className="text-[#f5e6c8]/50 text-xs shrink-0">
-            {contents.length}/3
+            {contents.length}/{SPELLBOOK_CAPACITY}
           </span>
           <div className="flex items-center gap-2">
             <input
@@ -477,7 +478,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   : 'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8]'
               }`}
             >
-              {isFull ? 'Full (3/3)' : '+ Add spell'}
+              {isFull ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY})` : '+ Add spell'}
             </button>
             <textarea
               value={item.notes}

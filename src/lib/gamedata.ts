@@ -1506,6 +1506,22 @@ export const TURNING_UNDEAD_TABLE = {
 } as const;
 
 // ──────────────────────────────────────────────────────────
+// Feature Notes: rules reminders the Traits and Spells tabs (and the PDF)
+// print beside a class or kindred feature
+// Source: docs/rules/02-kindreds.md, 03-classes.md, 04-kindred-classes.md
+// ──────────────────────────────────────────────────────────
+
+export const FEATURE_NOTES = {
+  turningUndead: "Present holy symbol, roll 2d6 within 30'.",
+  trophies: '+1 Attack/Save per creature type',
+  chivalryVirtues: 'Honour, Service, Glory, Protecting the weak, Hierarchy',
+  chivalryRules: "Must match liege's alignment. Cannot use missile weapons. Scorn light armour.",
+  madRevelry: "30' range, affects all living creatures (including allies). Save vs Spell. Fairies/demi-fey +2 to save.",
+  fungalSymbiosis: 'Spend 1 Turn to bond with non-hostile monstrous fungus (3+ levels below you). Save vs Spell.',
+  divineResistance: 'Immune to holy magic effects (blessings and curses). Holy healing works at half effect.',
+} as const;
+
+// ──────────────────────────────────────────────────────────
 // Feature Profile Helper
 // ──────────────────────────────────────────────────────────
 
@@ -1950,6 +1966,12 @@ export function calculateXpToNextLevel(kindred: KindredId | '', classId: ClassId
   return nextRow ? nextRow.xp : null;
 }
 
+// Encumbrance limits (docs/rules/08-adventuring.md)
+export const EQUIPPED_SLOT_LIMIT = 10;
+export const STOWED_SLOT_LIMIT = 16;
+/** Maximum load in coins of weight; above this the character can't move. */
+export const MAX_LOAD_WEIGHT = 1600;
+
 // 2h. Speed Functions (shared between CombatStats and Inventory)
 export function getSpeedByEquippedSlots(equippedSlots: number): number {
   if (equippedSlots <= 3) return 40;
@@ -2345,7 +2367,11 @@ export const MOSSLING_KNACKS: { id: number; name: string; tiers: { level: number
   },
 ];
 
-// 5F: Magician Starting Spell Books
+// 5F: Spell Books
+// Each spell book holds up to 3 spells.
+export const SPELLBOOK_CAPACITY = 3;
+
+// Magician starting spell books
 export const MAGICIAN_STARTING_SPELL_BOOKS: { roll: number; name: string; spells: string[] }[] = [
   { roll: 1, name: 'Charms of the Fey Court', spells: ['Fairy Servant', 'Ingratiate', 'Ventriloquism'] },
   { roll: 2, name: 'Hogbrand\'s Incandescence', spells: ['Firelight', 'Ignite/Extinguish', 'Shield of Force'] },

@@ -8,16 +8,12 @@ import { pdf } from '@react-pdf/renderer';
 import type { Character } from '@/lib/types';
 import { CharacterSheetDocument } from './CharacterSheetDocument';
 import { pdfFileName } from './filename';
-import { browserPageSize, type PdfPageSize } from './page-size';
+import { browserPageSize } from './page-size';
 
-export async function renderCharacterPdf(
-  character: Character,
-  pageSize: PdfPageSize = browserPageSize(),
-  exportedAt: Date = new Date(),
-): Promise<Blob> {
-  const exportedOn = exportedAt.toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+async function renderCharacterPdf(character: Character): Promise<Blob> {
+  const exportedOn = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   return pdf(
-    <CharacterSheetDocument character={character} pageSize={pageSize} exportedOn={exportedOn} />,
+    <CharacterSheetDocument character={character} pageSize={browserPageSize()} exportedOn={exportedOn} />,
   ).toBlob();
 }
 

@@ -13,6 +13,7 @@ import {
   TURNING_UNDEAD_TABLE,
   NOBLE_HOUSES,
   SYMBIOTIC_FLESH_TABLE,
+  FEATURE_NOTES,
 } from '@/lib/gamedata';
 import {
   getLanguageBreakdown,
@@ -22,7 +23,6 @@ import {
   getRetainerLimits,
   hasAnyClassFeature,
   hasAnyKindredFeature,
-  FEATURE_NOTES,
 } from '@/lib/character-sheet';
 
 interface TraitsAndNotesProps {
