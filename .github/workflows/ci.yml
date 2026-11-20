@@ -42,3 +42,9 @@ jobs:
 
       - name: Check the MSAL redirect bridge copy
         run: npm run check:msal-bridge
+
+      # Migration of saved characters, and the fairy-door pairing rules.
+      - name: Migration and map-data tests
+        run: |
+          npm run test:migration
+          npm run test:map-data
