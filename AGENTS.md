@@ -56,12 +56,14 @@ Character data is stored in localStorage and must survive schema changes across 
 
 - Each migration transforms from version N to N+1 (sequential)
 - After all migrations run, `reconcileWithDefaults()` deep-merges saved data over a fresh `createDefaultCharacter()` to fill any missing fields
-- Migrations run on load (`load()` in `src/lib/storage.ts`, one character at a time) and import (`parseImportedCharacter()`)
+- Migrations run on load (`load()` in `src/lib/storage.ts`, one character at a time) and on import (`parseImportedCharacters()`)
 - Migrated data is persisted back to localStorage immediately (best-effort) so migration only runs once
-- A character that fails to migrate is not dropped: its stored value is backed up under a `dolmenwood-recovery-*` key before the main key is rewritten, and the player can download it. All reads and writes of saved characters go through `src/lib/storage.ts`, which must never overwrite data it couldn't read
+- **A migration must never throw.** If one does, that character is *set aside*: it stays in the saved list exactly as parsed, every save keeps it there, and the next load tries it again, so once the migration is fixed the character comes back. It is also copied to a `dolmenwood-recovery-*` backup the player can download. Until then the player can't open that character, so treat a throw as a bug.
+- All reads and writes of saved characters go through `src/lib/storage.ts`. It never overwrites saved data it couldn't read (an unreadable whole value is replaced only after a verified backup), and before each save it checks that no other tab has saved since this tab last read or wrote. If another has, it stops saving rather than overwrite that tab's work. Two tabs can still disagree, though: the other tab's changes only show up after a reload.
 
 ### Testing migrations:
 
+- Add a case to `src/lib/storage.test.ts` and run `npm test` (Node's test runner via `tsx`, against a fake localStorage). Its "set aside ... come back once it is fixed" tests show the pattern for a migration that throws
 - Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
 - Test import/export round-trip with old-format files
 - Verify `npm run build` passes after any schema change
