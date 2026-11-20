@@ -2645,7 +2645,7 @@ export const ARCANE_SPELL_SUMMARIES: Record<string, SpellSummary> = {
   },
   'Sending': {
     range: 'Unlimited', duration: 'Instant',
-    effect: 'Sends a mental message of up to 25 words to a creature the caster knows by name and sight (Animal intelligence or better); it understands whatever its language.',
+    effect: 'Sends a mental message of up to 25 words to a creature the caster knows by name and sight (Animal Intelligence or better); it understands whatever its language.',
   },
   'Telekinesis': {
     range: "120'", duration: 'Concentration (up to 6 Rounds)',
