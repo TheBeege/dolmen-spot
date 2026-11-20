@@ -30,6 +30,7 @@ import {
   getSpeedBySlots,
   getSpeedByWeight,
   getTotalCoinCount,
+  hasUnknownKindredOrClass,
 } from './gamedata';
 
 // ── Labels ───────────────────────────────────────────────────
@@ -106,7 +107,9 @@ export function isSkillOutOfSync(stored: number | undefined, calculated: number 
 
 /**
  * Which skills the sheet lists: auto-calculated ones (from kindred/class/level)
- * and custom ones the player added, each sorted by key.
+ * and custom ones the player added, each sorted by key. With a kindred or class
+ * the app doesn't know, the calculated targets are only a guess, so none is
+ * reported out of sync (and none offered to sync).
  */
 export function getSkillTargetLayout(character: Pick<Character, 'kindred' | 'class' | 'level' | 'skillTargets'>) {
   const calculated = calculateSkillTargets(character.kindred, character.class, character.level);
@@ -114,7 +117,9 @@ export function getSkillTargetLayout(character: Pick<Character, 'kindred' | 'cla
   const customKeys = Object.keys(character.skillTargets)
     .filter(key => !calculated.autoSkillKeys.has(key))
     .sort();
-  const outOfSyncKeys = autoKeys.filter(key => isSkillOutOfSync(character.skillTargets[key], calculated.targets[key]));
+  const outOfSyncKeys = hasUnknownKindredOrClass(character)
+    ? []
+    : autoKeys.filter(key => isSkillOutOfSync(character.skillTargets[key], calculated.targets[key]));
   return { calculated, autoKeys, customKeys, outOfSyncKeys };
 }
 

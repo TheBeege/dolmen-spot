@@ -205,6 +205,12 @@ export function isKnownClassId(id: string): id is ClassId {
   return Object.hasOwn(KNOWN_CLASS_IDS, id);
 }
 
+/** True when the kindred or the class is an id the app doesn't know, so values that depend on it can't be calculated. */
+export function hasUnknownKindredOrClass(character: Pick<Character, 'kindred' | 'class'>): boolean {
+  return (!!character.kindred && !isKnownKindredId(character.kindred))
+    || (!!character.class && !isKnownClassId(character.class));
+}
+
 // Display names. The sheet shows an id it doesn't know as stored rather than
 // hiding it.
 export function getKindredName(id: string): string {
@@ -1913,7 +1919,10 @@ export function calculateAC(
   kindred: KindredId | '',
   classId: ClassId | '',
   level: number,
-): { ac: number; notes: string[] } {
+): { ac: number; notes: string[] } | null {
+  // Kindred (breggle fur) and class (friar Armour of Faith) both add to AC, so
+  // there's nothing to calculate with an id the app doesn't know.
+  if (hasUnknownKindredOrClass({ kindred, class: classId })) return null;
   const armour = ARMOUR_TABLE.find(a => a.name === equippedArmourName);
   let ac = armour ? armour.ac : 10; // Unarmoured = 10
   const notes: string[] = [];
@@ -1971,7 +1980,9 @@ export function calculateSaveTargets(kindred: KindredId | '', classId: ClassId |
 }
 
 // 2d. Magic Resistance
-export function calculateMagicResistance(wisScore: number, kindred: KindredId | ''): { value: number; notes: string[] } {
+export function calculateMagicResistance(wisScore: number, kindred: KindredId | ''): { value: number; notes: string[] } | null {
+  // Fairy kindreds add +2, so there's nothing to calculate with a kindred the app doesn't know.
+  if (kindred && !isKnownKindredId(kindred)) return null;
   let value = getAbilityModifier(wisScore);
   const notes: string[] = [];
 

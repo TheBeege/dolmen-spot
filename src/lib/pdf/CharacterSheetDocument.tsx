@@ -636,7 +636,7 @@ function CombatSection({ c }: { c: Character }) {
       <SectionTitle>Combat</SectionTitle>
       <View style={s.boxRow}>
         <StatBox label="Hit Points" value={`${c.currentHp} / ${c.maxHp}`} sub="Current / Max" highlight />
-        <StatBox label="Armour Class" value={String(c.armorClass)} calc={calcNote(c.armorClass, calcAC.ac)} highlight />
+        <StatBox label="Armour Class" value={String(c.armorClass)} calc={calcNote(c.armorClass, calcAC?.ac ?? null)} highlight />
         <StatBox
           label="Attack"
           value={formatModifier(c.attackBonus)}
@@ -656,16 +656,16 @@ function CombatSection({ c }: { c: Character }) {
         <StatBox
           label="Magic Resist."
           value={formatModifier(c.magicResistance)}
-          calc={calcNote(c.magicResistance, calcMR.value, formatModifier)}
+          calc={calcNote(c.magicResistance, calcMR?.value ?? null, formatModifier)}
         />
       </View>
       <Text style={s.body}>
         <Text style={s.bold}>Armour: </Text>
         {t(armourLine)}
-        {calcAC.notes.length > 0 ? <Text style={s.note}>{`   AC ${t(calcAC.notes.join(', '))}`}</Text> : null}
+        {calcAC && calcAC.notes.length > 0 ? <Text style={s.note}>{`   AC ${t(calcAC.notes.join(', '))}`}</Text> : null}
       </Text>
       {armourWarning ? <Text style={s.warn}>{t(armourWarning)}</Text> : null}
-      {calcMR.notes.length > 0 ? (
+      {calcMR && calcMR.notes.length > 0 ? (
         <Text style={s.note}>{`Magic resistance: ${t(calcMR.notes.join(', '))}`}</Text>
       ) : null}
       <Text style={s.note}>{`CON modifier: ${conMod} applied per Hit Die`}</Text>
