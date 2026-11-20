@@ -148,6 +148,36 @@ export interface CalendarDate {
 // See src/lib/hex-grid.ts for the canonical set of valid hexes.
 export type HexCoord = string;
 
+// 1-indexed column/row of a hex, as printed in its coordinate.
+export interface HexPos {
+  col: number;
+  row: number;
+}
+
+export type Terrain = 'woods' | 'open';
+
+// One hex of the printed map (src/lib/hex-grid.json).
+export interface HexCell extends HexPos {
+  terrain: Terrain;
+}
+
+// Calibration of the printed map image the hex grid was extracted from
+// (scripts/extract_hex_grid.py). Pixel values are in that image's frame.
+export interface HexGridMeta {
+  imageWidth: number;
+  imageHeight: number;
+  labelX_col1: number;     // x of hex 0101's printed label (and of every column-01 centre)
+  labelY_row1: number;     // y of hex 0101's printed label
+  colPitch: number;        // horizontal distance between neighbouring columns
+  rowPitch: number;        // vertical distance between rows of one column
+  labelToCenterDy: number; // a hex's centre sits this far below its label
+  hexSize: number;         // nominal centre-to-vertex distance (rowPitch / √3)
+  orientation: 'flat-top';
+  offset: 'odd-q';
+  /** Number of hexes in the manifest; checked against the loaded data. */
+  cellCount: number;
+}
+
 export interface MapPOI {
   id: string;
   hex: HexCoord;

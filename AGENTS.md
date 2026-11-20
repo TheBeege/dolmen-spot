@@ -72,7 +72,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- see `MEMORY.md` for exact color values
 - **Types**: All game interfaces live in `src/lib/types.ts`
-- **Game data**: All static game data lives in `src/lib/gamedata.ts`
+- **Game data**: All static game data lives in `src/lib/gamedata.ts`, except the hex-map manifest `src/lib/hex-grid.json`. It is generated from the printed map by `scripts/extract_hex_grid.py` (don't edit it by hand) and loaded through `src/lib/hex-grid.ts`; its types are in `types.ts` like the rest
 
 ## Pre-commit Hook & CI
 
