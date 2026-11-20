@@ -186,12 +186,12 @@ export function calculateEncumbrance(
 
 /**
  * What the sheet says under a Speed of 0 (over the maximum load); null when the
- * character can move. Stowing an item helps only when the equipped slots alone
- * are over their maximum.
+ * character can move. Stowing an item helps only when the equipped slots are
+ * over their maximum and there's still room in the stowed slots.
  */
 export function getOverloadNote(enc: Encumbrance, method: Character['encumbranceMethod']): string | null {
   if (enc.speed !== 0) return null;
-  const stowingHelps = method === 'slots' && enc.equippedSlotsOverLimit && !enc.stowedSlotsOverLimit;
+  const stowingHelps = method === 'slots' && enc.equippedSlotsOverLimit && enc.totalStowedSlots < STOWED_SLOT_LIMIT;
   return `Over maximum load: can't move until items are ${stowingHelps ? 'stowed or dropped' : 'dropped'}.`;
 }
 
