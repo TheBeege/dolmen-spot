@@ -600,10 +600,11 @@ describe('Scenario 20: whitespace before the marker is trimmed in linear time', 
   test('40,000 spaces inside the prose take well under a second', () => {
     const data = baseV10();
     data.otherNotes = `a${' '.repeat(40000)}b<!--MAP_PINS-->[]`;
-    const t = Date.now();
+    // performance.now(), unlike Date.now(), never jumps when the system clock is corrected.
+    const t = performance.now();
     const m = migrateCharacter(data as never);
-    const ms = Date.now() - t;
-    assert.ok(ms < 500 && m.otherNotes === `a${' '.repeat(40000)}b`, `${ms} ms`);
+    const ms = performance.now() - t;
+    assert.ok(ms < 500 && m.otherNotes === `a${' '.repeat(40000)}b`, `${ms.toFixed(1)} ms`);
   });
 });
 

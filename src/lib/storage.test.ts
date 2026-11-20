@@ -1254,9 +1254,13 @@ test('each too-deep entry gets its own backup: one already backed up never stand
   const first = `{"name":"First","level":1,"x":${nested(5_000)}}`;
   const second = `{"name":"Second","level":1,"x":${nested(6_000)}}`;
   const ls = new FakeStorage({ [CHARS]: `[${JSON.stringify(a)},${first}]`, [ACTIVE]: a.id });
-  createCharacterStore(ls).load();
+  // Backup keys start with the time, so the backups list in the order they
+  // were made only if the loads are at least a millisecond apart.
+  const clock = new Clock();
+  createCharacterStore(ls, { now: clock.now }).load();
+  clock.advance(1000);
   ls.map.set(CHARS, `[${JSON.stringify(a)},${second}]`); // another tab, or an older version, wrote a different one
-  createCharacterStore(ls).load();
+  createCharacterStore(ls, { now: clock.now }).load();
   assert.deepEqual(ls.records().map((r) => asText(r.entries[0]).raw), [first, second]);
   assert.deepEqual(stored(ls).map((c) => c.name), ['Aldric']);
 });
