@@ -18,7 +18,8 @@ interface Props {
   onDelete(providerId: 'google-drive' | 'onedrive', fileId: string): Promise<void>;
   onExportLocal(): void;
   onImportLocal(file: File): void;
-  loading: boolean;
+  /** Whether each provider has an operation in flight. */
+  loading: Record<'google-drive' | 'onedrive', boolean>;
   error: string | null;
   onClearError(): void;
   characterName: string;
@@ -55,6 +56,8 @@ export default function CloudStorageModal({
 
   const activeProviderId = activeTab !== 'local' ? (activeTab as 'google-drive' | 'onedrive') : null;
   const isConnected = activeProviderId ? authStates[activeProviderId] : false;
+  // Only this tab's provider: another provider finishing must not re-enable its buttons.
+  const busy = activeProviderId ? loading[activeProviderId] : false;
 
   const loadFiles = useCallback(async (providerId: 'google-drive' | 'onedrive') => {
     setFilesLoaded(false);
@@ -247,10 +250,10 @@ export default function CloudStorageModal({
               </p>
               <button
                 onClick={handleConnect}
-                disabled={loading}
+                disabled={busy}
                 className="px-4 py-2 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-sm rounded transition-colors"
               >
-                {loading ? 'Connecting...' : 'Connect'}
+                {busy ? 'Connecting...' : 'Connect'}
               </button>
               <p className="text-[#f5e6c8]/30 text-xs mt-4">
                 Your data stays in your own {activeProviderId === 'google-drive' ? 'Drive' : 'OneDrive'}. We only access files created by this app.
@@ -268,10 +271,10 @@ export default function CloudStorageModal({
                 </p>
                 <button
                   onClick={handleSave}
-                  disabled={loading}
+                  disabled={busy}
                   className="px-3 py-1.5 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-sm rounded transition-colors"
                 >
-                  {loading ? 'Saving...' : 'Save Character'}
+                  {busy ? 'Saving...' : 'Save Character'}
                 </button>
               </div>
 
@@ -281,14 +284,14 @@ export default function CloudStorageModal({
                   <h4 className="text-[#c4a35a] text-sm font-semibold">Saved Characters</h4>
                   <button
                     onClick={() => loadFiles(activeProviderId)}
-                    disabled={loading}
+                    disabled={busy}
                     className="text-xs text-[#f5e6c8]/40 hover:text-[#f5e6c8] transition-colors"
                   >
                     Refresh
                   </button>
                 </div>
 
-                {!filesLoaded && loading ? (
+                {!filesLoaded && busy ? (
                   <p className="text-[#f5e6c8]/40 text-sm py-4 text-center">Loading files...</p>
                 ) : files.length === 0 ? (
                   <p className="text-[#f5e6c8]/40 text-sm py-4 text-center">
@@ -312,14 +315,14 @@ export default function CloudStorageModal({
                         <div className="ml-2 flex items-center gap-1 shrink-0">
                           <button
                             onClick={() => handleLoad(file.id, file.name)}
-                            disabled={loading}
+                            disabled={busy}
                             className="px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-xs rounded transition-colors"
                           >
                             Load
                           </button>
                           <button
                             onClick={() => handleDelete(file.id, file.name)}
-                            disabled={loading}
+                            disabled={busy}
                             className="text-[#8b2500] hover:text-[#b33a1a] disabled:opacity-50 text-xs transition-colors"
                             title="Delete from cloud"
                           >
@@ -332,11 +335,12 @@ export default function CloudStorageModal({
                 )}
               </div>
 
-              {/* Disconnect */}
+              {/* Disconnect: not while this provider is busy, so a save or load can't lose its sign-in midway */}
               <div className="border-t border-[#5a3a28] pt-4">
                 <button
                   onClick={() => onDisconnect(activeProviderId)}
-                  className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
+                  disabled={busy}
+                  className="text-xs text-[#8b2500] hover:text-[#b33a1a] disabled:opacity-50 transition-colors"
                 >
                   Disconnect {activeProviderId === 'google-drive' ? 'Google Drive' : 'OneDrive'}
                 </button>
