@@ -1104,7 +1104,10 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         </svg>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-4">
+      {/* grid-cols-1, not the implicit column: that one grows to fit its
+          widest content, and on a 320 px phone it pushed the page wider
+          than the screen. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div ref={inspectorRef} className="scroll-mt-4">
           <HexInspectorPanel
             selectedHex={selectedHex}
