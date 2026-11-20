@@ -80,10 +80,13 @@ function getErrorDetails(error: unknown): ErrorDetails {
 }
 
 function formatErrorDetails(details: ErrorDetails): string {
+  const head = `${details.name}: ${details.message}`;
+  // V8's stack already starts with "Name: message"; don't print it twice.
+  const stack = details.stack?.startsWith(head) ? details.stack.slice(head.length).replace(/^\n/, '') : details.stack;
   return [
-    `${details.name}: ${details.message}`,
+    head,
     details.digest ? `Digest: ${details.digest}` : '',
-    details.stack ? `\n${details.stack}` : '',
+    stack ? `\n${stack}` : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -149,6 +152,7 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
   const [copyNote, setCopyNote] = useState('');
   const [problem, setProblem] = useState<string | null>(null);
   const copyRef = useRef<HTMLTextAreaElement>(null);
+  const reloadRef = useRef<HTMLButtonElement>(null);
 
   // Move focus to the copy box when it opens, ready to copy.
   useEffect(() => {
@@ -168,6 +172,15 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
     } catch {
       setSaveState('blocked');
       setProblem(UNREADABLE);
+      // The button just pressed goes away with the blocked state; keep focus on
+      // the one thing left to do instead of letting it fall to the page.
+      setTimeout(() => {
+        try {
+          reloadRef.current?.focus();
+        } catch {
+          // Focus is a convenience.
+        }
+      }, 0);
       return null;
     }
   };
@@ -217,7 +230,7 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
               Try Again
             </button>
           )}
-          <button type="button" onClick={reloadPage} className={`${BUTTON} bg-[#3a3a5e] hover:bg-[#4a4a6e]`}>
+          <button type="button" ref={reloadRef} onClick={reloadPage} className={`${BUTTON} bg-[#3a3a5e] hover:bg-[#4a4a6e]`}>
             Reload Page
           </button>
           {canReadSaves && (
