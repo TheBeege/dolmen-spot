@@ -74,22 +74,53 @@ Character data is stored in localStorage and must survive schema changes across 
 - **Types**: All game interfaces live in `src/lib/types.ts`
 - **Game data**: All static game data lives in `src/lib/gamedata.ts`
 
+## Releases & Deployment
+
+Production is https://dolmen.spot: the Vercel project `dolmenwood-character-sheet-owl` (team `beeges-projects`), deployed by Vercel's Git integration. **Merging a PR into `main` does not ship it to players.** Changes collect on `main` and go live together when a release is cut, so each release gets one coherent changelog entry.
+
+| Branch | Role | Vercel deploys it to |
+|--------|------|----------------------|
+| PR branches | Work in progress. PRs target `main`. | Preview (per commit) |
+| `main` | Integration / staging | Preview, at the stable URL `dolmenwood-character-sheet-owl-git-main-beeges-projects.vercel.app` (Vercel login required) |
+| `release` | What players have | **Production** (dolmen.spot) |
+
+- `release` only ever **fast-forwards** to `main`. Never commit to it directly, merge PRs into it (except hotfixes, below), or force-push it.
+- Cut a release only when the user asks for one.
+- Never deploy to production from a local checkout (`vercel --prod`). Production deploys come only from pushes to `release`.
+
+### Cutting a release
+
+1. `git fetch origin`, then list what's unreleased: `git log --first-parent --oneline origin/release..origin/main`. Each merge commit names its PR.
+2. Read the **Player-facing changes** section of each of those PRs (`gh pr view <n>`).
+3. If any PR has player-facing changes: on a `chore/release-YYYY-MM-DD` branch from `origin/main`, add **one** entry at the top of `ENTRIES` in `src/app/changelog/page.tsx` (see Changelog below), run `npm run build`, and open a PR into `main`. Wait for it to merge. (Don't name the branch `release/...` — git can't have both a `release` branch and `release/*` branches.)
+4. Fast-forward production: `git fetch origin && git push origin origin/main:release`. If git rejects this as non-fast-forward, `release` has diverged (see Hotfixes). Never force it.
+5. Verify that the newest production deployment is the new `release` commit and is `READY` (Vercel MCP `list_deployments` with `target: "production"`, or `gh api 'repos/TheBeege/dolmen-spot/deployments?environment=Production&per_page=1'`), and that https://dolmen.spot/changelog shows the entry.
+
+### Hotfixes
+
+If `main` holds nothing you'd mind shipping, land the fix on `main` and cut a normal release. Otherwise, branch from `origin/release` and PR the fix (plus its changelog entry, since a hotfix is a release) into `release`; merging it deploys. Then merge `release` back into `main` so the next release fast-forwards again.
+
 ## Changelog
 
-The user-visible changelog lives at `src/app/changelog/page.tsx` and is shown to players at `/changelog`.
+The player-facing changelog lives at `src/app/changelog/page.tsx` and is shown at `/changelog`. **Entries are written when a release is cut, not in feature PRs**: one entry per release, covering every user-facing PR in it.
 
-**When preparing or updating a PR with user-facing changes**, add or amend an entry at the top of the `ENTRIES` array in that file. Required:
+### In feature PRs
+
+- **Don't edit `src/app/changelog/page.tsx`.**
+- Add a `## Player-facing changes` section to the PR description: bullets written by the rules below, or `None` for internal-only changes. These are the raw material for the release entry, so keep them current if the PR's scope changes.
+
+### Writing the release entry
 
 1. **Player perspective, not developer perspective.** Describe what the player will see or be able to do — not what code or files changed. Compare:
    - Bad: "Refactored `addDays` to use absolute-day arithmetic"
    - Good: "Long spell studies no longer silently rewind when the calendar crosses a year."
-2. **Set the `date`** to the expected merge date (`YYYY-MM-DD`). It's fine to update this when the PR actually merges.
-3. **Leave `prNumber` undefined until the PR exists**, then fill it in (and update it if the PR is re-opened under a new number).
-4. **Skip purely internal changes** — refactors, lint fixes, migrations with no behavior change, doc-only changes, and dev tooling don't belong here.
-5. **Don't duplicate the changelog bullets verbatim inside the PR description.** The PR body covers implementation and test plan; the changelog entry is the player-facing source of truth. Both can exist, but the changelog entry should stand on its own.
-6. **One entry per PR, not per commit.** If a PR ships several features, list them as separate bullets under one entry.
-
-If a PR is later amended to add or remove user-facing behavior, update the existing changelog entry in the same PR — don't add a second entry for the same PR number.
+2. **`date`** is the day the release goes live (`YYYY-MM-DD`).
+3. **`title`** names the release as a whole (e.g. "Rebuilt hex map", "Map fixes and spell polish"), not one PR.
+4. **`prNumbers`** lists the user-facing PRs in the release.
+5. **Shape:** a single-topic release uses a flat `changes` list; a multi-feature release uses `sections`, one per feature, each with a short `heading`.
+6. **Curate, don't concatenate.** Merge overlapping notes, and drop anything introduced and fixed within the same release — players never saw it.
+7. **Skip purely internal changes** — refactors, lint fixes, migrations with no behavior change, doc-only changes, and dev tooling. A release with no player-facing changes gets no entry.
+8. **Released entries are history.** Only edit them to fix factual errors.
 
 ## Deployment Phases
 

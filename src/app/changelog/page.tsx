@@ -1,25 +1,38 @@
 import type { Metadata } from 'next';
 import Link from 'next/link';
+import { Fragment } from 'react';
 
 export const metadata: Metadata = {
   title: 'Changelog | Dolmen Spot',
   description: 'User-facing changes to Dolmen Spot, the Dolmenwood character tracker.',
 };
 
-type ChangelogEntry = {
-  date: string;
-  title: string;
-  prNumber?: number;
+type ChangelogSection = {
+  heading: string;
   changes: string[];
 };
 
-// Add a new entry at the TOP of this list whenever a PR with user-facing changes is merged.
+// One entry per release (a fast-forward of `release` to `main`), written when the release is cut.
+type ChangelogEntry = {
+  /** The day the release went live on dolmen.spot (YYYY-MM-DD). */
+  date: string;
+  title: string;
+  /** The user-facing PRs included in this release. */
+  prNumbers?: number[];
+  /** Bullets for a single-topic release. */
+  changes?: string[];
+  /** For a multi-feature release: one section per feature, shown after `changes`. */
+  sections?: ChangelogSection[];
+};
+
+// Add a new entry at the TOP of this list when cutting a release — never in a feature PR.
+// See "Releases & Deployment" and "Changelog" in AGENTS.md.
 // Write each bullet from the player's point of view — what changed for them, not what changed in code.
 const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-05-16',
     title: 'Dolmen Spot branding, About, and Changelog pages',
-    prNumber: 3,
+    prNumbers: [3],
     changes: [
       'The site is now called Dolmen Spot — your spot for tracking your Dolmenwood character. The game itself is still Dolmenwood; only the tracker has a name now.',
       'New About page describes the project and how to reach the author (GitHub issues or Discord @thebeege).',
@@ -30,7 +43,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-05-16',
     title: 'Multi-year calendar',
-    prNumber: 2,
+    prNumbers: [2],
     changes: [
       'Calendar now tracks the year alongside the date — set it directly on the Adventuring tab.',
       'Advancing past the last day of Year 1 rolls over into Year 2 (and rewinding rolls back).',
@@ -41,7 +54,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-05-16',
     title: 'Arcane spellbooks, scrolls, and study queue',
-    prNumber: 1,
+    prNumbers: [1],
     changes: [
       'Spellbooks are now real inventory items — add them with the new "+ Magical ▾" button and pick up to 3 spells per book.',
       'Scrolls are inventory items too. Adding a scroll automatically lists it under Available Spells with a one-click "Cast" button that consumes the scroll.',
@@ -69,6 +82,16 @@ const ENTRIES: ChangelogEntry[] = [
     ],
   },
 ];
+
+function ChangeList({ changes }: { changes: string[] }) {
+  return (
+    <ul className="list-disc pl-5 space-y-1.5 text-[#f5e6c8] text-sm leading-relaxed marker:text-[#c4a35a]/50">
+      {changes.map((change, i) => (
+        <li key={i}>{change}</li>
+      ))}
+    </ul>
+  );
+}
 
 export default function ChangelogPage() {
   return (
@@ -102,22 +125,34 @@ export default function ChangelogPage() {
               <header className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h2 className="text-lg font-semibold text-[#c4a35a]">{entry.title}</h2>
                 <span className="text-xs text-[#f5e6c8]/50">{entry.date}</span>
-                {entry.prNumber !== undefined && (
-                  <a
-                    href={`https://github.com/TheBeege/dolmen-spot/pull/${entry.prNumber}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-[#c4a35a]/80 hover:text-[#c4a35a] underline transition-colors"
-                  >
-                    PR #{entry.prNumber}
-                  </a>
+                {entry.prNumbers && entry.prNumbers.length > 0 && (
+                  <span className="text-xs text-[#c4a35a]/80">
+                    {entry.prNumbers.length === 1 ? 'PR' : 'PRs'}{' '}
+                    {entry.prNumbers.map((pr, i) => (
+                      <Fragment key={pr}>
+                        {i > 0 && ', '}
+                        <a
+                          href={`https://github.com/TheBeege/dolmen-spot/pull/${pr}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="hover:text-[#c4a35a] underline transition-colors"
+                        >
+                          #{pr}
+                        </a>
+                      </Fragment>
+                    ))}
+                  </span>
                 )}
               </header>
-              <ul className="list-disc pl-5 space-y-1.5 text-[#f5e6c8] text-sm leading-relaxed marker:text-[#c4a35a]/50">
-                {entry.changes.map((change, i) => (
-                  <li key={i}>{change}</li>
+              <div className="space-y-4">
+                {entry.changes && entry.changes.length > 0 && <ChangeList changes={entry.changes} />}
+                {entry.sections?.map((section) => (
+                  <section key={section.heading}>
+                    <h3 className="mb-1.5 text-sm font-semibold text-[#c4a35a]/90">{section.heading}</h3>
+                    <ChangeList changes={section.changes} />
+                  </section>
                 ))}
-              </ul>
+              </div>
             </article>
           ))}
         </div>
