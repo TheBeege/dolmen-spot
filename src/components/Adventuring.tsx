@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
-import { Character, JournalEntry, ActiveLightSource } from '@/lib/types';
+import { useRef, useState } from 'react';
+import { Character, JournalEntry, ActiveLightSource, CalendarDate } from '@/lib/types';
 import {
+  MAX_YEAR,
   MONTHS,
+  daysBetween,
   formatCalendarDate,
   FESTIVALS,
   FESTIVAL_DESCRIPTIONS,
@@ -23,12 +25,15 @@ import {
   isWysenday,
 } from '@/lib/gamedata';
 import {
+  clampToEarliestDate,
   formatRecordDate,
   getCurrentTimelinePoint,
+  getEarliestDolmenwoodDate,
+  getFairyVisits,
   getOpenFairyVisit,
   getStudyProgress,
 } from '@/lib/livedTime';
-import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
+import { FairyStatusPanel, LivedTimePanel, useFocusAfterRender } from '@/components/FairyTime';
 
 interface AdventuringProps {
   character: Character;
@@ -79,6 +84,46 @@ function ordinal(n: number): string {
   }
 }
 
+// A Day or Year field for the calendar. Each keystroke that makes an
+// allowed date applies straight away; anything else waits until the player
+// leaves the field, then gets clamped into range. Not fighting keystrokes
+// lets someone type "10" without the "1" first being snapped up to the
+// earliest allowed date.
+function CalendarNumberInput({
+  value,
+  min,
+  max,
+  apply,
+}: {
+  value: number;
+  min: number;
+  max: number;
+  apply: (n: number, final: boolean) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <input
+      type="number"
+      min={min}
+      max={max}
+      value={draft ?? String(value)}
+      onChange={(e) => {
+        const text = e.target.value;
+        setDraft(text);
+        const n = Number(text);
+        if (text.trim() !== '' && Number.isInteger(n)) apply(n, false);
+      }}
+      onBlur={() => {
+        if (draft === null) return;
+        const n = Number(draft);
+        apply(draft.trim() !== '' && Number.isInteger(n) ? n : value, true);
+        setDraft(null);
+      }}
+      className={`${inputClasses} w-full`}
+    />
+  );
+}
+
 export default function Adventuring({ character, onChange }: AdventuringProps) {
   const { currentDate, currentLocation, journalEntries } = character;
   const currentMonth = MONTHS[currentDate.month];
@@ -97,17 +142,31 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const [showHealingTable, setShowHealingTable] = useState(false);
   const [showHungerTables, setShowHungerTables] = useState(false);
 
+  // Focus targets after entering or leaving Fairy, when the control the
+  // player used goes away.
+  const fairyStatusRef = useRef<HTMLHeadingElement>(null);
+  const dolmenwoodDateRef = useRef<HTMLDivElement>(null);
+  const focusAfterRender = useFocusAfterRender();
+
   // ── Calendar Handlers ──────────────────────────────────────────────
 
-  // Earliest representable campaign date. The Year input + this guard
-  // are the only enforcement that the campaign date never drops below
-  // Year 1; addDays itself stays math-pure so daysBetween invariants hold.
-  const isAtCampaignStart =
-    currentDate.year === 1 && currentDate.month === 0 && currentDate.day === 1;
+  // The earliest date the calendar can show: Year 1, day 1, or the day the
+  // character last came back from Fairy, since going back past that would
+  // undo time spent in Fairy ("Edit return date" fixes a wrong return).
+  // These handlers are the only enforcement; addDays itself stays math-pure
+  // so daysBetween invariants hold.
+  const earliestDate = getEarliestDolmenwoodDate(character);
+  const isAtEarliestDate = daysBetween(earliestDate, currentDate) <= 0;
+  const earliestIsReturn = getFairyVisits(character).length > 0;
+
+  const setDate = (date: CalendarDate) => {
+    const next = clampToEarliestDate(character, date);
+    if (daysBetween(currentDate, next) !== 0) onChange({ currentDate: next });
+  };
 
   const handlePreviousDay = () => {
-    if (isAtCampaignStart) return;
-    onChange({ currentDate: addDays(currentDate, -1) });
+    if (isAtEarliestDate) return;
+    setDate(addDays(currentDate, -1));
   };
 
   const handleNextDay = () => {
@@ -117,17 +176,22 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const handleMonthChange = (newMonth: number) => {
     const maxDay = MONTHS[newMonth].days;
     const clampedDay = Math.min(currentDate.day, maxDay);
-    onChange({ currentDate: { ...currentDate, day: clampedDay, month: newMonth } });
+    setDate({ ...currentDate, day: clampedDay, month: newMonth });
   };
 
-  const handleDayChange = (newDay: number) => {
+  // While typing (final = false) only an allowed date applies; on leaving the
+  // field (final = true) the value is clamped into range and to the floor.
+  const applyDay = (day: number, final: boolean) => {
     const maxDay = currentMonth.days;
-    const clampedDay = Math.max(1, Math.min(newDay, maxDay));
-    onChange({ currentDate: { ...currentDate, day: clampedDay } });
+    const date = { ...currentDate, day: Math.max(1, Math.min(maxDay, day)) };
+    if (!final && (day !== date.day || daysBetween(earliestDate, date) < 0)) return;
+    setDate(date);
   };
 
-  const handleYearChange = (newYear: number) => {
-    onChange({ currentDate: { ...currentDate, year: Math.max(1, Math.floor(newYear) || 1) } });
+  const applyYear = (year: number, final: boolean) => {
+    const date = { ...currentDate, year: Math.max(1, Math.min(MAX_YEAR, year)) };
+    if (!final && (year !== date.year || daysBetween(earliestDate, date) < 0)) return;
+    setDate(date);
   };
 
   // ── Journal Handlers ───────────────────────────────────────────────
@@ -222,7 +286,13 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
 
         {/* In Fairy: status, day controls, and the way back */}
         {openFairyVisit && (
-          <FairyStatusPanel key={openFairyVisit.id} character={character} onChange={onChange} />
+          <FairyStatusPanel
+            key={openFairyVisit.id}
+            character={character}
+            onChange={onChange}
+            statusRef={fairyStatusRef}
+            onReturned={() => focusAfterRender(dolmenwoodDateRef)}
+          />
         )}
 
         {/* Festival alert */}
@@ -253,16 +323,22 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
         )}
 
-        <div className={`text-center mb-4 ${inFairy ? 'opacity-60' : ''}`}>
+        {/* In Fairy this is Dolmenwood as the character left it: boxed and
+            labelled rather than dimmed, so the text keeps its contrast. */}
+        <div className={`text-center mb-4 ${inFairy ? 'border border-dashed border-[#8a6fb0]/70 rounded-lg p-3' : ''}`}>
           {inFairy && (
-            <div className="text-[#f5e6c8]/70 text-xs font-semibold uppercase tracking-wider mb-1">
+            <div className="text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mb-1">
               Dolmenwood, as you left it
             </div>
           )}
-          <div className="text-2xl font-bold text-[#c4a35a]">
+          <div
+            ref={dolmenwoodDateRef}
+            tabIndex={-1}
+            className="text-2xl font-bold text-[#c4a35a] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]/60"
+          >
             {formatCalendarDate(currentDate)}
           </div>
-          <div className="text-[#f5e6c8]/60 text-sm mt-1">
+          <div className="text-[#f5e6c8]/70 text-sm mt-1">
             {currentMonth.description}
           </div>
           <div className="mt-1" style={{ color: seasonColor }}>
@@ -287,9 +363,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             <div className="flex items-center justify-center gap-3 mb-4">
               <button
                 onClick={handlePreviousDay}
-                disabled={isAtCampaignStart}
-                title={isAtCampaignStart ? 'Already at Year 1, day 1' : ''}
-                className={`${buttonClasses} ${isAtCampaignStart ? 'opacity-40 cursor-not-allowed' : ''}`}
+                disabled={isAtEarliestDate}
+                title={
+                  !isAtEarliestDate ? '' : earliestIsReturn ? 'You came back from Fairy on this day' : 'Already at Year 1, day 1'
+                }
+                className={`${buttonClasses} ${isAtEarliestDate ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
                 Previous Day
               </button>
@@ -297,6 +375,12 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
                 Next Day
               </button>
             </div>
+            {isAtEarliestDate && earliestIsReturn && (
+              <p className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
+                You came back from Fairy on this day, so the calendar can&apos;t go earlier. To change when you came
+                back, use Edit return date under Fairy visits below.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               <div>
@@ -315,31 +399,23 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
               </div>
               <div>
                 <label className={labelClasses}>Day</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={currentMonth.days}
-                  value={currentDate.day}
-                  onChange={(e) => handleDayChange(parseInt(e.target.value) || 1)}
-                  className={`${inputClasses} w-full`}
-                />
+                <CalendarNumberInput value={currentDate.day} min={1} max={currentMonth.days} apply={applyDay} />
               </div>
               <div className="col-span-2 sm:col-span-1">
                 <label className={labelClasses}>Year</label>
-                <input
-                  type="number"
-                  min={1}
-                  value={currentDate.year}
-                  onChange={(e) => handleYearChange(parseInt(e.target.value) || 1)}
-                  className={`${inputClasses} w-full`}
-                />
+                <CalendarNumberInput value={currentDate.year} min={1} max={MAX_YEAR} apply={applyYear} />
               </div>
             </div>
           </>
         )}
 
         {/* Days lived, Fairy visits, and the way into Fairy */}
-        <LivedTimePanel key={character.id} character={character} onChange={onChange} />
+        <LivedTimePanel
+          key={character.id}
+          character={character}
+          onChange={onChange}
+          onEntered={() => focusAfterRender(fairyStatusRef)}
+        />
       </div>
 
       {/* ── 5b. Current Location (existing) ──────────────────────── */}
@@ -681,47 +757,50 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           Camping
         </h2>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-          <div>
-            <div className={labelClasses}>Fire</div>
-            <div className="flex gap-2">
-              {([['none', 'No Fire'], ['campfire', 'Campfire']] as const).map(([val, label]) => (
-                <label key={val} className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="campFire"
-                    checked={campFire === val}
-                    onChange={() => setCampFire(val)}
-                    className="accent-[#c4a35a]"
-                  />
-                  <span className="text-[#f5e6c8] text-sm">{label}</span>
-                </label>
-              ))}
+        {/* Fire and bedding only feed the seasonal sleep result, so not in Fairy. */}
+        {!inFairy && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+            <div>
+              <div className={labelClasses}>Fire</div>
+              <div className="flex gap-2">
+                {([['none', 'No Fire'], ['campfire', 'Campfire']] as const).map(([val, label]) => (
+                  <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="campFire"
+                      checked={campFire === val}
+                      onChange={() => setCampFire(val)}
+                      className="accent-[#c4a35a]"
+                    />
+                    <span className="text-[#f5e6c8] text-sm">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div>
+              <div className={labelClasses}>Bedding</div>
+              <div className="flex flex-col gap-1">
+                {([['none', 'None'], ['bedrollOrTent', 'Bedroll or Tent'], ['bedrollAndTent', 'Bedroll + Tent']] as const).map(([val, label]) => (
+                  <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="campBedding"
+                      checked={campBedding === val}
+                      onChange={() => setCampBedding(val)}
+                      className="accent-[#c4a35a]"
+                    />
+                    <span className="text-[#f5e6c8] text-sm">{label}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
-          <div>
-            <div className={labelClasses}>Bedding</div>
-            <div className="flex flex-col gap-1">
-              {([['none', 'None'], ['bedrollOrTent', 'Bedroll or Tent'], ['bedrollAndTent', 'Bedroll + Tent']] as const).map(([val, label]) => (
-                <label key={val} className="flex items-center gap-1.5 cursor-pointer">
-                  <input
-                    type="radio"
-                    name="campBedding"
-                    checked={campBedding === val}
-                    onChange={() => setCampBedding(val)}
-                    className="accent-[#c4a35a]"
-                  />
-                  <span className="text-[#f5e6c8] text-sm">{label}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-        </div>
+        )}
 
         {inFairy ? (
           <div className="text-center mb-4 border border-[#8a6fb0]/60 bg-[#8a6fb0]/10 rounded p-3">
             <div className="text-[#c9b3f0] text-sm font-semibold mb-1">Sleeping in Fairy</div>
-            <div className="text-[#f5e6c8]/70 text-sm">
+            <div className="text-[#f5e6c8]/80 text-sm">
               Fairy is timeless, so the seasonal sleep table doesn&apos;t apply. The Referee rules on how well you rest.
             </div>
           </div>
@@ -750,50 +829,55 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
         </div>
 
-        <button
-          onClick={() => setShowSleepMatrix(!showSleepMatrix)}
-          className="text-[#c4a35a] text-sm hover:underline"
-        >
-          {showSleepMatrix ? 'Hide' : 'Show'} Full Sleep Matrix
-        </button>
-        {showSleepMatrix && (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-xs text-[#f5e6c8]">
-              <thead>
-                <tr className="border-b border-[#5a3a28]">
-                  <th className="text-left py-1 pr-2 text-[#c4a35a]">Fire</th>
-                  <th className="text-left py-1 pr-2 text-[#c4a35a]">Bedding</th>
-                  {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
-                    <th key={s} className="text-center py-1 px-1 text-[#c4a35a]">{s}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(['none', 'campfire'] as const).map((fire) =>
-                  (['none', 'bedrollOrTent', 'bedrollAndTent'] as const).map((bedding) => (
-                    <tr key={`${fire}-${bedding}`} className="border-b border-[#5a3a28]/50">
-                      <td className="py-1 pr-2">{fire === 'none' ? 'No fire' : 'Campfire'}</td>
-                      <td className="py-1 pr-2">
-                        {bedding === 'none' ? 'None' : bedding === 'bedrollOrTent' ? 'Bedroll/Tent' : 'Both'}
-                      </td>
-                      {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => {
-                        const diff = SLEEP_MATRIX[fire][bedding][s];
-                        return (
-                          <td
-                            key={s}
-                            className="text-center py-1 px-1 capitalize"
-                            style={{ color: SLEEP_DIFFICULTY_COLORS[diff] }}
-                          >
-                            {diff}
-                          </td>
-                        );
-                      })}
+        {/* The full matrix is seasonal too, so it is not offered in Fairy. */}
+        {!inFairy && (
+          <>
+            <button
+              onClick={() => setShowSleepMatrix(!showSleepMatrix)}
+              className="text-[#c4a35a] text-sm hover:underline"
+            >
+              {showSleepMatrix ? 'Hide' : 'Show'} Full Sleep Matrix
+            </button>
+            {showSleepMatrix && (
+              <div className="mt-2 overflow-x-auto">
+                <table className="w-full text-xs text-[#f5e6c8]">
+                  <thead>
+                    <tr className="border-b border-[#5a3a28]">
+                      <th className="text-left py-1 pr-2 text-[#c4a35a]">Fire</th>
+                      <th className="text-left py-1 pr-2 text-[#c4a35a]">Bedding</th>
+                      {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
+                        <th key={s} className="text-center py-1 px-1 text-[#c4a35a]">{s}</th>
+                      ))}
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody>
+                    {(['none', 'campfire'] as const).map((fire) =>
+                      (['none', 'bedrollOrTent', 'bedrollAndTent'] as const).map((bedding) => (
+                        <tr key={`${fire}-${bedding}`} className="border-b border-[#5a3a28]/50">
+                          <td className="py-1 pr-2">{fire === 'none' ? 'No fire' : 'Campfire'}</td>
+                          <td className="py-1 pr-2">
+                            {bedding === 'none' ? 'None' : bedding === 'bedrollOrTent' ? 'Bedroll/Tent' : 'Both'}
+                          </td>
+                          {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => {
+                            const diff = SLEEP_MATRIX[fire][bedding][s];
+                            return (
+                              <td
+                                key={s}
+                                className="text-center py-1 px-1 capitalize"
+                                style={{ color: SLEEP_DIFFICULTY_COLORS[diff] }}
+                              >
+                                {diff}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -890,7 +974,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
           {currentMonth.name} — {currentMonth.season}
           {inFairy && (
-            <span className="block text-[#f5e6c8]/60 text-xs font-semibold uppercase tracking-wider mt-0.5">
+            <span className="block text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mt-0.5">
               Dolmenwood, as you left it
             </span>
           )}
@@ -957,7 +1041,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
           Season
           {inFairy && (
-            <span className="text-[#f5e6c8]/60 text-xs font-semibold uppercase tracking-wider ml-2">
+            <span className="block text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mt-0.5">
               Dolmenwood, as you left it
             </span>
           )}

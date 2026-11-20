@@ -819,7 +819,7 @@ function KnownSpellsBlock({
             <span className="text-[#f5e6c8] flex-1 min-w-[100px]">{k.name}</span>
             <span
               className="text-[#f5e6c8]/40 text-xs shrink-0"
-              title={k.learnedAt ? `Learned ${formatRecordDate(character, k.learnedAt, k.learnedInFairy)}` : undefined}
+              title={k.learnedAt ? `Learned on ${formatRecordDate(character, k.learnedAt, k.learnedInFairy)}` : undefined}
             >
               {KNOWN_SOURCE_LABEL[k.source]}
             </span>
@@ -833,7 +833,7 @@ function KnownSpellsBlock({
             </button>
             {k.learnedInFairy && (
               <span className="basis-full text-[#c9b3f0]/80 text-xs pl-5">
-                Learned {formatFairyDate(character, k.learnedInFairy, k.learnedAt)}
+                Learned on {formatFairyDate(character, k.learnedInFairy, k.learnedAt)}
               </span>
             )}
           </div>
@@ -1138,7 +1138,7 @@ function SpellStudyBlock({
             <span className="text-[#f5e6c8] font-semibold">{active.spellName}</span>
             <span className="text-[#f5e6c8]/60 text-xs">({active.source})</span>
             <span className="ml-auto text-[#f5e6c8]/60 text-xs">
-              started {formatRecordDate(character, active.startedOn, active.startedInFairy)}
+              started on {formatRecordDate(character, active.startedOn, active.startedInFairy)}
             </span>
           </div>
           <div className="text-[#f5e6c8] text-sm mb-2">
@@ -1150,7 +1150,7 @@ function SpellStudyBlock({
               <span className="text-[#f5e6c8]/50 text-xs ml-2">(cost: {active.goldCost}gp)</span>
             )}
             {hasBeenToFairy && (
-              <div className="text-[#f5e6c8]/50 text-xs mt-0.5">
+              <div className="text-[#f5e6c8]/80 text-xs mt-0.5">
                 Counts days you&apos;ve lived, including days in Fairy. Time that passes in Dolmenwood while you&apos;re away doesn&apos;t count.
               </div>
             )}

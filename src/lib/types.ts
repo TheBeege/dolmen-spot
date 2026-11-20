@@ -234,14 +234,25 @@ export interface Character {
   // Visits to Fairy, oldest first. Only the last one can still be open
   // (returnedOn === null), which means the character is in Fairy now.
   fairyVisits: FairyVisit[];
+  // The Dolmenwood date the days-lived counter counts from: when the
+  // character's story began. Defaults to Year 1, 1 Grimvold.
+  livedTimeStart: CalendarDate;
 }
 
 export interface JournalEntry {
   id: string;
   date: CalendarDate;      // Dolmenwood date (frozen at the entry date while in Fairy)
   fairyDate?: FairyDate;   // set when the entry was written during a Fairy visit
+  fairyEvent?: FairyEvent; // set on the entries the app writes when entering or leaving Fairy
   location: string;
   text: string;
+}
+
+// Marks a journal entry as the automatic record of entering or leaving a
+// Fairy visit, so editing that visit's return date can update it.
+export interface FairyEvent {
+  visitId: string;
+  kind: 'entered' | 'returned';
 }
 
 // A trip into Fairy. Fairy is timeless: while the character is there,

@@ -95,8 +95,8 @@ export default function Home() {
       <header className="bg-[#1a1a2e] border-b border-[#5a3a28] sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 py-2">
           <div className="flex items-center justify-between gap-2">
-            {/* min-w-0 + truncate let the name shrink on phones so the buttons stay on screen */}
-            <div className="flex items-center gap-3 min-w-0">
+            {/* min-w-0 + flex-1 + truncate let the name shrink on phones so the badge and buttons stay on screen */}
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <span className="text-lg font-bold text-[#c4a35a] tracking-wide whitespace-nowrap shrink-0">
                 Dolmen Spot
               </span>
@@ -105,20 +105,22 @@ export default function Home() {
                 onClick={() => setShowCharList(!showCharList)}
                 className="text-sm text-[#f5e6c8] hover:text-[#c4a35a] transition-colors flex items-center gap-1 min-w-0"
               >
-                <span className="font-semibold truncate max-w-[150px]">
-                  {activeCharacter.name || 'Unnamed'}
+                {/* On phones the In Fairy badge sits under the name, so the name keeps its room. */}
+                <span className="flex flex-col items-start min-w-0 sm:flex-row sm:items-center sm:gap-1">
+                  <span className="font-semibold truncate min-w-0 max-w-full sm:max-w-[150px]">
+                    {activeCharacter.name || 'Unnamed'}
+                  </span>
+                  {isInFairy(activeCharacter) && (
+                    // Never shrinks: the name truncates first to make room for it.
+                    <span
+                      className="shrink-0 whitespace-nowrap text-[10px] leading-tight font-semibold uppercase tracking-wider text-[#c9b3f0] border border-[#8a6fb0]/70 bg-[#8a6fb0]/15 rounded-full px-1.5 py-px"
+                      title="This character is in Fairy. Dolmenwood's calendar is paused for them."
+                    >
+                      In Fairy
+                    </span>
+                  )}
                 </span>
                 <CloudStatusBadge metadata={cloudMetadata} />
-                {isInFairy(activeCharacter) && (
-                  // Just the star on phones, where the header has no room to spare.
-                  <span
-                    className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[#c9b3f0] border border-[#8a6fb0]/70 bg-[#8a6fb0]/15 rounded-full px-1.5 py-px"
-                    title="This character is in Fairy. Dolmenwood's calendar is paused for them."
-                  >
-                    <span aria-hidden="true">&#10022;</span>
-                    <span className="sr-only sm:not-sr-only sm:ml-1">In Fairy</span>
-                  </span>
-                )}
                 <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate">
                   {getKindredClassLabel(activeCharacter)}
                 </span>
