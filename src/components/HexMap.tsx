@@ -89,7 +89,10 @@ const WHEEL_DELTA_CAP_PX = 100; // per event, so one large jump can't zoom far
 const WHEEL_LINE_PX = 16; // wheel deltaMode 1 (lines) → pixels
 const BUTTON_ZOOM_FACTOR = 1.25;
 const ARROW_PAN_FRACTION = 0.1; // arrow keys pan by this much of the view
-const NARROW_SCREEN_QUERY = '(max-width: 767px)';
+// Screens where the hex inspector, below the map, is usually off-screen
+// when a hex is picked: narrow ones, and short ones such as a wide phone in
+// landscape. There, picking a hex scrolls its details into view.
+const REVEAL_INSPECTOR_QUERY = '(max-width: 767px), (max-height: 500px)';
 
 // Inputs are 16 px on phones so iOS doesn't zoom the page when they get focus.
 const INPUT_BASE =
@@ -294,8 +297,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // item's editor. `seq` changes on every click, even of the same marker.
   const [focus, setFocus] = useState<({ id: string } & FocusRequest) | null>(null);
   const [pendingForm, setPendingForm] = useState<{ type: 'poi' | 'door'; hex: HexCoord } | null>(null);
-  // Bumped when a hex is picked; on phones the inspector (below the map)
-  // is then scrolled into view.
+  // Bumped when a hex is picked; on phones (REVEAL_INSPECTOR_QUERY) the
+  // inspector, below the map, is then scrolled into view.
   const [revealSeq, setRevealSeq] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -326,7 +329,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   }
 
   useEffect(() => {
-    if (revealSeq > 0 && window.matchMedia(NARROW_SCREEN_QUERY).matches) {
+    if (revealSeq > 0 && window.matchMedia(REVEAL_INSPECTOR_QUERY).matches) {
       inspectorRef.current?.scrollIntoView({ block: 'nearest' });
     }
   }, [revealSeq]);
