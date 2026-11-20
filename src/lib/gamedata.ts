@@ -226,7 +226,8 @@ export function getKindredClassLabel(character: Pick<Character, 'kindred' | 'cla
   const parts: string[] = [];
   if (character.kindred) parts.push(getKindredName(character.kindred));
   if (character.class) parts.push(getClassName(character.class));
-  else if (character.kindred && character.kindred !== 'human') parts.push('(kindred-class)');
+  // Only a known kindred has a kindred-class; an unknown one is shown as stored, alone.
+  else if (character.kindred && character.kindred !== 'human' && isKnownKindredId(character.kindred)) parts.push('(kindred-class)');
   return parts.join(' ');
 }
 

@@ -48,6 +48,7 @@ import {
   getKindredName,
   getRuneUsageFrequency,
   isKnownClassId,
+  isKnownKindredId,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
 import {
@@ -481,8 +482,9 @@ function className(c: Character): string {
   return getClassName(c.class);
 }
 
+/** Only a known kindred has a kindred-class; an unknown one is shown as stored (see CharacterSection). */
 function isKindredClass(c: Character): boolean {
-  return !!c.kindred && c.kindred !== 'human' && !c.class;
+  return isKnownKindredId(c.kindred) && c.kindred !== 'human' && !c.class;
 }
 
 /** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" (the same label as the app's header) */

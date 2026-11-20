@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Character, KindredId, ClassId } from '@/lib/types';
 import {
   KINDREDS,
-  getKindredName,
   isKnownClassId,
   isKnownKindredId,
   MOON_SIGNS,
@@ -216,9 +215,10 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             <p className="text-red-400 text-xs mt-1">
               Humans must select a class.
             </p>
-          ) : character.kindred && !character.class ? (
+          ) : selectedKindred && !character.class ? (
+            // Only a known kindred has a kindred-class (an unknown one gets its own note above).
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
-              Playing as a {getKindredName(character.kindred)} kindred-class (see appendix).
+              Playing as a {selectedKindred.name} kindred-class (see appendix).
             </p>
           ) : null}
         </div>
