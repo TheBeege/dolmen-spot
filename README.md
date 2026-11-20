@@ -44,10 +44,11 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 
 ## Tech Stack
 
-- [Next.js](https://nextjs.org/) 15
+- [Next.js](https://nextjs.org/) 16
 - [React](https://react.dev/) 19
 - [TypeScript](https://www.typescriptlang.org/)
 - [Tailwind CSS](https://tailwindcss.com/) v4
+- [React-PDF](https://react-pdf.org/) for the PDF character sheet export
 - localStorage for persistence (no backend required), with optional Google Drive / OneDrive cloud save
 
 ## Getting Started
