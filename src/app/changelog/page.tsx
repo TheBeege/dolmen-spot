@@ -32,15 +32,17 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-21',
     title: 'Hex map, time in Fairy, printable sheets, and safer saves',
-    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21],
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22],
     sections: [
       {
         heading: 'Printable PDF character sheets',
         changes: [
           'New "Download PDF" button next to "Save / Load" saves a printable character sheet of your current character, named after them. On phones it shows as a download icon.',
-          'The sheet covers your character details, ability scores and modifiers, all five saving throws, combat stats (HP, AC, attack, melee, missile, speed, and magic resistance), skills, class and kindred features, languages, retainers, your spells, glamours, runes, or knacks, and your inventory by container with encumbrance and coins.',
-          'The Adventuring tab (calendar, conditions, rations, travel, light sources, spell study, and journal), the map, and free-form notes stay in the app and aren\'t printed.',
-          'Pages are printer-friendly with selectable text. Long inventories continue onto extra pages with their table headings repeated, and every page shows your character\'s name and a page number.',
+          'The sheet covers your character details, ability scores and modifiers, all five save targets, combat stats (HP, AC, attack, melee, missile, speed, and magic resistance), skills, class and kindred features with your Class Notes and Kindred Notes, languages, retainers, your spells, glamours, runes, or knacks, and your inventory by container with encumbrance and coins.',
+          'The Adventuring tab (calendar, conditions, rations, travel, light sources, spell study, and journal), the map, Other Notes, and spell notes stay in the app and aren\'t printed.',
+          'Pages are printer-friendly with selectable text. Long inventories, Tiny Items lists, backgrounds, and notes continue onto extra pages, with table headings repeated, and every page shows your character\'s name and a page number. A note inside a table, such as an item\'s or a spell\'s, stops after 60 lines with "…".',
+          'Names and notes print in Greek, Cyrillic, Korean, Japanese, and Chinese as well as every Latin letter and accent (for example "Łaszewski", "Dvořák", "김민준", and "山田太郎"). Common symbols such as ☐ ✓ ★ ♠ and dice print too, while emoji are left out. Arabic, Hebrew, Devanagari, and Thai text isn\'t covered yet and prints as "?".',
+          'The first PDF downloads about 0.4 MB of fonts, or more if your sheet has Korean, Japanese, or Chinese text, and your browser keeps them for later PDFs. While it waits, a note at the bottom of the screen says what for, and a stalled download stops with a message instead of hanging.',
           'Paper size follows your browser\'s language: Letter in the US, Canada, and other Letter-paper regions, A4 elsewhere.',
           'On phones, the header now hides the kindred and class and shortens long character names further, so its buttons always fit on screen.',
         ],
@@ -94,13 +96,14 @@ const ENTRIES: ChangelogEntry[] = [
           'Woodgrues with a standard class (Bard, Enchanter, Thief, and so on) get Mad Revelry once per day, as the rules say. Woodgrue kindred-class characters still get one use per Level.',
           'Kindred-class characters now get their XP modifier calculated from their Prime Abilities, with a Sync button like other classes. Editing an ability score or changing kindred no longer wipes an XP modifier the sheet can\'t calculate.',
           'Carrying more than the maximum load (over 1,600 coins of weight, or more than 10 equipped or 16 stowed slots) now gives Speed 0 on the Inventory tab and the PDF, with advice on what to stow or drop. Before, it showed 10.',
+          'The Divine Resistance note on the Spells & Magic tab now gives the actual rule, Resistance to Divine Aid: a 2-in-6 chance that a beneficial holy spell has no effect on you. It used to say "immune to holy magic".',
         ],
       },
       {
         heading: 'Sturdier, easier-to-read sheet',
         changes: [
           'A character saved with a class the sheet doesn\'t recognise (for example, from a hand-edited file) no longer blanks the whole app. Unrecognised classes and kindreds are shown as stored, and the sheet doesn\'t guess values or magic it can\'t work out.',
-          'The header and character list show proper names, such as "Woodgrue Enchanter", instead of lowercase ids or "???".',
+          'The header and character list show proper names, such as "Woodgrue Enchanter", instead of lowercase ids or "???", and the sheet no longer says "a Elf" or "1 slots".',
           'Inventory columns line up when you carry bags, sacks, or pouches, and on phones item rows fit the screen with each field labelled.',
           'Warnings, the header\'s kindred and class, the Inventory\'s × buttons, the character list\'s Del buttons, and the Save / Load close button are easier to read, and screen readers say what each of those buttons does.',
         ],
