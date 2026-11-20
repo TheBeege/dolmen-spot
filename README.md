@@ -116,6 +116,8 @@ python3 scripts/build-pdf-fonts.py --check  # verify the committed files are up 
 
 After upgrading `@react-pdf/renderer`, check whether the new versions still need them. A patch that no longer applies fails the install, locally as well as in CI and on Vercel (`--error-on-fail`), and patch-package warns when a package's version has changed. To change a patch, edit the package in `node_modules/` and run `npx patch-package <package name>`.
 
+A changed patch only applies to a fresh copy of its package, so reinstall with `npm ci`, which starts from an empty `node_modules`, rather than `npm install`. Vercel does the same (`installCommand` in `vercel.json`): its build cache keeps `node_modules`, with the old patches applied, from one build to the next.
+
 ## Disclaimer
 
 Dolmenwood is a trademark of [Necrotic Gnome](https://necroticgnome.com/). This is an unofficial fan project and is not affiliated with or endorsed by Necrotic Gnome. Game content is used for personal/fan use only.
