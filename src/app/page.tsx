@@ -17,6 +17,7 @@ import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
 import ExportPdfButton from '@/components/ExportPdfButton';
+import { isInFairy } from '@/lib/livedTime';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
@@ -94,8 +95,8 @@ export default function Home() {
       <header className="bg-[#1a1a2e] border-b border-[#5a3a28] sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 py-2">
           <div className="flex items-center justify-between gap-2">
-            {/* min-w-0 + truncate let the name shrink on phones so the buttons stay on screen */}
-            <div className="flex items-center gap-3 min-w-0">
+            {/* min-w-0 + flex-1 + truncate let the name shrink on phones so the badge and buttons stay on screen */}
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <span className="text-lg font-bold text-[#c4a35a] tracking-wide whitespace-nowrap shrink-0">
                 Dolmen Spot
               </span>
@@ -104,14 +105,37 @@ export default function Home() {
                 onClick={() => setShowCharList(!showCharList)}
                 className="text-sm text-[#f5e6c8] hover:text-[#c4a35a] transition-colors flex items-center gap-1 min-w-0"
               >
-                <span className="font-semibold truncate max-w-[150px]">
-                  {activeCharacter.name || 'Unnamed'}
+                {/* Below md the In Fairy badge sits under the name, so the name keeps
+                    its room; the cloud icon and chevron then line up with the name.
+                    The 150px cap is a fixed width (on this box below md, on the name
+                    from md up) so a long name leaves no empty space after it. Below md
+                    the name shrinks with this box when space runs short; from md up
+                    the box keeps its size and the kindred/class text gives way. */}
+                <span className="flex flex-col items-start min-w-0 max-w-[150px] md:max-w-none md:shrink-0 md:flex-row md:items-center md:gap-1">
+                  <span className="font-semibold truncate min-w-0 max-w-full md:max-w-[150px]">
+                    {activeCharacter.name || 'Unnamed'}
+                  </span>
+                  {isInFairy(activeCharacter) && (
+                    // Under 320px there's no room for the words, so a star stands in for them.
+                    <span
+                      className="shrink-0 whitespace-nowrap text-[10px] leading-tight font-semibold uppercase tracking-wider text-[#c9b3f0] border border-[#8a6fb0]/70 bg-[#8a6fb0]/15 rounded-full px-1.5 py-px"
+                      title="This character is in Fairy. Dolmenwood's calendar is paused for them."
+                    >
+                      <span aria-hidden="true" className="min-[320px]:hidden">✦</span>
+                      <span className="max-[320px]:sr-only">In Fairy</span>
+                    </span>
+                  )}
                 </span>
-                <CloudStatusBadge metadata={cloudMetadata} />
-                <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate">
+                {cloudMetadata && (
+                  <span className="shrink-0 self-start mt-0.5 md:self-auto md:mt-0">
+                    <CloudStatusBadge metadata={cloudMetadata} />
+                  </span>
+                )}
+                {/* Shrinks first when space runs short, before the name does. */}
+                <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate min-w-0 shrink-[4] self-start mt-0.5 md:self-auto md:mt-0">
                   {getKindredClassLabel(activeCharacter)}
                 </span>
-                <svg className="w-3 h-3 ml-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 ml-1 shrink-0 self-start mt-1 md:self-auto md:mt-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
@@ -169,6 +193,7 @@ export default function Home() {
                       </div>
                       <div className="text-xs text-[#f5e6c8]/70">
                         {[getKindredClassLabel(c), `Lv.${c.level}`].filter(Boolean).join(' ')}
+                        {isInFairy(c) && <span className="text-[#c9b3f0]"> <span className="whitespace-nowrap">&middot; In Fairy</span></span>}
                       </div>
                     </button>
                     {characters.length > 1 && (
@@ -265,6 +290,8 @@ export default function Home() {
             onExportLocal={exportCharacter}
             onImportLocal={importCharacter}
             loading={cloud.loading}
+            saving={cloud.saving}
+            listing={cloud.listing}
             error={cloud.error}
             onClearError={cloud.clearError}
             characterName={activeCharacter.name}

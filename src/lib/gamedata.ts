@@ -306,6 +306,54 @@ export function formatCalendarDate(date: CalendarDate): string {
   return `${date.day} ${month.name} (${dayName}), Year ${date.year}`;
 }
 
+// The largest year the date fields accept. Date math copes with any year;
+// anything bigger is almost certainly a typo. LATEST_DATE is that year's last
+// day: the calendar stops there.
+export const MAX_YEAR = 99999;
+export const LATEST_DATE: CalendarDate = { day: MONTHS[MONTHS.length - 1].days, month: MONTHS.length - 1, year: MAX_YEAR };
+
+// "3 Grimvold, Year 2": formatCalendarDate without the day name.
+export function formatShortDate(date: CalendarDate): string {
+  return `${date.day} ${MONTHS[date.month]?.name ?? 'Unknown'}, Year ${date.year}`;
+}
+
+// "1 day", "12 days", "1,058 days".
+export function plural(count: number, unit: string): string {
+  return `${count.toLocaleString('en-US')} ${unit}${count === 1 ? '' : 's'}`;
+}
+
+// "a", "a and b", "a, b and c".
+function joinParts(parts: string[]): string {
+  if (parts.length <= 1) return parts[0] ?? '';
+  return `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+}
+
+// Years, months and days, leaving out any that are zero.
+function describeParts(years: number, months: number, days: number): string {
+  const parts: [number, string][] = [[years, 'year'], [months, 'month'], [days, 'day']];
+  return joinParts(parts.filter(([n]) => n > 0).map(([n, unit]) => plural(n, unit)));
+}
+
+// The time between two dates in calendar terms, e.g. "3 years, 2 months and
+// 5 days" ("no time" if `to` isn't after `from`). Adding the result back with
+// addElapsedTime lands on `to`.
+export function describeDolmenwoodSpan(from: CalendarDate, to: CalendarDate): string {
+  if (daysBetween(from, to) <= 0) return 'no time';
+  const perYear = MONTHS.length;
+  let months = (to.year - from.year) * perYear + (to.month - from.month);
+  if (months > 0 && daysBetween(addMonths(from, months), to) < 0) months -= 1;
+  const days = daysBetween(addMonths(from, months), to);
+  return describeParts(Math.floor(months / perYear), months % perYear, days);
+}
+
+// A number of days as years and days ("3 years and 63 days"). Exact, since
+// every Dolmenwood year has the same length.
+export function describeDays(totalDays: number): string {
+  const days = Math.max(0, Math.floor(totalDays));
+  if (days === 0) return 'no time';
+  return describeParts(Math.floor(days / DAYS_IN_YEAR), 0, days % DAYS_IN_YEAR);
+}
+
 export const FESTIVALS: Record<string, { month: number; day: number; name: string }[]> = {
   festivals: [
     { month: 0, day: 29, name: 'Hanglemas' },
@@ -370,8 +418,43 @@ export function daysBetween(start: CalendarDate, end: CalendarDate): number {
   return getAbsoluteDay(end) - getAbsoluteDay(start);
 }
 
-export function weeksElapsed(start: CalendarDate, end: CalendarDate): number {
-  return Math.floor(daysBetween(start, end) / 7);
+// The inverse of getAbsoluteDay. Constant time (one division and at most 12
+// month steps), so even a mistyped Year 99999 costs nothing. Day numbers
+// below 1 land in Year 0 and earlier, matching addDays.
+export function fromAbsoluteDay(absoluteDay: number): CalendarDate {
+  const n = Math.floor(absoluteDay);
+  const year = Math.floor((n - 1) / DAYS_IN_YEAR) + 1;
+  let day = n - (year - 1) * DAYS_IN_YEAR; // 1..DAYS_IN_YEAR
+  let month = 0;
+  while (month < MONTHS.length - 1 && day > MONTHS[month].days) {
+    day -= MONTHS[month].days;
+    month += 1;
+  }
+  return { day, month, year };
+}
+
+// Add whole months, keeping the day of the month where it fits:
+// 31 Chysting + 1 month = 29 Lillipythe (the last day of that month).
+export function addMonths(date: CalendarDate, months: number): CalendarDate {
+  const perYear = MONTHS.length;
+  const index = (date.year - 1) * perYear + date.month + Math.trunc(months);
+  const year = Math.floor(index / perYear) + 1;
+  const month = index - (year - 1) * perYear;
+  return { day: Math.min(date.day, MONTHS[month].days), month, year };
+}
+
+export interface ElapsedTime {
+  years: number;
+  months: number;
+  weeks: number;
+  days: number;
+}
+
+// A date plus some years, months, weeks and days, applied in that order.
+// Years and months follow the calendar's month lengths (see addMonths).
+export function addElapsedTime(date: CalendarDate, elapsed: ElapsedTime): CalendarDate {
+  const afterMonths = addMonths(date, elapsed.years * MONTHS.length + elapsed.months);
+  return fromAbsoluteDay(getAbsoluteDay(afterMonths) + elapsed.weeks * 7 + elapsed.days);
 }
 
 // Advance (or rewind) a calendar date by some number of days, wrapping
@@ -2742,5 +2825,8 @@ export function createDefaultCharacter(): Character {
     travelDaysWithoutRest: 0,
     forcedMarchActive: false,
     travelPointsRemaining: 0,
+
+    fairyVisits: [],
+    livedTimeStart: { day: 1, month: 0, year: 1 },
   };
 }
