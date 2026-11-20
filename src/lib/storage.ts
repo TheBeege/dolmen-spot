@@ -1,6 +1,8 @@
 import type { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
+import { setCurrentStore } from './current-store';
+import { SAVE_DATA_FORMAT, SAVE_DATA_IMPORT_MESSAGE } from './save-data-file';
 
 /**
  * Saving and loading characters in localStorage without losing any.
@@ -49,8 +51,6 @@ export const DISMISSED_BACKUPS_KEY = 'dolmenwood-dismissed-backups';
 export const DISMISSED_NEWER_KEY = 'dolmenwood-dismissed-newer-version';
 export const RECOVERY_FORMAT = 'dolmen-spot-recovery';
 export const RECOVERY_DOWNLOAD_FORMAT = 'dolmen-spot-recovery-download';
-/** The save-data file the error screen offers (PR #21): everything in localStorage, not characters. */
-export const ERROR_SCREEN_FILE_FORMAT = 'dolmen-spot-recovery-error-screen';
 /** While saving is paused for want of a backup, try the backup again at most this often. */
 export const BACKUP_RETRY_MS = 5_000;
 
@@ -241,9 +241,8 @@ export const IMPORT_MESSAGES = {
   recoveryFile:
     "That's a recovery file from the storage warning, not a character file. It holds saved data Dolmen Spot couldn't read, " +
     "so it can't be imported. Keep it, or attach it to a bug report.",
-  // Word for word PR #21's SAVE_DATA_IMPORT_MESSAGE, so either can be kept when they meet.
-  errorScreenFile:
-    "That's a save-data file from Dolmen Spot's error screen, not a character file, so it can't be imported. Keep it, or attach it to a bug report.",
+  /** The error screen's save-data file (src/lib/save-data-file.ts), which holds everything in localStorage. */
+  errorScreenFile: SAVE_DATA_IMPORT_MESSAGE,
   newerVersion:
     "That file was saved by a newer version of Dolmen Spot, so this version can't import it yet. Try again once Dolmen Spot has been updated.",
   several: 'That file holds several characters. Use Import Character on the Local File tab to add them.',
@@ -277,7 +276,7 @@ export function parseImportedCharacters(
   items.forEach((item, i) => {
     // A character comes first: one with a stray `format` field is still a character.
     if (!looksLikeCharacter(item)) {
-      if (isPlainObject(item) && item.format === ERROR_SCREEN_FILE_FORMAT) throw new ImportError(IMPORT_MESSAGES.errorScreenFile);
+      if (isPlainObject(item) && item.format === SAVE_DATA_FORMAT) throw new ImportError(IMPORT_MESSAGES.errorScreenFile);
       if (isRecoveryFile(item)) throw new ImportError(IMPORT_MESSAGES.recoveryFile);
     }
     // Depth is measured from the character itself, exactly as load() measures each saved entry.
@@ -1076,6 +1075,8 @@ export function getCharacterStore(): CharacterStore {
     }
     browserStore = createCharacterStore(storage);
     warnBeforeUnloadWhileUnsaved(browserStore);
+    // For the error screen, which doesn't import this module.
+    setCurrentStore(browserStore);
   }
   return browserStore;
 }

@@ -13,7 +13,6 @@ import {
   CHARACTERS_KEY as CHARS,
   DISMISSED_BACKUPS_KEY as DISMISSED,
   DISMISSED_NEWER_KEY as DISMISSED_NEWER,
-  ERROR_SCREEN_FILE_FORMAT,
   IMPORT_MESSAGES,
   ImportError,
   RECOVERY_KEY_PREFIX as PREFIX,
@@ -28,6 +27,7 @@ import {
   type RecoveryRecord,
   type StorageLike,
 } from './storage';
+import { SAVE_DATA_FORMAT } from './save-data-file';
 import type { Character } from './types';
 
 // The store logs the failures it handles; keep them out of the test output.
@@ -1083,9 +1083,9 @@ test('imports: recovery files are recognised and explained, including our own do
   assert.throws(() => parseImportedCharacters(`[${files[0]}]`, { allowMany: true }), isImportError(IMPORT_MESSAGES.recoveryFile));
 });
 
-test("imports: the error screen's save-data file (PR #21) is explained as what it is", () => {
+test("imports: the error screen's save-data file is explained as what it is", () => {
   const file = JSON.stringify({
-    format: ERROR_SCREEN_FILE_FORMAT,
+    format: SAVE_DATA_FORMAT,
     app: 'Dolmen Spot',
     about: 'Everything Dolmen Spot had saved in this browser',
     downloadedAt: '2026-11-20T12:00:00.000Z',
@@ -1098,7 +1098,7 @@ test("imports: the error screen's save-data file (PR #21) is explained as what i
   assert.equal(
     IMPORT_MESSAGES.errorScreenFile,
     "That's a save-data file from Dolmen Spot's error screen, not a character file, so it can't be imported. Keep it, or attach it to a bug report.",
-    "word for word PR #21's SAVE_DATA_IMPORT_MESSAGE",
+    'the message the error screen\'s own module defines',
   );
 });
 
@@ -1509,7 +1509,7 @@ test('everything an export writes imports again, even characters only a hand edi
     { ...makeChar('x'), name: null },
     { ...makeChar('x'), name: { first: 'Odd' } },
     { ...makeChar('Formatted'), format: 'dolmen-spot-recovery-download' },
-    { ...makeChar('Error screen'), format: ERROR_SCREEN_FILE_FORMAT },
+    { ...makeChar('Error screen'), format: SAVE_DATA_FORMAT },
     { ...makeChar('Old download'), backups: [], notBackedUp: [] },
     JSON.parse(deepChar('Deep but loadable', 99)) as Record<string, unknown>,
     { name: 'Infinite', level: 1, schemaVersion: 'INFINITY' },
