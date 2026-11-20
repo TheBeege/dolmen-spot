@@ -133,12 +133,14 @@ export default function ExportPdfButton({ character }: { character: Character })
         </span>
       </button>
       {/* One live region for the whole export: "Preparing PDF…" for screen
-          readers at once, then, if it's slow, a visible note of what it's waiting for. */}
+          readers at once, then, if it's slow, a visible note of what it's
+          waiting for. The note can stay up for minutes, so it sits at the foot
+          of the screen (the bottom right from sm up), clear of the tabs. */}
       <div
         role="status"
         className={
           slowNote
-            ? 'absolute right-0 top-full mt-2 z-50 w-64 max-w-[calc(100vw-1.5rem)] pointer-events-none bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] text-xs rounded p-2 shadow-lg'
+            ? 'fixed inset-x-3 bottom-3 sm:left-auto sm:right-4 sm:bottom-4 sm:w-72 z-50 pointer-events-none bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] text-xs rounded p-2 shadow-lg'
             : 'sr-only'
         }
       >
