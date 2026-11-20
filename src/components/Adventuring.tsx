@@ -19,10 +19,16 @@ import {
   getHungerEffects,
   getMoonPhaseLabel,
   getMoonName,
-  weeksElapsed,
   addDays,
   isWysenday,
 } from '@/lib/gamedata';
+import {
+  formatRecordDate,
+  getCurrentTimelinePoint,
+  getOpenFairyVisit,
+  getStudyProgress,
+} from '@/lib/livedTime';
+import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
 
 interface AdventuringProps {
   character: Character;
@@ -78,6 +84,10 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const currentMonth = MONTHS[currentDate.month];
   const seasonColor = SEASON_COLORS[currentMonth.season] || '#f5e6c8';
   const season = currentMonth.season as 'Winter' | 'Spring' | 'Summer' | 'Autumn';
+  // While the character is in Fairy, Dolmenwood's date stays on the day they
+  // entered: season-based results don't apply and its "today" is as they left it.
+  const openFairyVisit = getOpenFairyVisit(character);
+  const inFairy = openFairyVisit !== null;
 
   // Ephemeral camping state (not persisted)
   const [campFire, setCampFire] = useState<'none' | 'campfire'>('none');
@@ -123,9 +133,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   // ── Journal Handlers ───────────────────────────────────────────────
 
   const handleAddJournalEntry = () => {
+    const now = getCurrentTimelinePoint(character);
     const newEntry: JournalEntry = {
       id: crypto.randomUUID(),
-      date: { ...currentDate },
+      date: now.date,
+      fairyDate: now.fairyDate,
       location: currentLocation,
       text: '',
     };
@@ -180,10 +192,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
 
   const moonName = getMoonName(currentDate);
   const moonPhaseLabel = getMoonPhaseLabel(currentDate);
-  const todaysFestivals = (FESTIVALS.festivals || []).filter(
+  // No festival or celestial alerts for Dolmenwood's "today" while in Fairy.
+  const todaysFestivals = inFairy ? [] : (FESTIVALS.festivals || []).filter(
     (f) => f.month === currentDate.month && f.day === currentDate.day
   );
-  const todaysCelestial = CELESTIAL_EVENTS.filter(
+  const todaysCelestial = inFairy ? [] : CELESTIAL_EVENTS.filter(
     (e) => e.month === currentDate.month && e.day === currentDate.day
   );
   const todayIsWysenday = isWysenday(currentDate);
@@ -206,6 +219,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Calendar
         </h2>
+
+        {/* In Fairy: status, day controls, and the way back */}
+        {openFairyVisit && (
+          <FairyStatusPanel key={openFairyVisit.id} character={character} onChange={onChange} />
+        )}
 
         {/* Festival alert */}
         {todaysFestivals.length > 0 && (
@@ -235,7 +253,12 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
         )}
 
-        <div className="text-center mb-4">
+        <div className={`text-center mb-4 ${inFairy ? 'opacity-60' : ''}`}>
+          {inFairy && (
+            <div className="text-[#f5e6c8]/70 text-xs font-semibold uppercase tracking-wider mb-1">
+              Dolmenwood, as you left it
+            </div>
+          )}
           <div className="text-2xl font-bold text-[#c4a35a]">
             {formatCalendarDate(currentDate)}
           </div>
@@ -250,64 +273,73 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             {moonName} &middot; {moonPhaseLabel}
           </div>
           {/* Wysenday badge */}
-          {todayIsWysenday && (
+          {!inFairy && todayIsWysenday && (
             <span className="inline-block mt-2 bg-[#c4a35a]/20 text-[#c4a35a] text-xs font-semibold px-3 py-1 rounded-full border border-[#c4a35a]/40">
               Wysenday
             </span>
           )}
         </div>
 
-        <div className="flex items-center justify-center gap-3 mb-4">
-          <button
-            onClick={handlePreviousDay}
-            disabled={isAtCampaignStart}
-            title={isAtCampaignStart ? 'Already at Year 1, day 1' : ''}
-            className={`${buttonClasses} ${isAtCampaignStart ? 'opacity-40 cursor-not-allowed' : ''}`}
-          >
-            Previous Day
-          </button>
-          <button onClick={handleNextDay} className={buttonClasses}>
-            Next Day
-          </button>
-        </div>
+        {/* Dolmenwood's date controls. In Fairy the date is frozen and the
+            Fairy panel above counts days instead. */}
+        {!inFairy && (
+          <>
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <button
+                onClick={handlePreviousDay}
+                disabled={isAtCampaignStart}
+                title={isAtCampaignStart ? 'Already at Year 1, day 1' : ''}
+                className={`${buttonClasses} ${isAtCampaignStart ? 'opacity-40 cursor-not-allowed' : ''}`}
+              >
+                Previous Day
+              </button>
+              <button onClick={handleNextDay} className={buttonClasses}>
+                Next Day
+              </button>
+            </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div>
-            <label className={labelClasses}>Month</label>
-            <select
-              value={currentDate.month}
-              onChange={(e) => handleMonthChange(parseInt(e.target.value))}
-              className={`${inputClasses} w-full`}
-            >
-              {MONTHS.map((m, i) => (
-                <option key={i} value={i}>
-                  {m.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelClasses}>Day</label>
-            <input
-              type="number"
-              min={1}
-              max={currentMonth.days}
-              value={currentDate.day}
-              onChange={(e) => handleDayChange(parseInt(e.target.value) || 1)}
-              className={`${inputClasses} w-full`}
-            />
-          </div>
-          <div className="col-span-2 sm:col-span-1">
-            <label className={labelClasses}>Year</label>
-            <input
-              type="number"
-              min={1}
-              value={currentDate.year}
-              onChange={(e) => handleYearChange(parseInt(e.target.value) || 1)}
-              className={`${inputClasses} w-full`}
-            />
-          </div>
-        </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+              <div>
+                <label className={labelClasses}>Month</label>
+                <select
+                  value={currentDate.month}
+                  onChange={(e) => handleMonthChange(parseInt(e.target.value))}
+                  className={`${inputClasses} w-full`}
+                >
+                  {MONTHS.map((m, i) => (
+                    <option key={i} value={i}>
+                      {m.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className={labelClasses}>Day</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={currentMonth.days}
+                  value={currentDate.day}
+                  onChange={(e) => handleDayChange(parseInt(e.target.value) || 1)}
+                  className={`${inputClasses} w-full`}
+                />
+              </div>
+              <div className="col-span-2 sm:col-span-1">
+                <label className={labelClasses}>Year</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={currentDate.year}
+                  onChange={(e) => handleYearChange(parseInt(e.target.value) || 1)}
+                  className={`${inputClasses} w-full`}
+                />
+              </div>
+            </div>
+          </>
+        )}
+
+        {/* Days lived, Fairy visits, and the way into Fairy */}
+        <LivedTimePanel key={character.id} character={character} onChange={onChange} />
       </div>
 
       {/* ── 5b. Current Location (existing) ──────────────────────── */}
@@ -389,11 +421,10 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           {/* Spell Study (only visible when active) */}
           {character.spellStudy?.active && (() => {
             const active = character.spellStudy.active;
-            // Clamp elapsed at 0 so a backward calendar nudge can't make
-            // `remaining` balloon past `weeksRequired` via subtraction.
-            const elapsed = Math.max(0, weeksElapsed(active.startedOn, currentDate));
-            const remaining = Math.max(0, active.weeksRequired - elapsed);
-            const ready = remaining === 0;
+            // Shared with the Spells tab: counts days lived, Fairy included.
+            const progress = getStudyProgress(character);
+            const remaining = progress?.weeksRemaining ?? active.weeksRequired;
+            const ready = progress?.ready ?? false;
             return (
               <div className={`bg-[#1a1a2e] rounded p-3 ${ready ? 'ring-1 ring-[#c4a35a]' : ''}`}>
                 <div className="text-[#c4a35a] text-sm font-semibold mb-2">🪄 Spell Study</div>
@@ -482,7 +513,16 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
         </div>
         <div className="text-[#f5e6c8]/60 text-xs">
-          Foraging yield ({season}): <span className="text-[#c4a35a] font-semibold">{foragingYield}</span> rations (Survival check).
+          {inFairy ? (
+            <>
+              <span className="text-[#c9b3f0]">Foraging in Fairy:</span> Fairy is timeless, so Dolmenwood&apos;s
+              seasons don&apos;t set the yield. The Referee rules on what you find.
+            </>
+          ) : (
+            <>
+              Foraging yield ({season}): <span className="text-[#c4a35a] font-semibold">{foragingYield}</span> rations (Survival check).
+            </>
+          )}{' '}
           Fresh rations spoil after 1 week without preservation.
         </div>
       </div>
@@ -678,20 +718,29 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
           </div>
         </div>
 
-        <div className="text-center mb-4">
-          <div className="text-[#f5e6c8]/60 text-sm mb-1">
-            Sleep Difficulty ({season})
+        {inFairy ? (
+          <div className="text-center mb-4 border border-[#8a6fb0]/60 bg-[#8a6fb0]/10 rounded p-3">
+            <div className="text-[#c9b3f0] text-sm font-semibold mb-1">Sleeping in Fairy</div>
+            <div className="text-[#f5e6c8]/70 text-sm">
+              Fairy is timeless, so the seasonal sleep table doesn&apos;t apply. The Referee rules on how well you rest.
+            </div>
           </div>
-          <div
-            className="text-2xl font-bold capitalize"
-            style={{ color: SLEEP_DIFFICULTY_COLORS[sleepDifficulty] }}
-          >
-            {sleepDifficulty}
+        ) : (
+          <div className="text-center mb-4">
+            <div className="text-[#f5e6c8]/60 text-sm mb-1">
+              Sleep Difficulty ({season})
+            </div>
+            <div
+              className="text-2xl font-bold capitalize"
+              style={{ color: SLEEP_DIFFICULTY_COLORS[sleepDifficulty] }}
+            >
+              {sleepDifficulty}
+            </div>
+            <div className="text-[#f5e6c8]/60 text-sm mt-1">
+              {SLEEP_DIFFICULTY_DESCRIPTION[sleepDifficulty]}
+            </div>
           </div>
-          <div className="text-[#f5e6c8]/60 text-sm mt-1">
-            {SLEEP_DIFFICULTY_DESCRIPTION[sleepDifficulty]}
-          </div>
-        </div>
+        )}
 
         <div className="bg-[#1a1a2e] rounded p-3 mb-3">
           <div className="text-[#c4a35a] text-sm font-semibold mb-1">Camp Activities</div>
@@ -840,6 +889,11 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
       <div className="bg-[#2a2a3e] rounded-lg p-4">
         <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
           {currentMonth.name} — {currentMonth.season}
+          {inFairy && (
+            <span className="block text-[#f5e6c8]/60 text-xs font-semibold uppercase tracking-wider mt-0.5">
+              Dolmenwood, as you left it
+            </span>
+          )}
         </h3>
         <div className="text-[#f5e6c8] text-sm mb-2">
           {currentMonth.days} days &middot; {currentMonth.description}
@@ -900,7 +954,14 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
 
       {/* Season Display */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h3 className="text-[#c4a35a] text-lg font-bold mb-3">Season</h3>
+        <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
+          Season
+          {inFairy && (
+            <span className="text-[#f5e6c8]/60 text-xs font-semibold uppercase tracking-wider ml-2">
+              Dolmenwood, as you left it
+            </span>
+          )}
+        </h3>
         <div className="flex gap-2">
           {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
             <div
@@ -943,8 +1004,8 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             <div key={entry.id} className="bg-[#1a1a2e] rounded p-3">
               <div className="flex items-start justify-between mb-2">
                 <div>
-                  <div className="text-[#c4a35a] text-sm font-semibold">
-                    {formatCalendarDate(entry.date)}
+                  <div className={`${entry.fairyDate ? 'text-[#c9b3f0]' : 'text-[#c4a35a]'} text-sm font-semibold`}>
+                    {formatRecordDate(character, entry.date, entry.fairyDate)}
                   </div>
                   {entry.location && (
                     <div className="text-[#f5e6c8]/60 text-xs">

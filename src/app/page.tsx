@@ -17,6 +17,7 @@ import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
 import ExportPdfButton from '@/components/ExportPdfButton';
+import { isInFairy } from '@/lib/livedTime';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
@@ -108,6 +109,16 @@ export default function Home() {
                   {activeCharacter.name || 'Unnamed'}
                 </span>
                 <CloudStatusBadge metadata={cloudMetadata} />
+                {isInFairy(activeCharacter) && (
+                  // Just the star on phones, where the header has no room to spare.
+                  <span
+                    className="shrink-0 text-[10px] font-semibold uppercase tracking-wider text-[#c9b3f0] border border-[#8a6fb0]/70 bg-[#8a6fb0]/15 rounded-full px-1.5 py-px"
+                    title="This character is in Fairy. Dolmenwood's calendar is paused for them."
+                  >
+                    <span aria-hidden="true">&#10022;</span>
+                    <span className="sr-only sm:not-sr-only sm:ml-1">In Fairy</span>
+                  </span>
+                )}
                 <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate">
                   {getKindredClassLabel(activeCharacter)}
                 </span>
@@ -169,6 +180,7 @@ export default function Home() {
                       </div>
                       <div className="text-xs text-[#f5e6c8]/70">
                         {[getKindredClassLabel(c), `Lv.${c.level}`].filter(Boolean).join(' ')}
+                        {isInFairy(c) && <span className="text-[#c9b3f0]"> &middot; In Fairy</span>}
                       </div>
                     </button>
                     {characters.length > 1 && (

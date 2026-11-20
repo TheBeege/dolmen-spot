@@ -2715,5 +2715,7 @@ export function createDefaultCharacter(): Character {
     travelDaysWithoutRest: 0,
     forcedMarchActive: false,
     travelPointsRemaining: 0,
+
+    fairyVisits: [],
   };
 }

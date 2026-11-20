@@ -1,7 +1,8 @@
 import { Character } from './types';
-import { createDefaultCharacter, MONTHS } from './gamedata';
+import { createDefaultCharacter, MONTHS, daysBetween } from './gamedata';
+import { getLivedDayAtDolmenwoodDate } from './livedTime';
 
-export const CURRENT_SCHEMA_VERSION = 11;
+export const CURRENT_SCHEMA_VERSION = 12;
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
 
@@ -94,6 +95,102 @@ function sanitizeCharacterDates(data: any): void {
     if (isPlainObject(data.spellStudy.active)) {
       data.spellStudy.active.startedOn = sanitizeDate(data.spellStudy.active.startedOn);
     }
+  }
+}
+
+/**
+ * Anchor an in-progress spell study on the lived-time clock (see
+ * src/lib/livedTime.ts) if it isn't already. A save from before Fairy
+ * visits existed has none, so its lived day for a Dolmenwood date is just
+ * the days since Year 1, day 1. Progress is then
+ * livedDays(now) - startedLivedDay = daysBetween(startedOn, currentDate),
+ * exactly what it was before.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function anchorActiveStudy(data: any): void {
+  const active = isPlainObject(data.spellStudy) ? data.spellStudy.active : null;
+  if (!isPlainObject(active) || Number.isFinite(active.startedLivedDay)) return;
+  const fairyVisits = Array.isArray(data.fairyVisits) ? data.fairyVisits : [];
+  active.startedLivedDay = getLivedDayAtDolmenwoodDate({ fairyVisits }, sanitizeDate(active.startedOn));
+}
+
+/**
+ * Add Fairy time tracking: the visit list, plus a lived-day anchor on any
+ * in-progress spell study so it keeps exactly the progress it had. Kept
+ * self-contained (no version numbers inside) so it can be renumbered if
+ * another schema bump lands first.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateAddFairyTime(data: any): any {
+  if (data.fairyVisits === undefined) data.fairyVisits = [];
+  anchorActiveStudy(data);
+  return data;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyDate(ref: any): { visitId: string; day: number } | undefined {
+  if (!isPlainObject(ref) || typeof ref.visitId !== 'string' || !Number.isFinite(ref.day)) return undefined;
+  return { visitId: ref.visitId, day: Math.max(1, Math.floor(ref.day)) };
+}
+
+/**
+ * Repair Fairy visit data on a partially-trusted save (a hand-edited import
+ * can skip the migration loop). Keeps the invariants the rest of the app
+ * relies on: well-formed dates, unique ids, non-negative days, a return
+ * date no earlier than the entry date, only the last visit open, and a
+ * Dolmenwood date frozen on the entry date while the character is in Fairy.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeFairyTime(data: any): void {
+  if (data.fairyVisits !== undefined && !Array.isArray(data.fairyVisits)) data.fairyVisits = [];
+  if (Array.isArray(data.fairyVisits)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const visits: any[] = data.fairyVisits.filter(isPlainObject);
+    const seenIds = new Set<string>();
+    visits.forEach((visit, i) => {
+      if (typeof visit.id !== 'string' || visit.id === '' || seenIds.has(visit.id)) visit.id = crypto.randomUUID();
+      seenIds.add(visit.id);
+      visit.enteredOn = sanitizeDate(visit.enteredOn);
+      if (visit.returnedOn == null) {
+        // Only the most recent visit can still be open; close any earlier
+        // one on the day it began, as if no time passed.
+        visit.returnedOn = i === visits.length - 1 ? null : { ...visit.enteredOn };
+      } else {
+        visit.returnedOn = sanitizeDate(visit.returnedOn);
+        if (daysBetween(visit.enteredOn, visit.returnedOn) < 0) visit.returnedOn = { ...visit.enteredOn };
+      }
+      visit.daysInFairy = Number.isFinite(visit.daysInFairy) ? Math.max(0, Math.floor(visit.daysInFairy)) : 0;
+    });
+    data.fairyVisits = visits;
+    const last = visits[visits.length - 1];
+    if (last && last.returnedOn === null) data.currentDate = { ...last.enteredOn };
+  }
+
+  // Fairy dates on records: keep well-formed ones, drop anything else.
+  // A reference to an unknown visit is kept; it still displays its day.
+  if (Array.isArray(data.journalEntries)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const entry of data.journalEntries as any[]) {
+      if (entry.fairyDate === undefined) continue;
+      const ref = sanitizeFairyDate(entry.fairyDate);
+      if (ref) entry.fairyDate = ref; else delete entry.fairyDate;
+    }
+  }
+  if (Array.isArray(data.knownSpells)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    for (const spell of data.knownSpells as any[]) {
+      if (spell.learnedInFairy === undefined) continue;
+      const ref = sanitizeFairyDate(spell.learnedInFairy);
+      if (ref) spell.learnedInFairy = ref; else delete spell.learnedInFairy;
+    }
+  }
+  if (isPlainObject(data.spellStudy) && isPlainObject(data.spellStudy.active)) {
+    const active = data.spellStudy.active;
+    if (active.startedInFairy !== undefined) {
+      const ref = sanitizeFairyDate(active.startedInFairy);
+      if (ref) active.startedInFairy = ref; else delete active.startedInFairy;
+    }
+    anchorActiveStudy(data);
   }
 }
 
@@ -197,6 +294,9 @@ const migrations: Record<number, (data: any) => any> = {
     sanitizeCharacterDates(data);
     return data;
   },
+  // v11 -> v12: Fairy time tracking. Adds fairyVisits and anchors any
+  // in-progress spell study on the lived-time clock (progress unchanged).
+  11: migrateAddFairyTime,
 };
 
 // Required subkeys for the schema's nullable-object fields. If a saved
@@ -308,6 +408,7 @@ export function migrateCharacter(data: any): Character {
   // JSON import that smuggles in non-numeric date fields gets cleaned
   // before downstream date math tries to use it.
   sanitizeCharacterDates(data);
+  sanitizeFairyTime(data);
 
   return reconcileWithDefaults(data) as Character;
 }
