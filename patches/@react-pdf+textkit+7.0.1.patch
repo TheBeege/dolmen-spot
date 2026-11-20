@@ -1,5 +1,5 @@
 diff --git a/node_modules/@react-pdf/textkit/lib/textkit.js b/node_modules/@react-pdf/textkit/lib/textkit.js
-index 7bfe0d9..c80191d 100644
+index 7bfe0d9..85a29fa 100644
 --- a/node_modules/@react-pdf/textkit/lib/textkit.js
 +++ b/node_modules/@react-pdf/textkit/lib/textkit.js
 @@ -681,23 +681,55 @@ const getEllipsisCodePoint = (font) => {
@@ -95,3 +95,32 @@ index 7bfe0d9..c80191d 100644
                  break;
              }
          }
+@@ -1244,18 +1283,25 @@ const generateGlyphs = () => {
+ /**
+  * Resolves yOffset for run
+  *
++ * Patched by dolmen-spot (patches/@react-pdf+textkit+7.0.1.patch): the run's
++ * offset (verticalAlign 'sub' or 'super') is added to each glyph's own, in
++ * points like the rest of the positions (scalePositions). It used to replace
++ * it, in font units: that threw away the vertical offsets the font gives its
++ * marks, so an accent was never raised over a capital, and with render's
++ * offsets scaled (patches/@react-pdf+render+4.7.0.patch) font units would put
++ * a superscript hundreds of points up.
++ *
+  * @param run - Run
+  * @returns Run
+  */
+ const resolveRunYOffset = (run) => {
+     if (!run.positions)
+         return run;
+-    const unitsPerEm = run.attributes?.font?.[0]?.unitsPerEm || 0;
+-    const yOffset = (run.attributes?.yOffset || 0) * unitsPerEm;
++    const yOffset = (run.attributes?.yOffset || 0) * (run.attributes?.fontSize || 12);
+     // Positions are created fresh by generateGlyphs earlier in this same
+     // pipeline (and justification mutates them later), so in-place is safe.
+     for (let i = 0; i < run.positions.length; i += 1) {
+-        run.positions[i].yOffset = yOffset;
++        run.positions[i].yOffset += yOffset;
+     }
+     return run;
+ };
