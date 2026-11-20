@@ -134,10 +134,10 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
             and one when even two don't (a very large one). */}
         <div className="grid grid-cols-1 min-[11.5rem]:grid-cols-2 min-[17rem]:grid-cols-3 sm:grid-cols-5 gap-3 mt-3">
           {SAVE_TARGET_INFO.map((save) => (
-            <div key={save.key} className="flex flex-col items-center gap-1">
-              <label className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide">
+            <label key={save.key} className="flex flex-col items-center gap-1">
+              <span className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide">
                 {save.label}
-              </label>
+              </span>
               <input
                 type="number"
                 value={character.saveTargets[save.key] || ''}
@@ -145,7 +145,7 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
                 className={inputClasses}
                 aria-label={`${save.label} save target`}
               />
-            </div>
+            </label>
           ))}
         </div>
       </div>
