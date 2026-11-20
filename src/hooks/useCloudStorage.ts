@@ -12,7 +12,8 @@ interface UseCloudStorageReturn {
   authStates: Record<ProviderId, boolean>;
   connect(providerId: ProviderId): Promise<void>;
   disconnect(providerId: ProviderId): void;
-  listFiles(providerId: ProviderId): Promise<CloudFile[]>;
+  /** The provider's files, or null if listing failed (the error says why). */
+  listFiles(providerId: ProviderId): Promise<CloudFile[] | null>;
   saveCharacter(providerId: ProviderId, characterId: string, json: string, characterName: string): Promise<void>;
   loadCharacter(providerId: ProviderId, fileId: string): Promise<string>;
   deleteFile(providerId: ProviderId, fileId: string): Promise<void>;
@@ -49,6 +50,9 @@ export function useCloudStorage(): UseCloudStorageReturn {
   // The message for the last failed operation, and which provider and operation it was.
   const [failure, setFailure] = useState<{ providerId: ProviderId; operation: Operation; message: string } | null>(null);
   const error = failure?.message ?? null;
+  // Each operation's start order, and per provider and operation, the newest one that succeeded.
+  const operationCount = useRef(0);
+  const newestSuccess = useRef<Partial<Record<`${ProviderId}:${Operation}`, number>>>({});
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -99,20 +103,27 @@ export function useCloudStorage(): UseCloudStorageReturn {
   // Runs one operation for a provider, counting it as in flight for that provider only.
   // A failure is recorded with its provider and operation. A success clears an earlier
   // failure of the same operation for that provider, so a message that no longer applies
-  // doesn't linger, while a successful list still can't hide a failed save.
+  // doesn't linger, while a successful list still can't hide a failed save. A failure that
+  // finishes after a newer call of the same operation succeeded is out of date, so it isn't
+  // shown.
   const track = useCallback(async <T>(
     providerId: ProviderId,
     operation: Operation,
     op: () => Promise<T>,
     fallbackMessage: string,
   ): Promise<T> => {
+    const order = ++operationCount.current;
+    const key = `${providerId}:${operation}` as const;
     setInFlight(prev => ({ ...prev, [providerId]: [...prev[providerId], operation] }));
     try {
       const result = await op();
+      newestSuccess.current[key] = Math.max(newestSuccess.current[key] ?? 0, order);
       setFailure(prev => (prev?.providerId === providerId && prev.operation === operation ? null : prev));
       return result;
     } catch (err) {
-      setFailure({ providerId, operation, message: err instanceof Error ? err.message : fallbackMessage });
+      if ((newestSuccess.current[key] ?? 0) < order) {
+        setFailure({ providerId, operation, message: err instanceof Error ? err.message : fallbackMessage });
+      }
       throw err;
     } finally {
       setInFlight(prev => {
@@ -141,12 +152,12 @@ export function useCloudStorage(): UseCloudStorageReturn {
     }
   }, [getProvider, refreshAuthState]);
 
-  const listFiles = useCallback(async (providerId: ProviderId): Promise<CloudFile[]> => {
+  const listFiles = useCallback(async (providerId: ProviderId): Promise<CloudFile[] | null> => {
     setFailure(null);
     try {
       return await track(providerId, 'list', () => getProvider(providerId).listCharacterFiles(), 'Failed to list files');
     } catch {
-      return [];
+      return null;
     }
   }, [getProvider, track]);
 

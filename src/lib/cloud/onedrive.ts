@@ -15,6 +15,7 @@ const SIGN_IN_ALREADY_OPEN =
   'A OneDrive sign-in window is already open. Finish signing in there, or close it and try again in a minute.';
 const STALE_SIGN_IN = "An earlier OneDrive sign-in in this tab didn't finish. Click Connect again to start a new one.";
 const NOT_CONNECTED = "OneDrive isn't connected. Connect it and try again.";
+const SIGNED_IN_NO_ACCESS = "Signed in, but OneDrive still couldn't confirm access. Try again.";
 
 // An error whose message is written for the player. `detail` is what actually went
 // wrong, for the console.
@@ -43,9 +44,12 @@ let msalInstance: PublicClientApplication | null = null;
 // The cache clear started by the last disconnect. A new sign-in waits for it, so it
 // can't race the clear and have its fresh tokens removed.
 let pendingCacheClear: Promise<void> = Promise.resolve();
-// The interactive MSAL call (a sign-in window) this page has open, if any. It settles
-// when that call does.
+// The interactive MSAL call (a sign-in window) this page has open, if any, and the most
+// recent one, open or settled. Each settles when its call does.
 let openPopup: Promise<unknown> | null = null;
+let lastPopup: Promise<unknown> | null = null;
+// How many of this page's sign-in windows have settled.
+let popupsSettled = 0;
 
 // MSAL's messages ("timed_out: See https://aka.ms/..."), Graph's JSON and browser errors
 // mean nothing to a player, so every error leaving this provider goes through here.
@@ -54,6 +58,7 @@ function toPlayerError(err: unknown): PlayerError {
     if (err.detail !== undefined) console.warn('OneDrive:', err.detail);
     return err;
   }
+  console.warn('OneDrive:', err);
   if (err instanceof AuthError) {
     switch (err.errorCode) {
       // MSAL 5 can't see the window being closed; it gives up after popupBridgeTimeout (60 s).
@@ -72,11 +77,9 @@ function toPlayerError(err: unknown): PlayerError {
       case 'access_denied': // the player cancelled or declined on Microsoft's page
         return new PlayerError('Microsoft sign-in was cancelled. Try again.');
     }
+    return new PlayerError('Microsoft sign-in failed. Try again.');
   }
-  console.warn('OneDrive:', err);
-  return new PlayerError(
-    err instanceof AuthError ? 'Microsoft sign-in failed. Try again.' : 'Something went wrong with OneDrive. Try again.'
-  );
+  return new PlayerError('Something went wrong with OneDrive. Try again.');
 }
 
 // Runs one interactive MSAL call. MSAL allows one interaction per tab, and MSAL 5 may not
@@ -88,10 +91,12 @@ async function runPopup<T>(start: () => Promise<T>): Promise<T> {
   if (openPopup) throw new PlayerError(SIGN_IN_ALREADY_OPEN);
   const call = Promise.resolve().then(start);
   openPopup = call;
+  lastPopup = call;
   try {
     return await call;
   } finally {
     openPopup = null;
+    popupsSettled++;
   }
 }
 
@@ -120,19 +125,28 @@ async function getAccessToken(instance: PublicClientApplication): Promise<string
   if (!account) throw new PlayerError(NOT_CONNECTED);
 
   const request: SilentRequest = { scopes: SCOPES, account };
+  // The silent attempt can take about 10 s to fail, so note which sign-in window was open
+  // when it started: that window, or one that opens and settles meanwhile, may already
+  // have brought back the token this call needs.
+  const popupAtStart = openPopup;
+  const settledAtStart = popupsSettled;
   try {
     const response = await instance.acquireTokenSilent(request);
     return response.accessToken;
   } catch {
-    if (openPopup) {
-      // Another operation already has a sign-in window open (the dialog lists files
+    const popup = openPopup ?? popupAtStart ?? (popupsSettled !== settledAtStart ? lastPopup : null);
+    if (popup) {
+      // Another operation has, or just had, a sign-in window open (the dialog lists files
       // again when the player switches tabs or reopens it). Wait for that window instead
-      // of refusing: once the player signs in there, the token this call needs is in the
-      // cache. If they don't, this call fails the same way, without opening a second
-      // window nobody asked for.
-      await openPopup;
-      const response = await instance.acquireTokenSilent(request);
-      return response.accessToken;
+      // of opening a second one nobody asked for. If the player didn't sign in there, this
+      // rethrows its failure; if they did, the token this call needs is in the cache.
+      await popup;
+      try {
+        const response = await instance.acquireTokenSilent(request);
+        return response.accessToken;
+      } catch (err) {
+        throw new PlayerError(SIGNED_IN_NO_ACCESS, err);
+      }
     }
     // Silent token acquisition failed, fall back to popup
     const response = await runPopup(() => instance.acquireTokenPopup({ scopes: SCOPES }));
@@ -206,7 +220,7 @@ export function createOneDriveProvider(): CloudProvider | null {
           .catch((err: unknown) => {
             if (err instanceof AuthError && err.errorCode === BrowserAuthErrorCodes.interactionInProgress) {
               overrideStaleLock = true;
-              throw new PlayerError(STALE_SIGN_IN);
+              throw new PlayerError(STALE_SIGN_IN, err);
             }
             throw err;
           });

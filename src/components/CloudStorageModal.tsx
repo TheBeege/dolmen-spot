@@ -12,7 +12,8 @@ interface Props {
   authStates: Record<string, boolean>;
   onConnect(providerId: 'google-drive' | 'onedrive'): Promise<void>;
   onDisconnect(providerId: 'google-drive' | 'onedrive'): void;
-  onListFiles(providerId: 'google-drive' | 'onedrive'): Promise<CloudFile[]>;
+  /** The provider's files, or null if listing failed. */
+  onListFiles(providerId: 'google-drive' | 'onedrive'): Promise<CloudFile[] | null>;
   onSave(providerId: 'google-drive' | 'onedrive'): Promise<void>;
   onLoad(providerId: 'google-drive' | 'onedrive', fileId: string, fileName: string): Promise<void>;
   onDelete(providerId: 'google-drive' | 'onedrive', fileId: string): Promise<void>;
@@ -47,7 +48,8 @@ export default function CloudStorageModal({
   characterName,
 }: Props) {
   const [activeTab, setActiveTab] = useState<TabId>('local');
-  const [files, setFiles] = useState<CloudFile[]>([]);
+  // The last file list each provider returned. A failed list leaves it as it was.
+  const [filesByProvider, setFilesByProvider] = useState<Partial<Record<'google-drive' | 'onedrive', CloudFile[]>>>({});
   const [filesLoaded, setFilesLoaded] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -62,11 +64,14 @@ export default function CloudStorageModal({
   // Only this tab's provider: another provider finishing must not re-enable its buttons.
   const busy = activeProviderId ? loading[activeProviderId] : false;
   const isSaving = activeProviderId ? saving[activeProviderId] : false;
+  const files = (activeProviderId && filesByProvider[activeProviderId]) || [];
 
   const loadFiles = useCallback(async (providerId: 'google-drive' | 'onedrive') => {
     setFilesLoaded(false);
     const result = await onListFiles(providerId);
-    setFiles(result);
+    // If listing failed (its message says why), keep the list already shown rather than
+    // replacing it with "No saved characters found."
+    if (result) setFilesByProvider(prev => ({ ...prev, [providerId]: result }));
     setFilesLoaded(true);
   }, [onListFiles]);
 
@@ -80,7 +85,7 @@ export default function CloudStorageModal({
   // Clear state when modal closes
   useEffect(() => {
     if (!open) {
-      setFiles([]);
+      setFilesByProvider({});
       setFilesLoaded(false);
       setSuccessMessage(null);
       onClearError();
