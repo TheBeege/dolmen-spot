@@ -14,6 +14,7 @@ import Adventuring from '@/components/Adventuring';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
+import ExportPdfButton from '@/components/ExportPdfButton';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
@@ -109,6 +110,7 @@ export default function Home() {
             </div>
 
             <div className="flex items-center gap-2">
+              <ExportPdfButton character={activeCharacter} />
               <button
                 onClick={() => setShowCloudModal(true)}
                 className="text-xs px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
