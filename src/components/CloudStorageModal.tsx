@@ -271,7 +271,7 @@ export default function CloudStorageModal({
           {/* Cloud Provider Tabs */}
           {activeProviderId && !isConnected && (
             <div className="text-center py-8">
-              <svg className="w-12 h-12 mx-auto mb-3 text-[#f5e6c8]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg aria-hidden="true" className="w-12 h-12 mx-auto mb-3 text-[#f5e6c8]/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
               </svg>
               <p className="text-[#f5e6c8]/60 text-sm mb-4">
@@ -314,7 +314,7 @@ export default function CloudStorageModal({
                   <button
                     onClick={() => loadFiles(activeProviderId)}
                     disabled={busy}
-                    className="text-xs text-[#f5e6c8]/70 hover:text-[#f5e6c8] transition-colors"
+                    className="text-xs text-[#f5e6c8]/70 hover:text-[#f5e6c8] disabled:opacity-50 transition-colors"
                   >
                     Refresh
                   </button>
