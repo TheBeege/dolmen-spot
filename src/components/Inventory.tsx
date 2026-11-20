@@ -535,8 +535,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   type="button"
                   onClick={() => handleSpellbookRemoveEntry(equipped, item.id, index)}
                   className="text-[#ff6b4a] hover:text-[#f5e6c8] text-sm shrink-0 px-1"
-                  title={`Remove ${entry.name || 'spell'}`}
-                  aria-label={`Remove ${entry.name || 'spell'}`}
+                  title={`Remove ${entry.name || `spell ${index + 1}`} from ${bookName}`}
+                  aria-label={`Remove ${entry.name || `spell ${index + 1}`} from ${bookName}`}
                 >
                   &times;
                 </button>
@@ -546,6 +546,11 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               type="button"
               onClick={() => handleSpellbookAddEntry(equipped, item.id)}
               disabled={isFull}
+              aria-label={
+                isFull
+                  ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY}): ${bookName}`
+                  : `Add spell to ${bookName}`
+              }
               className={`text-xs px-2 py-0.5 rounded mt-1 ${
                 isFull
                   ? 'bg-[#1a1a2e] text-[#f5e6c8]/30 border border-[#5a3a28]/40 cursor-not-allowed'
