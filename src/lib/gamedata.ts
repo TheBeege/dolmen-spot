@@ -190,14 +190,6 @@ export const CLASSES: ClassInfo[] = [
   },
 ];
 
-export const MOON_SIGNS = [
-  'Grinning moon', 'Dead moon', 'Beast moon', 'Squamous moon',
-  "Knight's moon", 'Rotting moon', "Maiden's moon", "Witch's moon",
-  "Robber's moon", 'Goat moon', 'Narrow moon', 'Black moon',
-];
-
-export const MOON_PHASES = ['Waxing', 'Full', 'Waning'] as const;
-
 export const ALIGNMENTS = ['Lawful', 'Neutral', 'Chaotic'] as const;
 
 export const ABILITY_MODIFIER_TABLE: Record<number, number> = {
@@ -239,6 +231,12 @@ export const MONTHS = [
   { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn', moonName: 'Black moon', newMoon: 5, fullMoon: 20, wysendays: ['The Day of Doors', 'Dolmenday'] },
 ];
 
+// Moon signs (optional rule, Player's Book pp174-175): the moon a character
+// was born under (each month's moon, in calendar order) and its phase.
+export const MOON_SIGNS = MONTHS.map((m) => m.moonName);
+
+export const MOON_PHASES = ['Waxing', 'Full', 'Waning'] as const;
+
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
 
 // Every month is 4 standard weeks, always starting on Colly, followed by
@@ -265,17 +263,6 @@ export function formatCalendarDate(date: CalendarDate): string {
   if (!month) return 'Unknown';
   const dayName = getDayName(date);
   return `${date.day} ${month.name} (${dayName}), Year ${date.year}`;
-}
-
-export function getSeasonIcon(month: number): string {
-  const season = MONTHS[month]?.season;
-  switch (season) {
-    case 'Winter': return '\u2744';
-    case 'Spring': return '\u2618';
-    case 'Summer': return '\u2600';
-    case 'Autumn': return '\u2618';
-    default: return '';
-  }
 }
 
 export const FESTIVALS: Record<string, { month: number; day: number; name: string }[]> = {
