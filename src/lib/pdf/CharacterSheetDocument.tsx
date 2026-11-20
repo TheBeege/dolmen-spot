@@ -113,7 +113,9 @@ const s = StyleSheet.create({
     borderBottomColor: COLOR.gold,
     paddingBottom: 6,
   },
-  headerMain: { flexGrow: 1, flexShrink: 1, paddingRight: 12 },
+  // flexBasis 0 so a long name wraps instead of running under the brand
+  headerMain: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 12 },
+  headerSide: { flexShrink: 0 },
   name: { fontFamily: 'Times-Roman', fontWeight: 700, fontSize: 24, lineHeight: 1.1 },
   identity: { fontSize: 10.5, color: COLOR.brown, marginTop: 3 },
   brand: {
@@ -501,7 +503,7 @@ function Header({ c, exportedOn }: { c: Character; exportedOn: string }) {
         <Text style={s.name}>{t(c.name || 'Unnamed')}</Text>
         <Text style={s.identity}>{t(identityLine(c))}</Text>
       </View>
-      <View>
+      <View style={s.headerSide}>
         <Text style={s.brand}>DOLMEN SPOT</Text>
         <Text style={s.meta}>{`Dolmenwood character sheet · ${exportedOn}`}</Text>
       </View>
@@ -696,9 +698,22 @@ function SkillsSection({ c }: { c: Character }) {
 
 // ── Traits & features ────────────────────────────────────────
 
-function Block({ title, note, children }: { title: string; note?: string; children?: ReactNode }) {
+interface BlockSpec {
+  key: string;
+  title: string;
+  note?: string;
+  body: ReactNode;
+}
+
+/**
+ * An unbreakable feature block. `lead` holds any headings that introduce it:
+ * minPresenceAhead can't keep a heading with a block taller than its
+ * look-ahead, so headings travel inside the first block instead.
+ */
+function Block({ title, note, lead, children }: { title: string; note?: string; lead?: ReactNode; children?: ReactNode }) {
   return (
     <View style={s.block} wrap={false}>
+      {lead}
       <Text style={s.blockTitle}>
         {t(title)}
         {note ? <Text style={s.subTitleNote}>{`  ${t(note)}`}</Text> : null}
@@ -708,54 +723,65 @@ function Block({ title, note, children }: { title: string; note?: string; childr
   );
 }
 
-function ClassFeatures({ c }: { c: Character }) {
+function classFeatureBlocks(c: Character): BlockSpec[] {
   const profile = getCharacterFeatureProfile(c.kindred, c.class, c.level);
-  const talentSlots = getFighterTalentCount(c.level);
-  const holyOrder = CLERIC_HOLY_ORDERS.find((o) => o.id === c.holyOrder);
-  const liege = NOBLE_HOUSES.find((h) => h.name === c.liegeHouse);
+  const blocks: BlockSpec[] = [];
 
-  return (
-    <>
-      {profile.hasCombatTalents ? (
-        <Block title="Combat Talents" note={`(${talentSlots} slots)`}>
-          {talentSlots === 0 ? (
-            <Empty>Combat talents unlock at Level 2.</Empty>
-          ) : (
-            Array.from({ length: talentSlots }, (_, i) => {
-              const sel = c.selectedCombatTalents[i];
-              const talent = FIGHTER_COMBAT_TALENTS.find((tal) => tal.id === sel?.talentId);
-              const spec = talent && (talent.id === 'slayer' || talent.id === 'weapon-specialist') && sel?.specification
+  if (profile.hasCombatTalents) {
+    const talentSlots = getFighterTalentCount(c.level);
+    blocks.push({
+      key: 'talents',
+      title: 'Combat Talents',
+      note: `(${talentSlots} slots)`,
+      body:
+        talentSlots === 0 ? (
+          <Empty>Combat talents unlock at Level 2.</Empty>
+        ) : (
+          Array.from({ length: talentSlots }, (_, i) => {
+            const sel = c.selectedCombatTalents[i];
+            const talent = FIGHTER_COMBAT_TALENTS.find((tal) => tal.id === sel?.talentId);
+            const spec =
+              talent && (talent.id === 'slayer' || talent.id === 'weapon-specialist') && sel?.specification
                 ? ` (${sel.specification})`
                 : '';
-              return (
-                <Text key={i} style={s.body}>
-                  <Text style={s.bold}>{`Slot ${i + 1}: `}</Text>
-                  {talent ? t(`${talent.name}${spec}`) : EMPTY}
-                  {talent ? <Text style={s.note}>{`  ${t(talent.description)}`}</Text> : null}
-                </Text>
-              );
-            })
-          )}
-        </Block>
-      ) : null}
+            return (
+              <Text key={i} style={s.body}>
+                <Text style={s.bold}>{`Slot ${i + 1}: `}</Text>
+                {talent ? t(`${talent.name}${spec}`) : EMPTY}
+                {talent ? <Text style={s.note}>{`  ${t(talent.description)}`}</Text> : null}
+              </Text>
+            );
+          })
+        ),
+    });
+  }
 
-      {profile.hasHolyOrder ? (
-        <Block title="Holy Order">
-          {c.level < 2 ? (
-            <Empty>Holy orders are available at Level 2+.</Empty>
-          ) : holyOrder ? (
-            <Text style={s.body}>
-              <Text style={s.bold}>{t(`${holyOrder.name} (${holyOrder.title})`)}</Text>
-              {`  ${t(holyOrder.bonus)}`}
-            </Text>
-          ) : (
-            <Empty>No holy order chosen.</Empty>
-          )}
-        </Block>
-      ) : null}
+  if (profile.hasHolyOrder) {
+    const holyOrder = CLERIC_HOLY_ORDERS.find((o) => o.id === c.holyOrder);
+    blocks.push({
+      key: 'holy-order',
+      title: 'Holy Order',
+      body:
+        c.level < 2 ? (
+          <Empty>Holy orders are available at Level 2+.</Empty>
+        ) : holyOrder ? (
+          <Text style={s.body}>
+            <Text style={s.bold}>{t(`${holyOrder.name} (${holyOrder.title})`)}</Text>
+            {`  ${t(holyOrder.bonus)}`}
+          </Text>
+        ) : (
+          <Empty>No holy order chosen.</Empty>
+        ),
+    });
+  }
 
-      {profile.hasTurning ? (
-        <Block title="Turning the Undead" note={`${FEATURE_NOTES.turningUndead} ${TURNING_UNDEAD_TABLE.frequency}.`}>
+  if (profile.hasTurning) {
+    blocks.push({
+      key: 'turning',
+      title: 'Turning the Undead',
+      note: `${FEATURE_NOTES.turningUndead} ${TURNING_UNDEAD_TABLE.frequency}.`,
+      body: (
+        <>
           <View style={s.miniGrid}>
             {TURNING_UNDEAD_TABLE.results.map((r) => (
               <View key={r.range} style={s.miniCell}>
@@ -765,67 +791,96 @@ function ClassFeatures({ c }: { c: Character }) {
             ))}
           </View>
           <Text style={s.note}>{TURNING_UNDEAD_TABLE.levelModifier}</Text>
-        </Block>
-      ) : null}
+        </>
+      ),
+    });
+  }
 
-      {profile.hasChivalricCode ? (
-        <Block title="Liege House">
+  if (profile.hasChivalricCode) {
+    const liege = NOBLE_HOUSES.find((h) => h.name === c.liegeHouse);
+    blocks.push({
+      key: 'liege',
+      title: 'Liege House',
+      body: (
+        <>
           <Text style={s.body}>
             {display(c.liegeHouse)}
             {liege ? <Text style={s.note}>{`  ${t(`${liege.alignment} · ${liege.head}`)}`}</Text> : null}
           </Text>
           <Text style={s.note}>{`Code of Chivalry: ${FEATURE_NOTES.chivalryVirtues}. ${FEATURE_NOTES.chivalryRules}`}</Text>
-        </Block>
-      ) : null}
+        </>
+      ),
+    });
+  }
 
-      {profile.hasTrophies ? (
-        <Block title="Trophies" note={FEATURE_NOTES.trophies}>
-          {c.trophies.length > 0 ? <Chips items={c.trophies.map((tr) => tr.creatureType)} /> : <Empty>None yet.</Empty>}
-        </Block>
-      ) : null}
+  if (profile.hasTrophies) {
+    blocks.push({
+      key: 'trophies',
+      title: 'Trophies',
+      note: FEATURE_NOTES.trophies,
+      body: c.trophies.length > 0 ? <Chips items={c.trophies.map((tr) => tr.creatureType)} /> : <Empty>None yet.</Empty>,
+    });
+  }
 
-      {profile.hasCompanion ? (
-        <Block title="Animal Companion">
-          {c.animalCompanion ? (
-            <Text style={s.body}>
-              <Text style={s.bold}>{display(c.animalCompanion.name)}</Text>
-              {`  ${t(c.animalCompanion.type || 'Unknown type')} · HP ${c.animalCompanion.hp}`}
-              {c.animalCompanion.notes ? <Text style={s.note}>{`  ${t(c.animalCompanion.notes)}`}</Text> : null}
-            </Text>
-          ) : (
-            <Empty>No companion.</Empty>
-          )}
-        </Block>
-      ) : null}
-    </>
-  );
+  if (profile.hasCompanion) {
+    const companion = c.animalCompanion;
+    blocks.push({
+      key: 'companion',
+      title: 'Animal Companion',
+      body: companion ? (
+        <Text style={s.body}>
+          <Text style={s.bold}>{display(companion.name)}</Text>
+          {`  ${t(companion.type || 'Unknown type')} · HP ${companion.hp}`}
+          {companion.notes ? <Text style={s.note}>{`  ${t(companion.notes)}`}</Text> : null}
+        </Text>
+      ) : (
+        <Empty>No companion.</Empty>
+      ),
+    });
+  }
+
+  return blocks;
 }
 
-function KindredFeatures({ c }: { c: Character }) {
+function kindredFeatureBlocks(c: Character): BlockSpec[] {
   const profile = getCharacterFeatureProfile(c.kindred, c.class, c.level);
-  return (
-    <>
-      {profile.hasHorns ? (
-        <Block title="Horn Progression" note={`Level ${c.level}`}>
-          <View style={s.miniGrid}>
-            {BREGGLE_HORN_PROGRESSION.map((h) => (
-              <View key={h.level} style={[s.miniCell, h.level === c.level ? s.miniCellActive : {}]}>
-                <Text style={s.boxLabel}>{`L${h.level}`}</Text>
-                <Text style={s.boxSub}>{t(h.length)}</Text>
-                <Text style={s.boxSub}>{h.damage}</Text>
-              </View>
-            ))}
-          </View>
-        </Block>
-      ) : null}
-      {profile.hasGaze ? (
-        <Block title="Breggle Gaze" note="(Level 4+)">
-          <Text style={s.body}>{`${c.gazeUsesRemaining} / ${getMaxGazeUses(c.level)} uses remaining`}</Text>
-        </Block>
-      ) : null}
+  const blocks: BlockSpec[] = [];
 
-      {profile.hasFormShift ? (
-        <Block title="Current Form" note={c.wilderUsedToday ? 'Wilder used today.' : undefined}>
+  if (profile.hasHorns) {
+    blocks.push({
+      key: 'horns',
+      title: 'Horn Progression',
+      note: `Level ${c.level}`,
+      body: (
+        <View style={s.miniGrid}>
+          {BREGGLE_HORN_PROGRESSION.map((h) => (
+            <View key={h.level} style={[s.miniCell, h.level === c.level ? s.miniCellActive : {}]}>
+              <Text style={s.boxLabel}>{`L${h.level}`}</Text>
+              <Text style={s.boxSub}>{t(h.length)}</Text>
+              <Text style={s.boxSub}>{h.damage}</Text>
+            </View>
+          ))}
+        </View>
+      ),
+    });
+  }
+
+  if (profile.hasGaze) {
+    blocks.push({
+      key: 'gaze',
+      title: 'Breggle Gaze',
+      note: '(Level 4+)',
+      body: <Text style={s.body}>{`${c.gazeUsesRemaining} / ${getMaxGazeUses(c.level)} uses remaining`}</Text>,
+    });
+  }
+
+  if (profile.hasFormShift) {
+    blocks.push({
+      key: 'forms',
+      title: 'Current Form',
+      note: c.wilderUsedToday ? 'Wilder used today.' : undefined,
+      body: (
+        <>
           <View style={s.miniGrid}>
             {(['estray', 'chester', 'wilder'] as const).map((formId) => {
               const form = GRIMALKIN_FORMS[formId];
@@ -843,11 +898,18 @@ function KindredFeatures({ c }: { c: Character }) {
           {c.currentForm === 'wilder' && 'notes' in GRIMALKIN_FORMS.wilder ? (
             <Text style={s.note}>{GRIMALKIN_FORMS.wilder.notes}</Text>
           ) : null}
-        </Block>
-      ) : null}
+        </>
+      ),
+    });
+  }
 
-      {profile.hasMadRevelry ? (
-        <Block title="Mad Revelry" note={`${c.madRevelryUsesRemaining}/${getMaxMadRevelryUses(c.level)} uses`}>
+  if (profile.hasMadRevelry) {
+    blocks.push({
+      key: 'revelry',
+      title: 'Mad Revelry',
+      note: `${c.madRevelryUsesRemaining}/${getMaxMadRevelryUses(c.level)} uses`,
+      body: (
+        <>
           <Text style={s.note}>{FEATURE_NOTES.madRevelry}</Text>
           {MAD_REVELRY_MELODIES.map((m) => (
             <Text key={m.id} style={s.body}>
@@ -855,66 +917,76 @@ function KindredFeatures({ c }: { c: Character }) {
               {m.effect}
             </Text>
           ))}
-        </Block>
-      ) : null}
+        </>
+      ),
+    });
+  }
 
-      {profile.hasSymbioticFlesh ? (
-        <Block title="Symbiotic Flesh" note="(1 trait per level)">
-          {c.symbioticFleshTraits.length > 0 ? (
-            <Chips
-              items={c.symbioticFleshTraits.map(
-                (roll) => `[${roll}] ${SYMBIOTIC_FLESH_TABLE.find((e) => e.roll === roll)?.trait ?? '???'}`,
-              )}
-            />
-          ) : (
-            <Empty>No traits recorded.</Empty>
-          )}
-        </Block>
-      ) : null}
-      {profile.hasFungalSymbiosis ? (
-        <Block title="Fungal Symbiosis" note="(Level 4+)">
+  if (profile.hasSymbioticFlesh) {
+    blocks.push({
+      key: 'flesh',
+      title: 'Symbiotic Flesh',
+      note: '(1 trait per level)',
+      body:
+        c.symbioticFleshTraits.length > 0 ? (
+          <Chips
+            items={c.symbioticFleshTraits.map(
+              (roll) => `[${roll}] ${SYMBIOTIC_FLESH_TABLE.find((e) => e.roll === roll)?.trait ?? '???'}`,
+            )}
+          />
+        ) : (
+          <Empty>No traits recorded.</Empty>
+        ),
+    });
+  }
+
+  if (profile.hasFungalSymbiosis) {
+    blocks.push({
+      key: 'fungal',
+      title: 'Fungal Symbiosis',
+      note: '(Level 4+)',
+      body: (
+        <>
           <Text style={s.body}>
             {`${c.fungalSymbiosisUsesRemaining} / ${getMaxFungalSymbiosisUses(c.level)} uses remaining`}
           </Text>
           <Text style={s.note}>{FEATURE_NOTES.fungalSymbiosis}</Text>
-        </Block>
-      ) : null}
-    </>
-  );
-}
-
-function LanguagesBlock({ c }: { c: Character }) {
-  const { langInfo, bonusLangs } = getLanguageBreakdown(c);
-  return (
-    <Block title="Languages">
-      <Text style={s.body}>
-        <Text style={s.bold}>Native: </Text>
-        {t(langInfo.nativeLanguages.join(', ')) || EMPTY}
-      </Text>
-      {langInfo.classLanguages.length > 0 ? (
-        <Text style={s.body}>
-          <Text style={s.bold}>Class: </Text>
-          {t(langInfo.classLanguages.join(', '))}
-        </Text>
-      ) : null}
-      <Text style={s.body}>
-        <Text style={s.bold}>{`Bonus (${bonusLangs.length} of ${langInfo.bonusSlots} slots used): `}</Text>
-        {bonusLangs.length > 0 ? t(bonusLangs.join(', ')) : EMPTY}
-      </Text>
-      {langInfo.bonusSlots === 0 ? <Text style={s.note}>INT modifier does not grant bonus languages.</Text> : null}
-    </Block>
-  );
-}
-
-function RetainersBlock({ c }: { c: Character }) {
-  const { maxRetainers } = getRetainerLimits(c.abilityScores.charisma);
-  if (c.retainers.length === 0) {
-    return (
-      <Block title="Retainers" note={`(0 of ${maxRetainers})`}>
-        <Empty>No retainers hired. Max = 4 + CHA modifier (min 1).</Empty>
-      </Block>
-    );
+        </>
+      ),
+    });
   }
+
+  return blocks;
+}
+
+function languagesBlock(c: Character): BlockSpec {
+  const { langInfo, bonusLangs } = getLanguageBreakdown(c);
+  return {
+    key: 'languages',
+    title: 'Languages',
+    body: (
+      <>
+        <Text style={s.body}>
+          <Text style={s.bold}>Native: </Text>
+          {t(langInfo.nativeLanguages.join(', ')) || EMPTY}
+        </Text>
+        {langInfo.classLanguages.length > 0 ? (
+          <Text style={s.body}>
+            <Text style={s.bold}>Class: </Text>
+            {t(langInfo.classLanguages.join(', '))}
+          </Text>
+        ) : null}
+        <Text style={s.body}>
+          <Text style={s.bold}>{`Bonus (${bonusLangs.length} of ${langInfo.bonusSlots} slots used): `}</Text>
+          {bonusLangs.length > 0 ? t(bonusLangs.join(', ')) : EMPTY}
+        </Text>
+        {langInfo.bonusSlots === 0 ? <Text style={s.note}>INT modifier does not grant bonus languages.</Text> : null}
+      </>
+    ),
+  };
+}
+
+function RetainersTable({ c, maxRetainers }: { c: Character; maxRetainers: number }) {
   return (
     <>
       <Caption note={`(${c.retainers.length} of ${maxRetainers})`}>Retainers</Caption>
@@ -935,31 +1007,80 @@ function RetainersBlock({ c }: { c: Character }) {
 }
 
 function TraitsSection({ c }: { c: Character }) {
+  const { maxRetainers } = getRetainerLimits(c.abilityScores.charisma);
   const profile = getCharacterFeatureProfile(c.kindred, c.class, c.level);
+  const groups: { heading?: string; blocks: BlockSpec[] }[] = [
+    {
+      heading: `Class features${className(c) ? ` · ${className(c)}` : ''}`,
+      blocks: hasAnyClassFeature(profile) ? classFeatureBlocks(c) : [],
+    },
+    {
+      heading: `Kindred features · ${kindredName(c)}`,
+      blocks: hasAnyKindredFeature(profile) ? kindredFeatureBlocks(c) : [],
+    },
+    { blocks: [languagesBlock(c)] },
+  ];
+  if (c.retainers.length === 0) {
+    groups[2].blocks.push({
+      key: 'retainers',
+      title: 'Retainers',
+      note: `(0 of ${maxRetainers})`,
+      body: <Empty>No retainers hired. Max = 4 + CHA modifier (min 1).</Empty>,
+    });
+  }
+
+  // The section title rides with the first block; each group heading with its group's first block.
+  let first = true;
+  const blocks = groups.flatMap((group) =>
+    group.blocks.map((block, i) => {
+      const lead = (
+        <>
+          {first ? <SectionTitle>Traits & Features</SectionTitle> : null}
+          {i === 0 && group.heading ? <Text style={s.subTitle}>{t(group.heading)}</Text> : null}
+        </>
+      );
+      first = false;
+      return (
+        <Block key={block.key} title={block.title} note={block.note} lead={lead}>
+          {block.body}
+        </Block>
+      );
+    }),
+  );
+
   return (
     <>
-      <SectionTitle>Traits & Features</SectionTitle>
-      {hasAnyClassFeature(profile) ? (
-        <>
-          <Text style={s.subTitle} minPresenceAhead={40}>{`Class features${className(c) ? ` · ${className(c)}` : ''}`}</Text>
-          <ClassFeatures c={c} />
-        </>
-      ) : null}
-      {hasAnyKindredFeature(profile) ? (
-        <>
-          <Text style={s.subTitle} minPresenceAhead={40}>{`Kindred features · ${kindredName(c)}`}</Text>
-          <KindredFeatures c={c} />
-        </>
-      ) : null}
-      <LanguagesBlock c={c} />
-      <RetainersBlock c={c} />
+      {blocks}
+      {c.retainers.length > 0 ? <RetainersTable c={c} maxRetainers={maxRetainers} /> : null}
     </>
   );
 }
 
 // ── Magic ────────────────────────────────────────────────────
+// Each magic block opens with an unbreakable View that carries `lead` (the
+// section title and status lines, for whichever block comes first) plus its
+// own heading, kept on the same page as the start of what follows.
 
-function SpellcastingBlock({ c, isArcane, spellsPerDay }: { c: Character; isArcane: boolean; spellsPerDay: number[] | null }) {
+/** Heading area that must not be stranded at the bottom of a page. */
+function KeepWithNext({ children }: { children: ReactNode }) {
+  return (
+    <View wrap={false} minPresenceAhead={44}>
+      {children}
+    </View>
+  );
+}
+
+function SpellcastingBlock({
+  c,
+  isArcane,
+  spellsPerDay,
+  lead,
+}: {
+  c: Character;
+  isArcane: boolean;
+  spellsPerDay: number[] | null;
+  lead?: ReactNode;
+}) {
   const preparedByRank = countPreparedByRank(c.spells);
   const scrolls = getScrollItems(c);
   const startingBook =
@@ -970,27 +1091,32 @@ function SpellcastingBlock({ c, isArcane, spellsPerDay }: { c: Character; isArca
 
   return (
     <>
-      <Text style={s.subTitle} minPresenceAhead={50}>{`${isArcane ? 'Arcane' : 'Holy'} Spells`}</Text>
-      {spellsPerDay ? (
-        <View wrap={false}>
-          <Text style={s.note}>Spells per day (prepared / max)</Text>
-          <View style={[s.miniGrid, { marginBottom: 2 }]}>
-            {spellsPerDay.map((max, i) => {
-              const rank = i + 1;
-              const prepared = preparedByRank[rank] || 0;
-              return (
-                <View key={rank} style={[s.miniCell, prepared > max ? { borderColor: COLOR.warn } : {}]}>
-                  <Text style={s.boxLabel}>{`Rank ${rank}`}</Text>
-                  <Text style={[s.boxValueSmall, prepared > max ? { color: COLOR.warn } : {}]}>{`${prepared}/${max}`}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-      ) : null}
-      {startingBook ? (
-        <Text style={s.note}>{t(`Starting spell book: ${startingBook.name} (${startingBook.spells.join(', ')}), not yet added to inventory`)}</Text>
-      ) : null}
+      <KeepWithNext>
+        {lead}
+        <Text style={s.subTitle}>{`${isArcane ? 'Arcane' : 'Holy'} Spells`}</Text>
+        {spellsPerDay ? (
+          <>
+            <Text style={s.note}>Spells per day (prepared / max)</Text>
+            <View style={[s.miniGrid, { marginBottom: 2 }]}>
+              {spellsPerDay.map((max, i) => {
+                const rank = i + 1;
+                const prepared = preparedByRank[rank] || 0;
+                return (
+                  <View key={rank} style={[s.miniCell, prepared > max ? { borderColor: COLOR.warn } : {}]}>
+                    <Text style={s.boxLabel}>{`Rank ${rank}`}</Text>
+                    <Text style={[s.boxValueSmall, prepared > max ? { color: COLOR.warn } : {}]}>{`${prepared}/${max}`}</Text>
+                  </View>
+                );
+              })}
+            </View>
+          </>
+        ) : null}
+        {startingBook ? (
+          <Text style={s.note}>
+            {t(`Starting spell book: ${startingBook.name} (${startingBook.spells.join(', ')}), not yet added to inventory`)}
+          </Text>
+        ) : null}
+      </KeepWithNext>
 
       <Caption>{isArcane ? 'Available Spells' : 'Prepared Spells'}</Caption>
       {c.spells.length > 0 ? (
@@ -1009,7 +1135,9 @@ function SpellcastingBlock({ c, isArcane, spellsPerDay }: { c: Character; isArca
       ) : null}
       {isArcane && scrolls.length > 0 ? (
         <>
-          <Text style={[s.note, { marginTop: 4 }]}>{'Scrolls in inventory · one-shot'}</Text>
+          <Text style={[s.note, { marginTop: 4 }]} minPresenceAhead={30}>
+            {'Scrolls in inventory · one-shot'}
+          </Text>
           <Table
             rows={scrolls}
             rowKey={(sc) => sc.id}
@@ -1052,16 +1180,19 @@ function SpellcastingBlock({ c, isArcane, spellsPerDay }: { c: Character; isArca
   );
 }
 
-function GlamoursBlock({ c, max }: { c: Character; max: number }) {
+function GlamoursBlock({ c, max, lead }: { c: Character; max: number; lead?: ReactNode }) {
   const over = c.glamours.length > max;
   return (
     <>
-      <Text style={s.subTitle} minPresenceAhead={40}>
-        Glamours
-        <Text style={[s.subTitleNote, over ? { color: COLOR.warn } : {}]}>
-          {`  ${c.glamours.length}/${max} glamours known${over ? ' (over maximum!)' : ''}`}
+      <KeepWithNext>
+        {lead}
+        <Text style={s.subTitle}>
+          Glamours
+          <Text style={[s.subTitleNote, over ? { color: COLOR.warn } : {}]}>
+            {`  ${c.glamours.length}/${max} glamours known${over ? ' (over maximum!)' : ''}`}
+          </Text>
         </Text>
-      </Text>
+      </KeepWithNext>
       {c.glamours.length > 0 ? (
         <Table
           rows={c.glamours}
@@ -1079,10 +1210,13 @@ function GlamoursBlock({ c, max }: { c: Character; max: number }) {
   );
 }
 
-function RunesBlock({ c }: { c: Character }) {
+function RunesBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
   return (
     <>
-      <Text style={s.subTitle} minPresenceAhead={40}>Fairy Runes</Text>
+      <KeepWithNext>
+        {lead}
+        <Text style={s.subTitle}>Fairy Runes</Text>
+      </KeepWithNext>
       {c.runes.length > 0 ? (
         <Table
           rows={c.runes}
@@ -1103,11 +1237,12 @@ function RunesBlock({ c }: { c: Character }) {
   );
 }
 
-function KnackBlock({ c }: { c: Character }) {
+function KnackBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
   const knack = c.knack;
   const ref = knack ? MOSSLING_KNACKS.find((k) => k.id === knack.knackId) : undefined;
   return (
     <View wrap={false}>
+      {lead}
       <Text style={s.subTitle}>
         Mossling Knack
         {knack ? <Text style={s.subTitleNote}>{`  ${t(knack.name)}`}</Text> : null}
@@ -1136,7 +1271,8 @@ function KnackBlock({ c }: { c: Character }) {
 function MagicSection({ c }: { c: Character }) {
   const { profile, hasNoMagic, hasSpells, hasGlamours, hasRunes, hasKnacks, isBregglesPreMagic } = getMagicSections(c);
   if (hasNoMagic) return null;
-  return (
+
+  const lead = (
     <>
       <SectionTitle>Spells & Magic</SectionTitle>
       {isBregglesPreMagic ? (
@@ -1148,14 +1284,28 @@ function MagicSection({ c }: { c: Character }) {
           {FEATURE_NOTES.divineResistance}
         </Text>
       ) : null}
-      {hasSpells && !isBregglesPreMagic ? (
-        <SpellcastingBlock c={c} isArcane={profile.spellType === 'arcane'} spellsPerDay={profile.spellsPerDay} />
-      ) : null}
-      {hasGlamours ? <GlamoursBlock c={c} max={profile.glamourCount} /> : null}
-      {hasRunes ? <RunesBlock c={c} /> : null}
-      {hasKnacks ? <KnackBlock c={c} /> : null}
     </>
   );
+
+  // The same order as the Spells & Magic tab; the first block carries the lead.
+  const blocks: ((lead?: ReactNode) => ReactNode)[] = [];
+  if (hasSpells && !isBregglesPreMagic) {
+    blocks.push((l) => (
+      <SpellcastingBlock
+        key="spells"
+        c={c}
+        isArcane={profile.spellType === 'arcane'}
+        spellsPerDay={profile.spellsPerDay}
+        lead={l}
+      />
+    ));
+  }
+  if (hasGlamours) blocks.push((l) => <GlamoursBlock key="glamours" c={c} max={profile.glamourCount} lead={l} />);
+  if (hasRunes) blocks.push((l) => <RunesBlock key="runes" c={c} lead={l} />);
+  if (hasKnacks) blocks.push((l) => <KnackBlock key="knack" c={c} lead={l} />);
+
+  if (blocks.length === 0) return <View wrap={false}>{lead}</View>;
+  return <>{blocks.map((render, i) => render(i === 0 ? lead : undefined))}</>;
 }
 
 // ── Inventory ────────────────────────────────────────────────
@@ -1230,13 +1380,14 @@ function InventorySection({ c }: { c: Character }) {
 
   return (
     <>
-      <SectionTitle>Inventory & Encumbrance</SectionTitle>
-      <Text style={s.body}>
-        <Text style={s.bold}>Encumbrance method: </Text>
-        {slotsMode ? 'Slots' : 'Weight'}
-      </Text>
-
-      <Caption>Equipped Items</Caption>
+      <KeepWithNext>
+        <SectionTitle>Inventory & Encumbrance</SectionTitle>
+        <Text style={s.body}>
+          <Text style={s.bold}>Encumbrance method: </Text>
+          {slotsMode ? 'Slots' : 'Weight'}
+        </Text>
+        <Caption>Equipped Items</Caption>
+      </KeepWithNext>
       {c.equippedItems.length > 0 ? (
         <ItemsTable items={c.equippedItems} group="Equipped" />
       ) : (
