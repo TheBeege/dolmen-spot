@@ -1,5 +1,6 @@
 import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
+import { pluralize } from './grammar';
 
 // Kindred-class restrictions from the Player's Book.
 // 'forbidden' = cannot take this class at all.
@@ -317,11 +318,6 @@ export function formatShortDate(date: CalendarDate): string {
   return `${date.day} ${MONTHS[date.month]?.name ?? 'Unknown'}, Year ${date.year}`;
 }
 
-// "1 day", "12 days", "1,058 days".
-export function plural(count: number, unit: string): string {
-  return `${count.toLocaleString('en-US')} ${unit}${count === 1 ? '' : 's'}`;
-}
-
 // "a", "a and b", "a, b and c".
 function joinParts(parts: string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
@@ -331,7 +327,7 @@ function joinParts(parts: string[]): string {
 // Years, months and days, leaving out any that are zero.
 function describeParts(years: number, months: number, days: number): string {
   const parts: [number, string][] = [[years, 'year'], [months, 'month'], [days, 'day']];
-  return joinParts(parts.filter(([n]) => n > 0).map(([n, unit]) => plural(n, unit)));
+  return joinParts(parts.filter(([n]) => n > 0).map(([n, unit]) => pluralize(n, unit, { grouping: true })));
 }
 
 // The time between two dates in calendar terms, e.g. "3 years, 2 months and

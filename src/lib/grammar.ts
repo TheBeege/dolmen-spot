@@ -11,7 +11,10 @@ export function withIndefiniteArticle(noun: string): string {
   return `${/^[aeiou]/i.test(noun) ? 'an' : 'a'} ${noun}`;
 }
 
-/** "1 slot", "2 slots", "0 slots". */
-export function pluralize(count: number, singular: string, plural = `${singular}s`): string {
-  return `${count} ${count === 1 ? singular : plural}`;
+/**
+ * "1 slot", "2 slots", "0 slots". With `grouping`, the count gets thousands
+ * separators: "1,058 days".
+ */
+export function pluralize(count: number, singular: string, { grouping = false }: { grouping?: boolean } = {}): string {
+  return `${grouping ? count.toLocaleString('en-US') : count} ${count === 1 ? singular : `${singular}s`}`;
 }
