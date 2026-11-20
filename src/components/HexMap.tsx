@@ -768,14 +768,17 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       const visible = items.slice(0, MAX_VISIBLE_MARKERS);
       const overflow = items.length - visible.length;
       const slots = visible.length + (overflow > 0 ? 1 : 0);
-      // A lone marker sits in the middle. On the current hex the star has
-      // the middle, so markers ring it, starting at the right (clear of the
-      // coordinate label above).
+      // A lone marker sits in the middle; several share a ring, the first
+      // at the top. On the current hex the star has the middle, so markers
+      // ring it on a wider circle, which would reach the coordinate label
+      // above: the ring gets one more place than it has markers, and the
+      // top one is left empty.
       const onCurrent = hex === currentHex;
       const radius = onCurrent ? CURRENT_HEX_RING_RADIUS : slots === 1 ? 0 : MARKER_RING_RADIUS;
-      const firstAngle = onCurrent ? 0 : -Math.PI / 2;
+      const places = onCurrent ? slots + 1 : slots;
+      const firstPlace = onCurrent ? 1 : 0;
       const slotAt = (i: number) => {
-        const angle = firstAngle + (i / slots) * Math.PI * 2;
+        const angle = -Math.PI / 2 + ((i + firstPlace) / places) * Math.PI * 2;
         return { x: c.x + radius * Math.cos(angle), y: c.y + radius * Math.sin(angle) };
       };
       visible.forEach((entry, i) => {
