@@ -48,7 +48,6 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 - [React](https://react.dev/) 19
 - [TypeScript](https://www.typescriptlang.org/)
 - [Tailwind CSS](https://tailwindcss.com/) v4
-- [Lucide React](https://lucide.dev/) icons
 - localStorage for persistence (no backend required), with optional Google Drive / OneDrive cloud save
 
 ## Getting Started
