@@ -206,15 +206,6 @@ export interface LeyLine {
   notes: string;
 }
 
-// Polymorphic onChange contract used by every character-tab component.
-// Accepting both a partial-character object and a functional updater means
-// callers that need to compose multiple writes in one tick (e.g. HexMap's
-// finishLeyLine + an in-flight keystroke) can do so without losing edits.
-// Components that only ever write a single object can keep passing one.
-export type CharacterUpdater =
-  | Partial<Character>
-  | ((prev: Character) => Partial<Character>);
-
 export interface LeyLineDraft {
   name: string;
   type: string;
@@ -315,6 +306,15 @@ export interface Character {
   forcedMarchActive: boolean;
   travelPointsRemaining: number;
 }
+
+// Polymorphic onChange contract used by every character-tab component and
+// useCharacter.updateCharacter. Accepting both a partial-character object
+// and a functional updater means callers that need to compose several
+// writes in one tick (e.g. HexMap's map edits) can do so without losing
+// any. Components that only ever write a single object can keep passing one.
+export type CharacterUpdater =
+  | Partial<Character>
+  | ((prev: Character) => Partial<Character>);
 
 export interface JournalEntry {
   id: string;
