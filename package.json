@@ -6,13 +6,15 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck": "next typegen && tsc --noEmit",
+    "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
+    "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.30.0",
     "@react-pdf/renderer": "^4.9.0",
     "@vercel/analytics": "^2.0.1",
-    "lucide-react": "^1.77.0",
     "next": "^16.4.6",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
@@ -24,7 +26,24 @@
     "@types/react-dom": "^19.3.0",
     "eslint": "^10.15.0",
     "eslint-config-next": "^16.4.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.1",
+    "sharp": "^0.35.5",
     "tailwindcss": "^4.3.5",
-    "typescript": "^6.0.3"
+    "typescript": "~6.0.3"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "overrides": {
+    "eslint-plugin-import": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
   }
 }
