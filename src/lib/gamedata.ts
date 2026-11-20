@@ -2446,7 +2446,8 @@ export interface MagicProfile {
   systems: MagicSystem[];
   spellsPerDay: number[] | null;
   maxSpellRank: number;
-  glamourCount: number;
+  /** null when it depends on a kindred the app doesn't know (an Enchanter's innate glamours). */
+  glamourCount: number | null;
   hasRunes: boolean;
   hasKnacks: boolean;
   hasDivineResistance: boolean;
@@ -2528,10 +2529,11 @@ export function getCharacterMagicProfile(kindred: KindredId | '', classId: Class
         result.systems = ['glamours', 'runes'];
         result.hasDivineResistance = true;
         result.hasRunes = true;
-        let glamourCount = ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0;
-        // Add innate kindred glamours (1 for Elf/Grimalkin) on top of class glamours
-        if (isKnownKindredId(kindred)) glamourCount += INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0;
-        result.glamourCount = glamourCount;
+        // Add innate kindred glamours (1 for Elf/Grimalkin) on top of class
+        // glamours; an unknown kindred's are unknown, so is the maximum.
+        result.glamourCount = kindred && !isKnownKindredId(kindred)
+          ? null
+          : (ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0) + (kindred ? INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0 : 0);
         break;
       }
       default: {

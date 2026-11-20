@@ -63,6 +63,7 @@ const selectClasses =
 export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicProps) {
   const {
     profile,
+    unknownNote,
     hasNoMagic,
     hasSpells,
     hasGlamours,
@@ -170,6 +171,11 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
       <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
         Spells & Magic
       </h2>
+
+      {/* A class or kindred the app doesn't know: say so rather than guess */}
+      {unknownNote && (
+        <p className="text-yellow-400 text-sm mb-4">{unknownNote}</p>
+      )}
 
       {/* No magic message */}
       {hasNoMagic && (
@@ -1493,9 +1499,11 @@ function GlamourSection({
   updateGlamour: (id: string, updates: Partial<CharacterGlamour>) => void;
   deleteGlamour: (id: string) => void;
 }) {
+  // null when the maximum depends on a kindred the app doesn't know
   const maxGlamours = profile.glamourCount;
   const currentCount = character.glamours.length;
-  const isOver = currentCount > maxGlamours;
+  const isOver = maxGlamours !== null && currentCount > maxGlamours;
+  const atMax = maxGlamours !== null && currentCount >= maxGlamours;
   const pickedIds = new Set(character.glamours.map((g) => g.glamourId));
   const availableGlamours = GLAMOURS.filter((g) => !pickedIds.has(g.id));
 
@@ -1504,7 +1512,7 @@ function GlamourSection({
       <h3 className={sectionHeadingClasses}>Glamours</h3>
 
       <div className={`text-sm mb-2 ${isOver ? 'text-red-400' : 'text-[#f5e6c8]/70'}`}>
-        {currentCount}/{maxGlamours} glamours known
+        {maxGlamours === null ? currentCount : `${currentCount}/${maxGlamours}`} glamours known
         {isOver && ' (over maximum!)'}
       </div>
 
@@ -1538,7 +1546,7 @@ function GlamourSection({
         );
       })}
 
-      {availableGlamours.length > 0 && currentCount < maxGlamours && (
+      {availableGlamours.length > 0 && !atMax && (
         <select
           value=""
           onChange={(e) => {
@@ -1556,7 +1564,7 @@ function GlamourSection({
         </select>
       )}
 
-      {currentCount >= maxGlamours && availableGlamours.length > 0 && (
+      {atMax && availableGlamours.length > 0 && (
         <p className="text-[#f5e6c8]/40 text-xs italic mt-2">
           Maximum glamours known. Remove one to add another.
         </p>

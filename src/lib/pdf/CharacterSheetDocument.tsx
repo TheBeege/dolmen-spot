@@ -1200,8 +1200,9 @@ function SpellcastingBlock({
   );
 }
 
-function GlamoursBlock({ c, max, lead }: { c: Character; max: number; lead?: ReactNode }) {
-  const over = c.glamours.length > max;
+function GlamoursBlock({ c, max, lead }: { c: Character; max: number | null; lead?: ReactNode }) {
+  // max is null when it depends on a kindred the app doesn't know.
+  const over = max !== null && c.glamours.length > max;
   return (
     <>
       <KeepWithNext>
@@ -1209,7 +1210,7 @@ function GlamoursBlock({ c, max, lead }: { c: Character; max: number; lead?: Rea
         <Text style={s.subTitle}>
           Glamours
           <Text style={[s.subTitleNote, over ? { color: COLOR.warn } : {}]}>
-            {`  ${c.glamours.length}/${max} glamours known${over ? ' (over maximum!)' : ''}`}
+            {`  ${c.glamours.length}${max === null ? '' : `/${max}`} glamours known${over ? ' (over maximum!)' : ''}`}
           </Text>
         </Text>
       </KeepWithNext>
@@ -1289,12 +1290,13 @@ function KnackBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
 }
 
 function MagicSection({ c }: { c: Character }) {
-  const { profile, hasNoMagic, hasSpells, hasGlamours, hasRunes, hasKnacks, isBregglesPreMagic } = getMagicSections(c);
+  const { profile, unknownNote, hasNoMagic, hasSpells, hasGlamours, hasRunes, hasKnacks, isBregglesPreMagic } = getMagicSections(c);
   if (hasNoMagic) return null;
 
   const lead = (
     <>
       <SectionTitle>Spells & Magic</SectionTitle>
+      {unknownNote ? <Text style={s.warn}>{unknownNote}</Text> : null}
       {isBregglesPreMagic ? (
         <Empty>{`Breggle arcane magic unlocks at Level 4. Current level: ${c.level}.`}</Empty>
       ) : null}
@@ -1324,7 +1326,11 @@ function MagicSection({ c }: { c: Character }) {
   if (hasRunes) blocks.push((l) => <RunesBlock key="runes" c={c} lead={l} />);
   if (hasKnacks) blocks.push((l) => <KnackBlock key="knack" c={c} lead={l} />);
 
-  if (blocks.length === 0) return <View wrap={false}>{lead}</View>;
+  if (blocks.length === 0) {
+    // Never print the heading on its own.
+    if (!unknownNote && !isBregglesPreMagic && !profile.hasDivineResistance) return null;
+    return <View wrap={false}>{lead}</View>;
+  }
   return <>{blocks.map((render, i) => render(i === 0 ? lead : undefined))}</>;
 }
 

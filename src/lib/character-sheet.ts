@@ -31,6 +31,9 @@ import {
   getSpeedByWeight,
   getTotalCoinCount,
   hasUnknownKindredOrClass,
+  isKnownClassId,
+  isKnownKindredId,
+  type MagicSystem,
 } from './gamedata';
 
 // ── Labels ───────────────────────────────────────────────────
@@ -267,16 +270,26 @@ export function countPreparedByRank(spells: SpellSlot[]): Record<number, number>
   return preparedByRank;
 }
 
-/** Which magic sections the Spells & Magic tab shows for this character. */
+/**
+ * Which magic sections the Spells & Magic tab (and the PDF) shows. A character's
+ * magic comes from their class, or their kindred-class when they have none; if
+ * that id is one the app doesn't know, `unknownNote` says so and no section
+ * (and no "no magical abilities") is shown.
+ */
 export function getMagicSections(character: Pick<Character, 'kindred' | 'class' | 'level'>) {
   const profile = getCharacterMagicProfile(character.kindred, character.class, character.level);
+  const unknown = character.class
+    ? (isKnownClassId(character.class) ? null : 'class')
+    : (character.kindred && !isKnownKindredId(character.kindred) ? 'kindred' : null);
+  const has = (system: MagicSystem) => !unknown && profile.systems.includes(system);
   return {
     profile,
-    hasNoMagic: profile.systems.length === 1 && profile.systems[0] === 'none',
-    hasSpells: profile.systems.includes('arcane') || profile.systems.includes('holy'),
-    hasGlamours: profile.systems.includes('glamours'),
-    hasRunes: profile.systems.includes('runes'),
-    hasKnacks: profile.systems.includes('knacks'),
+    unknownNote: unknown ? `Dolmen Spot doesn't recognise this ${unknown}, so it can't show its magic.` : null,
+    hasNoMagic: !unknown && profile.systems.length === 1 && profile.systems[0] === 'none',
+    hasSpells: has('arcane') || has('holy'),
+    hasGlamours: has('glamours'),
+    hasRunes: has('runes'),
+    hasKnacks: has('knacks'),
     // Breggle kindred-class arcane magic unlocks at Level 4.
     isBregglesPreMagic: character.kindred === 'breggle' && !character.class && character.level < 4,
   };
