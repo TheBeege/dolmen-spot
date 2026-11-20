@@ -321,7 +321,10 @@ export default function FairyDateDialog({
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        {/* relative: the sr-only live region at the end is absolutely positioned,
+            so without it the region would hang off the dialog itself and make
+            the whole dialog scroll. */}
+        <div className="relative flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           <p id={introId} className="text-sm text-[#f5e6c8]/90">
             Fairy visit {visitNumber}: you entered on{' '}
             <span className="text-[#c4a35a]">{formatCalendarDate(visit.enteredOn)}</span>
