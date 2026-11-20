@@ -227,7 +227,7 @@ export function formatModifier(mod: number): string {
 export const MONTHS = [
   { name: 'Grimvold', season: 'Winter', days: 30, description: 'The Onset of Winter', moonName: 'Grinning moon', newMoon: 4, fullMoon: 19, wysendays: ['Hanglemas', "Dyboll's Day"] },
   { name: 'Lymewald', season: 'Winter', days: 28, description: 'Deep Winter', moonName: 'Dead moon', newMoon: 4, fullMoon: 18, wysendays: [] as string[] },
-  { name: 'Haggryme', season: 'Winter', days: 30, description: 'The Fading of Winter', moonName: 'Beast moon', newMoon: 5, fullMoon: 20, wysendays: ["Yarl's Day", 'Day of Virgins'] },
+  { name: 'Haggryme', season: 'Winter', days: 30, description: 'The Fading of Winter', moonName: 'Beast moon', newMoon: 5, fullMoon: 20, wysendays: ["Yarl's Day", 'The Day of Virgins'] },
   { name: 'Symswald', season: 'Spring', days: 29, description: 'The Onset of Spring', moonName: 'Squamous moon', newMoon: 4, fullMoon: 19, wysendays: ['Hopfast'] },
   { name: 'Harchment', season: 'Spring', days: 29, description: 'High Spring', moonName: "Knight's moon", newMoon: 5, fullMoon: 19, wysendays: ['Smithing'] },
   { name: 'Iggwyld', season: 'Spring', days: 30, description: 'The Fading of Spring', moonName: 'Rotting moon', newMoon: 5, fullMoon: 20, wysendays: ['Shortening', "Longshank's Day"] },
@@ -236,7 +236,7 @@ export const MONTHS = [
   { name: 'Haelhold', season: 'Summer', days: 28, description: 'The Fading of Summer', moonName: "Robber's moon", newMoon: 3, fullMoon: 18, wysendays: [] as string[] },
   { name: 'Reedwryme', season: 'Autumn', days: 30, description: 'The Onset of Autumn', moonName: 'Goat moon', newMoon: 4, fullMoon: 19, wysendays: ["Shub's Eve", 'Druden Day'] },
   { name: 'Obthryme', season: 'Autumn', days: 28, description: 'Deep Autumn', moonName: 'Narrow moon', newMoon: 4, fullMoon: 19, wysendays: [] as string[] },
-  { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn', moonName: 'Black moon', newMoon: 5, fullMoon: 20, wysendays: ['Day of Doors', 'Dolmenday'] },
+  { name: 'Braghold', season: 'Autumn', days: 30, description: 'The Fading of Autumn', moonName: 'Black moon', newMoon: 5, fullMoon: 20, wysendays: ['The Day of Doors', 'Dolmenday'] },
 ];
 
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
@@ -283,7 +283,7 @@ export const FESTIVALS: Record<string, { month: number; day: number; name: strin
     { month: 0, day: 29, name: 'Hanglemas' },
     { month: 0, day: 30, name: "Dyboll's Day" },
     { month: 2, day: 29, name: "Yarl's Day" },
-    { month: 2, day: 30, name: 'Day of Virgins' },
+    { month: 2, day: 30, name: 'The Day of Virgins' },
     { month: 3, day: 2, name: 'Feast of Cats' },
     { month: 3, day: 29, name: 'Hopfast' },
     { month: 4, day: 29, name: 'Smithing' },
@@ -296,7 +296,7 @@ export const FESTIVALS: Record<string, { month: number; day: number; name: strin
     { month: 9, day: 25, name: 'Feast of St Clewyd' },
     { month: 9, day: 29, name: "Shub's Eve" },
     { month: 9, day: 30, name: 'Druden Day / Festival of the Green Man' },
-    { month: 11, day: 29, name: 'Day of Doors' },
+    { month: 11, day: 29, name: 'The Day of Doors' },
     { month: 11, day: 30, name: 'Dolmenday - The Hunting of the Winter Hart' },
   ],
 };
