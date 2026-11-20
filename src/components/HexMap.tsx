@@ -13,7 +13,7 @@ import type {
   MapPOI,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
-import { gridBounds, hexCenterOf, hexPath, hexVertices, isValidHex, pixelToHex } from '@/lib/hex';
+import { gridBounds, hexCenterOf, hexPath, hexVertices, isValidHex, nearestPointOnMap, pixelToHex } from '@/lib/hex';
 import {
   DEFAULT_LEY_LINE_TYPE,
   LEY_LINE_COLORS,
@@ -179,28 +179,16 @@ function releasePointer(el: Element | null, id: number) {
 const viewCenter = (v: View): Point => ({ x: v.x + v.w / 2, y: v.y + v.h / 2 });
 const inView = (v: View, p: Point) => p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h;
 
-const HEX_CENTER_POINTS: readonly Point[] = ALL_HEXES.map((h) => hexCenterOf(h)!);
-
 /**
- * `v`, moved if needed so that its centre stays over the map: no further than
- * a hex's size from the nearest hex centre. However far a pan, pinch, scroll
- * or arrow key goes, the middle of the box still shows a hex.
+ * `v`, moved if needed so that its centre stays over the map: within half a
+ * hex of the hull of the hex centres. However far a pan, pinch, scroll or
+ * arrow key goes, hexes stay in the box, and since that region is convex,
+ * a drag along its edge moves the view smoothly.
  */
 function keepOnMap(v: View): View {
   const c = viewCenter(v);
-  let nearest = HEX_CENTER_POINTS[0];
-  let nearestDist2 = Infinity;
-  for (const h of HEX_CENTER_POINTS) {
-    const d2 = (h.x - c.x) ** 2 + (h.y - c.y) ** 2;
-    if (d2 < nearestDist2) {
-      nearestDist2 = d2;
-      nearest = h;
-    }
-  }
-  const dist = Math.sqrt(nearestDist2);
-  if (dist <= HEX_SIZE) return v;
-  const k = HEX_SIZE / dist;
-  return { ...v, x: nearest.x + (c.x - nearest.x) * k - v.w / 2, y: nearest.y + (c.y - nearest.y) * k - v.h / 2 };
+  const p = nearestPointOnMap(c, HEX_SIZE / 2);
+  return p === c ? v : { ...v, x: p.x - v.w / 2, y: p.y - v.h / 2 };
 }
 
 // --- Static layers: drawn once, never re-rendered by hovering or panning ---

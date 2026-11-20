@@ -138,3 +138,70 @@ const GRID_BOUNDS: Readonly<{ x: number; y: number; w: number; h: number }> = ((
 export function gridBounds(): Readonly<{ x: number; y: number; w: number; h: number }> {
   return GRID_BOUNDS;
 }
+
+type Point = { x: number; y: number };
+
+/** > 0 if o → a → b turns counter-clockwise (in y-up coordinates). */
+function cross(o: Point, a: Point, b: Point): number {
+  return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+}
+
+/**
+ * Convex hull of the hex centres (Andrew's monotone chain), counter-clockwise
+ * in y-up coordinates. The map's pan limit: because it's convex, the nearest
+ * point of it moves smoothly as a point outside it moves.
+ */
+const CENTRE_HULL: readonly Point[] = (() => {
+  const pts = [...CENTERS.values()].sort((a, b) => a.x - b.x || a.y - b.y);
+  const half = (list: Point[]) => {
+    const out: Point[] = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out[out.length - 2], out[out.length - 1], p) <= 0) out.pop();
+      out.push(p);
+    }
+    return out;
+  };
+  const lower = half(pts);
+  const upper = half([...pts].reverse());
+  return Object.freeze([...lower.slice(0, -1), ...upper.slice(0, -1)]);
+})();
+
+/** The point of segment a–b nearest to p. */
+function nearestOnSegment(p: Point, a: Point, b: Point): Point {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2));
+  return { x: a.x + t * dx, y: a.y + t * dy };
+}
+
+/**
+ * `p` if it lies within `margin` of the hull of the hex centres; otherwise the
+ * nearest point that does. The region is convex, so as `p` moves the result
+ * never moves further than `p` did.
+ */
+export function nearestPointOnMap(p: Point, margin = 0): Point {
+  const n = CENTRE_HULL.length;
+  let inside = true;
+  for (let i = 0; i < n; i++) {
+    if (cross(CENTRE_HULL[i], CENTRE_HULL[(i + 1) % n], p) < 0) {
+      inside = false;
+      break;
+    }
+  }
+  if (inside) return p;
+  let best = CENTRE_HULL[0];
+  let bestD2 = Infinity;
+  for (let i = 0; i < n; i++) {
+    const q = nearestOnSegment(p, CENTRE_HULL[i], CENTRE_HULL[(i + 1) % n]);
+    const d2 = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+    if (d2 < bestD2) {
+      bestD2 = d2;
+      best = q;
+    }
+  }
+  const d = Math.sqrt(bestD2);
+  if (d <= margin) return p;
+  const k = margin / d;
+  return { x: best.x + (p.x - best.x) * k, y: best.y + (p.y - best.y) * k };
+}
