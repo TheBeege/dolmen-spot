@@ -44,8 +44,9 @@ const POI_RADIUS = 22;
 const DOOR_RADIUS = 26;
 const BADGE_RADIUS = 24;
 const STAR_RADIUS = 42;
-// On the current hex the star takes the middle, so markers circle it.
-const CURRENT_HEX_RING_RADIUS = STAR_RADIUS + DOOR_RADIUS + 4;
+// On the current hex the star takes the middle, so markers circle it, this
+// far outside the star.
+const CURRENT_RING_GAP = DOOR_RADIUS + 4;
 const MAX_VISIBLE_MARKERS = 4; // more than this collapse into a "+N" badge
 const LEY_LINE_WIDTH = 14;
 const CONNECTOR_WIDTH = 8;
@@ -57,18 +58,27 @@ const DOOR_GLYPH_FONT = 38; // the ✦ on a fairy door marker
 const BADGE_FONT = 28; // the "+N" overflow badge
 const STAR_GLYPH_FONT = 56; // the ★ of the current location
 const MARKER_RIM = 4; // pale rim around markers
+const BADGE_RIM = 3;
+const STAR_RIM = 6;
 const TEXT_HALO = 8; // dark outline that keeps draft step numbers legible
+const ROAD_LABEL_HALO = 6;
 
 // --- Line widths in CSS pixels (non-scaling), so outlines stay visible at any zoom ---
 const GRID_LINE_PX = 1;
 const HIGHLIGHT_LINE_PX = 2.5;
 const CURRENT_LINE_PX = 3;
 
-// Hex-coordinate labels fade from MIN (zoomed out to COORD_LABEL_FADE_AT ×
-// the full map's width or more) up to MAX as you zoom in.
-const COORD_LABEL_OPACITY_MIN = 0.15;
-const COORD_LABEL_OPACITY_MAX = 0.7;
-const COORD_LABEL_FADE_AT = 1.4;
+// --- Smallest on-screen sizes, in CSS pixels ---
+// Zoomed out, the image sizes above get too small to see (a hex is about
+// 20 px across at the whole-map view on a phone), so overlays grow to stay
+// at least this big. Labels that would be smaller are hidden instead.
+const MIN_MARKER_PX = 12; // POI diameter; doors, badges and rings grow with it
+const MIN_STAR_PX = 14; // current-location star diameter
+const MIN_LEY_LINE_PX = 2.5;
+const MIN_ROAD_LINE_PX = 1.5;
+const MIN_STEP_FONT_PX = 10; // step numbers of a ley line being drawn
+const MIN_LABEL_FONT_PX = 8; // hex coordinates and fairy road names
+const COORD_LABEL_OPACITY = 0.7;
 
 // --- Navigation ---
 const PAN_THRESHOLD_PX = 4; // movement before a press becomes a pan, so taps still select
@@ -271,7 +281,20 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const [revealSeq, setRevealSeq] = useState(0);
   const [isPanning, setIsPanning] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const inspectorRef = useRef<HTMLDivElement>(null);
+  // The map box's size in CSS px, for the smallest on-screen sizes below.
+  const [boxSize, setBoxSize] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!box) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width: w, height: h } = entry.contentRect;
+      setBoxSize((s) => (s && s.w === w && s.h === h ? s : { w, h }));
+    });
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, []);
 
   // Drop selections whose item no longer exists (deleted, or gone in a
   // re-import). Adjusted during render rather than in an effect; each guard
@@ -641,6 +664,26 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     itemsByHex.set(d.hex, e);
   }
 
+  // On-screen sizes. In image units, an overlay shrinks with the view; these
+  // keep each one at its smallest on-screen size (MIN_*_PX) or more. Until
+  // the box has been measured, image sizes are used and labels are hidden.
+  const pxPerUnit = boxSize ? Math.min(boxSize.w / view.w, boxSize.h / view.h) : null;
+  const atLeast = (units: number, minPx: number) => (pxPerUnit ? Math.max(units, minPx / pxPerUnit) : units);
+  const legible = (fontUnits: number) => pxPerUnit !== null && fontUnits * pxPerUnit >= MIN_LABEL_FONT_PX;
+  const leyLine = atLeast(LEY_LINE_WIDTH, MIN_LEY_LINE_PX);
+  const roadLine = atLeast(CONNECTOR_WIDTH, MIN_ROAD_LINE_PX);
+  const size = {
+    marker: atLeast(POI_RADIUS, MIN_MARKER_PX / 2) / POI_RADIUS, // scale for all marker geometry
+    star: atLeast(STAR_RADIUS, MIN_STAR_PX / 2) / STAR_RADIUS,
+    leyLine,
+    leyLineScale: leyLine / LEY_LINE_WIDTH,
+    roadLine,
+    roadLineScale: roadLine / CONNECTOR_WIDTH,
+    stepFont: atLeast(DRAFT_STEP_FONT, MIN_STEP_FONT_PX),
+    coordLabels: legible(COORD_LABEL_FONT),
+    roadLabels: legible(ROAD_LABEL_FONT),
+  };
+
   const polylinePoints = (hexes: HexCoord[]) =>
     hexes
       .map((h) => hexCenterOf(h))
@@ -669,7 +712,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             points={polylinePoints(ll.hexes)}
             fill="none"
             stroke={ll.color}
-            strokeWidth={LEY_LINE_WIDTH}
+            strokeWidth={size.leyLine}
             strokeLinejoin="round"
             strokeLinecap="round"
             opacity={selectedLeyLine && selectedLeyLine !== ll.id ? 0.35 : 0.9}
@@ -690,8 +733,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             points={polylinePoints(draft.hexes)}
             fill="none"
             stroke={draft.color}
-            strokeWidth={LEY_LINE_WIDTH}
-            strokeDasharray="20 12"
+            strokeWidth={size.leyLine}
+            strokeDasharray={`${20 * size.leyLineScale} ${12 * size.leyLineScale}`}
             strokeLinejoin="round"
             strokeLinecap="round"
             opacity={0.85}
@@ -704,13 +747,13 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             <text
               key={`step-${h}`}
               x={c.x}
-              y={c.y + DRAFT_STEP_FONT * 0.35}
+              y={c.y + size.stepFont * 0.35}
               textAnchor="middle"
-              fontSize={DRAFT_STEP_FONT}
+              fontSize={size.stepFont}
               fontWeight="bold"
               fill={PARCHMENT}
               stroke={NIGHT}
-              strokeWidth={TEXT_HALO}
+              strokeWidth={(TEXT_HALO * size.stepFont) / DRAFT_STEP_FONT}
               paintOrder="stroke"
             >
               {i + 1}
@@ -736,8 +779,17 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       if (!ca || !cb) continue;
       out.push(
         <g key={pairKey} pointerEvents="none">
-          <line x1={ca.x} y1={ca.y} x2={cb.x} y2={cb.y} stroke={DOOR_FILL} strokeWidth={CONNECTOR_WIDTH} strokeDasharray="20 14" opacity={0.75} />
-          {d.destination.roadName && (
+          <line
+            x1={ca.x}
+            y1={ca.y}
+            x2={cb.x}
+            y2={cb.y}
+            stroke={DOOR_FILL}
+            strokeWidth={size.roadLine}
+            strokeDasharray={`${20 * size.roadLineScale} ${14 * size.roadLineScale}`}
+            opacity={0.75}
+          />
+          {d.destination.roadName && size.roadLabels && (
             <text
               x={(ca.x + cb.x) / 2}
               y={(ca.y + cb.y) / 2 - 14}
@@ -745,7 +797,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
               fontSize={ROAD_LABEL_FONT}
               fill={DOOR_FILL}
               fontWeight="bold"
-              style={{ paintOrder: 'stroke fill', stroke: NIGHT, strokeWidth: 6 }}
+              style={{ paintOrder: 'stroke fill', stroke: NIGHT, strokeWidth: ROAD_LABEL_HALO }}
             >
               {d.destination.roadName}
             </text>
@@ -774,7 +826,9 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       // above: the ring gets one more place than it has markers, and the
       // top one is left empty.
       const onCurrent = hex === currentHex;
-      const radius = onCurrent ? CURRENT_HEX_RING_RADIUS : slots === 1 ? 0 : MARKER_RING_RADIUS;
+      const radius = onCurrent
+        ? STAR_RADIUS * size.star + CURRENT_RING_GAP * size.marker
+        : slots === 1 ? 0 : MARKER_RING_RADIUS * size.marker;
       const places = onCurrent ? slots + 1 : slots;
       const firstPlace = onCurrent ? 1 : 0;
       const slotAt = (i: number) => {
@@ -790,7 +844,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           els.push(
             <g key={`poi-${entry.item.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
-              <circle cx={m.x} cy={m.y} r={POI_RADIUS} fill={POI_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM} />
+              <circle cx={m.x} cy={m.y} r={POI_RADIUS * size.marker} fill={POI_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
             </g>,
           );
         } else {
@@ -802,8 +856,17 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           els.push(
             <g key={`door-${door.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
-              <circle cx={m.x} cy={m.y} r={DOOR_RADIUS} fill={DOOR_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM} />
-              <text x={m.x} y={m.y + DOOR_GLYPH_FONT * 0.32} textAnchor="middle" fontSize={DOOR_GLYPH_FONT} fill={NIGHT} fontWeight="bold" pointerEvents="none" aria-hidden="true">
+              <circle cx={m.x} cy={m.y} r={DOOR_RADIUS * size.marker} fill={DOOR_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
+              <text
+                x={m.x}
+                y={m.y + DOOR_GLYPH_FONT * size.marker * 0.32}
+                textAnchor="middle"
+                fontSize={DOOR_GLYPH_FONT * size.marker}
+                fill={NIGHT}
+                fontWeight="bold"
+                pointerEvents="none"
+                aria-hidden="true"
+              >
                 ✦
               </text>
             </g>,
@@ -814,8 +877,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         const b = slotAt(visible.length);
         els.push(
           <g key={`overflow-${hex}`} pointerEvents="none" role="img" aria-label={`${overflow} more on hex ${hex}`}>
-            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS} fill={NIGHT} stroke={PARCHMENT} strokeWidth={3} />
-            <text x={b.x} y={b.y + BADGE_FONT * 0.36} textAnchor="middle" fontSize={BADGE_FONT} fill={PARCHMENT} fontWeight="bold">
+            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS * size.marker} fill={NIGHT} stroke={PARCHMENT} strokeWidth={BADGE_RIM * size.marker} />
+            <text x={b.x} y={b.y + BADGE_FONT * size.marker * 0.36} textAnchor="middle" fontSize={BADGE_FONT * size.marker} fill={PARCHMENT} fontWeight="bold">
               +{overflow}
             </text>
           </g>,
@@ -830,8 +893,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     if (!c) return null;
     return (
       <g pointerEvents="none" aria-hidden="true">
-        <circle cx={c.x} cy={c.y} r={STAR_RADIUS} fill={GOLD} stroke={PARCHMENT} strokeWidth={6} />
-        <text x={c.x} y={c.y + STAR_GLYPH_FONT * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT} fill={NIGHT} fontWeight="bold">
+        <circle cx={c.x} cy={c.y} r={STAR_RADIUS * size.star} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * size.star} />
+        <text x={c.x} y={c.y + STAR_GLYPH_FONT * size.star * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * size.star} fill={NIGHT} fontWeight="bold">
           ★
         </text>
       </g>
@@ -854,10 +917,6 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     </g>
   );
 
-  const labelOpacity = Math.max(
-    COORD_LABEL_OPACITY_MIN,
-    Math.min(COORD_LABEL_OPACITY_MAX, 1 - view.w / (baseBounds.w * COORD_LABEL_FADE_AT)),
-  );
   const zoomPercent = Math.round((baseBounds.w / view.w) * 100);
   const toolButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 transition-colors';
 
@@ -936,6 +995,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           can still be scrolled past it (dragging on the map pans the map):
           on a phone in landscape the map is letterboxed instead. */}
       <div
+        ref={boxRef}
         className="bg-[#1a1a2e] rounded-lg overflow-hidden relative w-full aspect-(--map-aspect) md:aspect-auto md:h-[60vh] max-h-[calc(100svh-8rem)]"
         style={{ '--map-aspect': `${baseBounds.w} / ${baseBounds.h}` } as React.CSSProperties}
       >
@@ -960,9 +1020,11 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           <g style={{ cursor: draft ? 'crosshair' : 'pointer' }}>
             <HexGridLayer currentHex={currentHex} />
           </g>
-          <g opacity={labelOpacity} pointerEvents="none" aria-hidden="true">
-            <CoordLabels />
-          </g>
+          {size.coordLabels && (
+            <g opacity={COORD_LABEL_OPACITY} pointerEvents="none" aria-hidden="true">
+              <CoordLabels />
+            </g>
+          )}
           <g>{renderLeyLines()}</g>
           {renderDraft()}
           <g>{renderDoorConnectors()}</g>
