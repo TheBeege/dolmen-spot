@@ -879,11 +879,20 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       visible.forEach((entry, i) => {
         const m = slotAt(i);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
+        // Touch browsers move a tap that's near a marker to the nearest point
+        // of the marker's bounding box. An invisible square over that box makes
+        // sure the tap then lands on the marker, not on the hex underneath its
+        // corner (often a neighbouring hex, once markers outgrow their hexes).
+        const hitBox = (r: number) => {
+          const half = r + (MARKER_RIM * size.marker) / 2;
+          return <rect x={m.x - half} y={m.y - half} width={2 * half} height={2 * half} fill="none" pointerEvents="all" />;
+        };
         if (entry.kind === 'poi') {
           const label = `POI: ${entry.item.name || 'Unnamed'}${notesPreview(entry.item.notes)}`;
           els.push(
             <g key={`poi-${entry.item.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
+              {hitBox(POI_RADIUS * size.marker)}
               <circle cx={m.x} cy={m.y} r={POI_RADIUS * size.marker} fill={POI_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
             </g>,
           );
@@ -895,6 +904,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           els.push(
             <g key={`door-${door.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
+              {hitBox(DOOR_RADIUS * size.marker)}
               <circle cx={m.x} cy={m.y} r={DOOR_RADIUS * size.marker} fill={DOOR_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
               <text
                 x={m.x}
