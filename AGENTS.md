@@ -17,9 +17,9 @@ If the docs are ambiguous or incomplete, cross-reference the source PDF at `sour
 | `docs/rules/03-classes.md` | `src/lib/gamedata.ts` (CLASSES, advancement tables), `src/components/CombatStats.tsx`, `src/components/AbilityScores.tsx` |
 | `docs/rules/04-kindred-classes.md` | `src/lib/gamedata.ts` (kindred-class advancement tables), `src/components/CombatStats.tsx` |
 | `docs/rules/05-magic.md` | `src/lib/gamedata.ts` (spell data), `src/components/SpellsAndMagic.tsx` |
-| `docs/rules/06-equipment.md` | `src/lib/gamedata.ts` (ARMOUR_TABLE, WEAPONS_TABLE, ADVENTURING_GEAR), `src/components/Inventory.tsx` |
+| `docs/rules/06-equipment.md` | `src/lib/gamedata.ts` (ARMOUR_TABLE, WEAPONS_TABLE, ADVENTURING_GEAR, LIGHT_SOURCE_TYPES), `src/components/Inventory.tsx`, `src/components/Adventuring.tsx` (light tracker) |
 | `docs/rules/07-combat.md` | `src/components/CombatStats.tsx`, `src/lib/gamedata.ts` (attack modifiers) |
-| `docs/rules/08-adventuring.md` | `src/lib/gamedata.ts` (adventuring tables such as `TERRAIN_TABLE` and `SLEEP_MATRIX`), `src/components/Inventory.tsx` (encumbrance), `src/components/CombatStats.tsx` (speed), `src/components/Adventuring.tsx` (travel, camping, light, hunger and condition trackers) |
+| `docs/rules/08-adventuring.md` | `src/lib/gamedata.ts` (adventuring tables such as `TERRAIN_TABLE` and `SLEEP_MATRIX`), `src/components/Inventory.tsx` (encumbrance), `src/components/CombatStats.tsx` (speed), `src/components/Adventuring.tsx` (travel, camping, hunger and condition trackers) |
 | `docs/rules/09-appendices.md` | `src/lib/gamedata.ts` (MONTHS, FESTIVALS, calendar), `src/components/Adventuring.tsx` (calendar UI), `src/components/ReferencePanel.tsx` |
 
 ## Validation Rules
