@@ -67,7 +67,7 @@ Character data is stored in localStorage and must survive schema changes across 
 
 ## Code Conventions
 
-- **Tech stack**: Next.js 15, TypeScript, Tailwind CSS v4 (utility classes only, no `@apply`)
+- **Tech stack**: Next.js 16, TypeScript, Tailwind CSS v4 (utility classes only, no `@apply`)
 - **State management**: React hooks + localStorage persistence via `src/hooks/useCharacter.ts`
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- see `MEMORY.md` for exact color values
@@ -125,3 +125,13 @@ The player-facing changelog lives at `src/app/changelog/page.tsx` and is shown a
 ## Deployment Phases
 
 See `docs/DEPLOYMENT-PHASES.md` for the ordered feature implementation plan. Work on phases sequentially -- later phases depend on earlier ones being correct.
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+## This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->
