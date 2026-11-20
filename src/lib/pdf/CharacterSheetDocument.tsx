@@ -7,17 +7,22 @@
  * Every number here comes from the same stored fields and shared helpers the
  * tabs use (gamedata.ts, character-sheet.ts). Where a tab shows a stored value
  * next to a "Sync to X" button, the sheet prints the stored value and notes
- * "calc. X". Free-form notes, the map, the journal and the calendar are left
- * out on purpose.
+ * "calc. X". The Combat, Magic and Other notes, the map, the journal and the
+ * calendar are left out on purpose.
+ *
+ * All text goes through this file's `Text`, which makes its strings
+ * printable with the sheet's fonts (see text.ts and fonts.ts).
  */
-import { Document, Page, StyleSheet, Text, View } from '@react-pdf/renderer';
-import type { ReactNode } from 'react';
+import { Document, Page, StyleSheet, Text as PdfText, View } from '@react-pdf/renderer';
+import { Children, createContext, isValidElement, useContext, useMemo, type ComponentProps, type ReactNode } from 'react';
 import type { Character, CharacterContainer, InventoryItem } from '@/lib/types';
 import {
   ARMOUR_TABLE,
   BREGGLE_HORN_PROGRESSION,
   CLERIC_HOLY_ORDERS,
+  EQUIPPED_SLOT_LIMIT,
   FAIRY_RUNES,
+  FEATURE_NOTES,
   FIGHTER_COMBAT_TALENTS,
   GLAMOURS,
   GRIMALKIN_FORMS,
@@ -27,6 +32,8 @@ import {
   MOON_PHASES,
   MOSSLING_KNACKS,
   NOBLE_HOUSES,
+  SPELLBOOK_CAPACITY,
+  STOWED_SLOT_LIMIT,
   SYMBIOTIC_FLESH_TABLE,
   TURNING_UNDEAD_TABLE,
   calculateAC,
@@ -48,16 +55,12 @@ import {
   getKindredName,
   getRuneUsageFrequency,
   isKnownClassId,
-  isKnownKindredId,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
 import {
   ABILITY_SCORE_INFO,
-  EQUIPPED_SLOT_LIMIT,
-  FEATURE_NOTES,
   KNOWN_SPELL_SOURCE_LABELS,
   SAVE_TARGET_INFO,
-  STOWED_SLOT_LIMIT,
   calculateEncumbrance,
   countPreparedByRank,
   formatXpPercent,
@@ -75,12 +78,16 @@ import {
   getSkillTargetLayout,
   hasAnyClassFeature,
   hasAnyKindredFeature,
+  isKindredClass,
   isSpellInAnyBook,
   isSpellOnScroll,
   isStartingBookApplied,
 } from '@/lib/character-sheet';
+import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
+import type { SheetFonts } from './fonts';
+import { breakName, hasCjk } from './line-breaks';
 import type { PdfPageSize } from './page-size';
-import { pdfText as t } from './text';
+import { createPdfText } from './text';
 
 // ── Design tokens ────────────────────────────────────────────
 
@@ -96,12 +103,16 @@ const COLOR = {
   warn: '#9b2c0c',
 };
 
+// Font families come from the sheet's fonts at render time (see useSheet):
+// `fonts.sans` on the page, `fonts.serif` for headings, `fonts.italic` for notes.
+// Capitals are made in JS with upper() before the text is made printable, not
+// with textTransform, which react-pdf applies after (an uppercased "µ" is
+// Greek capital Mu, a character of its own).
 const s = StyleSheet.create({
   page: {
     paddingTop: 34,
     paddingBottom: 52,
     paddingHorizontal: 40,
-    fontFamily: 'Helvetica',
     fontSize: 9,
     // No page-wide lineHeight: react-pdf turns a unitless lineHeight into points
     // using the element's own font size and children inherit those points, so
@@ -121,10 +132,12 @@ const s = StyleSheet.create({
   // flexBasis 0 so a long name wraps instead of running under the brand
   headerMain: { flexGrow: 1, flexShrink: 1, flexBasis: 0, paddingRight: 12 },
   headerSide: { flexShrink: 0 },
-  name: { fontFamily: 'Times-Roman', fontWeight: 700, fontSize: 24, lineHeight: 1.1 },
+  // 22pt Noto Serif is about as big as the 24pt Times the sheet was designed
+  // with. Capped at 24 lines (about 600pt), so even an absurdly long name
+  // can't push the header past the bottom of the page.
+  name: { fontWeight: 700, fontSize: 22, lineHeight: 1.1, maxLines: 24, textOverflow: 'ellipsis' },
   identity: { fontSize: 10.5, color: COLOR.brown, marginTop: 3 },
   brand: {
-    fontFamily: 'Times-Roman',
     fontWeight: 700,
     fontSize: 10,
     color: COLOR.brown,
@@ -138,21 +151,22 @@ const s = StyleSheet.create({
     right: 40,
     bottom: 22,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     borderTopWidth: 0.75,
     borderTopColor: COLOR.gold,
     paddingTop: 4,
     fontSize: 7.5,
     color: COLOR.muted,
   },
+  // One line, cut short with "…", so a long name can't run into the page number
+  footerName: { flexGrow: 1, flexShrink: 1, flexBasis: 0, marginRight: 12, maxLines: 1, textOverflow: 'ellipsis' },
+  // A fixed width: react-pdf lays the row out before it knows the page numbers.
+  footerPage: { flexShrink: 0, width: 64, textAlign: 'right' },
 
   // Headings
   sectionTitle: {
-    fontFamily: 'Times-Roman',
     fontWeight: 700,
     fontSize: 12.5,
     color: COLOR.brown,
-    textTransform: 'uppercase',
     letterSpacing: 1,
     borderBottomWidth: 1,
     borderBottomColor: COLOR.gold,
@@ -165,24 +179,26 @@ const s = StyleSheet.create({
 
   // Text
   note: { fontSize: 7.5, color: COLOR.muted, marginTop: 2 },
-  italicNote: { fontSize: 7.5, color: COLOR.muted, fontStyle: 'italic', marginTop: 2 },
+  italicNote: { fontSize: 7.5, color: COLOR.muted, marginTop: 2 },
   warn: { fontSize: 7.5, color: COLOR.warn, marginTop: 2 },
   bold: { fontWeight: 700 },
   body: { fontSize: 8.5, marginTop: 1 },
-  empty: { fontSize: 8, color: COLOR.muted, fontStyle: 'italic' },
+  empty: { fontSize: 8, color: COLOR.muted },
 
   // Field grid (Character section)
   fieldGrid: { flexDirection: 'row', flexWrap: 'wrap' },
   field: { width: '33.33%', paddingRight: 8, marginBottom: 6 },
+  // The right-hand column needs no gap after it.
+  fieldLast: { paddingRight: 0 },
   fieldLabel: {
     fontSize: 6.5,
     fontWeight: 700,
     color: COLOR.brown,
-    textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
+  // 9.5pt Noto Sans takes about as much room as the 10pt Helvetica it replaced.
   fieldValue: {
-    fontSize: 10,
+    fontSize: 9.5,
     borderBottomWidth: 0.5,
     borderBottomColor: COLOR.rule,
     paddingBottom: 1.5,
@@ -207,7 +223,6 @@ const s = StyleSheet.create({
     fontSize: 6.5,
     fontWeight: 700,
     color: COLOR.brown,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
     textAlign: 'center',
   },
@@ -256,7 +271,6 @@ const s = StyleSheet.create({
     fontSize: 6.5,
     fontWeight: 700,
     color: COLOR.brown,
-    textTransform: 'uppercase',
     letterSpacing: 0.5,
     paddingVertical: 2.5,
     paddingHorizontal: 3,
@@ -315,40 +329,129 @@ const s = StyleSheet.create({
   summaryTotal: { fontWeight: 700, color: COLOR.brown },
 });
 
+// Table rows never split across pages, so a cell's text is capped to keep
+// every row shorter than a page (60 lines of 8.5pt text is about 560pt), and
+// ends in "…" where it is cut, at a line break too (that takes
+// patches/@react-pdf+textkit+7.0.1.patch). A row that tall moves to the next
+// page whole when it doesn't fit, which can leave the table's column headings
+// alone at the foot of the page before.
+const CELL_MAX_LINES = 60;
+
+// Spell table column widths; the scrolls table's name column spans all but the rank.
+const SPELL_COLUMNS = { rank: 0.8, spell: 4, prepared: 0.8, cast: 0.8, notes: 5 };
+const SCROLL_NAME_WIDTH = SPELL_COLUMNS.spell + SPELL_COLUMNS.prepared + SPELL_COLUMNS.cast + SPELL_COLUMNS.notes;
+
+// ── Fonts and printable text ─────────────────────────────────
+
+interface Sheet {
+  fonts: SheetFonts;
+  /** Makes a value printable with the sheet's fonts (see text.ts). */
+  text: (value: unknown) => string;
+}
+
+const SheetContext = createContext<Sheet | null>(null);
+
+function useSheet(): Sheet {
+  const sheet = useContext(SheetContext);
+  if (!sheet) throw new Error('Character sheet parts must be rendered inside CharacterSheetDocument.');
+  return sheet;
+}
+
+// react-pdf's Text props, without its SVG variant (which requires x and y).
+type TextProps = Exclude<ComponentProps<typeof PdfText>, { x: string | number }>;
+
+// textkit's "infinity": its line breaker never breaks a line at a hyphenation
+// point with this penalty (its fallback, for a word too long for any line,
+// still may).
+const NO_HYPHEN_BREAKS = 10000;
+
+/** Whether any string in `children`, nested Text included, has Korean, Japanese or Chinese in it. */
+function containsCjk(children: ReactNode): boolean {
+  let found = false;
+  Children.forEach(children, (child) => {
+    if (found) return;
+    if (typeof child === 'string') found = hasCjk(child);
+    else if (isValidElement<{ children?: ReactNode }>(child)) found = containsCjk(child.props.children);
+  });
+  return found;
+}
+
+/**
+ * react-pdf's Text, with every string it prints made printable. Text with
+ * Korean, Japanese or Chinese in it breaks lines at spaces and the points
+ * line-breaks.ts adds, not at hyphenation points, because react-pdf treats
+ * every change of font or script inside a word as one, and breaking there
+ * could start a line with a comma. Only a word too long for its line (a URL,
+ * say) still breaks with a hyphen.
+ */
+function Text({ children, render, ...props }: TextProps) {
+  const { text } = useSheet();
+  // Pass `render` only when there is one: react-pdf treats any Text with the prop as dynamic.
+  if (render) return <PdfText {...props} render={(args) => text(render(args))} />;
+  const printable = Children.map(children, (child) =>
+    typeof child === 'string' || typeof child === 'number' ? text(child) : child,
+  );
+  return (
+    <PdfText {...props} {...(containsCjk(printable) ? { hyphenationPenalty: NO_HYPHEN_BREAKS } : {})}>
+      {printable}
+    </PdfText>
+  );
+}
+
+function upper(text: string): string {
+  return text.toUpperCase();
+}
+
 // ── Small building blocks ────────────────────────────────────
 
 const EMPTY = '—'; // em dash
 
-function display(value: string | number | null | undefined): string {
-  if (value === null || value === undefined || value === '') return EMPTY;
-  return t(value);
+/** The character's name as printed, or "Unnamed" if nothing printable is left. */
+function useCharacterName(c: Character): string {
+  const { text } = useSheet();
+  return text(c.name).trim() || 'Unnamed';
 }
 
-function SectionTitle({ children, presence = 60 }: { children: string; presence?: number }) {
-  return (
-    <Text style={s.sectionTitle} minPresenceAhead={presence}>
-      {children}
-    </Text>
-  );
+function SectionTitle({ children }: { children: string }) {
+  const { fonts } = useSheet();
+  return <Text style={[s.sectionTitle, { fontFamily: fonts.serif }]}>{upper(children)}</Text>;
 }
 
 function Caption({ children, note, warn }: { children: string; note?: string; warn?: string }) {
   return (
     <Text style={s.caption} minPresenceAhead={44}>
-      {t(children)}
-      {note ? <Text style={s.captionNote}>{`  ${t(note)}`}</Text> : null}
-      {warn ? <Text style={[s.captionNote, { color: COLOR.warn, fontWeight: 700 }]}>{`  ${t(warn)}`}</Text> : null}
+      {children}
+      {note ? <Text style={s.captionNote}>{`  ${note}`}</Text> : null}
+      {warn ? <Text style={[s.captionNote, { color: COLOR.warn, fontWeight: 700 }]}>{`  ${warn}`}</Text> : null}
     </Text>
   );
 }
 
-function Field({ label, value, note, warn }: { label: string; value: string | number; note?: string; warn?: string }) {
+function ItalicNote({ children }: { children: string }) {
+  const { fonts } = useSheet();
+  return <Text style={[s.italicNote, { fontFamily: fonts.italic }]}>{children}</Text>;
+}
+
+function Field({ label, value, note, warn, last }: {
+  label: string;
+  value: string | number;
+  note?: string;
+  warn?: string;
+  /** In the grid's right-hand column. */
+  last?: boolean;
+}) {
+  const { text } = useSheet();
   return (
-    <View style={s.field}>
-      <Text style={s.fieldLabel}>{label}</Text>
-      <Text style={s.fieldValue}>{display(value)}</Text>
-      {note ? <Text style={s.italicNote}>{t(note)}</Text> : null}
-      {warn ? <Text style={s.warn}>{t(warn)}</Text> : null}
+    <View style={[s.field, last ? s.fieldLast : {}]}>
+      <Text style={s.fieldLabel} minPresenceAhead={12}>
+        {upper(label)}
+      </Text>
+      {/* Mostly names (affiliation, moon sign...), so no syllable hyphenation. */}
+      <Text style={s.fieldValue} hyphenationCallback={breakName}>
+        {text(value) || EMPTY}
+      </Text>
+      {note ? <ItalicNote>{note}</ItalicNote> : null}
+      {warn ? <Text style={s.warn}>{warn}</Text> : null}
     </View>
   );
 }
@@ -370,10 +473,10 @@ function StatBox({
 }) {
   return (
     <View style={[s.box, highlight ? s.boxHighlight : {}]}>
-      <Text style={s.boxLabel}>{label}</Text>
-      <Text style={small ? s.boxValueSmall : s.boxValue}>{value === '' ? ' ' : t(value)}</Text>
-      {sub ? <Text style={s.boxSub}>{t(sub)}</Text> : null}
-      {calc ? <Text style={s.boxCalc}>{t(calc)}</Text> : null}
+      <Text style={s.boxLabel}>{upper(label)}</Text>
+      <Text style={small ? s.boxValueSmall : s.boxValue}>{value === '' ? ' ' : value}</Text>
+      {sub ? <Text style={s.boxSub}>{sub}</Text> : null}
+      {calc ? <Text style={s.boxCalc}>{calc}</Text> : null}
     </View>
   );
 }
@@ -386,6 +489,8 @@ interface Column<T> {
   header: string;
   width: number;
   align?: 'left' | 'center' | 'right';
+  /** Line breaking for this column's text, e.g. breakName for names. */
+  breaks?: (word: string) => string[];
   cell: (row: T) => ReactNode;
 }
 
@@ -402,12 +507,12 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
   return (
     <View style={s.table}>
       <View style={s.thead} fixed>
-        {columns.map((col) => (
+        {columns.map((col, c) => (
           <Text
-            key={col.header}
+            key={c}
             style={[s.th, { flexGrow: col.width, flexShrink: 1, flexBasis: 0, textAlign: col.align ?? 'left' }]}
           >
-            {col.header}
+            {upper(col.header)}
           </Text>
         ))}
       </View>
@@ -417,12 +522,12 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
           style={[s.tr, i % 2 === 1 ? s.trAlt : {}, dimRow?.(row) ? s.trDim : {}]}
           wrap={false}
         >
-          {columns.map((col) => {
+          {columns.map((col, c) => {
             const content = col.cell(row);
             const align = col.align ?? 'left';
             return (
               <View
-                key={col.header}
+                key={c}
                 style={[
                   s.td,
                   {
@@ -434,7 +539,12 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
                 ]}
               >
                 {typeof content === 'string' || typeof content === 'number' ? (
-                  <Text style={{ textAlign: align }}>{t(content)}</Text>
+                  <Text
+                    style={{ textAlign: align, maxLines: CELL_MAX_LINES, textOverflow: 'ellipsis' }}
+                    hyphenationCallback={col.breaks}
+                  >
+                    {content}
+                  </Text>
                 ) : (
                   content
                 )}
@@ -448,7 +558,8 @@ function Table<T>({ columns, rows, rowKey, dimRow }: {
 }
 
 function Empty({ children }: { children: string }) {
-  return <Text style={s.empty}>{t(children)}</Text>;
+  const { fonts } = useSheet();
+  return <Text style={[s.empty, { fontFamily: fonts.italic }]}>{children}</Text>;
 }
 
 function Chips({ items }: { items: string[] }) {
@@ -456,7 +567,7 @@ function Chips({ items }: { items: string[] }) {
     <View style={s.chipRow}>
       {items.map((item, i) => (
         <Text key={`${item}-${i}`} style={s.chip}>
-          {t(item)}
+          {item}
         </Text>
       ))}
     </View>
@@ -467,7 +578,7 @@ function SummaryRow({ label, value, warn, total }: { label: string; value: strin
   return (
     <View style={s.summaryRow}>
       <Text style={total ? s.summaryTotal : {}}>{label}</Text>
-      <Text style={[total ? s.summaryTotal : {}, warn ? { color: COLOR.warn, fontWeight: 700 } : {}]}>{t(value)}</Text>
+      <Text style={[total ? s.summaryTotal : {}, warn ? { color: COLOR.warn, fontWeight: 700 } : {}]}>{value}</Text>
     </View>
   );
 }
@@ -483,13 +594,8 @@ function className(c: Character): string {
   return getClassName(c.class);
 }
 
-/** Only a known kindred has a kindred-class; an unknown one is shown as stored (see CharacterSection). */
-function isKindredClass(c: Character): boolean {
-  return isKnownKindredId(c.kindred) && c.kindred !== 'human' && !c.class;
-}
-
 /** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" (the same label as the app's header) */
-export function identityLine(c: Character): string {
+function identityLine(c: Character): string {
   return [`Level ${c.level}`, getKindredClassLabel(c)].filter(Boolean).join(' ');
 }
 
@@ -500,14 +606,18 @@ function calcNote(stored: number, calculated: number | null, format: (n: number)
 // ── Sections ─────────────────────────────────────────────────
 
 function Header({ c, exportedOn }: { c: Character; exportedOn: string }) {
+  const { fonts } = useSheet();
+  const name = useCharacterName(c);
   return (
     <View style={s.header} wrap={false}>
       <View style={s.headerMain}>
-        <Text style={s.name}>{t(c.name || 'Unnamed')}</Text>
-        <Text style={s.identity}>{t(identityLine(c))}</Text>
+        <Text style={[s.name, { fontFamily: fonts.serif }]} hyphenationCallback={breakName}>
+          {name}
+        </Text>
+        <Text style={s.identity}>{identityLine(c)}</Text>
       </View>
       <View style={s.headerSide}>
-        <Text style={s.brand}>DOLMEN SPOT</Text>
+        <Text style={[s.brand, { fontFamily: fonts.serif }]}>DOLMEN SPOT</Text>
         <Text style={s.meta}>{`Dolmenwood character sheet · ${exportedOn}`}</Text>
       </View>
     </View>
@@ -533,7 +643,7 @@ function CharacterSection({ c }: { c: Character }) {
     classWarn = 'Humans must select a class.';
   } else if (isKindredClass(c)) {
     classValue = 'Kindred-class';
-    classNote = `Playing as a ${kindredName(c)} kindred-class (see appendix).`;
+    classNote = `Playing as ${withIndefiniteArticle(kindredName(c))} kindred-class (see appendix).`;
   }
 
   const hasMoonSign = canHaveMoonSign(c.kindred);
@@ -557,8 +667,9 @@ function CharacterSection({ c }: { c: Character }) {
       : `Manual override; calc. ${formatXpPercent(xpCalc.total)} (${breakdown.join(' + ')})`;
   }
 
+  // Not wrap={false}: a long background or affiliation may continue on the next page.
   return (
-    <View wrap={false}>
+    <View>
       <SectionTitle>Character</SectionTitle>
       <View style={s.fieldGrid}>
         <Field
@@ -568,7 +679,7 @@ function CharacterSection({ c }: { c: Character }) {
           warn={unknownKindred ? "Dolmen Spot doesn't recognise this kindred, so it can't calculate kindred-based values." : undefined}
         />
         <Field label="Class" value={classValue} note={classNote} warn={classWarn} />
-        <Field label="Level" value={c.level} />
+        <Field label="Level" value={c.level} last />
         <Field label="Background" value={c.background} />
         <Field
           label="Alignment"
@@ -576,10 +687,10 @@ function CharacterSection({ c }: { c: Character }) {
           note={alignmentWarning?.severity === 'info' ? alignmentWarning.text : undefined}
           warn={alignmentWarning?.severity === 'warning' ? alignmentWarning.text : undefined}
         />
-        <Field label="Affiliation" value={c.affiliation} />
+        <Field label="Affiliation" value={c.affiliation} last />
         <Field label="Moon sign" value={moonValue} note={hasMoonSign ? undefined : 'Fairies cannot have moon signs.'} />
         <Field label="XP / Next level XP" value={`${c.xp} / ${c.xpNextLevel}`} />
-        <Field label="XP modifier" value={formatXpPercent(c.xpModifier)} note={xpNote} />
+        <Field label="XP modifier" value={formatXpPercent(c.xpModifier)} note={xpNote} last />
       </View>
     </View>
   );
@@ -609,7 +720,7 @@ function AbilitiesSection({ c }: { c: Character }) {
 function SavesSection({ c }: { c: Character }) {
   return (
     <View wrap={false}>
-      <SectionTitle>Saving Throws</SectionTitle>
+      <SectionTitle>Save Targets</SectionTitle>
       <View style={s.boxRow}>
         {SAVE_TARGET_INFO.map((save) => (
           <StatBox key={save.key} label={save.label} value={c.saveTargets[save.key] ? String(c.saveTargets[save.key]) : ''} />
@@ -664,12 +775,12 @@ function CombatSection({ c }: { c: Character }) {
       </View>
       <Text style={s.body}>
         <Text style={s.bold}>Armour: </Text>
-        {t(armourLine)}
-        {calcAC && calcAC.notes.length > 0 ? <Text style={s.note}>{`   AC ${t(calcAC.notes.join(', '))}`}</Text> : null}
+        {armourLine}
+        {calcAC && calcAC.notes.length > 0 ? <Text style={s.note}>{`   AC ${calcAC.notes.join(', ')}`}</Text> : null}
       </Text>
-      {armourWarning ? <Text style={s.warn}>{t(armourWarning)}</Text> : null}
+      {armourWarning ? <Text style={s.warn}>{armourWarning}</Text> : null}
       {calcMR && calcMR.notes.length > 0 ? (
-        <Text style={s.note}>{`Magic resistance: ${t(calcMR.notes.join(', '))}`}</Text>
+        <Text style={s.note}>{`Magic resistance: ${calcMR.notes.join(', ')}`}</Text>
       ) : null}
       <Text style={s.note}>{`CON modifier: ${conMod} applied per Hit Die`}</Text>
     </View>
@@ -683,7 +794,7 @@ function SkillsSection({ c }: { c: Character }) {
   const cell = (key: string, value: number | undefined, calcValue?: number) => (
     <View key={key} style={s.skillCell}>
       <View style={s.skillBox}>
-        <Text style={s.boxLabel}>{t(skillKeyToDisplayName(key))}</Text>
+        <Text style={s.boxLabel}>{upper(skillKeyToDisplayName(key))}</Text>
         <Text style={s.boxValueSmall}>{value === undefined ? EMPTY : String(value)}</Text>
         {calcValue !== undefined ? <Text style={s.boxCalc}>{`calc. ${calcValue}`}</Text> : null}
       </View>
@@ -721,24 +832,52 @@ interface BlockSpec {
   key: string;
   title: string;
   note?: string;
+  /** Holds text of any length (notes, lists): may continue on the next page. */
+  breakable?: boolean;
   body: ReactNode;
 }
 
 /**
- * An unbreakable feature block. `lead` holds any headings that introduce it:
- * minPresenceAhead can't keep a heading with a block taller than its
- * look-ahead, so headings travel inside the first block instead.
+ * A feature block. `lead` holds any headings that introduce it, so they stay
+ * on the same page as its start. A short, fixed-size block is unbreakable,
+ * and its headings travel inside it (minPresenceAhead can't keep a heading
+ * with a block taller than its look-ahead). A breakable block keeps its
+ * headings and title together with the first lines of its body. It is a
+ * fragment, not a View: react-pdf only moves an element to the next page for
+ * minPresenceAhead when it has earlier siblings, and a heading that came
+ * first in the block's own View would stay at the foot of a page.
  */
-function Block({ title, note, lead, children }: { title: string; note?: string; lead?: ReactNode; children?: ReactNode }) {
-  return (
-    <View style={s.block} wrap={false}>
+function Block({ title, note, lead, breakable, children }: {
+  title: string;
+  note?: string;
+  lead?: ReactNode;
+  breakable?: boolean;
+  children?: ReactNode;
+}) {
+  const heading = (
+    <>
       {lead}
       <Text style={s.blockTitle}>
-        {t(title)}
-        {note ? <Text style={s.subTitleNote}>{`  ${t(note)}`}</Text> : null}
+        {title}
+        {note ? <Text style={s.subTitleNote}>{`  ${note}`}</Text> : null}
       </Text>
+    </>
+  );
+  if (!breakable) {
+    return (
+      <View style={s.block} wrap={false}>
+        {heading}
+        {children}
+      </View>
+    );
+  }
+  return (
+    <>
+      <View style={s.block} wrap={false} minPresenceAhead={30}>
+        {heading}
+      </View>
       {children}
-    </View>
+    </>
   );
 }
 
@@ -751,7 +890,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
     blocks.push({
       key: 'talents',
       title: 'Combat Talents',
-      note: `(${talentSlots} slots)`,
+      note: `(${pluralize(talentSlots, 'slot')})`,
       body:
         talentSlots === 0 ? (
           <Empty>Combat talents unlock at Level 2.</Empty>
@@ -766,8 +905,8 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
             return (
               <Text key={i} style={s.body}>
                 <Text style={s.bold}>{`Slot ${i + 1}: `}</Text>
-                {talent ? t(`${talent.name}${spec}`) : EMPTY}
-                {talent ? <Text style={s.note}>{`  ${t(talent.description)}`}</Text> : null}
+                {talent ? `${talent.name}${spec}` : EMPTY}
+                {talent ? <Text style={s.note}>{`  ${talent.description}`}</Text> : null}
               </Text>
             );
           })
@@ -785,8 +924,8 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
           <Empty>Holy orders are available at Level 2+.</Empty>
         ) : holyOrder ? (
           <Text style={s.body}>
-            <Text style={s.bold}>{t(`${holyOrder.name} (${holyOrder.title})`)}</Text>
-            {`  ${t(holyOrder.bonus)}`}
+            <Text style={s.bold}>{`${holyOrder.name} (${holyOrder.title})`}</Text>
+            {`  ${holyOrder.bonus}`}
           </Text>
         ) : (
           <Empty>No holy order chosen.</Empty>
@@ -804,7 +943,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
           <View style={s.miniGrid}>
             {TURNING_UNDEAD_TABLE.results.map((r) => (
               <View key={r.range} style={s.miniCell}>
-                <Text style={s.boxLabel}>{r.range}</Text>
+                <Text style={s.boxLabel}>{upper(r.range)}</Text>
                 <Text style={s.boxSub}>{r.effect}</Text>
               </View>
             ))}
@@ -823,8 +962,8 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
       body: (
         <>
           <Text style={s.body}>
-            {display(c.liegeHouse)}
-            {liege ? <Text style={s.note}>{`  ${t(`${liege.alignment} · ${liege.head}`)}`}</Text> : null}
+            {c.liegeHouse || EMPTY}
+            {liege ? <Text style={s.note}>{`  ${liege.alignment} · ${liege.head}`}</Text> : null}
           </Text>
           <Text style={s.note}>{`Code of Chivalry: ${FEATURE_NOTES.chivalryVirtues}. ${FEATURE_NOTES.chivalryRules}`}</Text>
         </>
@@ -837,6 +976,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
       key: 'trophies',
       title: 'Trophies',
       note: FEATURE_NOTES.trophies,
+      breakable: true,
       body: c.trophies.length > 0 ? <Chips items={c.trophies.map((tr) => tr.creatureType)} /> : <Empty>None yet.</Empty>,
     });
   }
@@ -846,11 +986,12 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
     blocks.push({
       key: 'companion',
       title: 'Animal Companion',
+      breakable: true,
       body: companion ? (
-        <Text style={s.body}>
-          <Text style={s.bold}>{display(companion.name)}</Text>
-          {`  ${t(companion.type || 'Unknown type')} · HP ${companion.hp}`}
-          {companion.notes ? <Text style={s.note}>{`  ${t(companion.notes)}`}</Text> : null}
+        <Text style={s.body} hyphenationCallback={breakName}>
+          <Text style={s.bold}>{companion.name || EMPTY}</Text>
+          {`  ${companion.type || 'Unknown type'} · HP ${companion.hp}`}
+          {companion.notes ? <Text style={s.note}>{`  ${companion.notes}`}</Text> : null}
         </Text>
       ) : (
         <Empty>No companion.</Empty>
@@ -875,7 +1016,7 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
           {BREGGLE_HORN_PROGRESSION.map((h) => (
             <View key={h.level} style={[s.miniCell, h.level === c.level ? s.miniCellActive : {}]}>
               <Text style={s.boxLabel}>{`L${h.level}`}</Text>
-              <Text style={s.boxSub}>{t(h.length)}</Text>
+              <Text style={s.boxSub}>{h.length}</Text>
               <Text style={s.boxSub}>{h.damage}</Text>
             </View>
           ))}
@@ -897,7 +1038,8 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
     blocks.push({
       key: 'forms',
       title: 'Current Form',
-      note: c.wilderUsedToday ? 'Wilder used today.' : undefined,
+      // As on the Traits tab: only worth saying while in another form.
+      note: c.wilderUsedToday && c.currentForm !== 'wilder' ? 'Wilder used today.' : undefined,
       body: (
         <>
           <View style={s.miniGrid}>
@@ -906,7 +1048,7 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
               const active = c.currentForm === formId;
               return (
                 <View key={formId} style={[s.miniCell, { paddingHorizontal: 4 }, active ? s.miniCellActive : {}]}>
-                  <Text style={s.boxLabel}>{`${form.name}${active ? ' (current)' : ''}`}</Text>
+                  <Text style={s.boxLabel}>{upper(`${form.name}${active ? ' (current)' : ''}`)}</Text>
                   <Text style={s.boxSub}>{form.description}</Text>
                   {form.ac ? <Text style={s.boxSub}>{`AC ${form.ac} | Spd ${form.speed}'`}</Text> : null}
                   {form.attacks ? <Text style={s.boxSub}>{form.attacks}</Text> : null}
@@ -979,26 +1121,35 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
   return blocks;
 }
 
+/**
+ * The player's own Class Notes or Kindred Notes, like the official sheet's
+ * "Kindred & Class Traits" box. `notes` is already printable text; none, no block.
+ */
+function notesBlock(key: string, title: string, notes: string): BlockSpec[] {
+  return notes ? [{ key, title, breakable: true, body: <Text style={s.body}>{notes}</Text> }] : [];
+}
+
 function languagesBlock(c: Character): BlockSpec {
   const { langInfo, bonusLangs } = getLanguageBreakdown(c);
   return {
     key: 'languages',
     title: 'Languages',
+    breakable: true,
     body: (
       <>
         <Text style={s.body}>
           <Text style={s.bold}>Native: </Text>
-          {t(langInfo.nativeLanguages.join(', ')) || EMPTY}
+          {langInfo.nativeLanguages.join(', ') || EMPTY}
         </Text>
         {langInfo.classLanguages.length > 0 ? (
           <Text style={s.body}>
             <Text style={s.bold}>Class: </Text>
-            {t(langInfo.classLanguages.join(', '))}
+            {langInfo.classLanguages.join(', ')}
           </Text>
         ) : null}
         <Text style={s.body}>
-          <Text style={s.bold}>{`Bonus (${bonusLangs.length} of ${langInfo.bonusSlots} slots used): `}</Text>
-          {bonusLangs.length > 0 ? t(bonusLangs.join(', ')) : EMPTY}
+          <Text style={s.bold}>{`Bonus (${bonusLangs.length} of ${pluralize(langInfo.bonusSlots, 'slot')} used): `}</Text>
+          {bonusLangs.length > 0 ? bonusLangs.join(', ') : EMPTY}
         </Text>
         {langInfo.bonusSlots === 0 ? <Text style={s.note}>INT modifier does not grant bonus languages.</Text> : null}
       </>
@@ -1014,7 +1165,7 @@ function RetainersTable({ c, maxRetainers }: { c: Character; maxRetainers: numbe
         rows={c.retainers}
         rowKey={(r) => r.id}
         columns={[
-          { header: 'Name', width: 3, cell: (r) => r.name || EMPTY },
+          { header: 'Name', width: 3, breaks: breakName, cell: (r) => r.name || EMPTY },
           { header: 'Class', width: 2, cell: (r) => r.class },
           { header: 'Level', width: 1, align: 'center', cell: (r) => r.level },
           { header: 'HP', width: 1, align: 'center', cell: (r) => r.hp },
@@ -1027,16 +1178,25 @@ function RetainersTable({ c, maxRetainers }: { c: Character; maxRetainers: numbe
 }
 
 function TraitsSection({ c }: { c: Character }) {
+  const { text } = useSheet();
   const { maxRetainers } = getRetainerLimits(c.abilityScores.charisma);
   const profile = getCharacterFeatureProfile(c.kindred, c.class, c.level);
+  const cls = className(c);
+  const kindred = kindredName(c);
   const groups: { heading?: string; blocks: BlockSpec[] }[] = [
     {
-      heading: `Class features${className(c) ? ` · ${className(c)}` : ''}`,
-      blocks: hasAnyClassFeature(profile) ? classFeatureBlocks(c) : [],
+      heading: `Class features${cls ? ` · ${cls}` : ''}`,
+      blocks: [
+        ...(hasAnyClassFeature(profile) ? classFeatureBlocks(c) : []),
+        ...notesBlock('class-notes', 'Class Notes', text(c.classTraits ?? '').trim()),
+      ],
     },
     {
-      heading: `Kindred features · ${kindredName(c)}`,
-      blocks: hasAnyKindredFeature(profile) ? kindredFeatureBlocks(c) : [],
+      heading: `Kindred features${kindred ? ` · ${kindred}` : ''}`,
+      blocks: [
+        ...(hasAnyKindredFeature(profile) ? kindredFeatureBlocks(c) : []),
+        ...notesBlock('kindred-notes', 'Kindred Notes', text(c.kindredTraits ?? '').trim()),
+      ],
     },
     { blocks: [languagesBlock(c)] },
   ];
@@ -1056,12 +1216,12 @@ function TraitsSection({ c }: { c: Character }) {
       const lead = (
         <>
           {first ? <SectionTitle>Traits & Features</SectionTitle> : null}
-          {i === 0 && group.heading ? <Text style={s.subTitle}>{t(group.heading)}</Text> : null}
+          {i === 0 && group.heading ? <Text style={s.subTitle}>{group.heading}</Text> : null}
         </>
       );
       first = false;
       return (
-        <Block key={block.key} title={block.title} note={block.note} lead={lead}>
+        <Block key={block.key} title={block.title} note={block.note} lead={lead} breakable={block.breakable}>
           {block.body}
         </Block>
       );
@@ -1123,7 +1283,7 @@ function SpellcastingBlock({
                 const prepared = preparedByRank[rank] || 0;
                 return (
                   <View key={rank} style={[s.miniCell, prepared > max ? { borderColor: COLOR.warn } : {}]}>
-                    <Text style={s.boxLabel}>{`Rank ${rank}`}</Text>
+                    <Text style={s.boxLabel}>{upper(`Rank ${rank}`)}</Text>
                     <Text style={[s.boxValueSmall, prepared > max ? { color: COLOR.warn } : {}]}>{`${prepared}/${max}`}</Text>
                   </View>
                 );
@@ -1133,7 +1293,7 @@ function SpellcastingBlock({
         ) : null}
         {startingBook ? (
           <Text style={s.note}>
-            {t(`Starting spell book: ${startingBook.name} (${startingBook.spells.join(', ')}), not yet added to inventory`)}
+            {`Starting spell book: ${startingBook.name} (${startingBook.spells.join(', ')}), not yet added to inventory`}
           </Text>
         ) : null}
       </KeepWithNext>
@@ -1145,11 +1305,11 @@ function SpellcastingBlock({
           rowKey={(sp) => sp.id}
           dimRow={(sp) => sp.cast}
           columns={[
-            { header: 'Rank', width: 0.8, align: 'center', cell: (sp) => `R${sp.rank}` },
-            { header: 'Spell', width: 4, cell: (sp) => sp.name || EMPTY },
-            { header: 'Prep', width: 0.8, align: 'center', cell: (sp) => <Checkbox checked={sp.prepared} /> },
-            { header: 'Cast', width: 0.8, align: 'center', cell: (sp) => <Checkbox checked={sp.cast} /> },
-            { header: 'Notes', width: 5, cell: (sp) => sp.notes },
+            { header: 'Rank', width: SPELL_COLUMNS.rank, align: 'center', cell: (sp) => `R${sp.rank}` },
+            { header: 'Spell', width: SPELL_COLUMNS.spell, cell: (sp) => sp.name || EMPTY },
+            { header: 'Prep', width: SPELL_COLUMNS.prepared, align: 'center', cell: (sp) => <Checkbox checked={sp.prepared} /> },
+            { header: 'Cast', width: SPELL_COLUMNS.cast, align: 'center', cell: (sp) => <Checkbox checked={sp.cast} /> },
+            { header: 'Notes', width: SPELL_COLUMNS.notes, cell: (sp) => sp.notes },
           ]}
         />
       ) : null}
@@ -1162,8 +1322,8 @@ function SpellcastingBlock({
             rows={scrolls}
             rowKey={(sc) => sc.id}
             columns={[
-              { header: 'Rank', width: 0.8, align: 'center', cell: (sc) => `R${sc.scrollSpell?.rank ?? ''}` },
-              { header: 'Scroll', width: 10.6, cell: (sc) => sc.scrollSpell?.name ?? '' },
+              { header: 'Rank', width: SPELL_COLUMNS.rank, align: 'center', cell: (sc) => `R${sc.scrollSpell?.rank ?? ''}` },
+              { header: 'Scroll', width: SCROLL_NAME_WIDTH, cell: (sc) => sc.scrollSpell?.name ?? '' },
             ]}
           />
         </>
@@ -1262,30 +1422,31 @@ function KnackBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
   const knack = c.knack;
   const ref = knack ? MOSSLING_KNACKS.find((k) => k.id === knack.knackId) : undefined;
   return (
-    <View wrap={false}>
-      {lead}
-      <Text style={s.subTitle}>
-        Mossling Knack
-        {knack ? <Text style={s.subTitleNote}>{`  ${t(knack.name)}`}</Text> : null}
-      </Text>
-      {!knack || !ref ? (
-        <Empty>No knack chosen yet.</Empty>
-      ) : (
-        <>
-          {ref.tiers.map((tier) => {
+    <>
+      <KeepWithNext>
+        {lead}
+        <Text style={s.subTitle}>
+          Mossling Knack
+          {knack ? <Text style={s.subTitleNote}>{`  ${knack.name}`}</Text> : null}
+        </Text>
+        {!knack || !ref ? (
+          <Empty>No knack chosen yet.</Empty>
+        ) : (
+          ref.tiers.map((tier) => {
             const active = c.level >= tier.level;
             return (
               <Text key={tier.level} style={[s.body, active ? {} : { color: COLOR.faint }]}>
                 <Text style={s.bold}>{`L${tier.level}: `}</Text>
-                {t(tier.description)}
+                {tier.description}
                 {active ? '' : `  (Level ${tier.level})`}
               </Text>
             );
-          })}
-          {knack.notes ? <Text style={s.note}>{t(knack.notes)}</Text> : null}
-        </>
-      )}
-    </View>
+          })
+        )}
+      </KeepWithNext>
+      {/* The player's notes can be any length, so they may continue on the next page. */}
+      {knack && ref && knack.notes ? <Text style={s.note}>{knack.notes}</Text> : null}
+    </>
   );
 }
 
@@ -1302,8 +1463,8 @@ function MagicSection({ c }: { c: Character }) {
       ) : null}
       {profile.hasDivineResistance ? (
         <Text style={s.body}>
-          <Text style={s.bold}>Divine Resistance: </Text>
-          {FEATURE_NOTES.divineResistance}
+          <Text style={s.bold}>Resistance to Divine Aid: </Text>
+          {FEATURE_NOTES.resistanceToDivineAid}
         </Text>
       ) : null}
     </>
@@ -1345,19 +1506,18 @@ function itemName(item: InventoryItem): string {
 }
 
 function ItemCell({ item }: { item: InventoryItem }) {
+  const { text } = useSheet();
   const contents = item.spellbookContents ?? [];
   return (
     <View>
-      <Text>{display(itemName(item))}</Text>
+      <Text style={{ maxLines: CELL_MAX_LINES, textOverflow: 'ellipsis' }}>{text(itemName(item)) || EMPTY}</Text>
       {item.kind === 'spellbook' ? (
         <Text style={s.cellSub}>
-          {t(
-            `Spell book (${contents.length}/3)${
-              contents.length > 0
-                ? `: ${contents.map((e) => (e.name ? `R${e.rank} ${e.name}` : EMPTY)).join(', ')}`
-                : ': no spells recorded'
-            }`,
-          )}
+          {`Spell book (${contents.length}/${SPELLBOOK_CAPACITY})${
+            contents.length > 0
+              ? `: ${contents.map((e) => (e.name ? `R${e.rank} ${e.name}` : EMPTY)).join(', ')}`
+              : ': no spells recorded'
+          }`}
         </Text>
       ) : null}
     </View>
@@ -1371,7 +1531,7 @@ function ItemsTable({ items, group }: { items: InventoryItem[]; group: string })
       rows={items}
       rowKey={(item) => item.id}
       columns={[
-        { header: t(group), width: 5, cell: (item) => <ItemCell item={item} /> },
+        { header: group, width: 5, cell: (item) => <ItemCell item={item} /> },
         { header: 'Slots', width: 0.9, align: 'center', cell: (item) => String(item.slots) },
         { header: 'Weight', width: 1.1, align: 'center', cell: (item) => String(item.weight) },
         { header: 'Notes', width: 4, cell: (item) => item.notes },
@@ -1380,7 +1540,12 @@ function ItemsTable({ items, group }: { items: InventoryItem[]; group: string })
   );
 }
 
-function ContainerGroup({ c, container }: { c: Character; container: CharacterContainer | null }) {
+function ContainerGroup({ c, container, lead }: {
+  c: Character;
+  container: CharacterContainer | null;
+  /** A heading to keep with the container's name and the start of its list. */
+  lead?: ReactNode;
+}) {
   const items = getContainerItems(c.stowedItems, container?.id);
   const { usedWeight, capacity, isOverCapacity } = getContainerLoad(container, c.stowedItems);
   // Like the Inventory tab, capacity is only shown with weight encumbrance.
@@ -1388,22 +1553,27 @@ function ContainerGroup({ c, container }: { c: Character; container: CharacterCo
   const name = container ? container.name || 'Container' : 'Loose Items';
   return (
     <>
-      <Caption
-        note={container && weightMode ? `(${usedWeight} / ${capacity}w)` : undefined}
-        warn={container && weightMode && isOverCapacity ? 'Over capacity!' : undefined}
-      >
-        {name}
-      </Caption>
+      <KeepWithNext>
+        {lead}
+        <Caption
+          note={container && weightMode ? `(${usedWeight} / ${capacity}w)` : undefined}
+          warn={container && weightMode && isOverCapacity ? 'Over capacity!' : undefined}
+        >
+          {name}
+        </Caption>
+      </KeepWithNext>
       {items.length > 0 ? <ItemsTable items={items} group={name} /> : <Empty>Empty.</Empty>}
     </>
   );
 }
 
 function InventorySection({ c }: { c: Character }) {
+  const { text } = useSheet();
   const enc = calculateEncumbrance(c);
   const overloadNote = getOverloadNote(enc, c.encumbranceMethod);
   const slotsMode = c.encumbranceMethod === 'slots';
   const { coins } = c;
+  const coinCount = pluralize(enc.totalCoinCount, 'coin');
 
   return (
     <>
@@ -1421,16 +1591,18 @@ function InventorySection({ c }: { c: Character }) {
         <Empty>No equipped items.</Empty>
       )}
 
-      <Text style={s.subTitle} minPresenceAhead={60}>Stowed Items</Text>
-      {c.containers.map((container) => (
-        <ContainerGroup key={container.id} c={c} container={container} />
+      {[...c.containers, null].map((container, i) => (
+        <ContainerGroup
+          key={container?.id ?? 'loose'}
+          c={c}
+          container={container}
+          lead={i === 0 ? <Text style={s.subTitle}>Stowed Items</Text> : undefined}
+        />
       ))}
-      <ContainerGroup c={c} container={null} />
 
-      <View wrap={false}>
-        <Caption>Tiny Items</Caption>
-        <Text style={s.body}>{display(c.tinyItems)}</Text>
-      </View>
+      {/* The list can be any length, so it may continue on the next page. */}
+      <Caption>Tiny Items</Caption>
+      <Text style={s.body}>{text(c.tinyItems ?? '').trim() || EMPTY}</Text>
 
       <View style={[s.twoCol, { marginTop: 10 }]} wrap={false}>
         <View style={s.col}>
@@ -1446,7 +1618,7 @@ function InventorySection({ c }: { c: Character }) {
                 <Text style={s.warn}>{`Over the maximum of ${EQUIPPED_SLOT_LIMIT} equipped slots`}</Text>
               ) : null}
               <SummaryRow label="Stowed slots (items)" value={String(enc.itemStowedSlots)} />
-              <SummaryRow label="Coin slots" value={`${enc.coinSlots} (${enc.totalCoinCount} coins)`} />
+              <SummaryRow label="Coin slots" value={`${enc.coinSlots} (${coinCount})`} />
               <SummaryRow
                 label="Total stowed slots"
                 value={`${enc.totalStowedSlots} / ${STOWED_SLOT_LIMIT}`}
@@ -1459,7 +1631,7 @@ function InventorySection({ c }: { c: Character }) {
           ) : (
             <>
               <SummaryRow label="Item weight" value={String(enc.itemEquippedWeight + enc.itemStowedWeight)} />
-              <SummaryRow label="Coin weight" value={`${enc.coinWeight} (${enc.totalCoinCount} coins)`} />
+              <SummaryRow label="Coin weight" value={`${enc.coinWeight} (${coinCount})`} />
               <SummaryRow label="Total weight" value={String(enc.totalWeight)} warn={enc.overMaxLoad} />
             </>
           )}
@@ -1474,7 +1646,7 @@ function InventorySection({ c }: { c: Character }) {
           <SummaryRow label="Pellucidium" value={String(coins.pellucidium)} />
           <SummaryRow
             label="Total"
-            value={`${enc.totalCoinCount} coins (${getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)`}
+            value={`${coinCount} (${getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)`}
             total
           />
           <Text style={s.note}>Exchange: 1pp = 5gp = 50sp = 500cp</Text>
@@ -1486,27 +1658,74 @@ function InventorySection({ c }: { c: Character }) {
 
 // ── Document ─────────────────────────────────────────────────
 
-export interface CharacterSheetDocumentProps {
+// Fields the sheet leaves out: the Combat, Magic and Other notes, spell
+// study, the journal, the party's location and the map. Typed as Character's
+// keys, so that renaming or removing one of them fails the typecheck.
+const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
+  'combatTalents',
+  'otherNotes',
+  'spellNotes',
+  'spellStudy',
+  'failedStudies',
+  'journalEntries',
+  'currentLocation',
+  'currentLocationHex',
+  'mapData',
+]);
+
+/** All the character's text the sheet may print, for choosing which fonts to load. */
+export function sheetText(c: Character): string {
+  // Known spells print without their notes.
+  const printed = { ...c, knownSpells: c.knownSpells.map((spell) => spell.name) };
+  return JSON.stringify(printed, (key, value) => (UNPRINTED_FIELDS.has(key) ? undefined : value));
+}
+
+interface CharacterSheetDocumentProps {
   character: Character;
   pageSize: PdfPageSize;
   exportedOn: string;
+  fonts: SheetFonts;
 }
 
-export function CharacterSheetDocument({ character: c, pageSize, exportedOn }: CharacterSheetDocumentProps) {
-  const name = c.name || 'Unnamed';
+/** The text on one line: line breaks and runs of other spacing become single spaces. */
+function oneLine(value: string): string {
+  return value.replace(/[\p{Cc}\p{Zl}\p{Zp}\s]+/gu, ' ').trim();
+}
+
+function Footer({ c }: { c: Character }) {
+  // The footer has one line, which a line break in the name would end.
+  const name = oneLine(useCharacterName(c));
+  return (
+    <View style={s.footer} fixed>
+      <Text style={s.footerName} hyphenationCallback={breakName}>
+        {`${name} · ${identityLine(c)}`}
+      </Text>
+      <Text style={s.footerPage} render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
+    </View>
+  );
+}
+
+/**
+ * The name for the PDF's title, which PDF viewers show with fonts of their own,
+ * so it keeps every character the sheet's fonts lack. Only line breaks and
+ * other control characters become spaces.
+ */
+function titleName(c: Character): string {
+  return oneLine((c.name ?? '').normalize('NFC')) || 'Unnamed';
+}
+
+function SheetPages({ character: c, pageSize, exportedOn }: Omit<CharacterSheetDocumentProps, 'fonts'>) {
+  const { fonts } = useSheet();
   return (
     <Document
-      title={`${name} - Dolmen Spot character sheet`}
+      title={`${titleName(c)} - Dolmen Spot character sheet`}
       subject="Dolmenwood character sheet"
       creator="Dolmen Spot"
       producer="Dolmen Spot"
       language="en"
     >
-      <Page size={pageSize} style={s.page} wrap>
-        <View style={s.footer} fixed>
-          <Text>{t(`${name} · ${identityLine(c)}`)}</Text>
-          <Text render={({ pageNumber, totalPages }) => `Page ${pageNumber} of ${totalPages}`} />
-        </View>
+      <Page size={pageSize} style={[s.page, { fontFamily: fonts.sans }]} wrap>
+        <Footer c={c} />
 
         <Header c={c} exportedOn={exportedOn} />
         <CharacterSection c={c} />
@@ -1519,5 +1738,14 @@ export function CharacterSheetDocument({ character: c, pageSize, exportedOn }: C
         <InventorySection c={c} />
       </Page>
     </Document>
+  );
+}
+
+export function CharacterSheetDocument({ fonts, ...props }: CharacterSheetDocumentProps) {
+  const sheet = useMemo(() => ({ fonts, text: createPdfText(fonts.hasGlyph) }), [fonts]);
+  return (
+    <SheetContext.Provider value={sheet}>
+      <SheetPages {...props} />
+    </SheetContext.Provider>
   );
 }

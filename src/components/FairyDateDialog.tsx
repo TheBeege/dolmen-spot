@@ -15,9 +15,9 @@ import {
   formatShortDate,
   fromAbsoluteDay,
   getAbsoluteDay,
-  plural,
   type ElapsedTime,
 } from '@/lib/gamedata';
+import { pluralize } from '@/lib/grammar';
 import {
   canReturnOn,
   isWithinCalendar,
@@ -74,7 +74,7 @@ function describeEditMoves(plan: ReturnEditPlan, daysSinceReturn: number): strin
   const lines = [`Today moves with it, to ${formatCalendarDate(plan.today)}.`];
   if (records.length > 0) lines.push(`Records from after you came back move too: ${listOf(records)}.`);
   if (plan.movesCountingStart) lines.push("The days-lived counter's start moves too, so the count stays the same.");
-  if (daysSinceReturn > 0) lines.push(`The ${plural(daysSinceReturn, 'day')} you've lived since you came back still count.`);
+  if (daysSinceReturn > 0) lines.push(`The ${pluralize(daysSinceReturn, 'day', { grouping: true })} you've lived since you came back still count.`);
   return lines;
 }
 
@@ -147,7 +147,7 @@ export default function FairyDateDialog({
   const passedDays = target ? daysBetween(visit.enteredOn, target) : 0;
   const span = target ? describeDolmenwoodSpan(visit.enteredOn, target) : '';
   const passedText = passedDays > 0
-    ? `${span} passed in Dolmenwood${span === plural(passedDays, 'day') ? '' : ` (${plural(passedDays, 'day')})`}`
+    ? `${span} passed in Dolmenwood${span === pluralize(passedDays, 'day', { grouping: true }) ? '' : ` (${pluralize(passedDays, 'day', { grouping: true })})`}`
     : 'No time passed in Dolmenwood';
   const daysSinceReturn = visit.returnedOn ? Math.max(0, daysBetween(visit.returnedOn, character.currentDate)) : 0;
   // Nothing moves when the date is the one already recorded.
@@ -273,13 +273,13 @@ export default function FairyDateDialog({
             <span className="text-[#c4a35a]">{formatCalendarDate(visit.enteredOn)}</span>
             {editing && visit.returnedOn ? (
               <>
-                , lived <span className="text-[#c9b3f0] font-semibold">{plural(visit.daysInFairy, 'day')}</span> in
+                , lived <span className="text-[#c9b3f0] font-semibold">{pluralize(visit.daysInFairy, 'day', { grouping: true })}</span> in
                 Fairy, and came back on <span className="text-[#c4a35a]">{formatCalendarDate(visit.returnedOn)}</span>.
                 Set the date you really came back; everything since then moves with it.
               </>
             ) : (
               <>
-                {' '}and have lived <span className="text-[#c9b3f0] font-semibold">{plural(visit.daysInFairy, 'day')}</span>{' '}
+                {' '}and have lived <span className="text-[#c9b3f0] font-semibold">{pluralize(visit.daysInFairy, 'day', { grouping: true })}</span>{' '}
                 in Fairy. The Referee decides how much time passed in Dolmenwood.
               </>
             )}
@@ -319,7 +319,7 @@ export default function FairyDateDialog({
               </button>
               {roll && (
                 <span className="text-[#f5e6c8] text-sm">
-                  Rolled {roll.dice[0]} + {roll.dice[1]} = <span className="font-semibold">{plural(roll.total, 'day')}</span>
+                  Rolled {roll.dice[0]} + {roll.dice[1]} = <span className="font-semibold">{pluralize(roll.total, 'day', { grouping: true })}</span>
                 </span>
               )}
             </div>

@@ -24,6 +24,13 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      {
+        // The PDF fonts are named after their content (scripts/build-pdf-fonts.py),
+        // so a font that changes gets a new URL and browsers can keep each file
+        // for good instead of checking for a new version on every export.
+        source: "/fonts/pdf/:file([^/]+\\.[0-9a-f]{10}\\.(?:ttf|otf))",
+        headers: [{ key: "Cache-Control", value: "public, max-age=31536000, immutable" }],
+      },
     ];
   },
 };
