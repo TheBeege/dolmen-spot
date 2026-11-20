@@ -31,6 +31,17 @@ import {
   addDays,
   formatCalendarDate,
 } from '@/lib/gamedata';
+import {
+  countPreparedByRank,
+  getMagicSections,
+  getScrollItems,
+  getSpellbooks,
+  isSpellInAnyBook,
+  isSpellOnScroll,
+  isStartingBookApplied,
+  FEATURE_NOTES,
+  KNOWN_SPELL_SOURCE_LABELS,
+} from '@/lib/character-sheet';
 
 interface SpellsAndMagicProps {
   character: Character;
@@ -50,12 +61,15 @@ const selectClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
 
 export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicProps) {
-  const profile = getCharacterMagicProfile(character.kindred, character.class, character.level);
-  const hasNoMagic = profile.systems.length === 1 && profile.systems[0] === 'none';
-  const hasSpells = profile.systems.includes('arcane') || profile.systems.includes('holy');
-  const hasGlamours = profile.systems.includes('glamours');
-  const hasRunes = profile.systems.includes('runes');
-  const hasKnacks = profile.systems.includes('knacks');
+  const {
+    profile,
+    hasNoMagic,
+    hasSpells,
+    hasGlamours,
+    hasRunes,
+    hasKnacks,
+    isBregglesPreMagic,
+  } = getMagicSections(character);
 
   // ── Spell Slot Helpers ──────────────────────────────────
 
@@ -151,10 +165,6 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
     }
   };
 
-  // ── Breggle pre-magic check ─────────────────────────────
-  const isBregglesPreMagic =
-    character.kindred === 'breggle' && !character.class && character.level < 4;
-
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
       <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
@@ -182,7 +192,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
         <div className="bg-[#1a1a2e] border border-[#c4a35a]/30 rounded p-3 mb-4">
           <span className="text-[#c4a35a] font-semibold text-sm">Divine Resistance:</span>{' '}
           <span className="text-[#f5e6c8] text-sm">
-            Immune to holy magic effects (blessings and curses). Holy healing works at half effect.
+            {FEATURE_NOTES.divineResistance}
           </span>
         </div>
       )}
@@ -274,37 +284,6 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
 // Sub-sections (internal to this file)
 // ════════════════════════════════════════════════════════════
 
-// ── Inventory helpers (read-only) ─────────────────────────────
-function getAllInventoryItems(c: Character): InventoryItem[] {
-  return [...c.equippedItems, ...c.stowedItems];
-}
-function getSpellbooks(c: Character): InventoryItem[] {
-  return getAllInventoryItems(c).filter((i) => i.kind === 'spellbook');
-}
-function getScrollItems(c: Character): InventoryItem[] {
-  return getAllInventoryItems(c).filter((i) => i.kind === 'scroll' && !!i.scrollSpell?.name);
-}
-function isSpellInAnyBook(c: Character, name: string): boolean {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  return getSpellbooks(c).some((b) =>
-    (b.spellbookContents ?? []).some((e) => e.name.trim().toLowerCase() === n),
-  );
-}
-function isSpellOnScroll(c: Character, name: string): boolean {
-  const n = name.trim().toLowerCase();
-  if (!n) return false;
-  return getScrollItems(c).some((s) => s.scrollSpell?.name.trim().toLowerCase() === n);
-}
-
-function isStartingBookApplied(c: Character): boolean {
-  if (!c.startingSpellBook) return false;
-  // Check the stamped flag rather than name-matching the inventory item.
-  // This means renaming the in-inventory book won't reopen the starter
-  // dropdown and let the player create duplicates.
-  return getAllInventoryItems(c).some((i) => i.kind === 'spellbook' && i.isStartingBook);
-}
-
 // Explicit ordering for sort + iteration. Using an array (rather than
 // Object.keys on the label record) so we don't depend on insertion order
 // if the labels are ever alphabetised.
@@ -318,14 +297,7 @@ const KNOWN_SOURCES: KnownSpellSource[] = [
 ];
 const KNOWN_SOURCE_ORDER: Record<KnownSpellSource, number> = KNOWN_SOURCES
   .reduce((acc, src, i) => { acc[src] = i; return acc; }, {} as Record<KnownSpellSource, number>);
-const KNOWN_SOURCE_LABEL: Record<KnownSpellSource, string> = {
-  starting: 'Starting',
-  studied: 'Studied',
-  mentor: 'Mentor',
-  research: 'Researched',
-  rewrite: 'Rewritten',
-  manual: 'Manual',
-};
+const KNOWN_SOURCE_LABEL = KNOWN_SPELL_SOURCE_LABELS;
 
 function SpellCasterSection({
   character,
@@ -350,12 +322,7 @@ function SpellCasterSection({
   const maxRank = profile.maxSpellRank || 6;
 
   // Count prepared spells by rank
-  const preparedByRank: Record<number, number> = {};
-  for (const spell of character.spells) {
-    if (spell.prepared) {
-      preparedByRank[spell.rank] = (preparedByRank[spell.rank] || 0) + 1;
-    }
-  }
+  const preparedByRank = countPreparedByRank(character.spells);
 
   return (
     <div className="mb-4">
