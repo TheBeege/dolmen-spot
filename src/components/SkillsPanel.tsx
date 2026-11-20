@@ -6,7 +6,7 @@ import {
   skillNameToKey,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
-import { getSkillTargetLayout, hasClassOrKindredClass, isSkillOutOfSync } from '@/lib/character-sheet';
+import { getSkillTargetLayout, hasClassOrKindredClass } from '@/lib/character-sheet';
 
 interface SkillsPanelProps {
   character: Character;
@@ -21,7 +21,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
   const [newSkillName, setNewSkillName] = useState('');
 
   // Which stored skills are auto-calculated vs custom, and which auto ones
-  // are out of sync with the calculated targets
+  // are out of sync with the calculated targets (none for an unknown kindred or class)
   const { calculated, autoKeys, customKeys, outOfSyncKeys } = getSkillTargetLayout(character);
   const hasOutOfSync = outOfSyncKeys.length > 0;
 
@@ -94,7 +94,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
         {autoKeys.map(key => {
           const stored = character.skillTargets[key];
           const calc = calculated.targets[key];
-          const isOff = isSkillOutOfSync(stored, calc);
+          const isOff = outOfSyncKeys.includes(key);
           const displayName = skillKeyToDisplayName(key);
           return (
             <div key={key} className="flex flex-col items-center gap-1">

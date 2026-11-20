@@ -4,6 +4,7 @@ import { useState, useCallback, lazy, Suspense } from 'react';
 import Link from 'next/link';
 import { useCharacter } from '@/hooks/useCharacter';
 import { useCloudStorage } from '@/hooks/useCloudStorage';
+import { getKindredClassLabel } from '@/lib/gamedata';
 import CharacterInfo from '@/components/CharacterInfo';
 import AbilityScores from '@/components/AbilityScores';
 import CombatStats from '@/components/CombatStats';
@@ -112,10 +113,8 @@ export default function Home() {
                   {activeCharacter.name || 'Unnamed'}
                 </span>
                 <CloudStatusBadge metadata={cloudMetadata} />
-                <span className="hidden sm:inline text-[#f5e6c8]/40 text-xs truncate">
-                  {activeCharacter.kindred && activeCharacter.class
-                    ? `${activeCharacter.kindred} ${activeCharacter.class}`
-                    : ''}
+                <span className="hidden sm:inline text-[#f5e6c8]/70 text-xs truncate">
+                  {getKindredClassLabel(activeCharacter)}
                 </span>
                 <svg className="w-3 h-3 ml-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
@@ -173,8 +172,8 @@ export default function Home() {
                       <div className="text-sm text-[#f5e6c8] truncate">
                         {c.name || 'Unnamed'}
                       </div>
-                      <div className="text-xs text-[#f5e6c8]/40">
-                        {c.kindred || '???'} {c.class || '???'} Lv.{c.level}
+                      <div className="text-xs text-[#f5e6c8]/70">
+                        {[getKindredClassLabel(c), `Lv.${c.level}`].filter(Boolean).join(' ')}
                       </div>
                     </button>
                     {characters.length > 1 && (
@@ -185,8 +184,9 @@ export default function Home() {
                             deleteCharacter(c.id);
                           }
                         }}
-                        className="text-[#8b2500] hover:text-[#b33a1a] text-xs ml-2 shrink-0"
+                        className="text-[#ff9a85] hover:text-[#ffd0c4] text-xs ml-2 shrink-0"
                         title="Delete character"
+                        aria-label={`Delete ${c.name || 'this character'}`}
                       >
                         Del
                       </button>
