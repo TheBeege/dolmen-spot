@@ -410,7 +410,10 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             <div className="flex items-center justify-center gap-3 mb-4">
               <button
                 onClick={handlePreviousDay}
-                disabled={isAtEarliestDate}
+                // aria-disabled rather than disabled, so the button keeps focus when it
+                // reaches the limit; the handler does nothing there.
+                aria-disabled={isAtEarliestDate}
+                aria-describedby={isAtEarliestDate ? `${dateFieldsId}-first-note` : undefined}
                 title={
                   !isAtEarliestDate ? '' : earliestIsReturn ? 'You came back from Fairy on this day' : 'Already at Year 1, day 1'
                 }
@@ -420,24 +423,34 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
               </button>
               <button
                 onClick={handleNextDay}
-                disabled={isAtLatestDate}
+                aria-disabled={isAtLatestDate}
+                aria-describedby={isAtLatestDate ? `${dateFieldsId}-last-note` : undefined}
                 title={isAtLatestDate ? "The calendar's last day" : ''}
                 className={`${buttonClasses} ${isAtLatestDate ? 'opacity-40 cursor-not-allowed' : ''}`}
               >
                 Next Day
               </button>
             </div>
-            {isAtEarliestDate && earliestIsReturn && (
-              <p className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
-                You came back from Fairy on this day, so the calendar can&apos;t go earlier. To change when you came
-                back, use Edit return date under Fairy visits below.
-              </p>
-            )}
-            {isAtLatestDate && (
-              <p className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
-                {formatShortDate(LATEST_DATE)} is the calendar&apos;s last day, so Next Day stops here.
-              </p>
-            )}
+            {/* Why a button stopped, announced as it appears. At Year 1, day 1 the
+                date already says it, so that note is for screen readers only. */}
+            <div aria-live="polite">
+              {isAtEarliestDate &&
+                (earliestIsReturn ? (
+                  <p id={`${dateFieldsId}-first-note`} className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
+                    You came back from Fairy on this day, so the calendar can&apos;t go earlier. To change when you came
+                    back, use Edit return date under Fairy visits below.
+                  </p>
+                ) : (
+                  <p id={`${dateFieldsId}-first-note`} className="sr-only">
+                    {formatShortDate(earliestDate)} is the calendar&apos;s first day, so Previous Day stops here.
+                  </p>
+                ))}
+              {isAtLatestDate && (
+                <p id={`${dateFieldsId}-last-note`} className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
+                  {formatShortDate(LATEST_DATE)} is the calendar&apos;s last day, so Next Day stops here.
+                </p>
+              )}
+            </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
               {/* Below sm, Month gets the full row so long month names fit. */}

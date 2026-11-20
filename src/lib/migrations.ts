@@ -107,18 +107,26 @@ function sanitizeCharacterDates(data: any): void {
 /**
  * Anchor an in-progress spell study on the lived-time clock (see
  * src/lib/livedTime.ts), measured against the given well-formed visits.
- * Leaves an existing anchor alone unless `force` is set.
+ * Leaves an existing anchor alone unless `force` is set, or unless the
+ * study began in Dolmenwood after the last return (stamped with that visit):
+ * then the anchor always comes from its date, which is exact for such a
+ * study. Editing that return works the study's start out again from the
+ * anchor, so a hand-edited anchor would otherwise block every edit.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function anchorActiveStudy(data: any, fairyVisits: FairyVisit[], force = false): void {
   const active = isPlainObject(data.spellStudy) ? data.spellStudy.active : null;
   if (!isPlainObject(active)) return;
-  if (!force && Number.isFinite(active.startedLivedDay)) {
+  const stamp = typeof active.sinceReturnFrom === 'string' ? active.sinceReturnFrom : undefined;
+  const startedOn = sanitizeDate(active.startedOn);
+  const last = fairyVisits[fairyVisits.length - 1];
+  const sinceLastReturn =
+    !active.startedInFairy && stamp !== undefined && last?.id === stamp && last.returnedOn != null && daysBetween(last.returnedOn, startedOn) >= 0;
+  if (!force && !sinceLastReturn && Number.isFinite(active.startedLivedDay)) {
     active.startedLivedDay = Math.max(0, Math.floor(active.startedLivedDay)); // a whole, non-negative lived day
     return;
   }
-  const stamp = typeof active.sinceReturnFrom === 'string' ? active.sinceReturnFrom : undefined;
-  active.startedLivedDay = getLivedDayAtDolmenwoodDate({ fairyVisits }, sanitizeDate(active.startedOn), stamp);
+  active.startedLivedDay = getLivedDayAtDolmenwoodDate({ fairyVisits }, startedOn, stamp);
 }
 
 /**

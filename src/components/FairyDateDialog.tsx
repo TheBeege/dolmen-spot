@@ -8,12 +8,13 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { CalendarDate, Character, FairyVisit } from '@/lib/types';
 import {
   LATEST_DATE,
-  addDays,
   addElapsedTime,
   daysBetween,
   describeDolmenwoodSpan,
   formatCalendarDate,
   formatShortDate,
+  fromAbsoluteDay,
+  getAbsoluteDay,
   plural,
   type ElapsedTime,
 } from '@/lib/gamedata';
@@ -140,7 +141,7 @@ export default function FairyDateDialog({
   const movesPastCalendar = editing && target !== undefined && !beforeEntry && !pastCalendar && plan === null;
   const todayPastCalendar =
     movesPastCalendar && target !== undefined && visit.returnedOn
-      ? !isWithinCalendar(addDays(character.currentDate, daysBetween(visit.returnedOn, target)))
+      ? !isWithinCalendar(fromAbsoluteDay(getAbsoluteDay(character.currentDate) + daysBetween(visit.returnedOn, target)))
       : false;
   const valid = target !== undefined && !beforeEntry && !pastCalendar && !movesPastCalendar;
   const passedDays = target ? daysBetween(visit.enteredOn, target) : 0;

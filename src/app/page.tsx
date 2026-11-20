@@ -122,7 +122,7 @@ export default function Home() {
                       title="This character is in Fairy. Dolmenwood's calendar is paused for them."
                     >
                       <span aria-hidden="true" className="min-[320px]:hidden">✦</span>
-                      <span className="max-[319px]:sr-only">In Fairy</span>
+                      <span className="max-[320px]:sr-only">In Fairy</span>
                     </span>
                   )}
                 </span>
