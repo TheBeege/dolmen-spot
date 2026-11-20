@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useCharacter } from '@/hooks/useCharacter';
 import { useCloudStorage } from '@/hooks/useCloudStorage';
 import { getKindredClassLabel } from '@/lib/gamedata';
+import { SAVE_DATA_IMPORT_MESSAGE } from '@/lib/save-data-file';
 import CharacterInfo from '@/components/CharacterInfo';
 import AbilityScores from '@/components/AbilityScores';
 import CombatStats from '@/components/CombatStats';
@@ -63,7 +64,14 @@ export default function Home() {
 
   const handleCloudLoad = useCallback(async (providerId: 'google-drive' | 'onedrive', fileId: string, fileName: string) => {
     const json = await cloud.loadCharacter(providerId, fileId);
-    const newCharId = importCharacterFromJson(json);
+    let newCharId: string;
+    try {
+      newCharId = importCharacterFromJson(json);
+    } catch (err) {
+      // Nothing was added. Say why, then let the modal stay open.
+      alert(err instanceof Error && err.message === SAVE_DATA_IMPORT_MESSAGE ? err.message : 'Invalid character file.');
+      throw err;
+    }
     cloud.setMetadata(newCharId, providerId, fileId, fileName);
   }, [cloud, importCharacterFromJson]);
 
