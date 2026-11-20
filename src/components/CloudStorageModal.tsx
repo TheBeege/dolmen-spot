@@ -180,9 +180,9 @@ export default function CloudStorageModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close"
-            title="Close"
-            className="text-[#ff6b4a] hover:text-[#ff9a85] font-bold text-lg px-2"
+            aria-label="Close Save / Load"
+            title="Close Save / Load"
+            className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg px-2"
           >
             &times;
           </button>
@@ -284,7 +284,7 @@ export default function CloudStorageModal({
               >
                 {busy ? 'Connecting...' : 'Connect'}
               </button>
-              <p className="text-[#f5e6c8]/30 text-xs mt-4">
+              <p className="text-[#f5e6c8]/70 text-xs mt-4">
                 Your data stays in your own {activeProviderId === 'google-drive' ? 'Drive' : 'OneDrive'}. We only access files created by this app.
               </p>
             </div>
@@ -314,16 +314,16 @@ export default function CloudStorageModal({
                   <button
                     onClick={() => loadFiles(activeProviderId)}
                     disabled={busy}
-                    className="text-xs text-[#f5e6c8]/40 hover:text-[#f5e6c8] transition-colors"
+                    className="text-xs text-[#f5e6c8]/70 hover:text-[#f5e6c8] transition-colors"
                   >
                     Refresh
                   </button>
                 </div>
 
                 {isListing ? (
-                  <p className="text-[#f5e6c8]/40 text-sm py-4 text-center">Loading files...</p>
+                  <p className="text-[#f5e6c8]/70 text-sm py-4 text-center">Loading files...</p>
                 ) : files.length === 0 ? (
-                  <p className="text-[#f5e6c8]/40 text-sm py-4 text-center">
+                  <p className="text-[#f5e6c8]/70 text-sm py-4 text-center">
                     No saved characters found.
                   </p>
                 ) : (
@@ -337,7 +337,7 @@ export default function CloudStorageModal({
                           <div className="text-sm text-[#f5e6c8] truncate">
                             {file.name.replace('.dolmenwood.json', '')}
                           </div>
-                          <div className="text-xs text-[#f5e6c8]/30">
+                          <div className="text-xs text-[#f5e6c8]/70">
                             {new Date(file.modifiedTime).toLocaleString()}
                           </div>
                         </div>
@@ -354,7 +354,7 @@ export default function CloudStorageModal({
                             disabled={busy}
                             aria-label={`Delete ${file.name.replace('.dolmenwood.json', '')}`}
                             title={`Delete ${file.name.replace('.dolmenwood.json', '')}`}
-                            className="text-[#ff9a85] hover:text-[#ffc2b5] disabled:opacity-50 text-xs transition-colors"
+                            className="text-[#ff9a85] hover:text-[#ffd0c4] disabled:opacity-50 text-xs transition-colors"
                           >
                             Del
                           </button>
@@ -370,7 +370,7 @@ export default function CloudStorageModal({
                 <button
                   onClick={() => handleDisconnect(activeProviderId)}
                   disabled={busy}
-                  className="text-xs text-[#ff6b4a] hover:text-[#ff9a85] disabled:opacity-50 transition-colors"
+                  className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] disabled:opacity-50 transition-colors"
                 >
                   Disconnect {activeProviderId === 'google-drive' ? 'Google Drive' : 'OneDrive'}
                 </button>
