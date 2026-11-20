@@ -266,7 +266,9 @@ export default function Home() {
           <Adventuring character={activeCharacter} onChange={updateCharacter} />
         )}
         {activeTab === 'map' && (
-          <HexMap character={activeCharacter} onChange={updateCharacter} />
+          // Keyed by character so selections, open forms and the view reset
+          // when switching characters instead of carrying over.
+          <HexMap key={activeCharacter.id} character={activeCharacter} onChange={updateCharacter} />
         )}
         {activeTab === 'reference' && (
           <ReferencePanel />
