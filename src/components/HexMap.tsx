@@ -928,9 +928,12 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       </div>
 
       {/* On phones the box follows the grid's shape so the inspector below
-          stays close; from md up it's a fixed 60vh. */}
+          stays close; from md up it's a fixed 60vh. It's never taller than
+          the screen below the sticky header, with room to spare, so the page
+          can still be scrolled past it (dragging on the map pans the map):
+          on a phone in landscape the map is letterboxed instead. */}
       <div
-        className="bg-[#1a1a2e] rounded-lg overflow-hidden relative w-full aspect-(--map-aspect) md:aspect-auto md:h-[60vh]"
+        className="bg-[#1a1a2e] rounded-lg overflow-hidden relative w-full aspect-(--map-aspect) md:aspect-auto md:h-[60vh] max-h-[calc(100svh-8rem)]"
         style={{ '--map-aspect': `${baseBounds.w} / ${baseBounds.h}` } as React.CSSProperties}
       >
         <svg
