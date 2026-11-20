@@ -4,8 +4,24 @@
 // (Plain `node --experimental-strip-types` doesn't resolve the .ts-less
 // relative imports inside the migration module.)
 import { migrateCharacter, CURRENT_SCHEMA_VERSION } from '../src/lib/migrations.ts';
+import { hexCenter } from '../src/lib/hex.ts';
+import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '../src/lib/hex-grid.ts';
 
 type AnyData = Record<string, unknown>;
+
+// Where a hex sits on the old map, as the x/y percentages the old map stored
+// for its pins (pixel position in public/dolmenwood-map.png ÷ image size).
+// dx/dy nudge the point off the hex centre, in image pixels.
+function oldMapPosition(hex: string, dx = 0, dy = 0): { x: number; y: number } {
+  const cell = HEX_CELLS[hex];
+  const c = hexCenter(cell.col, cell.row);
+  return {
+    x: ((c.x + dx) / HEX_GRID_META.imageWidth) * 100,
+    y: ((c.y + dy) / HEX_GRID_META.imageHeight) * 100,
+  };
+}
+
+const UNPLACED_HEADING = "Map markers that couldn't be placed:";
 
 let passed = 0;
 let failed = 0;
@@ -133,15 +149,17 @@ section('Scenario 2: legacy MAP_PINS marker with valid pins');
 section('Scenario 3: unpadded legacy hex codes');
 {
   const data = baseV10();
-  // "303" → "0303" (live), "7" → "0007" (NOT in manifest, gets dropped by
-  // the orphan filter), "0507" (live).
+  // "303" → "0303" (live), "7" → "0007" (NOT in manifest, and the pin has
+  // no position to fall back on), "0507" (live).
   data.otherNotes = '<!--MAP_PINS-->[{"label":"X","hex":"303"},{"label":"Y","hex":"7"},{"label":"Z","hex":"0507"}]';
   const migrated = migrateCharacter(data as never);
-  check('two live POIs survive (orphan dropped)', migrated.mapData.pois.length === 2);
+  check('two live POIs placed', migrated.mapData.pois.length === 2);
   const hexes = migrated.mapData.pois.map((p) => p.hex);
   check('hex 303 padded to 0303', hexes.includes('0303'));
   check('hex 0507 unchanged', hexes.includes('0507'));
-  check('hex 7 → 0007 was dropped (off-grid)', !hexes.includes('0007'));
+  check('hex 7 → 0007 (off-grid, no position) is not a POI', !hexes.includes('0007'));
+  check('…but its label and typed hex stay in otherNotes',
+    migrated.otherNotes === `${UNPLACED_HEADING}\n- Y (Hex 7)`, JSON.stringify(migrated.otherNotes));
 }
 
 // ----- Scenario 4: no marker at all -----
@@ -362,14 +380,65 @@ section('Scenario 11c: asymmetric door pair gets repaired to wild');
   check('E (orphan) repaired to wild', byId.E.destination.kind === 'wild');
 }
 
-// ----- Scenario 11: pin missing hex / bad shape -----
-section('Scenario 11: pin records that should be skipped');
+// ----- Scenario 11: pins with no usable hex and no position -----
+section("Scenario 11: pins that can't be placed are kept in otherNotes");
 {
   const data = baseV10();
-  data.otherNotes = '<!--MAP_PINS-->[{},{"label":"no-hex"},{"hex":"abcd"},{"hex":"0303","label":"good"}]';
+  data.otherNotes = 'Prose.\n<!--MAP_PINS-->[{},{"label":"no-hex"},{"hex":"abcd"},{"hex":"0303","label":"good"},null,"str"]';
   const migrated = migrateCharacter(data as never);
-  check('only the good pin imported', migrated.mapData.pois.length === 1);
+  check('only the good pin becomes a POI', migrated.mapData.pois.length === 1);
   check('good pin label', migrated.mapData.pois[0].name === 'good');
+  check('marker stripped, unplaced pins listed after the prose (empty / non-object entries ignored)',
+    migrated.otherNotes === `Prose.\n\n${UNPLACED_HEADING}\n- no-hex\n- Marker (Hex abcd)`, JSON.stringify(migrated.otherNotes));
+}
+
+// ----- Scenario 12: pins placed by their position on the old map -----
+section('Scenario 12: pins without a usable hex are placed by their old-map position');
+{
+  const data = baseV10();
+  const pins = [
+    // No hex typed, valid position (the old "Hex #" field was optional).
+    { id: 'no-hex', label: 'Hidden Shrine', hex: '', ...oldMapPosition('0909', 40, -30), isCurrentLocation: false },
+    // Junk typed into "Hex #": fall back to the position.
+    { id: 'junk', label: 'Ford', hex: 'by the river', ...oldMapPosition('0606'), isCurrentLocation: false },
+    // Well-formed hex that isn't on the grid (1313 sits under the title
+    // art): fall back to the position.
+    { id: 'off-grid-hex', label: 'Abbey', hex: '1313', ...oldMapPosition('1210', -50, 40), isCurrentLocation: false },
+    // A typed hex that IS on the grid wins over the position.
+    { id: 'typed', label: 'Inn', hex: '0507', ...oldMapPosition('0909'), isCurrentLocation: false },
+    // Converted pin marked current → currentLocationHex.
+    { id: 'current', label: 'Camp', hex: '', ...oldMapPosition('1004', 0, 60), isCurrentLocation: true },
+    // Hand-edited numeric hex: no crash, padded like a typed one.
+    { id: 'numeric', label: 'Numeric', hex: 303, x: 'n/a', y: null, isCurrentLocation: false },
+    // Position in the image margin, outside the grid: kept in notes.
+    { id: 'margin', label: 'Compass Rose', hex: '', x: 1, y: 98, isCurrentLocation: false },
+    // Position out of range / not numbers: kept in notes.
+    { id: 'bad-pos', label: 'Lost', hex: 'nowhere', x: 150, y: '20', isCurrentLocation: false },
+  ];
+  data.otherNotes = `Notes.\n<!--MAP_PINS-->${JSON.stringify(pins)}`;
+  const migrated = migrateCharacter(data as never);
+  const hexOf = Object.fromEntries(migrated.mapData.pois.map((p) => [p.id, p.hex]));
+  check('no hex, valid position → POI on the hex under the pin', hexOf['no-hex'] === '0909', String(hexOf['no-hex']));
+  check('junk hex string → placed by position', hexOf['junk'] === '0606', String(hexOf['junk']));
+  check('off-grid typed hex → placed by position', hexOf['off-grid-hex'] === '1210', String(hexOf['off-grid-hex']));
+  check('typed on-grid hex wins over position', hexOf['typed'] === '0507', String(hexOf['typed']));
+  check('numeric hex padded, not crashing', hexOf['numeric'] === '0303', String(hexOf['numeric']));
+  check('converted current-location pin sets currentLocationHex', migrated.currentLocationHex === '1004', migrated.currentLocationHex);
+  check('POIs keep the pin labels', migrated.mapData.pois.find((p) => p.id === 'no-hex')?.name === 'Hidden Shrine');
+  check('off-grid / invalid positions are not POIs', !('margin' in hexOf) && !('bad-pos' in hexOf));
+  check('…their labels stay in otherNotes, marker stripped',
+    migrated.otherNotes === `Notes.\n\n${UNPLACED_HEADING}\n- Compass Rose\n- Lost (Hex nowhere)`, JSON.stringify(migrated.otherNotes));
+}
+
+// ----- Scenario 13: every hex round-trips through the old-map position -----
+section('Scenario 13: each hex centre, as an old-map position, migrates back to that hex');
+{
+  const data = baseV10();
+  data.otherNotes = `<!--MAP_PINS-->${JSON.stringify(ALL_HEXES.map((h) => ({ id: h, label: h, hex: '', ...oldMapPosition(h) })))}`;
+  const migrated = migrateCharacter(data as never);
+  const wrong = migrated.mapData.pois.filter((p) => p.id !== p.hex).map((p) => `${p.id}→${p.hex}`);
+  check(`all ${ALL_HEXES.length} hexes round-trip`,
+    migrated.mapData.pois.length === ALL_HEXES.length && wrong.length === 0, wrong.join(', '));
 }
 
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);

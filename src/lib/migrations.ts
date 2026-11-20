@@ -1,6 +1,7 @@
-import { Character } from './types';
+import { Character, HexCoord } from './types';
 import { createDefaultCharacter, MONTHS } from './gamedata';
-import { HEX_CELLS } from './hex-grid';
+import { HEX_CELLS, HEX_GRID_META } from './hex-grid';
+import { pixelToHex } from './hex';
 
 export const CURRENT_SCHEMA_VERSION = 12;
 
@@ -226,6 +227,20 @@ function sanitizeMapData(data: any): void {
   }
 }
 
+/**
+ * Hex under a pre-v12 map pin. The old map stored each pin's position as x/y
+ * percentages (0–100) of the printed map image, public/dolmenwood-map.png.
+ * hex-grid.json was extracted from that same image, so percentage × image
+ * size is a point in pixelToHex's pixel space. Returns null when the position
+ * is missing or out of range, or isn't on a hex of the current grid.
+ */
+function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
+  if (typeof x !== 'number' || typeof y !== 'number') return null;
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
+  if (x < 0 || x > 100 || y < 0 || y > 100) return null;
+  return pixelToHex((x / 100) * HEX_GRID_META.imageWidth, (y / 100) * HEX_GRID_META.imageHeight);
+}
+
 // Each migration transforms from version N to N+1.
 // Migrations receive raw data (any) and return transformed data.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -327,8 +342,10 @@ const migrations: Record<number, (data: any) => any> = {
     return data;
   },
   // v11 -> v12: Structured hex-map data. Adds mapData + currentLocationHex
-  // and best-effort-migrates the legacy <!--MAP_PINS--> marker stashed in
-  // otherNotes into proper MapPOI records.
+  // and migrates the legacy <!--MAP_PINS--> marker stashed in otherNotes
+  // into MapPOI records: each pin goes on the hex the player typed or, failing
+  // that, the hex under its position on the old map. Pins that fit neither
+  // are listed by name in otherNotes instead of being dropped.
   11: (data) => {
     // Ensure mapData is well-shaped before we push into it. The same helper
     // also runs unconditionally in migrateCharacter() so a hand-edited v12
@@ -354,31 +371,50 @@ const migrations: Record<number, (data: any) => any> = {
 
     // Parse succeeded. Whether the shape was an array or not, we strip the
     // marker — keeping it around would leave it visible in the notes UI with
-    // no recovery path. Trim trailing whitespace that preceded the marker
-    // so re-saved notes don't accumulate phantom blank lines.
+    // no recovery path. (Every pin below becomes a POI or is listed in the
+    // notes, so stripping loses nothing.) Trim trailing whitespace that
+    // preceded the marker so re-saved notes don't accumulate phantom blank
+    // lines.
     data.otherNotes = before.replace(/\s+$/, '');
     if (!Array.isArray(parsed)) return data;
 
-    type LegacyPin = { id?: string; label?: string; hex?: string; isCurrentLocation?: boolean };
+    // The old UI always wrote strings and numbers here, but hand-edited
+    // saves can hold anything, so read every field defensively.
+    type LegacyPin = { id?: unknown; label?: unknown; hex?: unknown; x?: unknown; y?: unknown; isCurrentLocation?: unknown };
+    const unplaced: string[] = [];
     for (const pin of parsed as LegacyPin[]) {
-      if (!pin || typeof pin !== 'object') continue;
-      // Legacy form was a free-text input. Users typed things like "303"
-      // expecting the canonical 4-digit form; left-pad before validating
-      // so we don't silently drop their pins.
-      const raw = (pin.hex || '').trim();
-      const hex = /^\d{1,4}$/.test(raw) ? raw.padStart(4, '0') : raw;
-      if (!HEX_COORD_RE.test(hex)) continue;
+      if (!isPlainObject(pin)) continue;
+      const label = typeof pin.label === 'string' ? pin.label : typeof pin.label === 'number' ? String(pin.label) : '';
+      const typedHex = typeof pin.hex === 'string' ? pin.hex.trim() : typeof pin.hex === 'number' ? String(pin.hex) : '';
+      // Prefer the hex the player typed into the optional "Hex #" field.
+      // Users typed things like "303" expecting the canonical 4-digit form,
+      // so left-pad before checking it against the grid. If it's empty,
+      // malformed or not a hex on the current grid, use where the pin sat.
+      const padded = /^\d{1,4}$/.test(typedHex) ? typedHex.padStart(4, '0') : '';
+      const hex = padded && padded in HEX_CELLS ? padded : legacyPinPositionToHex(pin.x, pin.y);
+      if (hex === null) {
+        // Can't be placed: keep what the player wrote (skip pins with
+        // neither a label nor a hex, which hold nothing to keep).
+        if (label || typedHex) unplaced.push(typedHex ? `${label || 'Marker'} (Hex ${typedHex})` : label);
+        continue;
+      }
       data.mapData.pois.push({
-        id: pin.id || (typeof crypto !== 'undefined' && crypto.randomUUID
-          ? crypto.randomUUID()
-          : `poi-${Math.random().toString(36).slice(2)}`),
+        id: typeof pin.id === 'string' && pin.id
+          ? pin.id
+          : typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : `poi-${Math.random().toString(36).slice(2)}`,
         hex,
-        name: pin.label || 'Marker',
+        name: label || 'Marker',
         notes: '',
       });
       if (pin.isCurrentLocation) {
         data.currentLocationHex = hex;
       }
+    }
+    if (unplaced.length > 0) {
+      const list = `Map markers that couldn't be placed:\n${unplaced.map((l) => `- ${l}`).join('\n')}`;
+      data.otherNotes = data.otherNotes ? `${data.otherNotes}\n\n${list}` : list;
     }
     return data;
   },
