@@ -57,7 +57,8 @@ function dropOffset(el: HTMLTextAreaElement, x: number, y: number): number {
  * 15rem (`max-h-60`) and scrolls from there. Browsers with `field-sizing`
  * size it to its text themselves, scrollbar included. Elsewhere, an invisible
  * copy of the text in the same grid cell sets the cell's height, and the
- * textarea fills it.
+ * textarea fills it. There both reserve the scrollbar's gutter, so a scrollbar
+ * appearing can't make the textarea wrap its text narrower than the copy.
  */
 export default function GrowingTextarea({
   value,
@@ -128,7 +129,7 @@ export default function GrowingTextarea({
               }
             : undefined
         }
-        className={`${fieldClassName} col-start-1 row-start-1 h-auto max-h-60 w-full resize-none overflow-y-auto [field-sizing:content] not-supports-[field-sizing:content]:h-full`}
+        className={`${fieldClassName} col-start-1 row-start-1 h-auto max-h-60 w-full resize-none overflow-y-auto [field-sizing:content] not-supports-[field-sizing:content]:h-full not-supports-[field-sizing:content]:[scrollbar-gutter:stable]`}
       />
       {/* The fallback sizer, only shown without field-sizing: the same box and
           wrapping as the textarea. An empty field is as tall as its
@@ -136,7 +137,7 @@ export default function GrowingTextarea({
           empty line, as the textarea does. */}
       <span
         aria-hidden="true"
-        className={`${fieldClassName} col-start-1 row-start-1 max-h-60 overflow-hidden whitespace-pre-wrap break-words invisible supports-[field-sizing:content]:hidden`}
+        className={`${fieldClassName} col-start-1 row-start-1 max-h-60 overflow-hidden [scrollbar-gutter:stable] whitespace-pre-wrap break-words invisible supports-[field-sizing:content]:hidden`}
       >
         {shown || placeholder}{' '}
       </span>
