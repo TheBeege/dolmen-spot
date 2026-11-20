@@ -609,6 +609,37 @@ test('dismissing the newer-version notice is remembered per character until it o
   assert.equal(rolledBack.getStatus().setAside[0].dismissed, false);
 });
 
+test('while every character is set aside, every visit reports the new sheet, dismissed or not, until one opens', () => {
+  // A rollback: the only character is from a newer version, and its notice was dismissed.
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([fromNewerVersion('Future')]) });
+  const first = createCharacterStore(ls);
+  first.load();
+  first.dismissNewerVersion();
+  for (let visit = 2; visit <= 3; visit++) {
+    const s = createCharacterStore(ls);
+    s.load();
+    assert.equal(s.getStatus().startedNewSheet, true, `visit ${visit}: the banner's one-line reminder needs this`);
+    assert.deepEqual(s.getStatus().setAside.map((e) => [e.reason, e.dismissed]), [['newer-version', true]]);
+  }
+  const rolledForward = createCharacterStore(ls, { currentSchemaVersion: CURRENT_SCHEMA_VERSION + 1, migrate: (d) => d as Character });
+  rolledForward.load();
+  assert.equal(rolledForward.getStatus().startedNewSheet, false, 'it opens, so there is no new sheet to explain');
+
+  // Every migration fails, and the earlier-backup line was dismissed.
+  const ls2 = new FakeStorage({ [CHARS]: JSON.stringify([legacyChar('Broken')]) });
+  const s1 = createCharacterStore(ls2, { migrate: brokenFor('Broken') });
+  s1.load();
+  s1.dismissBackups(ls2.recoveryKeys());
+  const s2 = createCharacterStore(ls2, { migrate: brokenFor('Broken') });
+  s2.load();
+  assert.equal(s2.getStatus().startedNewSheet, true);
+  assert.equal(s2.getStatus().backups[0].dismissed, true);
+  assert.deepEqual(s2.getStatus().setAside.map((e) => e.reason), ['migration-failed']);
+  const fixed = createCharacterStore(ls2);
+  assert.deepEqual(names(fixed.load().characters), ['Broken']);
+  assert.equal(fixed.getStatus().startedNewSheet, false, 'fixed, it opens');
+});
+
 test('a newer-version dismissal is kept in memory when it cannot be written', () => {
   const future = fromNewerVersion('Future');
   const ls = new FakeStorage({ [CHARS]: JSON.stringify([makeChar('Aldric'), future]) });

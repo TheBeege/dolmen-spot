@@ -24,6 +24,10 @@ import {
  *   folds its backup into that line, and keeps a newer-version notice away on
  *   later visits too. Each download covers only what its own notice describes,
  *   and is labelled Download Copy when some of that has no backup.
+ *   While every character is set aside but some could still open (a failed
+ *   migration, or one saved by a newer version), one calm line on every visit
+ *   says so, so a dismissed notice never leaves a bare new sheet that looks
+ *   like everything was lost. Dismissing that line hides it for the visit.
  * - <StorageAnnouncer> is a hidden live region, always mounted, whose text
  *   changes only when the problem does, so screen readers hear it once.
  * Nothing renders while storage works and no backups are waiting.
@@ -54,6 +58,19 @@ function subscribeDismissed(listener: () => void) {
 
 function useDismissedProblem(): string | null {
   return useSyncExternalStore(subscribeDismissed, () => dismissedProblem, () => null);
+}
+
+// Whether the new-sheet line was dismissed on this visit. Never remembered
+// across visits: on the next one it explains the new sheet again.
+let newSheetNoteDismissed = false;
+
+function dismissNewSheetNoteForThisVisit() {
+  newSheetNoteDismissed = true;
+  dismissListeners.forEach((listener) => listener());
+}
+
+function useNewSheetNoteDismissed(): boolean {
+  return useSyncExternalStore(subscribeDismissed, () => newSheetNoteDismissed, () => false);
 }
 
 const RELEASE_CONFIRM =
@@ -173,12 +190,16 @@ function describeProblem(status: StorageStatus, characterCount: number): Problem
       `Until then, ${one ? "it won't" : "they won't"} appear in your list.`,
     );
   }
-  if (status.startedNewSheet) lines.push('A new sheet was started for now.');
   if (removed > 0) {
     lines.push(`${removed === 1 ? "A saved entry that wasn't a character was" : `${removed} saved entries that weren't characters were`} moved to the backup.`);
   }
   if (keptOthers > 0) {
     lines.push(`${keptOthers === 1 ? "A saved entry that isn't a character is" : `${keptOthers} saved entries that aren't characters are`} kept until there's room for a backup.`);
+  }
+  // After the reasons. "For now" only while a set-aside character could still open.
+  if (status.startedNewSheet) {
+    const couldOpen = status.setAside.some((e) => e.reason === 'migration-failed' || e.reason === 'newer-version');
+    lines.push(couldOpen ? 'A new sheet was started for now.' : 'A new sheet was started.');
   }
 
   return {
@@ -296,6 +317,24 @@ function formatWhen(iso: string): string {
   return `${day}, ${time}`;
 }
 
+/**
+ * While every character is set aside but some could still open, the sheet
+ * shown is a new one. One line says whose characters are kept, and why.
+ */
+function newSheetNote(status: StorageStatus): string | null {
+  if (!status.startedNewSheet) return null;
+  const failed = status.setAside.filter((e) => e.reason === 'migration-failed');
+  const newer = status.setAside.filter((e) => e.reason === 'newer-version');
+  const count = failed.length + newer.length;
+  if (count === 0) return null;
+  const why: string[] = [];
+  if (failed.length > 0) why.push(`${joinNames(failed.map((e) => characterName(e.value)))} can't be opened by this version yet`);
+  if (newer.length > 0) {
+    why.push(`${joinNames(newer.map((e) => characterName(e.value)))} ${newer.length === 1 ? 'was' : 'were'} saved by a newer version of Dolmen Spot`);
+  }
+  return `${why.join(', and ')}. ${count === 1 ? "It's" : "They're"} kept unchanged in this browser, and this is a new sheet in the meantime.`;
+}
+
 /** One sentence (or two) about backups left from earlier visits. */
 function describeEarlier(status: StorageStatus, earlier: StoredBackup[]): string {
   const readable = earlier.filter((b) => b.record);
@@ -318,7 +357,8 @@ function describeEarlier(status: StorageStatus, earlier: StoredBackup[]): string
   }
   const keys = new Set(earlier.map((b) => b.key));
   const still = status.setAside.filter((e) => e.reason === 'migration-failed' && e.backupKey !== null && keys.has(e.backupKey));
-  if (still.length > 0) {
+  // While a new sheet is shown, its own line names them instead.
+  if (still.length > 0 && newSheetNote(status) === null) {
     const one = still.length === 1;
     parts.push(`Still can't be opened: ${joinNames(still.map((e) => characterName(e.value)))}. ${one ? "It's" : "They're"} kept unchanged in this browser and tried again each visit.`);
   }
@@ -396,7 +436,12 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
   // Backups from earlier visits, plus this visit's once its notice is dismissed,
   // so Download Backup stays one click away until this line is dismissed too.
   const earlier = status.backups.filter((b) => !b.dismissed && (!b.createdThisSession || !showProblem));
-  if (!showProblem && earlier.length === 0) return null;
+  const note = newSheetNote(status);
+  const noteDismissed = useNewSheetNoteDismissed();
+  // The full notice says the same, so the line waits until it's gone (and on this
+  // visit, dismissing the notice dismisses the line too).
+  const showNote = note !== null && !showProblem && !noteDismissed;
+  if (!showProblem && !showNote && earlier.length === 0) return null;
 
   const thisVisit = status.backups.filter((b) => b.createdThisSession);
   const deletableNow = showProblem ? deletableKeys(status, thisVisit) : [];
@@ -421,12 +466,18 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
     setDismissedProblem(signature);
     // A newer-version notice stays dismissed on later visits, until that character opens.
     getCharacterStore().dismissNewerVersion();
+    dismissNewSheetNoteForThisVisit();
     focusSoon(() => document.getElementById('storage-reminder-details') ?? document.getElementById('storage-backups-download') ?? pageHeading());
   };
 
   const dismissEarlier = () => {
     getCharacterStore().dismissBackups(earlier.map((b) => b.key));
     focusSoon(() => document.getElementById('storage-banner-title') ?? pageHeading());
+  };
+
+  const dismissNote = () => {
+    dismissNewSheetNoteForThisVisit();
+    focusSoon(() => document.getElementById('storage-backups-download') ?? pageHeading());
   };
 
   return (
@@ -481,6 +532,21 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
               </div>
             </div>
             <button type="button" onClick={dismissProblem} aria-label="Dismiss" className={DISMISS}>
+              &times;
+            </button>
+          </div>
+        </section>
+      )}
+      {showNote && (
+        <section
+          key="new-sheet"
+          id="storage-new-sheet"
+          aria-label="Characters kept in this browser"
+          className="rounded-lg border border-[#5a3a28] bg-[#2a2a3e]/60 px-3 py-1.5"
+        >
+          <div className="flex items-start gap-2">
+            <p className="flex-1 min-w-0 py-0.5 text-xs text-[#f5e6c8]/75">{note}</p>
+            <button type="button" onClick={dismissNote} aria-label="Dismiss" className={DISMISS}>
               &times;
             </button>
           </div>
