@@ -126,12 +126,35 @@ function asText(v: unknown): string {
 }
 
 /**
- * Text to keep for a non-object entry found where map items or pins were
- * expected: strings (trimmed), numbers and booleans as written, arrays as
- * JSON; '' for null or an empty string, which hold nothing to keep.
+ * True if `v` is, or somewhere contains, a string that isn't blank, a number
+ * or a boolean. Walks nested arrays and objects without recursion, so a
+ * deeply nested hand-edited value can't overflow the stack.
+ */
+function holdsText(v: unknown): boolean {
+  const pending: unknown[] = [v];
+  const seen = new Set<object>();
+  while (pending.length > 0) {
+    const x = pending.pop();
+    if (typeof x === 'string') {
+      if (x.trim() !== '') return true;
+    } else if (typeof x === 'number' || typeof x === 'boolean') {
+      return true;
+    } else if (x !== null && typeof x === 'object' && !seen.has(x)) {
+      seen.add(x);
+      for (const y of Object.values(x)) pending.push(y);
+    }
+  }
+  return false;
+}
+
+/**
+ * Text to keep from a value that can't be a map item or pin (or list of
+ * them): strings (trimmed), numbers and booleans as written, arrays and
+ * objects as JSON. '' for values that hold no text: null, blank strings,
+ * and arrays or objects with none inside, such as [] or {"a": [[]]}.
  */
 function nonItemText(v: unknown): string {
-  if (v === null || v === undefined) return '';
+  if (!holdsText(v)) return '';
   if (typeof v === 'string') return v.trim();
   if (typeof v === 'number' || typeof v === 'boolean') return String(v);
   try {

@@ -689,6 +689,24 @@ describe('Scenario 23: text in map values of the wrong shape is kept in otherNot
   });
   const empty = migrateCharacter(baseV12({ pois: null, fairyDoors: '', leyLines: '  ', draftLeyLine: null }) as never);
   test('values with no text add nothing', () => assert.equal(empty.otherNotes, ''));
+  test('…nor do empty arrays and objects, however deeply nested', () => {
+    const noText: unknown[] = [
+      [],
+      [[], {}],
+      { pois: {}, fairyDoors: [[]], leyLines: { a: [] }, draftLeyLine: [] },
+      { pois: [[], [{ a: [null, ' '] }]], fairyDoors: [], leyLines: [{ name: 'L', type: 'Ley line', hexes: {} }] },
+    ];
+    const notes = noText.map((mapData) => migrateCharacter(baseV12(mapData) as never).otherNotes);
+    // The ley line with no hexes is itself listed, but without "(hexes {})".
+    assert.deepEqual(notes, ['', '', '', `${UNPLACED_HEADING}\n- Ley line L`]);
+    const pinsOnly = baseV10();
+    pinsOnly.otherNotes = 'Prose.\n<!--MAP_PINS-->[[],{},{"a":[[]]},"text"]';
+    assert.equal(migrateCharacter(pinsOnly as never).otherNotes, `Prose.\n\n${UNPLACED_HEADING}\n- text`);
+  });
+  test('…while text inside them is still kept', () => {
+    const m = migrateCharacter(baseV12({ pois: { a: [[], ['Ford at 0606']] }, fairyDoors: [], leyLines: [] }) as never);
+    assert.equal(m.otherNotes, `${UNPLACED_HEADING}\n- {"a":[[],["Ford at 0606"]]}`);
+  });
   const pins = baseV10();
   pins.mapData = 'Remember the ford at 0606';
   pins.otherNotes = 'Prose.\n<!--MAP_PINS-->[{"id":"a","label":"Inn","hex":"0507"}]';
