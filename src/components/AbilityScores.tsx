@@ -3,33 +3,12 @@
 import { Character, AbilityScores as AbilityScoresType, SaveTargets } from '@/lib/types';
 import { getAbilityModifier, formatModifier, calculateXpModifier } from '@/lib/gamedata';
 import SkillsPanel from './SkillsPanel';
+import { ABILITY_SCORE_INFO, SAVE_TARGET_INFO } from '@/lib/character-sheet';
 
 interface AbilityScoresProps {
   character: Character;
   onChange: (updates: Partial<Character>) => void;
 }
-
-const ABILITIES: {
-  key: keyof AbilityScoresType;
-  label: string;
-  abbr: string;
-  note: string;
-}[] = [
-  { key: 'strength', label: 'Strength', abbr: 'STR', note: 'Melee atk/dmg' },
-  { key: 'intelligence', label: 'Intelligence', abbr: 'INT', note: 'Languages' },
-  { key: 'wisdom', label: 'Wisdom', abbr: 'WIS', note: 'Magic resistance' },
-  { key: 'dexterity', label: 'Dexterity', abbr: 'DEX', note: 'AC / missile atk' },
-  { key: 'constitution', label: 'Constitution', abbr: 'CON', note: 'HP / level' },
-  { key: 'charisma', label: 'Charisma', abbr: 'CHA', note: 'Reactions' },
-];
-
-const SAVES: { key: keyof SaveTargets; label: string }[] = [
-  { key: 'doom', label: 'Doom' },
-  { key: 'ray', label: 'Ray' },
-  { key: 'hold', label: 'Hold' },
-  { key: 'blast', label: 'Blast' },
-  { key: 'spell', label: 'Spell' },
-];
 
 export default function AbilityScores({ character, onChange }: AbilityScoresProps) {
 
@@ -96,7 +75,7 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
           Ability Scores
         </h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mt-3">
-          {ABILITIES.map((ability) => {
+          {ABILITY_SCORE_INFO.map((ability) => {
             const score = character.abilityScores[ability.key];
             const mod = getAbilityModifier(score);
             const modStr = formatModifier(mod);
@@ -144,7 +123,7 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
           Save Targets
         </h2>
         <div className="grid grid-cols-5 gap-3 mt-3">
-          {SAVES.map((save) => (
+          {SAVE_TARGET_INFO.map((save) => (
             <div key={save.key} className="flex flex-col items-center gap-1">
               <label className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide">
                 {save.label}

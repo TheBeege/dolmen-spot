@@ -15,6 +15,7 @@ import {
   rollD6,
   getCharacterLanguages,
 } from '@/lib/gamedata';
+import { formatXpPercent } from '@/lib/character-sheet';
 
 interface CharacterInfoProps {
   character: Character;
@@ -25,10 +26,6 @@ const inputClasses =
   'w-full bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
-
-function formatXpPercent(val: number): string {
-  return val >= 0 ? `+${val}%` : `${val}%`;
-}
 
 export default function CharacterInfo({ character, onChange }: CharacterInfoProps) {
   const [equipOpen, setEquipOpen] = useState(false);
