@@ -1,4 +1,10 @@
-import { PublicClientApplication, type SilentRequest, type AccountInfo } from '@azure/msal-browser';
+import {
+  PublicClientApplication,
+  BrowserAuthError,
+  BrowserAuthErrorCodes,
+  type SilentRequest,
+  type AccountInfo,
+} from '@azure/msal-browser';
 import { CloudProvider, CloudFile, CloudSaveResult } from './types';
 
 const GRAPH_API = 'https://graph.microsoft.com/v1.0';
@@ -6,6 +12,9 @@ const SCOPES = ['Files.ReadWrite.AppFolder'];
 const APP_FOLDER = '/drive/special/approot';
 
 let msalInstance: PublicClientApplication | null = null;
+// The cache clear started by the last disconnect. A new sign-in waits for it, so it
+// can't race the clear and have its fresh tokens removed.
+let pendingCacheClear: Promise<void> = Promise.resolve();
 
 async function getMsalInstance(clientId: string): Promise<PublicClientApplication> {
   if (msalInstance) return msalInstance;
@@ -64,6 +73,8 @@ export function createOneDriveProvider(): CloudProvider | null {
   if (!clientId) return null;
 
   let instance: PublicClientApplication | null = null;
+  // Set when a sign-in was refused because of a stale interaction lock (see authenticate).
+  let overrideStaleInteraction = false;
 
   return {
     id: 'onedrive',
@@ -74,8 +85,25 @@ export function createOneDriveProvider(): CloudProvider | null {
     },
 
     async authenticate(): Promise<void> {
+      await pendingCacheClear;
       instance = await getMsalInstance(clientId);
-      const response = await instance.loginPopup({ scopes: SCOPES });
+      // While a popup is open, MSAL holds an "interaction in progress" lock in
+      // sessionStorage. Reloading the tab during a sign-in popup (or during the old
+      // logoutPopup Disconnect) leaves that lock behind, and MSAL then refuses every
+      // sign-in in the tab with interaction_in_progress. MSAL's documented way out is
+      // overrideInteractionInProgress, used only when the user explicitly retries, never as
+      // an automatic retry. So explain, and let the next click on Connect take over the lock.
+      const overrideInteractionInProgress = overrideStaleInteraction;
+      overrideStaleInteraction = false;
+      const response = await instance
+        .loginPopup({ scopes: SCOPES, overrideInteractionInProgress })
+        .catch((err: unknown) => {
+          if (err instanceof BrowserAuthError && err.errorCode === BrowserAuthErrorCodes.interactionInProgress) {
+            overrideStaleInteraction = true;
+            throw new Error("An earlier OneDrive sign-in in this tab didn't finish. Click Connect again to start a new one.");
+          }
+          throw err;
+        });
       if (response.account) {
         instance.setActiveAccount(response.account);
       }
@@ -85,7 +113,20 @@ export function createOneDriveProvider(): CloudProvider | null {
       if (instance) {
         const account = getActiveAccount(instance);
         if (account) {
-          instance.logoutPopup({ account }).catch(() => {});
+          // Forget the account in this browser only: clearCache removes the account and
+          // its tokens from MSAL's cache, opens no window and takes no interaction lock.
+          // The player stays signed in to Microsoft itself.
+          //
+          // This replaces logoutPopup. Since MSAL 5.7, logoutPopup waits up to
+          // popupBridgeTimeout (60 s) for the sign-out popup to report back through the
+          // redirect bridge. Without a postLogoutRedirectUri the popup lands on the main
+          // page, which has no bridge, so the wait always timed out. Meanwhile MSAL held its
+          // interaction lock, so reconnecting within that minute failed with
+          // interaction_in_progress, and reloading during it left the lock behind until the
+          // tab was closed.
+          pendingCacheClear = instance.clearCache({ account }).catch((err) => {
+            console.warn('Could not clear the OneDrive account from this browser', err);
+          });
         }
         msalInstance = null;
         instance = null;
