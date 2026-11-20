@@ -84,32 +84,33 @@ export default function Home() {
       {/* Header */}
       <header className="bg-[#1a1a2e] border-b border-[#5a3a28] sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 py-2">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-lg font-bold text-[#c4a35a] tracking-wide">
+          <div className="flex items-center justify-between gap-2">
+            {/* min-w-0 + truncate let the name shrink on phones so the buttons stay on screen */}
+            <div className="flex items-center gap-3 min-w-0">
+              <span className="text-lg font-bold text-[#c4a35a] tracking-wide whitespace-nowrap shrink-0">
                 Dolmen Spot
               </span>
               <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
               <button
                 onClick={() => setShowCharList(!showCharList)}
-                className="text-sm text-[#f5e6c8] hover:text-[#c4a35a] transition-colors flex items-center gap-1"
+                className="text-sm text-[#f5e6c8] hover:text-[#c4a35a] transition-colors flex items-center gap-1 min-w-0"
               >
                 <span className="font-semibold truncate max-w-[150px]">
                   {activeCharacter.name || 'Unnamed'}
                 </span>
                 <CloudStatusBadge metadata={cloudMetadata} />
-                <span className="text-[#f5e6c8]/40 text-xs">
+                <span className="hidden sm:inline text-[#f5e6c8]/40 text-xs truncate">
                   {activeCharacter.kindred && activeCharacter.class
                     ? `${activeCharacter.kindred} ${activeCharacter.class}`
                     : ''}
                 </span>
-                <svg className="w-3 h-3 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-3 h-3 ml-1 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 shrink-0">
               <ExportPdfButton character={activeCharacter} />
               <button
                 onClick={() => setShowCloudModal(true)}

@@ -206,6 +206,8 @@ const s = StyleSheet.create({
     letterSpacing: 0.5,
     textAlign: 'center',
   },
+  // "CON · Constitution": mixed case so it fits one line in A4's narrower boxes
+  abilityLabel: { fontSize: 6.5, fontWeight: 700, color: COLOR.brown, letterSpacing: 0.2, textAlign: 'center' },
   boxValue: { fontSize: 15, fontWeight: 700, marginTop: 1, textAlign: 'center' },
   boxValueSmall: { fontSize: 11, fontWeight: 700, marginTop: 1, textAlign: 'center' },
   boxSub: { fontSize: 6.5, color: COLOR.muted, textAlign: 'center', marginTop: 1 },
@@ -579,7 +581,7 @@ function AbilitiesSection({ c }: { c: Character }) {
           const score = c.abilityScores[ability.key];
           return (
             <View key={ability.key} style={s.box}>
-              <Text style={s.boxLabel}>{`${ability.abbr} · ${ability.label}`}</Text>
+              <Text style={s.abilityLabel}>{`${ability.abbr} · ${ability.label}`}</Text>
               <Text style={s.boxValue}>{score ? String(score) : ' '}</Text>
               <Text style={s.abilityMod}>{formatModifier(getAbilityModifier(score))}</Text>
               <Text style={s.boxSub}>{ability.note}</Text>
