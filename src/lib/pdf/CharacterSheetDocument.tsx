@@ -1552,7 +1552,8 @@ function ContainerGroup({ c, container, lead }: {
   const { usedWeight, capacity, isOverCapacity } = getContainerLoad(container, c.stowedItems);
   // Like the Inventory tab, capacity is only shown with weight encumbrance.
   const weightMode = c.encumbranceMethod === 'weight';
-  const name = container ? container.name || 'Container' : 'Loose Items';
+  // On one line, as the Inventory tab shows it (a line break there is a space).
+  const name = container ? oneLine(container.name ?? '') || 'Container' : 'Loose Items';
   return (
     <>
       <KeepWithNext>
