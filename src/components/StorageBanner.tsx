@@ -1,6 +1,6 @@
 'use client';
 
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { downloadFile, localFileStamp } from '@/lib/download';
 import {
   changesNotSaved,
@@ -345,19 +345,21 @@ function deleteConfirm(status: StorageStatus, shown: StoredBackup[], keys: strin
   const one = going.length === 1;
   const parts = [
     one
-      ? `Delete the ${going[0].record ? '' : 'damaged '}backup from ${backupWhen(going[0])}?`
-      : `Delete the ${going.length} backups from ${whenList(going)}?`,
+      ? `Delete the ${going[0].record ? '' : 'damaged '}${backupWhen(going[0])} backup from this browser?`
+      : `Delete the ${going.length} backups (${whenList(going)}) from this browser?`,
   ];
   const holding = staying.filter((b) => status.setAside.some((e) => e.backupKey === b.key));
   if (holding.length > 0) {
     const names = status.setAside.filter((e) => holding.some((b) => b.key === e.backupKey)).map((e) => characterName(e.value));
-    parts.push(`${holding.length === 1 ? 'The one' : 'The ones'} from ${whenList(holding)} ${holding.length === 1 ? 'is' : 'are'} kept while ${joinNames(names)} can't be opened.`);
+    parts.push(holding.length === 1
+      ? `The ${whenList(holding)} backup is kept while ${joinNames(names)} can't be opened.`
+      : `The ${whenList(holding)} backups are kept while ${joinNames(names)} can't be opened.`);
   }
   const notDownloaded = staying.filter((b) => !holding.includes(b));
   if (notDownloaded.length > 0) {
     parts.push(notDownloaded.length === 1
-      ? `The one from ${whenList(notDownloaded)} is kept: it isn't in the file you downloaded.`
-      : `The ones from ${whenList(notDownloaded)} are kept: they aren't in the file you downloaded.`);
+      ? `The ${whenList(notDownloaded)} backup is kept: it isn't in the file you downloaded.`
+      : `The ${whenList(notDownloaded)} backups are kept: they aren't in the file you downloaded.`);
   }
   parts.push(`Make sure the downloaded file was saved first: after this, it's the only copy of what ${one ? 'that backup' : 'those backups'} held.`);
   return parts.join(' ');
@@ -552,6 +554,9 @@ export function StorageReminder() {
 /** A hidden live region whose text changes only when the storage problem does. */
 export function StorageAnnouncer() {
   const text = announcement(useStorageStatus());
+  // "Saving again" is news only for the view that saw it: forget it when this
+  // region goes, so the next one (after a remount) doesn't start with it.
+  useEffect(() => () => getCharacterStore().clearSavingRecovered(), []);
   return (
     <div role="status" className="sr-only">
       {text}

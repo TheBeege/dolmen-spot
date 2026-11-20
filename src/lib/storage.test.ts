@@ -1192,6 +1192,32 @@ test('loading measures depth from each saved character: 100 levels deep loads, 1
   assert.equal(grows.getItem(CHARS), before);
 });
 
+test('when every saved entry moves to a backup, a new sheet is started, and saved once it changes', () => {
+  const raw = `[${deepChar('Deepo', 100)}]`;
+  const ls = new FakeStorage({ [CHARS]: raw });
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  assert.deepEqual(names(characters), ['New Adventurer']);
+  assert.equal(s.getStatus().startedNewSheet, true);
+  assert.equal(ls.getItem(CHARS), raw, 'not written yet, so every load until the first change finds the same');
+  assert.equal(ls.recoveryKeys().length, 1);
+  const again = createCharacterStore(ls); // a remount, or StrictMode's second load
+  again.load();
+  assert.equal(again.getStatus().startedNewSheet, true);
+  assert.equal(ls.recoveryKeys().length, 1, 'the same backup holds it');
+  s.saveCharacters([{ ...characters[0], name: 'Edited' }]);
+  assert.deepEqual(stored(ls).map((c) => c.name), ['Edited'], 'the first change saves the sheet, and the backed-up entry leaves the list');
+  const junk = createCharacterStore(new FakeStorage({ [CHARS]: '[null,42]' }));
+  junk.load();
+  assert.equal(junk.getStatus().startedNewSheet, true, 'entries that are not characters, likewise');
+  const first = createCharacterStore(new FakeStorage({}));
+  first.load();
+  assert.equal(first.getStatus().startedNewSheet, false, 'a first visit');
+  const replaced = createCharacterStore(new FakeStorage({ [CHARS]: 'bad{' }));
+  replaced.load();
+  assert.equal(replaced.getStatus().startedNewSheet, false, 'a replaced whole value has its own wording');
+});
+
 test('each too-deep entry gets its own backup: one already backed up never stands in for another', () => {
   const a = makeChar('Aldric');
   const first = `{"name":"First","level":1,"x":${nested(5_000)}}`;
@@ -1216,6 +1242,31 @@ test('backups measure depth from each character too: 100 levels deep is a valid 
   assert.equal(past.record, null);
   const file = JSON.parse(s.recoveryDownload()) as DownloadFile;
   assert.deepEqual(file.backups[1], { key: `${PREFIX}b`, damagedBackup: record(100) }, 'still downloadable, as its exact text');
+});
+
+test('backup records keep only their known fields, in the status and in the download', () => {
+  const record = {
+    format: 'dolmen-spot-recovery', version: 1, savedAt: '2026-11-20T10:00:00.000Z', extra: 'record-level',
+    entries: [
+      { kind: 'character', index: 0, error: 'e', value: { name: 'Wendeline' }, junk: { deep: [1, 2] } },
+      { kind: 'all-characters', error: 'e', raw: 'old', activeCharacterId: null, junk: 1 },
+      { kind: 'character-text', index: 1, error: 'e', name: 'Deep', raw: '{"name":"Deep"}', junk: true },
+    ],
+  };
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([makeChar('A')]), [`${PREFIX}a`]: JSON.stringify(record) });
+  const s = createCharacterStore(ls);
+  s.load();
+  const known = {
+    format: 'dolmen-spot-recovery', version: 1, savedAt: '2026-11-20T10:00:00.000Z',
+    entries: [
+      { kind: 'character', index: 0, error: 'e', value: { name: 'Wendeline' } },
+      { kind: 'all-characters', error: 'e', raw: 'old', activeCharacterId: null },
+      { kind: 'character-text', index: 1, error: 'e', name: 'Deep', raw: '{"name":"Deep"}' },
+    ],
+  };
+  assert.deepEqual(s.getStatus().backups[0].record, known);
+  assert.deepEqual((JSON.parse(s.recoveryDownload()) as DownloadFile).backups[0], known);
+  assert.equal(s.getStatus().backups[0].raw, JSON.stringify(record), 'the stored text itself is untouched');
 });
 
 test('a file Import accepts at the depth limit loads again on the next visit, with every character', () => {
@@ -1435,6 +1486,15 @@ test('"saving again" is news only until the next load (a remount says nothing ab
   s.saveCharacters([{ ...characters[0], otherNotes: 'two' }]);
   assert.equal(s.getStatus().savingRecovered, true);
   s.load();
+  assert.equal(s.getStatus().savingRecovered, false);
+
+  // The live region that announced it forgets it as it goes (so a remounted one starts empty).
+  ls.failSet = (k) => quotaError(k);
+  s.saveCharacters([{ ...characters[0], otherNotes: 'three' }]);
+  ls.failSet = null;
+  s.saveCharacters([{ ...characters[0], otherNotes: 'four' }]);
+  assert.equal(s.getStatus().savingRecovered, true);
+  s.clearSavingRecovered();
   assert.equal(s.getStatus().savingRecovered, false);
 });
 

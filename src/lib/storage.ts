@@ -118,7 +118,10 @@ export interface StorageStatus {
   backups: StoredBackup[];
   /** Entries this load couldn't open. They stay in the saved list (see SetAsideReason). */
   setAside: SetAsideEntry[];
-  /** No saved character could be opened, so this load started a new sheet. It's saved once the player changes it. */
+  /**
+   * Saved entries were found but none could be opened, so this load started a
+   * new sheet. It's saved once the player changes it.
+   */
   startedNewSheet: boolean;
   /** The unreadable whole saved value, while no verified backup of it exists. Saving is paused while this is non-empty. */
   unsavedRecovery: RecoveryEntry[];
@@ -202,6 +205,8 @@ export interface CharacterStore {
    * notice about the characters saved by a newer version, until each one opens.
    */
   dismissNewerVersion(): void;
+  /** Forget that saving recovered: the view that announced it has gone. */
+  clearSavingRecovered(): void;
   /**
    * This tab's characters, in the format Export All Characters writes (so
    * Import Character accepts it), when storage may not have them: while
@@ -632,10 +637,11 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
 
     if (characters.length === 0) {
       const fresh = createNewAdventurer();
-      if (carriedJson.length > 0) {
-        // Every saved character is set aside. Start a sheet for now, and save it
-        // only once the player changes it, so fixing (or rolling forward) brings
-        // back exactly the old list.
+      if (entries.length > 0) {
+        // Saved entries were found, but none can be opened: they're set aside in
+        // the list, or held by verified backups. Start a sheet for now, and save
+        // it only once the player changes it, so fixing (or rolling forward)
+        // brings back exactly the old list, and every load until then says so.
         setStatus({ startedNewSheet: true });
         return startSession([fresh], fresh.id, carriedJson, JSON.stringify([fresh]));
       }
@@ -800,6 +806,10 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
         }
       }
       setStatus({ setAside: status.setAside.map((e) => (e.reason === 'newer-version' ? { ...e, dismissed: true } : e)) });
+    },
+
+    clearSavingRecovered() {
+      if (status.savingRecovered) setStatus({ savingRecovered: false });
     },
 
     unsavedCharactersJson() {

@@ -32,34 +32,53 @@ const MESSAGES: Record<SaveState, { status: string; next: string }> = {
     status: "This browser's storage is full, so Dolmen Spot couldn't save your latest change. Everything saved before it is still in this browser.",
     next: 'Try again to go back to your last saved version, or download a copy of your save data to keep.',
   },
+  // The sheet runs without storage (in memory), so blocked storage never stops
+  // it opening: an error that reaches this screen has some other cause.
   blocked: {
-    status: "Dolmen Spot couldn't open this page because the browser is blocking its storage (site data), so your characters can't be loaded or saved here.",
-    next: "Allow site data for this site in your browser's settings, then reload the page.",
+    status: "Dolmen Spot hit an error and couldn't show this page. The browser is also blocking its storage (site data), so nothing can be saved here.",
+    next: "Try again. To save characters in this browser, allow site data for this site in your browser's settings, then reload the page.",
   },
 };
 
-/** What to say instead while this tab holds changes that aren't saved, by whether storage is blocked. */
-const UNSAVED_MESSAGES: Record<'readable' | 'blocked', { status: string; next: string }> = {
-  readable: {
+/** What to say instead, from what this tab's store reports. */
+const STORE_MESSAGES = {
+  // This tab holds changes that aren't in storage.
+  unsaved: {
     status: "Dolmen Spot hit an error and couldn't show this page. Your latest changes haven't been saved in this browser yet.",
     next: 'Choose Try Again to get back to them, or download them first. Reloading the page would lose them.',
   },
-  blocked: {
+  unsavedBlocked: {
     status: "Dolmen Spot hit an error and couldn't show this page. The browser is blocking its storage (site data), so your changes haven't been saved.",
     next: 'Choose Try Again to get back to them, or download them first. Reloading the page would lose them.',
   },
-};
+  // Saved data that couldn't be read is left exactly as it was (no backup of it could be made yet).
+  untouched: {
+    status: "Dolmen Spot hit an error and couldn't show this page. Nothing in this browser has been changed.",
+    next: 'Try again, or download a copy of your save data to keep.',
+  },
+} satisfies Record<string, { status: string; next: string }>;
 
-/**
- * Whether this tab holds changes that aren't in storage. (A problem with
- * nothing changed since, like storage blocked on a fresh visit, puts nothing
- * at risk, so #21's own wording stays true then.) Never throws.
- */
-function hasUnsavedChanges(): boolean {
+/** What this tab's store reports, if the app opened one. */
+interface StoreView {
+  /** This tab holds changes that aren't in storage. */
+  unsaved: boolean;
+  /** The store couldn't read storage, so nothing is saved this visit. */
+  blocked: boolean;
+  /** Saved data the store couldn't read is kept as it was, with saving paused. */
+  untouched: boolean;
+}
+
+/** Reads the store once. Never throws. */
+function readStore(): StoreView {
   try {
-    return currentStore()?.getStatus().hasUnsavedChanges === true;
+    const status = currentStore()?.getStatus();
+    return {
+      unsaved: status?.hasUnsavedChanges === true,
+      blocked: status?.storageUnreadable === true,
+      untouched: (status?.unsavedRecovery.length ?? 0) > 0,
+    };
   } catch {
-    return false;
+    return { unsaved: false, blocked: false, untouched: false };
   }
 }
 
@@ -73,15 +92,6 @@ function unsavedCharacters(): string | null {
     return currentStore()?.unsavedCharactersJson() ?? null;
   } catch {
     return null;
-  }
-}
-
-/** Whether the store found this browser's storage unreadable when it loaded. Never throws. */
-function storeFoundStorageBlocked(): boolean {
-  try {
-    return currentStore()?.getStatus().storageUnreadable === true;
-  } catch {
-    return false;
   }
 }
 
@@ -171,10 +181,9 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
   // Chosen when the screen appears (getSaveState never throws), and switched
   // to 'blocked' if storage later can't be read, so the message stays true.
   const [saveState, setSaveState] = useState<SaveState>(() => getSaveState(error));
-  // Whether this tab holds changes that storage doesn't have. Read once:
-  // nothing changes them while this screen shows.
-  const [unsaved] = useState(hasUnsavedChanges);
-  const [storeBlocked] = useState(storeFoundStorageBlocked);
+  // Read once: nothing changes the store while this screen shows.
+  const [store] = useState(readStore);
+  const { unsaved } = store;
   const [details] = useState(() => getErrorDetails(error));
   // The save data, shown for copying on request or when a download fails.
   const [copyText, setCopyText] = useState<string | null>(null);
@@ -257,9 +266,11 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
   };
 
   const canReadSaves = saveState !== 'blocked';
-  const message = unsaved ? UNSAVED_MESSAGES[!canReadSaves || storeBlocked ? 'blocked' : 'readable'] : MESSAGES[saveState];
-  // Try Again gets this tab's characters back from the store, even with storage blocked.
-  const canTryAgain = canReadSaves || unsaved;
+  const blocked = !canReadSaves || store.blocked;
+  let message = MESSAGES[saveState];
+  if (unsaved) message = blocked ? STORE_MESSAGES.unsavedBlocked : STORE_MESSAGES.unsaved;
+  else if (blocked) message = MESSAGES.blocked;
+  else if (store.untouched) message = STORE_MESSAGES.untouched;
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-8 bg-[#1a1a2e] text-[#f5e6c8]">
@@ -272,11 +283,10 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
         <p className="text-sm leading-relaxed mt-2 text-[#f5e6c8]/80">{message.next}</p>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          {canTryAgain && (
-            <button type="button" onClick={onTryAgain} className={`${BUTTON} bg-[#2d4a2e] hover:bg-[#3d6b3e]`}>
-              Try Again
-            </button>
-          )}
+          {/* Always offered: the sheet runs even with storage blocked, and Try Again gets this tab's characters back from the store. */}
+          <button type="button" onClick={onTryAgain} className={`${BUTTON} bg-[#2d4a2e] hover:bg-[#3d6b3e]`}>
+            Try Again
+          </button>
           {unsaved && (
             <button type="button" ref={unsavedRef} onClick={downloadUnsavedCharacters} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#7a5a38]`}>
               Download Unsaved Characters
