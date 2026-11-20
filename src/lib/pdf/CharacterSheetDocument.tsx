@@ -1657,8 +1657,8 @@ function InventorySection({ c }: { c: Character }) {
 // ── Document ─────────────────────────────────────────────────
 
 // Fields the sheet leaves out: the Combat, Magic and Other notes, spell
-// study, the journal and the party's location. Typed as Character's keys, so
-// that renaming or removing one of them fails the typecheck.
+// study, the journal, the party's location and the map. Typed as Character's
+// keys, so that renaming or removing one of them fails the typecheck.
 const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
   'combatTalents',
   'otherNotes',
@@ -1667,6 +1667,8 @@ const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
   'failedStudies',
   'journalEntries',
   'currentLocation',
+  'currentLocationHex',
+  'mapData',
 ]);
 
 /** All the character's text the sheet may print, for choosing which fonts to load. */
