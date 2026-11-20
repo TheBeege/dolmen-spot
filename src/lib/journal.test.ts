@@ -299,17 +299,46 @@ describe('the hex an entry is written in', () => {
     assert.equal(inFairy.location, 'The Ring', 'the location typed is kept');
   });
 
-  test('"Returned from Fairy", by default in the map\'s current hex, with the location as typed', () => {
+  // Where the entries written after a return say they were: the entry's
+  // location and hex.
+  const placeOfNext = (c: Character) => {
+    const next = createJournalEntry(c);
+    return [next.location, next.hex ?? null];
+  };
+
+  test('"Returned from Fairy", by default in the map\'s current hex, back where they left', () => {
     let c = character({ currentLocation: 'The Ring', currentLocationHex: '0606' });
     c = apply(c, enterFairy(c));
+    c = { ...c, currentLocation: 'Court of the Queen of Blackbirds' }; // typed on Adventuring while away
     const patch = returnFromFairy(c, date(5, 0, 1));
     assert.ok(patch);
     assert.equal('currentLocationHex' in patch, false, "the map's current hex doesn't move");
     c = apply(c, patch);
     assert.deepEqual([last(c).fairyEvent?.kind, last(c).hex, last(c).location], ['returned', '0606', 'The Ring']);
-    const after = createJournalEntry(c);
-    assert.equal(after.hex, '0606');
-    assert.ok(after.sinceReturnFrom);
+    assert.equal(c.currentLocation, 'The Ring', 'the current location is where they left from again');
+    assert.deepEqual(placeOfNext(c), ['The Ring', '0606']);
+    assert.ok(createJournalEntry(c).sinceReturnFrom);
+    // Saying so: the same hex typed in.
+    let same = character({ currentLocation: 'The Ring', currentLocationHex: '0606' });
+    same = apply(same, enterFairy(same));
+    same = apply(same, returnFromFairy({ ...same, currentLocation: 'Elfland' }, date(5, 0, 1), '0606'));
+    assert.deepEqual([last(same).location, same.currentLocation, same.currentLocationHex], ['The Ring', 'The Ring', '0606']);
+  });
+
+  test('back where they left, with the "Entered Fairy" entry deleted: the current location stays', () => {
+    let c = character({ currentLocation: 'The Ring', currentLocationHex: '0606' });
+    c = apply(c, enterFairy(c));
+    c = { ...c, journalEntries: c.journalEntries.filter((e) => e.fairyEvent?.kind !== 'entered'), currentLocation: 'Elfland' };
+    c = apply(c, returnFromFairy(c, date(5, 0, 1)));
+    assert.deepEqual([last(c).location, c.currentLocation], ['Elfland', 'Elfland']);
+  });
+
+  test('having left from no hex, back in none: back where they left', () => {
+    let c = character({ currentLocation: 'Prigwort', currentLocationHex: '' });
+    c = apply(c, enterFairy(c));
+    c = apply(c, returnFromFairy({ ...c, currentLocation: 'Elfland' }, date(5, 0, 1), ''));
+    assert.equal('hex' in last(c), false);
+    assert.deepEqual([last(c).location, c.currentLocation, c.currentLocationHex], ['Prigwort', 'Prigwort', '']);
   });
 
   test("back in another hex: the map's current hex moves there, and the location is the place marked on it", () => {
@@ -318,26 +347,41 @@ describe('the hex an entry is written in', () => {
     c = apply(c, returnFromFairy(c, date(5, 0, 1), '1106'));
     assert.equal(c.currentLocationHex, '1106');
     assert.deepEqual([last(c).hex, last(c).location], ['1106', 'Old Mill'], 'the first named point of interest');
-    assert.equal(c.currentLocation, 'The Ring', "the location typed on Adventuring isn't changed");
-    assert.equal(createJournalEntry(c).hex, '1106', 'new entries are stamped with the new hex');
+    assert.equal(c.currentLocation, 'Old Mill', 'the current location is where they came back');
+    assert.deepEqual(placeOfNext(c), ['Old Mill', '1106'], 'and new entries say so');
   });
 
   test('back in a hex with only a fairy door marked, or nothing: its name, or no location', () => {
     let c = character({ currentLocation: 'The Ring', currentLocationHex: '0606', mapData: marked });
     c = apply(c, enterFairy(c));
-    assert.equal(last(apply(c, returnFromFairy(c, date(5, 0, 1), '0303'))).location, 'Door in the Stone');
-    assert.equal(last(apply(c, returnFromFairy(c, date(5, 0, 1), '0707'))).location, '');
+    const door = apply(c, returnFromFairy(c, date(5, 0, 1), '0303'));
+    assert.deepEqual([last(door).location, door.currentLocation], ['Door in the Stone', 'Door in the Stone']);
+    const unmarked = apply(c, returnFromFairy(c, date(5, 0, 1), '0707'));
+    assert.deepEqual([last(unmarked).location, unmarked.currentLocation], ['', '']);
+    assert.deepEqual(placeOfNext(unmarked), ['', '0707']);
   });
 
-  test("back in no hex: the entry has none, and the map's current hex is cleared", () => {
+  test("back in no hex: no hex and no location, and the map's current hex is cleared", () => {
     for (const cameBackIn of ['', '9999']) {
       let c = character({ currentLocation: 'The Ring', currentLocationHex: '0606' });
       c = apply(c, enterFairy(c));
       c = apply(c, returnFromFairy(c, date(5, 0, 1), cameBackIn));
       assert.equal('hex' in last(c), false, cameBackIn);
-      assert.equal(last(c).location, '');
-      assert.equal(c.currentLocationHex, '');
+      assert.deepEqual([last(c).location, c.currentLocation, c.currentLocationHex], ['', '', ''], cameBackIn);
+      assert.deepEqual(placeOfNext(c), ['', null], cameBackIn);
     }
+  });
+
+  test('editing the return date leaves the hex and the location alone', () => {
+    let c = character({ currentLocation: 'The Ring', currentLocationHex: '0606', mapData: marked });
+    c = apply(c, enterFairy(c));
+    c = apply(c, returnFromFairy(c, date(5, 0, 1), '1106'));
+    c = { ...c, currentLocation: 'By the millpond' }; // moved on since
+    const returned = last(c);
+    c = apply(c, editReturnDate(c, date(20, 0, 1)));
+    const after = c.journalEntries.find((e) => e.id === returned.id);
+    assert.deepEqual([after?.hex, after?.location], ['1106', 'Old Mill']);
+    assert.deepEqual([c.currentLocation, c.currentLocationHex], ['By the millpond', '1106']);
   });
 
   test('withEntryHex sets, changes and clears the hex, leaving the rest', () => {
@@ -422,25 +466,50 @@ describe('search', () => {
     assert.ok(finds('ไก่', 'ไก่'));
   });
 
+  // The words of each term of a search.
+  const wordsOf = (query: string) => parseJournalQuery(query).map((term) => term.words);
+
+  test("Hebrew's and Arabic's vowel points and other marks are ignored, both ways", () => {
+    const kataba = '\u0643\u064e\u062a\u064e\u0628\u064e'; // kataba, with its vowels
+    const ktb = '\u0643\u062a\u0628'; // the same, without them
+    const shalom = '\u05e9\u05b8\u05c1\u05dc\u05d5\u05b9\u05dd'; // shalom, pointed
+    const shlm = '\u05e9\u05dc\u05d5\u05dd'; // the same, unpointed
+    assert.equal(foldForSearch(kataba), ktb);
+    assert.equal(foldForSearch(shalom), shlm);
+    const finds = (text: string, query: string) =>
+      matchesSearch(oldEntry('t', date(1, 0, 1), { text }), character(), parseJournalQuery(query));
+    assert.ok(finds(kataba, ktb) && finds(ktb, kataba) && finds(shalom, shlm) && finds(shlm, shalom));
+    assert.deepEqual(findMatchRanges(`${shalom}!`, parseJournalQuery(shlm)), [{ start: 0, end: shalom.length }], 'marked whole');
+  });
+
   test('a search is made of words and quoted phrases, folded, without repeats', () => {
-    assert.deepEqual(parseJournalQuery('  Goblin   KING goblin\tcafé '), [['goblin'], ['king'], ['cafe']]);
-    assert.deepEqual(parseJournalQuery('"goblin king"'), [['goblin', 'king']]);
-    assert.deepEqual(parseJournalQuery('ford “goblin  king,” year'), [['ford'], ['goblin', 'king'], ['year']]);
-    assert.deepEqual(parseJournalQuery('"goblin king'), [['goblin', 'king']], 'a quote left open runs to the end');
-    assert.deepEqual(parseJournalQuery('"king" king'), [['king']]);
-    assert.deepEqual(parseJournalQuery('   '), []);
-    assert.deepEqual(parseJournalQuery('\u0301'), [], 'only an accent is no search');
+    assert.deepEqual(wordsOf('  Goblin   KING goblin\tcafé '), [['goblin'], ['king'], ['cafe']]);
+    assert.deepEqual(wordsOf('"goblin king"'), [['goblin', 'king']]);
+    assert.deepEqual(wordsOf('ford “goblin  king,” year'), [['ford'], ['goblin', 'king'], ['year']]);
+    assert.deepEqual(wordsOf('"goblin king'), [['goblin', 'king']], 'a quote left open runs to the end');
+    assert.deepEqual(wordsOf('"king" king'), [['king']]);
+    assert.deepEqual(wordsOf('   '), []);
+    assert.deepEqual(wordsOf('\u0301'), [], 'only an accent is no search');
   });
 
   test("punctuation comes off a word's ends, and stays inside it", () => {
-    assert.deepEqual(parseJournalQuery('3 Grimvold, Year 2'), [['3'], ['grimvold'], ['year'], ['2']]);
-    assert.deepEqual(parseJournalQuery('(Hayme) king. "x"'), [['hayme'], ['king'], ['x']]);
-    assert.deepEqual(parseJournalQuery("Hag's goblin-king 'tis"), [["hag's"], ['goblin-king'], ['tis']]);
-    assert.deepEqual(parseJournalQuery('( ) .* -- ""'), [], 'nothing but punctuation is no search');
+    assert.deepEqual(wordsOf('3 Grimvold, Year 2'), [['3'], ['grimvold'], ['year'], ['2']]);
+    assert.deepEqual(wordsOf('(Hayme) king. "x"'), [['hayme'], ['king'], ['x']]);
+    assert.deepEqual(wordsOf("Hag's goblin-king 'tis"), [["hag's"], ['goblin-king'], ['tis']]);
+    assert.deepEqual(wordsOf('( ) .* -- ""'), [], 'nothing but punctuation is no search');
+  });
+
+  test('a word on its own that is all digits is a number, by its value; in quotes, digits are as typed', () => {
+    assert.deepEqual(parseJournalQuery('606'), [{ words: ['606'], number: '606' }]);
+    assert.deepEqual(parseJournalQuery('0606 606, (00606)'), [{ words: ['0606'], number: '606' }], 'one number');
+    assert.deepEqual(parseJournalQuery('0 00'), [{ words: ['0'], number: '0' }]);
+    assert.deepEqual(parseJournalQuery('"606"'), [{ words: ['606'] }]);
+    assert.deepEqual(parseJournalQuery('"606" 606'), [{ words: ['606'] }, { words: ['606'], number: '606' }]);
+    assert.deepEqual(parseJournalQuery('3rd 06-06 "year 1"'), [{ words: ['3rd'] }, { words: ['06-06'] }, { words: ['year', '1'] }]);
   });
 
   test('symbols such as emoji are kept, and found however they are drawn', () => {
-    assert.deepEqual(parseJournalQuery('🧙 (⚔) 💰! ©'), [['🧙'], ['⚔'], ['💰'], ['©']]);
+    assert.deepEqual(wordsOf('🧙 (⚔) 💰! ©'), [['🧙'], ['⚔'], ['💰'], ['©']]);
     const finds = (text: string, query: string) =>
       matchesSearch(oldEntry('t', date(1, 0, 1), { text }), character(), parseJournalQuery(query));
     assert.ok(finds('Met a 🧙\u200d♂\ufe0f at the ford', '🧙'), 'part of a longer emoji');
@@ -492,7 +561,8 @@ describe('search', () => {
     assert.ok(!elevenTwelve('year 1'));
     assert.ok(!elevenTwelve('"year 1"'));
     assert.ok(elevenTwelve('"year 12"') && elevenTwelve('11') && elevenTwelve('0101'));
-    assert.ok(!elevenTwelve('101') && !elevenTwelve('2'));
+    assert.ok(elevenTwelve('101'), 'the value of 0101');
+    assert.ok(!elevenTwelve('2') && !elevenTwelve('"101"'));
     // 13 Grimvold (Hayme), Year 1
     const thirteen = on(date(13, 0, 1));
     assert.ok(!thirteen('3 grimvold') && !thirteen('"3 grimvold"'));
@@ -512,6 +582,32 @@ describe('search', () => {
     const found = (query: string) => f.journalEntries.filter((e) => matchesSearch(e, f, parseJournalQuery(query))).map(label);
     assert.deepEqual(found('fairy visit 1, day 5'), ['first visit, fifth day']);
     assert.deepEqual(found('"visit 11, day 15"'), ['eleventh visit, fifteenth day']);
+  });
+
+  test('a number finds a whole number of the same value, so 606 finds Hex 0606', () => {
+    const at = (text: string, query: string) =>
+      findMatchRanges(text, parseJournalQuery(query)).map((r) => text.slice(r.start, r.end));
+    assert.deepEqual(at('Hex 0606', '606'), ['0606']);
+    assert.deepEqual(at('Hex 0606', '0606'), ['0606']);
+    assert.deepEqual(at('Hex 0101', '101'), ['0101']);
+    assert.deepEqual(at('606 gold', '0606'), ['606']);
+    assert.deepEqual(at('3 Grimvold (Hayme), Year 1', '01'), ['1']);
+    assert.deepEqual(at('day 1, Year 12, 11 Grimvold, Hex 0101, day 01', '1'), ['1', '01']);
+    for (const [text, query] of [
+      ['Hex 0606', '06'],
+      ['Hex 0606', '6'],
+      ['Year 12', '1'],
+      ['11 Grimvold', '1'],
+      ['Hex 0101', '1'],
+      ['Fairy visit 10, day 5', '1'],
+    ]) {
+      assert.deepEqual(at(text, query), [], `${query} in ${text}`);
+    }
+    // In quotes, digits are as typed.
+    assert.deepEqual(at('Hex 0606', '"606"'), []);
+    assert.deepEqual(at('Hex 0606', '"hex 606"'), []);
+    assert.deepEqual(at('Hex 0606', '"hex 0606"'), ['Hex 0606']);
+    assert.ok(finds('606'), "the entry's hex, Hex 0606");
   });
 
   test('ignoring case and accents, both ways', () => {
@@ -577,13 +673,13 @@ describe('search', () => {
 
   test('overlapping and touching matches are joined', () => {
     assert.deepEqual(findMatchRanges('goblinking', parseJournalQuery('goblin king')), [{ start: 0, end: 10 }]);
-    assert.deepEqual(findMatchRanges('aaaa', [['aa']]), [{ start: 0, end: 4 }]);
+    assert.deepEqual(findMatchRanges('aaaa', [{ words: ['aa'] }]), [{ start: 0, end: 4 }]);
     assert.deepEqual(findMatchRanges('anything', []), []);
   });
 
   test('highlightSegments cuts text into matching and other parts', () => {
     const text = 'a goat and a Goat';
-    const ranges = findMatchRanges(text, [['goat']]);
+    const ranges = findMatchRanges(text, [{ words: ['goat'] }]);
     assert.deepEqual(highlightSegments(text, ranges), [
       { text: 'a ', match: false },
       { text: 'goat', match: true },
@@ -631,7 +727,7 @@ describe('excerpts of the text around matches', () => {
 
   test('dense matches are split into short excerpts that never overlap', () => {
     const text = 'Danced with a goblin under the moon. '.repeat(20).trim();
-    const ranges = findMatchRanges(text, [['goblin']]);
+    const ranges = findMatchRanges(text, [{ words: ['goblin'] }]);
     const { excerpts, moreMatches } = matchExcerpts(text, ranges);
     assert.equal(excerpts.length, 3);
     let shownMatches = 0;
@@ -663,7 +759,7 @@ describe('excerpts of the text around matches', () => {
 
   test('a cut never splits a character in two', () => {
     const text = `${'🐐'.repeat(30)}goat${'🐐'.repeat(30)}`;
-    const [excerpt] = matchExcerpts(text, findMatchRanges(text, [['goat']]), { context: 5 }).excerpts;
+    const [excerpt] = matchExcerpts(text, findMatchRanges(text, [{ words: ['goat'] }]), { context: 5 }).excerpts;
     const joined = excerpt.segments.map((s) => s.text).join('');
     assert.ok(joined.startsWith('🐐') && joined.endsWith('🐐'), joined);
     assert.ok(!/[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/.test(joined), 'no lone surrogates');

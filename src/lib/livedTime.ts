@@ -535,10 +535,17 @@ export function setDaysInFairy(character: Character, days: number): Partial<Char
  *
  * `cameBackIn` is the map hex the party came back in ('' for none), by
  * default the map's current hex: where they left from, as the map still
- * shows it. The return's journal entry is stamped with it. If it's another
- * hex, the map's current hex moves there, and the entry's location is the
- * name of a place marked on that hex, if there is one, rather than the
- * location typed before they left.
+ * shows it. The return's journal entry is stamped with it, and with where
+ * they came back, which becomes the party's current location (the one typed
+ * on the Adventuring tab):
+ *   - back in the hex they left from (or, having left from no hex, back in
+ *     none): the location they left from, as this visit's "Entered Fairy"
+ *     entry recorded it, or the current location if that entry is gone.
+ *     What was typed there while away was a place in Fairy;
+ *   - back in another hex: the name of a place marked on that hex, if there
+ *     is one, and the map's current hex moves there;
+ *   - back in no hex, having left from one: no location, and the map's
+ *     current hex is cleared.
  */
 export function returnFromFairy(
   character: Character,
@@ -552,11 +559,12 @@ export function returnFromFairy(
   const leftFrom = isValidHex(character.currentLocationHex) ? character.currentLocationHex : '';
   const hex = cameBackIn === undefined ? leftFrom : isValidHex(cameBackIn) ? cameBackIn : '';
   const elsewhere = hex !== leftFrom;
+  const location = elsewhere ? getPlaceNameOn(character.mapData, hex) : locationLeftFrom(character, open);
   const entry: JournalEntry = {
     id: crypto.randomUUID(),
     date: { ...date },
     fairyEvent: { visitId: open.id, kind: 'returned' },
-    location: elsewhere ? getPlaceNameOn(character.mapData, hex) : character.currentLocation ?? '',
+    location,
     ...(hex ? { hex } : {}),
     text: describeReturn(visits.length, open.daysInFairy, open.enteredOn, date),
   };
@@ -565,10 +573,20 @@ export function returnFromFairy(
     fairyVisits,
     currentDate: { ...date },
     journalEntries: [...(character.journalEntries ?? []), entry],
+    currentLocation: location,
     ...(elsewhere ? { currentLocationHex: hex } : {}),
     ...refitCountingStart(character, fairyVisits, open.enteredOn),
     ...refitOvertakenStudy(character, fairyVisits, open),
   };
+}
+
+// Where the party left from on `visit`: the location its "Entered Fairy"
+// entry recorded, or the current location if that entry has been deleted.
+function locationLeftFrom(character: Character, visit: FairyVisit): string {
+  const entries = Array.isArray(character.journalEntries) ? character.journalEntries : [];
+  const entered = entries.find((e) => e?.fairyEvent?.kind === 'entered' && e.fairyEvent.visitId === visit.id);
+  if (typeof entered?.location === 'string') return entered.location;
+  return typeof character.currentLocation === 'string' ? character.currentLocation : '';
 }
 
 // The study with its start moved to a point on the timeline.

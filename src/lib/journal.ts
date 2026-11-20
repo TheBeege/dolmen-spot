@@ -278,12 +278,13 @@ export function hexFilterOptions(entries: readonly JournalEntry[], selected: Jou
 // splits accented letters into letter and accent (NFKD), drops the accent,
 // lower-cases, and folds the few letters that don't split that way (ø, ł,
 // ß, æ, þ...), Greek's final sigma, and curly quotes and the various dashes,
-// which phones type for straight ones. Only accents (the combining
-// diacritical marks) are dropped, with the variation selectors that pick
-// how an emoji is drawn (⚔️ is ⚔ drawn in colour): the marks that make
-// letters of their own in other scripts, such as Japanese voicing marks,
-// Devanagari vowel signs and Thai tone marks, are kept, and a match never
-// ends just before one, so か doesn't find が.
+// which phones type for straight ones. The marks dropped are the accents
+// (the combining diacritical marks), the variation selectors that pick how
+// an emoji is drawn (⚔️ is ⚔ drawn in colour), and the vowel points and
+// other marks of Hebrew and Arabic, which are as often left out as written.
+// The marks that make letters of their own in other scripts, such as
+// Japanese voicing marks, Devanagari vowel signs and Thai tone marks, are
+// kept, and a match never ends just before one, so か doesn't find が.
 //
 // A search is made of terms: each word, and each phrase in double quotes
 // ("goblin king"). An entry matches when every term is somewhere in it, in
@@ -292,11 +293,17 @@ export function hexFilterOptions(entries: readonly JournalEntry[], selected: Jou
 // digits and symbols such as emoji is taken off the ends of a term, so
 // "Grimvold," or "(Hayme)" still finds the word; inside it, it stays, as in
 // "Hag's" or "goblin-king".
-// A term that starts or ends with a digit doesn't match inside a longer
-// number: "1" finds "day 1" but not "11" or "Year 12", and "year 1" in quotes
+// Numbers are matched whole. A word on its own that is all digits is a
+// number, and finds a whole number of the same value, however many zeros it
+// starts with: 606 finds Hex 0606, and 1 finds "day 1" but not "11", "Year
+// 12" or Hex 0101. In quotes, digits are matched as typed, and a term that
+// starts or ends with one doesn't match inside a longer number: "year 1"
 // finds Year 1 only.
 
-const DIACRITICS = /[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe00-\ufe0f\ufe20-\ufe2f]/g;
+// The marks folding drops (see above): the accents and the emoji variation
+// selectors, and every mark in the Hebrew and Arabic blocks.
+const DROPPED_MARKS =
+  /[\u0300-\u036f\u1ab0-\u1aff\u1dc0-\u1dff\u20d0-\u20ff\ufe00-\ufe0f\ufe20-\ufe2f]|(?=[\u0590-\u05ff\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff])\p{M}/gu;
 const ASCII_ONLY = /^[\x00-\x7f]*$/;
 const EXTRA_FOLDS: ReadonlyMap<string, string> = new Map([
   ['ø', 'o'], ['ł', 'l'], ['đ', 'd'], ['ð', 'd'], ['ħ', 'h'], ['ŧ', 't'], ['ı', 'i'], ['þ', 'th'],
@@ -313,8 +320,8 @@ function foldChar(ch: string): string {
   let folded = foldedChars.get(ch);
   if (folded === undefined) {
     // Lower-casing can itself add an accent (İ → i̇), so strip twice.
-    const lower = ch.normalize('NFKD').replace(DIACRITICS, '').toLowerCase();
-    const bare = lower.normalize('NFKD').replace(DIACRITICS, '');
+    const lower = ch.normalize('NFKD').replace(DROPPED_MARKS, '').toLowerCase();
+    const bare = lower.normalize('NFKD').replace(DROPPED_MARKS, '');
     folded = Array.from(bare, (c) => EXTRA_FOLDS.get(c) ?? c).join('');
     foldedChars.set(ch, folded);
   }
@@ -349,8 +356,15 @@ export function foldForSearch(text: string): string {
   return foldText(text).folded;
 }
 
-/** One thing to search for: a word, or the words of a phrase in quotes, folded. */
-export type SearchTerm = readonly string[];
+/**
+ * One thing to search for (see "Search" above), folded: a word, or the words
+ * of a phrase in quotes. A word typed on its own that is all digits is a
+ * number, found by its value.
+ */
+export interface SearchTerm {
+  readonly words: readonly string[];
+  readonly number?: string; // a number's value: its digits without the zeros it starts with
+}
 
 // Letters, digits, and symbols such as emoji (🧙, ⚔, ©, °).
 const WORD_CHAR = /[\p{L}\p{M}\p{N}\p{So}\p{Extended_Pictographic}]/u;
@@ -371,19 +385,33 @@ function trimToWord(text: string): string {
  * runs to the end. An empty list means no search.
  */
 export function parseJournalQuery(query: string): SearchTerm[] {
+  // By what each finds, to drop repeats: a number by its value (606 and 0606
+  // are one search), anything else by its words. A word never starts with #.
   const terms = new Map<string, SearchTerm>();
-  const add = (text: string) => {
+  const add = (text: string, quoted: boolean) => {
     const words = trimToWord(text).split(/\s+/).filter(Boolean);
-    if (words.length > 0) terms.set(words.join(' '), words);
+    if (words.length === 0) return;
+    const number = !quoted && words.length === 1 && ALL_DIGITS.test(words[0]) ? numberValue(words[0]) : undefined;
+    const key = number === undefined ? words.join(' ') : `#${number}`;
+    if (!terms.has(key)) terms.set(key, number === undefined ? { words } : { words, number });
   };
   // Folding turns curly double quotes into straight ones.
   foldForSearch(query)
     .split('"')
     .forEach((part, i) => {
-      if (i % 2 === 1) add(part); // inside quotes: a phrase
-      else for (const word of part.split(/\s+/)) add(word);
+      if (i % 2 === 1) add(part, true); // inside quotes: a phrase
+      else for (const word of part.split(/\s+/)) add(word, false);
     });
   return [...terms.values()];
+}
+
+const ALL_DIGITS = /^\p{Nd}+$/u;
+
+// A number's digits without the zeros it starts with ("0" for zero).
+function numberValue(digits: string): string {
+  let i = 0;
+  while (i < digits.length - 1 && digits[i] === '0') i += 1;
+  return digits.slice(i);
 }
 
 const DIGIT = /^\p{Nd}$/u;
@@ -401,12 +429,12 @@ function charAt(s: string, at: number): string {
   return code === undefined ? '' : String.fromCodePoint(code);
 }
 
-// Whether a term found at `start`..`end` of `folded` stands as it should: a
-// number in it isn't part of a longer number, and it doesn't stop inside a
+// Whether words found at `start`..`end` of `folded` stand as they should: a
+// number in them isn't part of a longer number, and they don't stop inside a
 // letter, just before a mark that belongs to it.
-function standsAlone(folded: string, start: number, end: number, term: SearchTerm): boolean {
-  const first = term[0];
-  const last = term[term.length - 1];
+function standsAlone(folded: string, start: number, end: number, words: readonly string[]): boolean {
+  const first = words[0];
+  const last = words[words.length - 1];
   if (DIGIT.test(charAt(first, 0)) && DIGIT.test(charBefore(folded, start))) return false;
   if (DIGIT.test(charBefore(last, last.length)) && DIGIT.test(charAt(folded, end))) return false;
   return !MARK.test(charAt(folded, end));
@@ -414,7 +442,8 @@ function standsAlone(folded: string, start: number, end: number, term: SearchTer
 
 // Where `term` occurs in `folded`, first starting at or after `from`.
 function findTerm(folded: string, term: SearchTerm, from: number): TextRange | null {
-  const [first, ...rest] = term;
+  if (term.number !== undefined) return findNumber(folded, term.number, from);
+  const [first, ...rest] = term.words;
   for (let start = folded.indexOf(first, from); start !== -1; start = folded.indexOf(first, start + 1)) {
     let end = start + first.length;
     for (const word of rest) {
@@ -426,7 +455,28 @@ function findTerm(folded: string, term: SearchTerm, from: number): TextRange | n
       }
       end = next + word.length;
     }
-    if (end !== -1 && standsAlone(folded, start, end, term)) return { start, end };
+    if (end !== -1 && standsAlone(folded, start, end, term.words)) return { start, end };
+  }
+  return null;
+}
+
+// Where a whole number of the value `value` (see numberValue) is in
+// `folded`, first starting at or after `from`: a whole run of digits, never
+// part of one, and not just before a mark that belongs to its last digit.
+function findNumber(folded: string, value: string, from: number): TextRange | null {
+  let start = from;
+  // Past the rest of a run of digits that began before `from`.
+  while (start < folded.length && DIGIT.test(charBefore(folded, start))) start += charAt(folded, start).length;
+  while (start < folded.length) {
+    const ch = charAt(folded, start);
+    if (!DIGIT.test(ch)) {
+      start += ch.length;
+      continue;
+    }
+    let end = start;
+    while (end < folded.length && DIGIT.test(charAt(folded, end))) end += charAt(folded, end).length;
+    if (numberValue(folded.slice(start, end)) === value && !MARK.test(charAt(folded, end))) return { start, end };
+    start = end;
   }
   return null;
 }
