@@ -9,6 +9,8 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
+    "test:migration": "tsx scripts/test_migration.ts",
+    "test:map-data": "tsx scripts/test_map_data.ts",
     "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
@@ -30,6 +32,7 @@
     "husky": "^9.1.7",
     "lint-staged": "^17.6.1",
     "tailwindcss": "^4.3.5",
+    "tsx": "^4.23.15",
     "typescript": "^6.0.3"
   }
 }
