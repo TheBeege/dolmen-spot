@@ -126,7 +126,7 @@ Production is https://www.dolmen.spot (the bare `dolmen.spot` redirects there): 
    git fetch origin
    sha=$(gh pr view <n> --json mergeCommit -q .mergeCommit.oid) && test -n "$sha" &&
      git log --first-parent --oneline "origin/release..$sha" &&
-     gh api "repos/TheBeege/dolmen-spot/commits/$sha/check-runs" --jq '.check_runs[] | "CI: \(.name): \(.status) \(.conclusion)"'
+     gh api "repos/TheBeege/dolmen-spot/commits/$sha/check-runs" --jq '.check_runs[] | select(.name == "Lint and typecheck") | "CI: \(.name): \(.status) \(.conclusion)"'
    ```
 
    Check what it prints:
@@ -134,7 +134,7 @@ Production is https://www.dolmen.spot (the bare `dolmen.spot` redirects there): 
    - **First line:** it must be the merge commit of your release PR (or of its latest follow-up). If its subject doesn't name a PR (a custom merge subject, or a rebase merge), look the PR up as in step 1. If it's another PR, stop: `<n>` is wrong.
    - **No commits listed:** stop. `<n>` is wrong, the PR hasn't merged (the guard then stops before `git log`), or that commit is already on `release`.
    - **Other commits:** you must already have read each one, in step 2, step 3's re-run, or an earlier run of this check (this release's own changelog PRs excepted). If one is new, stop and read it as in step 2. If it's player-facing and not yet in the entry, or the entry's `date` is now wrong, amend this release's existing entry in a follow-up PR into `main` (never add a second entry), wait for it to merge, and repeat this step with that PR as `<n>`.
-   - **CI:** the last line is CI's result for that exact commit, from its push to `main`, and must be `CI: Lint and typecheck: completed success`. If it's missing or not yet `completed`, wait a few minutes and re-run the check. If CI failed, or never reports, stop and tell the user.
+   - **CI:** the `CI:` line is the result of CI's `Lint and typecheck` job on that exact commit, from its push to `main` (the check leaves out other apps' check runs, such as Vercel's), and must read `CI: Lint and typecheck: completed success`. If it's missing or not yet `completed`, wait a few minutes and re-run the check. If CI failed, or never reports, stop and tell the user.
 
    If all of that holds, push:
 
@@ -151,7 +151,7 @@ Production is https://www.dolmen.spot (the bare `dolmen.spot` redirects there): 
 
 ### Hotfixes
 
-If `main` holds nothing you'd mind shipping, land the fix on `main` and cut a normal release. Otherwise, branch from `origin/release` and PR the fix (plus its changelog entry, since a hotfix is a release) into `release`; its CI must pass before it merges, since merging it deploys. Then merge `release` back into `main` so the next release fast-forwards again: open a PR into `main` from a new branch cut at `origin/release` (not from `release` itself, where resolving a conflict would commit `main` into `release` and deploy it). That PR must be merged with a merge commit (`gh pr merge <n> --merge`), never squashed or rebased: either of those copies the hotfix into new commits, so `release` stops being an ancestor of `main` and the next release can't fast-forward.
+If `main` holds nothing you'd mind shipping, land the fix on `main` and cut a normal release. Otherwise, branch from `origin/release` and PR the fix (plus its changelog entry, since a hotfix is a release) into `release`; its CI must pass before it merges, since merging it deploys. (A PR into `release` gets no CI run until a release has put `.github/workflows/ci.yml` on `release`; before that, `git ls-tree origin/release .github/workflows/ci.yml` prints nothing. Until then, run `npm run lint`, `npm run typecheck` and `npm run build` on the branch yourself and tell the user the results.) Then merge `release` back into `main` so the next release fast-forwards again: open a PR into `main` from a new branch cut at `origin/release` (not from `release` itself, where resolving a conflict would commit `main` into `release` and deploy it). That PR must be merged with a merge commit (`gh pr merge <n> --merge`), never squashed or rebased: either of those copies the hotfix into new commits, so `release` stops being an ancestor of `main` and the next release can't fast-forward.
 
 ## Changelog
 
