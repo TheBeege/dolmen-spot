@@ -7,6 +7,8 @@ import {
   getCharacterStore,
   isSavingPaused,
   NO_STORAGE_PROBLEMS,
+  RECOVERY_KEY_PREFIX,
+  type RecoveryEntry,
   type RecoveryScope,
   type StorageStatus,
   type StoredBackup,
@@ -19,8 +21,9 @@ import {
  * - <StorageBanner> sits right after the header and scrolls away. It explains
  *   the problem found on this visit, with what to do first, and shows any
  *   backups left from earlier visits as one calm line. Dismissing the problem
- *   folds its backup into that line. Each Download Backup covers only what its
- *   own notice describes.
+ *   folds its backup into that line, and keeps a newer-version notice away on
+ *   later visits too. Each download covers only what its own notice describes,
+ *   and is labelled Download Copy when some of that has no backup.
  * - <StorageAnnouncer> is a hidden live region, always mounted, whose text
  *   changes only when the problem does, so screen readers hear it once.
  * Nothing renders while storage works and no backups are waiting.
@@ -56,8 +59,6 @@ function useDismissedProblem(): string | null {
 const RELEASE_CONFIRM =
   "Your downloaded file keeps the data Dolmen Spot couldn't read. Replace it in this browser with your current characters? " +
   "Make sure the downloaded file was saved first: after this, it's the only copy of what couldn't be read.";
-const DELETE_CONFIRM =
-  "Delete the backup from this browser? Make sure the downloaded file was saved first: after this, it's the only copy of what the backup held.";
 
 const BUTTON = 'text-xs font-semibold whitespace-nowrap rounded border transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]';
 const PRIMARY = `${BUTTON} px-3 py-1.5 border-transparent bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8]`;
@@ -72,7 +73,9 @@ interface Problem {
   /** Short lines, what to do first. */
   lines: string[];
   showDownload: boolean;
-  /** What this notice's Download Backup covers: this visit's backups and anything no backup holds. */
+  /** "Download Copy" when some of it has no backup in this browser, else "Download Backup". */
+  downloadLabel: string;
+  /** What this notice's download covers: this visit's backups and anything no backup holds. */
   downloadScope: RecoveryScope;
   showRelease: boolean;
   showReload: boolean;
@@ -87,12 +90,15 @@ function describeProblem(status: StorageStatus, characterCount: number): Problem
   const paused = status.unsavedRecovery.length > 0;
   const replaced = newEntries(status).some((e) => e.kind === 'all-characters');
   const failed = newFailures(status);
-  const newer = status.setAside.filter((e) => e.reason === 'newer-version');
+  const newer = shownNewer(status);
   const removed = newEntries(status).filter((e) => e.kind === 'character' && !isCharacterLike(e.value)).length;
+  const deepMoved = newTextEntries(status);
+  const deepMovedNamed = deepMoved.filter((e) => e.name !== null);
+  const deepKept = status.setAside.filter((e) => e.reason === 'too-deep');
   const keptOthers = status.setAside.filter((e) => e.reason === 'not-a-character').length;
   // Whether anything this notice describes has no backup in this browser.
-  const unbacked = paused || failed.some((e) => e.backupKey === null) || keptOthers > 0;
-  const hasRecoveryData = replaced || failed.length > 0 || removed > 0 || unbacked;
+  const unbacked = paused || failed.some((e) => e.backupKey === null) || keptOthers > 0 || deepKept.length > 0;
+  const hasRecoveryData = replaced || failed.length > 0 || removed > 0 || deepMoved.length > 0 || unbacked;
 
   const lines: string[] = [];
   // What to do first.
@@ -141,6 +147,24 @@ function describeProblem(status: StorageStatus, characterCount: number): Problem
       lines.push("There wasn't room for an extra backup copy in this browser (its storage may be full).");
     }
   }
+  if (deepMovedNamed.length > 0) {
+    const one = deepMovedNamed.length === 1;
+    lines.push(
+      `${joinNames(deepMovedNamed.map((e) => characterName({ name: e.name })))} couldn't be opened: ${one ? 'its' : 'their'} saved data ` +
+      `is nested far too deeply, so ${one ? 'it was' : 'they were'} moved to the backup.`,
+    );
+  }
+  if (deepMoved.length > deepMovedNamed.length) {
+    const count = deepMoved.length - deepMovedNamed.length;
+    lines.push(`${count === 1 ? 'A saved entry' : `${count} saved entries`} nested far too deeply to read ${count === 1 ? 'was' : 'were'} moved to the backup.`);
+  }
+  if (deepKept.length > 0) {
+    const one = deepKept.length === 1;
+    lines.push(
+      `${joinNames(deepKept.map((e) => characterName(e.value)))} can't be opened: ${one ? 'its' : 'their'} saved data is nested far too deeply. ` +
+      `${one ? "It's" : "They're"} kept in this browser until there's room for a backup.`,
+    );
+  }
   if (newer.length > 0) {
     const one = newer.length === 1;
     lines.push(`${joinNames(newer.map((e) => characterName(e.value)))} ${one ? 'was' : 'were'} saved by a newer version of Dolmen Spot.`);
@@ -162,6 +186,7 @@ function describeProblem(status: StorageStatus, characterCount: number): Problem
     title,
     lines,
     showDownload: hasRecoveryData,
+    downloadLabel: unbacked ? 'Download Copy' : 'Download Backup',
     downloadScope: { backupKeys: status.backups.filter((b) => b.createdThisSession).map((b) => b.key), notBackedUp: true },
     showRelease: paused && status.downloaded?.coversUnsavedRecovery === true,
     showReload: status.conflict !== null,
@@ -173,13 +198,28 @@ function problemTitle(status: StorageStatus): string | null {
   if (status.conflict) return 'Another tab changed your characters';
   if (changesNotSaved(status)) return "Changes aren't being saved";
   if (newEntries(status).some((e) => e.kind === 'all-characters')) return "Your saved characters couldn't be read";
-  const failed = newFailures(status).length;
+  const failed =
+    newFailures(status).length +
+    newTextEntries(status).filter((e) => e.name !== null).length +
+    status.setAside.filter((e) => e.reason === 'too-deep').length;
   if (failed > 0) return `${failed === 1 ? '1 character' : `${failed} characters`} couldn't be opened`;
-  const newer = status.setAside.filter((e) => e.reason === 'newer-version').length;
+  const newer = shownNewer(status).length;
   if (newer > 0) return `${newer === 1 ? '1 character needs' : `${newer} characters need`} a newer version of Dolmen Spot`;
   // Entries that aren't characters are only kept in the list while no backup holds them.
   if (newEntries(status).length > 0 || status.setAside.some((e) => e.reason === 'not-a-character')) return "Some saved data couldn't be read";
   return null;
+}
+
+/** Characters saved by a newer version whose notice the player hasn't dismissed (dismissals last until each one opens). */
+function shownNewer(status: StorageStatus) {
+  return status.setAside.filter((e) => e.reason === 'newer-version' && !e.dismissed);
+}
+
+type TextEntry = Extract<RecoveryEntry, { kind: 'character-text' }>;
+
+/** Entries too deeply nested to open, moved to a backup on this visit. */
+function newTextEntries(status: StorageStatus): TextEntry[] {
+  return newEntries(status).filter((e): e is TextEntry => e.kind === 'character-text');
 }
 
 /** What the live region says: the problem's title, or that saving has recovered. */
@@ -285,6 +325,44 @@ function describeEarlier(status: StorageStatus, earlier: StoredBackup[]): string
   return parts.join(' ');
 }
 
+/** When a backup was made: its record says, or (for a damaged one) its key's time stamp does. */
+function backupWhen(backup: StoredBackup): string {
+  return formatWhen(backup.record?.savedAt ?? backup.key.slice(RECOVERY_KEY_PREFIX.length, RECOVERY_KEY_PREFIX.length + 24));
+}
+
+function whenList(backups: StoredBackup[]): string {
+  return joinNames([...new Set(backups.map(backupWhen))]);
+}
+
+/**
+ * The confirm for Delete Backup, saying exactly which of the backups shown go
+ * and which stay: one still holding a character that can't be opened, or one
+ * that isn't in the file the player downloaded.
+ */
+function deleteConfirm(status: StorageStatus, shown: StoredBackup[], keys: string[]): string {
+  const going = shown.filter((b) => keys.includes(b.key));
+  const staying = shown.filter((b) => !keys.includes(b.key));
+  const one = going.length === 1;
+  const parts = [
+    one
+      ? `Delete the ${going[0].record ? '' : 'damaged '}backup from ${backupWhen(going[0])}?`
+      : `Delete the ${going.length} backups from ${whenList(going)}?`,
+  ];
+  const holding = staying.filter((b) => status.setAside.some((e) => e.backupKey === b.key));
+  if (holding.length > 0) {
+    const names = status.setAside.filter((e) => holding.some((b) => b.key === e.backupKey)).map((e) => characterName(e.value));
+    parts.push(`${holding.length === 1 ? 'The one' : 'The ones'} from ${whenList(holding)} ${holding.length === 1 ? 'is' : 'are'} kept while ${joinNames(names)} can't be opened.`);
+  }
+  const notDownloaded = staying.filter((b) => !holding.includes(b));
+  if (notDownloaded.length > 0) {
+    parts.push(notDownloaded.length === 1
+      ? `The one from ${whenList(notDownloaded)} is kept: it isn't in the file you downloaded.`
+      : `The ones from ${whenList(notDownloaded)} are kept: they aren't in the file you downloaded.`);
+  }
+  parts.push(`Make sure the downloaded file was saved first: after this, it's the only copy of what ${one ? 'that backup' : 'those backups'} held.`);
+  return parts.join(' ');
+}
+
 function downloadBackup(scope: RecoveryScope) {
   downloadFile(`dolmen-spot-backup-${localFileStamp()}.json`, getCharacterStore().recoveryDownload(scope));
 }
@@ -318,11 +396,12 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
   const earlier = status.backups.filter((b) => !b.dismissed && (!b.createdThisSession || !showProblem));
   if (!showProblem && earlier.length === 0) return null;
 
-  const deletableNow = showProblem ? deletableKeys(status, status.backups.filter((b) => b.createdThisSession)) : [];
+  const thisVisit = status.backups.filter((b) => b.createdThisSession);
+  const deletableNow = showProblem ? deletableKeys(status, thisVisit) : [];
   const deletableEarlier = deletableKeys(status, earlier);
 
-  const deleteBackups = (keys: string[], downloadButtonId: string) => {
-    if (!confirm(DELETE_CONFIRM)) return;
+  const deleteBackups = (shown: StoredBackup[], keys: string[], downloadButtonId: string) => {
+    if (!confirm(deleteConfirm(status, shown, keys))) return;
     getCharacterStore().deleteBackups(keys);
     focusSoon(() => document.getElementById(downloadButtonId)
       ?? document.getElementById('storage-banner-title')
@@ -338,6 +417,8 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
 
   const dismissProblem = () => {
     setDismissedProblem(signature);
+    // A newer-version notice stays dismissed on later visits, until that character opens.
+    getCharacterStore().dismissNewerVersion();
     focusSoon(() => document.getElementById('storage-reminder-details') ?? document.getElementById('storage-backups-download') ?? pageHeading());
   };
 
@@ -372,7 +453,7 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
               <div className="flex flex-wrap gap-2 mt-2">
                 {problem.showDownload && (
                   <button type="button" id="storage-banner-download" onClick={() => downloadBackup(problem.downloadScope)} className={PRIMARY}>
-                    Download Backup
+                    {problem.downloadLabel}
                   </button>
                 )}
                 {problem.urgent && (
@@ -391,7 +472,7 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
                   </button>
                 )}
                 {deletableNow.length > 0 && (
-                  <button type="button" onClick={() => deleteBackups(deletableNow, 'storage-banner-download')} className={SECONDARY}>
+                  <button type="button" onClick={() => deleteBackups(thisVisit, deletableNow, 'storage-banner-download')} className={SECONDARY}>
                     Delete Backup
                   </button>
                 )}
@@ -423,7 +504,7 @@ export default function StorageBanner({ characterCount, onExportCharacter, onExp
                   Download Backup
                 </button>
                 {deletableEarlier.length > 0 && (
-                  <button type="button" onClick={() => deleteBackups(deletableEarlier, 'storage-backups-download')} className={SMALL_SECONDARY}>
+                  <button type="button" onClick={() => deleteBackups(earlier, deletableEarlier, 'storage-backups-download')} className={SMALL_SECONDARY}>
                     Delete Backup
                   </button>
                 )}
