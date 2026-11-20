@@ -1,9 +1,48 @@
-// Where the markers of one hex go on the map. Pure geometry in the map
-// image's units, so it can be tested without drawing anything.
+// Where the markers of one hex go on the map, and how big they are. Pure
+// geometry in the map image's units, so it can be tested without drawing.
+import { HEX_GRID_META } from './hex-grid';
+
+/** Distance from a hex's centre to the middle of an edge. */
+export const HEX_INNER_RADIUS = HEX_GRID_META.rowPitch / 2;
+
+// Marker sizes at full size, in image units. Zoomed out they grow (markerGrowth).
+export const POI_RADIUS = 22;
+export const DOOR_RADIUS = 26;
+export const BADGE_RADIUS = 24; // the "+N" overflow badge
+export const MARKER_RIM = 4; // pale rim around markers
+export const STAR_RADIUS = 42; // the current location's star
+export const MARKER_RING_RADIUS = 42; // markers sharing a hex fan out on this circle
+/** On the current hex the star takes the middle, and markers circle it this far outside it. */
+export const CURRENT_RING_GAP = DOOR_RADIUS + 4;
+
+// Smallest on-screen sizes, in CSS px.
+export const MIN_MARKER_PX = 12; // POI diameter; doors, badges and rings grow with it
+export const MIN_STAR_PX = 14; // star diameter
 
 export interface Offset {
   x: number;
   y: number;
+}
+
+export interface MarkerGrowth {
+  /** Factor for every marker size: 1 at full size, more when zoomed out. */
+  marker: number;
+  /** The star's radius. */
+  starRadius: number;
+}
+
+/**
+ * How big markers and the star are drawn at a scale of `pxPerUnit` CSS px per
+ * image unit (null before the map has been measured): full size, or bigger
+ * where that would be under MIN_MARKER_PX or MIN_STAR_PX across. The star is
+ * never wider than its hex.
+ */
+export function markerGrowth(pxPerUnit: number | null): MarkerGrowth {
+  const atLeast = (units: number, minPx: number) => (pxPerUnit ? Math.max(units, minPx / pxPerUnit) : units);
+  return {
+    marker: atLeast(POI_RADIUS, MIN_MARKER_PX / 2) / POI_RADIUS,
+    starRadius: Math.min(atLeast(STAR_RADIUS, MIN_STAR_PX / 2), HEX_INNER_RADIUS),
+  };
 }
 
 export interface RingInput {
@@ -17,6 +56,25 @@ export interface RingInput {
   innerRadius: number;
   /** Radius of the current-location star in the middle, or 0 if the hex isn't current. */
   starRadius: number;
+}
+
+/** layoutRing's input for a hex showing markers of these `kinds` (and the "+N" badge if `badge`). */
+export function ringFor({ kinds, badge, onCurrent, growth }: {
+  kinds: readonly ('poi' | 'door')[];
+  badge: boolean;
+  onCurrent: boolean;
+  growth: MarkerGrowth;
+}): RingInput {
+  const k = growth.marker;
+  const slots = kinds.length + (badge ? 1 : 0);
+  const largest = Math.max(...kinds.map((kind) => (kind === 'door' ? DOOR_RADIUS : POI_RADIUS)), badge ? BADGE_RADIUS : 0);
+  return {
+    slots,
+    markerRadius: largest * k + (MARKER_RIM * k) / 2,
+    ringRadius: onCurrent ? growth.starRadius + CURRENT_RING_GAP * k : slots === 1 ? 0 : MARKER_RING_RADIUS * k,
+    innerRadius: HEX_INNER_RADIUS,
+    starRadius: onCurrent ? growth.starRadius : 0,
+  };
 }
 
 export type RingLayout =

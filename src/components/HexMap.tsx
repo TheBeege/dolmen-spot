@@ -24,7 +24,18 @@ import {
   nearestPointOnMap,
   pixelToHex,
 } from '@/lib/hex';
-import { countOnStar, layoutRing } from '@/lib/marker-layout';
+import {
+  BADGE_RADIUS,
+  DOOR_RADIUS,
+  HEX_INNER_RADIUS,
+  MARKER_RIM,
+  POI_RADIUS,
+  STAR_RADIUS,
+  countOnStar,
+  layoutRing,
+  markerGrowth,
+  ringFor,
+} from '@/lib/marker-layout';
 import {
   DEFAULT_LEY_LINE_TYPE,
   LEY_LINE_COLORS,
@@ -49,16 +60,8 @@ const POI_FILL = '#8b2500';
 const DOOR_FILL = '#a774d6';
 
 // --- Sizes in image units (the printed map's pixels); they scale with zoom ---
+// Marker and star sizes, and how they grow, are in marker-layout.ts.
 const HEX_SIZE = HEX_GRID_META.hexSize;
-const HEX_INNER_RADIUS = HEX_GRID_META.rowPitch / 2; // centre to the middle of an edge
-const MARKER_RING_RADIUS = 42; // markers sharing a hex fan out on this circle
-const POI_RADIUS = 22;
-const DOOR_RADIUS = 26;
-const BADGE_RADIUS = 24;
-const STAR_RADIUS = 42;
-// On the current hex the star takes the middle, so markers circle it, this
-// far outside the star.
-const CURRENT_RING_GAP = DOOR_RADIUS + 4;
 const MAX_VISIBLE_MARKERS = 4; // more than this collapse into a "+N" badge
 const LEY_LINE_WIDTH = 14;
 const CONNECTOR_WIDTH = 8;
@@ -69,7 +72,6 @@ const ROAD_LABEL_FONT = 34;
 const DOOR_GLYPH_FONT = 38; // the ✦ on a fairy door marker
 const BADGE_FONT = 28; // the "+N" overflow badge
 const STAR_GLYPH_FONT = 56; // the ★ of the current location
-const MARKER_RIM = 4; // pale rim around markers
 const BADGE_RIM = 3;
 const STAR_RIM = 6;
 const TEXT_HALO = 8; // dark outline that keeps draft step numbers legible
@@ -83,9 +85,8 @@ const CURRENT_LINE_PX = 3;
 // --- Smallest on-screen sizes, in CSS pixels ---
 // Zoomed out, the image sizes above get too small to see (a hex is about
 // 20 px across at the whole-map view on a phone), so overlays grow to stay
-// at least this big. Labels that would be smaller are hidden instead.
-const MIN_MARKER_PX = 12; // POI diameter; doors, badges and rings grow with it
-const MIN_STAR_PX = 14; // current-location star diameter
+// at least this big (markers and the star: markerGrowth). Labels that would
+// be smaller are hidden instead.
 const MIN_LEY_LINE_PX = 2.5;
 const MIN_ROAD_LINE_PX = 1.5;
 const MIN_STEP_FONT_PX = 10; // step numbers of a ley line being drawn
@@ -731,9 +732,9 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const legible = (fontUnits: number) => pxPerUnit !== null && fontUnits * pxPerUnit >= MIN_LABEL_FONT_PX;
   const leyLine = atLeast(LEY_LINE_WIDTH, MIN_LEY_LINE_PX);
   const roadLine = atLeast(CONNECTOR_WIDTH, MIN_ROAD_LINE_PX);
+  const growth = markerGrowth(pxPerUnit);
   const size = {
-    marker: atLeast(POI_RADIUS, MIN_MARKER_PX / 2) / POI_RADIUS, // scale for all marker geometry
-    star: atLeast(STAR_RADIUS, MIN_STAR_PX / 2) / STAR_RADIUS,
+    marker: growth.marker, // scale for all marker geometry
     leyLine,
     leyLineScale: leyLine / LEY_LINE_WIDTH,
     roadLine,
@@ -742,8 +743,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     coordLabels: legible(COORD_LABEL_FONT),
     roadLabels: legible(ROAD_LABEL_FONT),
   };
-  // The current-location star: grown like the markers, but never wider than its hex.
-  const starRadius = Math.min(STAR_RADIUS * size.star, HEX_INNER_RADIUS);
+  const starRadius = growth.starRadius;
 
   const polylinePoints = (hexes: HexCoord[]) =>
     hexes
@@ -879,23 +879,13 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       ];
       const visible = items.slice(0, MAX_VISIBLE_MARKERS);
       const overflow = items.length - visible.length;
-      const slots = visible.length + (overflow > 0 ? 1 : 0);
       // A lone marker sits in the middle; several share a ring, the first at
       // the top; on the current hex they ring the star, with the top place
       // left free for the coordinate label (layoutRing). Markers always stay
       // inside their hex: where they'd crowd each other or the star, as when
       // zoomed out on a phone, the hex gets one combined marker instead.
       const onCurrent = hex === currentHex;
-      const largest =
-        Math.max(...visible.map((e) => (e.kind === 'door' ? DOOR_RADIUS : POI_RADIUS)), overflow > 0 ? BADGE_RADIUS : 0) * size.marker +
-        (MARKER_RIM * size.marker) / 2;
-      const layout = layoutRing({
-        slots,
-        markerRadius: largest,
-        ringRadius: onCurrent ? starRadius + CURRENT_RING_GAP * size.marker : slots === 1 ? 0 : MARKER_RING_RADIUS * size.marker,
-        innerRadius: HEX_INNER_RADIUS,
-        starRadius: onCurrent ? starRadius : 0,
-      });
+      const layout = layoutRing(ringFor({ kinds: visible.map((e) => e.kind), badge: overflow > 0, onCurrent, growth }));
       if (layout.kind === 'combined') {
         els.push(renderCombinedMarker(hex, c, items, onCurrent));
         return;
