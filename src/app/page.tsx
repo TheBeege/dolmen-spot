@@ -193,7 +193,7 @@ export default function Home() {
                       </div>
                       <div className="text-xs text-[#f5e6c8]/70">
                         {[getKindredClassLabel(c), `Lv.${c.level}`].filter(Boolean).join(' ')}
-                        {isInFairy(c) && <span className="text-[#c9b3f0]"> &middot; In Fairy</span>}
+                        {isInFairy(c) && <span className="text-[#c9b3f0]"> <span className="whitespace-nowrap">&middot; In Fairy</span></span>}
                       </div>
                     </button>
                     {characters.length > 1 && (
