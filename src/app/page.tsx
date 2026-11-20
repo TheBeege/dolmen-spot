@@ -14,6 +14,7 @@ import Adventuring from '@/components/Adventuring';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
+import StorageBanner from '@/components/StorageBanner';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
@@ -201,6 +202,9 @@ export default function Home() {
             ))}
           </nav>
         </div>
+
+        {/* Only shown when saved data couldn't be read or saving is failing */}
+        <StorageBanner onExportCharacter={exportCharacter} />
       </header>
 
       {/* Main Content */}

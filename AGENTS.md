@@ -56,8 +56,9 @@ Character data is stored in localStorage and must survive schema changes across 
 
 - Each migration transforms from version N to N+1 (sequential)
 - After all migrations run, `reconcileWithDefaults()` deep-merges saved data over a fresh `createDefaultCharacter()` to fill any missing fields
-- Migrations run on load (`loadCharacters()`) and import (`importCharacter()`)
-- Migrated data is persisted back to localStorage immediately so migration only runs once
+- Migrations run on load (`load()` in `src/lib/storage.ts`, one character at a time) and import (`parseImportedCharacter()`)
+- Migrated data is persisted back to localStorage immediately (best-effort) so migration only runs once
+- A character that fails to migrate is not dropped: its stored value is backed up under a `dolmenwood-recovery-*` key before the main key is rewritten, and the player can download it. All reads and writes of saved characters go through `src/lib/storage.ts`, which must never overwrite data it couldn't read
 
 ### Testing migrations:
 
