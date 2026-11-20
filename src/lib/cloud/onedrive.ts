@@ -16,52 +16,82 @@ const SIGN_IN_ALREADY_OPEN =
 const STALE_SIGN_IN = "An earlier OneDrive sign-in in this tab didn't finish. Click Connect again to start a new one.";
 const NOT_CONNECTED = "OneDrive isn't connected. Connect it and try again.";
 
+// An error whose message is written for the player. `detail` is what actually went
+// wrong, for the console.
+class PlayerError extends Error {
+  detail: unknown;
+  constructor(message: string, detail?: unknown) {
+    super(message);
+    this.detail = detail;
+  }
+}
+
+// A Microsoft Graph request that failed with this HTTP status.
+class GraphError extends PlayerError {
+  status: number;
+  constructor(status: number, body: string) {
+    let message = "OneDrive couldn't complete that. Try again.";
+    if (status === 401 || status === 403) message = "OneDrive didn't accept your sign-in. Disconnect OneDrive, then connect again.";
+    else if (status === 404) message = 'That file no longer exists in OneDrive.';
+    else if (status === 429 || status >= 500) message = 'OneDrive is having trouble. Try again in a moment.';
+    super(message, `Microsoft Graph API error ${status}: ${body}`);
+    this.status = status;
+  }
+}
+
 let msalInstance: PublicClientApplication | null = null;
 // The cache clear started by the last disconnect. A new sign-in waits for it, so it
 // can't race the clear and have its fresh tokens removed.
 let pendingCacheClear: Promise<void> = Promise.resolve();
-// Interactive MSAL calls (sign-in popups) this page has started that haven't settled.
-let popupsInFlight = 0;
+// The interactive MSAL call (a sign-in window) this page has open, if any. It settles
+// when that call does.
+let openPopup: Promise<unknown> | null = null;
 
-// MSAL's messages ("timed_out: See https://aka.ms/...") mean nothing to a player, so
-// every MSAL error leaving this module is swapped for one they can act on.
-function toFriendlyError(err: unknown): unknown {
-  if (!(err instanceof AuthError)) return err;
-  switch (err.errorCode) {
-    // MSAL 5 can't see the window being closed; it gives up after popupBridgeTimeout (60 s).
-    case BrowserAuthErrorCodes.timedOut:
-    case BrowserAuthErrorCodes.userCancelled:
-      return new Error('The Microsoft sign-in window was closed or took too long. Try again.');
-    case BrowserAuthErrorCodes.popupWindowError:
-    case BrowserAuthErrorCodes.emptyWindowError:
-      return new Error("The Microsoft sign-in window couldn't open. Allow pop-ups for this site and try again.");
-    case BrowserAuthErrorCodes.interactionInProgress:
-      return new Error(SIGN_IN_ALREADY_OPEN);
-    case BrowserAuthErrorCodes.noNetworkConnectivity:
-    case BrowserAuthErrorCodes.postRequestFailed:
-    case BrowserAuthErrorCodes.getRequestFailed:
-      return new Error("Couldn't reach Microsoft. Check your connection and try again.");
-    case 'access_denied': // the player cancelled or declined on Microsoft's page
-      return new Error('Microsoft sign-in was cancelled. Try again.');
-    default:
-      console.warn('OneDrive sign-in failed', err);
-      return new Error('Microsoft sign-in failed. Try again.');
+// MSAL's messages ("timed_out: See https://aka.ms/..."), Graph's JSON and browser errors
+// mean nothing to a player, so every error leaving this provider goes through here.
+function toPlayerError(err: unknown): PlayerError {
+  if (err instanceof PlayerError) {
+    if (err.detail !== undefined) console.warn('OneDrive:', err.detail);
+    return err;
   }
+  if (err instanceof AuthError) {
+    switch (err.errorCode) {
+      // MSAL 5 can't see the window being closed; it gives up after popupBridgeTimeout (60 s).
+      case BrowserAuthErrorCodes.timedOut:
+      case BrowserAuthErrorCodes.userCancelled:
+        return new PlayerError('The Microsoft sign-in window was closed or took too long. Try again.');
+      case BrowserAuthErrorCodes.popupWindowError:
+      case BrowserAuthErrorCodes.emptyWindowError:
+        return new PlayerError("The Microsoft sign-in window couldn't open. Allow pop-ups for this site and try again.");
+      case BrowserAuthErrorCodes.interactionInProgress:
+        return new PlayerError(SIGN_IN_ALREADY_OPEN);
+      case BrowserAuthErrorCodes.noNetworkConnectivity:
+      case BrowserAuthErrorCodes.postRequestFailed:
+      case BrowserAuthErrorCodes.getRequestFailed:
+        return new PlayerError("Couldn't reach Microsoft. Check your connection and try again.");
+      case 'access_denied': // the player cancelled or declined on Microsoft's page
+        return new PlayerError('Microsoft sign-in was cancelled. Try again.');
+    }
+  }
+  console.warn('OneDrive:', err);
+  return new PlayerError(
+    err instanceof AuthError ? 'Microsoft sign-in failed. Try again.' : 'Something went wrong with OneDrive. Try again.'
+  );
 }
 
-// Runs one interactive MSAL call. MSAL allows one interaction per tab, so while one of
-// ours is open (MSAL 5 may not notice its window closing for a minute) another call is
-// refused here: it would otherwise fail with interaction_in_progress, or cancel the
-// open one if it overrode the lock.
+// Runs one interactive MSAL call. MSAL allows one interaction per tab, and MSAL 5 may not
+// notice a closed window for a minute, so while one of ours is open another call is
+// refused here: it would otherwise fail with interaction_in_progress, or cancel the open
+// one if it overrode the lock. (A token request waits for the open one instead; see
+// getAccessToken.)
 async function runPopup<T>(start: () => Promise<T>): Promise<T> {
-  if (popupsInFlight > 0) throw new Error(SIGN_IN_ALREADY_OPEN);
-  popupsInFlight++;
+  if (openPopup) throw new PlayerError(SIGN_IN_ALREADY_OPEN);
+  const call = Promise.resolve().then(start);
+  openPopup = call;
   try {
-    return await start();
-  } catch (err) {
-    throw toFriendlyError(err);
+    return await call;
   } finally {
-    popupsInFlight--;
+    openPopup = null;
   }
 }
 
@@ -87,13 +117,23 @@ function getActiveAccount(instance: PublicClientApplication): AccountInfo | null
 
 async function getAccessToken(instance: PublicClientApplication): Promise<string> {
   const account = getActiveAccount(instance);
-  if (!account) throw new Error(NOT_CONNECTED);
+  if (!account) throw new PlayerError(NOT_CONNECTED);
 
   const request: SilentRequest = { scopes: SCOPES, account };
   try {
     const response = await instance.acquireTokenSilent(request);
     return response.accessToken;
   } catch {
+    if (openPopup) {
+      // Another operation already has a sign-in window open (the dialog lists files
+      // again when the player switches tabs or reopens it). Wait for that window instead
+      // of refusing: once the player signs in there, the token this call needs is in the
+      // cache. If they don't, this call fails the same way, without opening a second
+      // window nobody asked for.
+      await openPopup;
+      const response = await instance.acquireTokenSilent(request);
+      return response.accessToken;
+    }
     // Silent token acquisition failed, fall back to popup
     const response = await runPopup(() => instance.acquireTokenPopup({ scopes: SCOPES }));
     return response.accessToken;
@@ -103,16 +143,21 @@ async function getAccessToken(instance: PublicClientApplication): Promise<string
 async function graphRequest(instance: PublicClientApplication, path: string, init?: RequestInit): Promise<Response> {
   const token = await getAccessToken(instance);
   const url = path.startsWith('http') ? path : `${GRAPH_API}${path}`;
-  const res = await fetch(url, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...init?.headers,
-    },
-  });
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...init,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...init?.headers,
+      },
+    });
+  } catch (err) {
+    throw new PlayerError("Couldn't reach OneDrive. Check your connection and try again.", err);
+  }
   if (!res.ok) {
-    const body = await res.text();
-    throw new Error(`Microsoft Graph API error ${res.status}: ${body}`);
+    const body = await res.text().catch(() => '');
+    throw new GraphError(res.status, body);
   }
   return res;
 }
@@ -126,14 +171,15 @@ export function createOneDriveProvider(): CloudProvider | null {
   let overrideStaleLock = false;
 
   // The instance for one operation, read once at its start. If Disconnect runs midway,
-  // the operation keeps this instance, now without an account, and fails with "not
-  // connected" instead of on a null instance.
+  // the operation keeps this instance, now without an account: a step that still needs a
+  // token fails with "not connected" instead of on a null instance, and a step that
+  // already has its token finishes.
   const operationInstance = async (): Promise<PublicClientApplication> => {
-    if (!instance) instance = await getMsalInstance(clientId).catch((err) => { throw toFriendlyError(err); });
+    if (!instance) instance = await getMsalInstance(clientId);
     return instance;
   };
 
-  return {
+  const provider: CloudProvider = {
     id: 'onedrive',
     displayName: 'OneDrive',
 
@@ -160,7 +206,7 @@ export function createOneDriveProvider(): CloudProvider | null {
           .catch((err: unknown) => {
             if (err instanceof AuthError && err.errorCode === BrowserAuthErrorCodes.interactionInProgress) {
               overrideStaleLock = true;
-              throw new Error(STALE_SIGN_IN);
+              throw new PlayerError(STALE_SIGN_IN);
             }
             throw err;
           });
@@ -216,7 +262,7 @@ export function createOneDriveProvider(): CloudProvider | null {
           }));
       } catch (err) {
         // App folder doesn't exist yet — it's created on first save
-        if (err instanceof Error && err.message.includes('404')) {
+        if (err instanceof GraphError && err.status === 404) {
           return [];
         }
         throw err;
@@ -275,5 +321,20 @@ export function createOneDriveProvider(): CloudProvider | null {
       const msal = await operationInstance();
       await graphRequest(msal, `/me/drive/items/${fileId}`, { method: 'DELETE' });
     },
+  };
+
+  // Whatever an operation throws, from MSAL, Graph, the network or a bug, reaches the
+  // player as a PlayerError (see toPlayerError).
+  const playerFacing = <T>(op: Promise<T>): Promise<T> =>
+    op.catch((err: unknown) => {
+      throw toPlayerError(err);
+    });
+  return {
+    ...provider,
+    authenticate: () => playerFacing(provider.authenticate()),
+    listCharacterFiles: () => playerFacing(provider.listCharacterFiles()),
+    saveCharacter: (json, fileName, existingFileId) => playerFacing(provider.saveCharacter(json, fileName, existingFileId)),
+    loadCharacter: (fileId) => playerFacing(provider.loadCharacter(fileId)),
+    deleteCharacter: (fileId) => playerFacing(provider.deleteCharacter(fileId)),
   };
 }

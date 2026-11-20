@@ -20,6 +20,8 @@ interface Props {
   onImportLocal(file: File): void;
   /** Whether each provider has an operation in flight. */
   loading: Record<'google-drive' | 'onedrive', boolean>;
+  /** Whether each provider has a save in flight. */
+  saving: Record<'google-drive' | 'onedrive', boolean>;
   error: string | null;
   onClearError(): void;
   characterName: string;
@@ -39,6 +41,7 @@ export default function CloudStorageModal({
   onExportLocal,
   onImportLocal,
   loading,
+  saving,
   error,
   onClearError,
   characterName,
@@ -58,6 +61,7 @@ export default function CloudStorageModal({
   const isConnected = activeProviderId ? authStates[activeProviderId] : false;
   // Only this tab's provider: another provider finishing must not re-enable its buttons.
   const busy = activeProviderId ? loading[activeProviderId] : false;
+  const isSaving = activeProviderId ? saving[activeProviderId] : false;
 
   const loadFiles = useCallback(async (providerId: 'google-drive' | 'onedrive') => {
     setFilesLoaded(false);
@@ -274,7 +278,7 @@ export default function CloudStorageModal({
                   disabled={busy}
                   className="px-3 py-1.5 bg-[#2d4a2e] hover:bg-[#3d6b3e] disabled:opacity-50 text-[#f5e6c8] text-sm rounded transition-colors"
                 >
-                  {busy ? 'Saving...' : 'Save Character'}
+                  {isSaving ? 'Saving...' : 'Save Character'}
                 </button>
               </div>
 

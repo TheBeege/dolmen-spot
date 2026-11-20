@@ -5,6 +5,7 @@ import type { CloudProvider, CloudFile, CloudMetadataEntry } from '@/lib/cloud/t
 import { getCloudMetadata, setCloudMetadata, removeCloudMetadataByFileId } from '@/lib/cloud/cloud-metadata';
 
 type ProviderId = 'google-drive' | 'onedrive';
+type Operation = 'connect' | 'list' | 'save' | 'load' | 'delete';
 
 interface UseCloudStorageReturn {
   providers: CloudProvider[];
@@ -19,6 +20,8 @@ interface UseCloudStorageReturn {
   setMetadata(characterId: string, providerId: ProviderId, fileId: string, fileName: string): void;
   /** Whether each provider has an operation in flight. */
   loading: Record<ProviderId, boolean>;
+  /** Whether each provider has a save in flight. */
+  saving: Record<ProviderId, boolean>;
   error: string | null;
   clearError(): void;
 }
@@ -29,17 +32,23 @@ export function useCloudStorage(): UseCloudStorageReturn {
     'google-drive': false,
     'onedrive': false,
   });
-  // Operations in flight, counted per provider: one call finishing mustn't re-enable
-  // buttons while another call, for that provider or another one, is still running.
-  const [inFlight, setInFlight] = useState<Record<ProviderId, number>>({
-    'google-drive': 0,
-    'onedrive': 0,
+  // Operations in flight, per provider: one call finishing mustn't re-enable buttons
+  // while another call, for that provider or another one, is still running.
+  const [inFlight, setInFlight] = useState<Record<ProviderId, Operation[]>>({
+    'google-drive': [],
+    'onedrive': [],
   });
   const loading = useMemo(
-    () => ({ 'google-drive': inFlight['google-drive'] > 0, 'onedrive': inFlight.onedrive > 0 }),
+    () => ({ 'google-drive': inFlight['google-drive'].length > 0, 'onedrive': inFlight.onedrive.length > 0 }),
     [inFlight],
   );
-  const [error, setError] = useState<string | null>(null);
+  const saving = useMemo(
+    () => ({ 'google-drive': inFlight['google-drive'].includes('save'), 'onedrive': inFlight.onedrive.includes('save') }),
+    [inFlight],
+  );
+  // The message for the last failed operation, and which provider and operation it was.
+  const [failure, setFailure] = useState<{ providerId: ProviderId; operation: Operation; message: string } | null>(null);
+  const error = failure?.message ?? null;
   const initialized = useRef(false);
 
   useEffect(() => {
@@ -88,27 +97,38 @@ export function useCloudStorage(): UseCloudStorageReturn {
   }, [providers]);
 
   // Runs one operation for a provider, counting it as in flight for that provider only.
-  const track = useCallback(async <T>(providerId: ProviderId, op: () => Promise<T>): Promise<T> => {
-    setInFlight(prev => ({ ...prev, [providerId]: prev[providerId] + 1 }));
+  // A failure is recorded with its provider and operation. A success clears an earlier
+  // failure of the same operation for that provider, so a message that no longer applies
+  // doesn't linger, while a successful list still can't hide a failed save.
+  const track = useCallback(async <T>(
+    providerId: ProviderId,
+    operation: Operation,
+    op: () => Promise<T>,
+    fallbackMessage: string,
+  ): Promise<T> => {
+    setInFlight(prev => ({ ...prev, [providerId]: [...prev[providerId], operation] }));
     try {
-      return await op();
+      const result = await op();
+      setFailure(prev => (prev?.providerId === providerId && prev.operation === operation ? null : prev));
+      return result;
+    } catch (err) {
+      setFailure({ providerId, operation, message: err instanceof Error ? err.message : fallbackMessage });
+      throw err;
     } finally {
-      setInFlight(prev => ({ ...prev, [providerId]: prev[providerId] - 1 }));
+      setInFlight(prev => {
+        const ops = [...prev[providerId]];
+        ops.splice(ops.indexOf(operation), 1);
+        return { ...prev, [providerId]: ops };
+      });
     }
   }, []);
 
   const connect = useCallback(async (providerId: ProviderId) => {
-    setError(null);
-    try {
-      await track(providerId, async () => {
-        const provider = getProvider(providerId);
-        await provider.authenticate();
-        refreshAuthState(providerId);
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Authentication failed');
-      throw err;
-    }
+    setFailure(null);
+    await track(providerId, 'connect', async () => {
+      await getProvider(providerId).authenticate();
+      refreshAuthState(providerId);
+    }, 'Authentication failed');
   }, [getProvider, refreshAuthState, track]);
 
   const disconnect = useCallback((providerId: ProviderId) => {
@@ -122,11 +142,10 @@ export function useCloudStorage(): UseCloudStorageReturn {
   }, [getProvider, refreshAuthState]);
 
   const listFiles = useCallback(async (providerId: ProviderId): Promise<CloudFile[]> => {
-    setError(null);
+    setFailure(null);
     try {
-      return await track(providerId, () => getProvider(providerId).listCharacterFiles());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to list files');
+      return await track(providerId, 'list', () => getProvider(providerId).listCharacterFiles(), 'Failed to list files');
+    } catch {
       return [];
     }
   }, [getProvider, track]);
@@ -137,53 +156,38 @@ export function useCloudStorage(): UseCloudStorageReturn {
     json: string,
     characterName: string
   ) => {
-    setError(null);
-    try {
-      await track(providerId, async () => {
-        const provider = getProvider(providerId);
-        const fileName = `${characterName || 'character'}.dolmenwood.json`;
-        const existing = getCloudMetadata(characterId);
-        const existingFileId = existing?.provider === providerId ? existing.fileId : undefined;
+    setFailure(null);
+    await track(providerId, 'save', async () => {
+      const provider = getProvider(providerId);
+      const fileName = `${characterName || 'character'}.dolmenwood.json`;
+      const existing = getCloudMetadata(characterId);
+      const existingFileId = existing?.provider === providerId ? existing.fileId : undefined;
 
-        const result = await provider.saveCharacter(json, fileName, existingFileId);
+      const result = await provider.saveCharacter(json, fileName, existingFileId);
 
-        setCloudMetadata(characterId, {
-          provider: providerId,
-          fileId: result.fileId,
-          fileName: result.fileName,
-          lastSaved: new Date().toISOString(),
-        });
+      setCloudMetadata(characterId, {
+        provider: providerId,
+        fileId: result.fileId,
+        fileName: result.fileName,
+        lastSaved: new Date().toISOString(),
       });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to save character');
-      throw err;
-    }
+    }, 'Failed to save character');
   }, [getProvider, track]);
 
   const loadCharacter = useCallback(async (providerId: ProviderId, fileId: string): Promise<string> => {
-    setError(null);
-    try {
-      return await track(providerId, () => getProvider(providerId).loadCharacter(fileId));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load character');
-      throw err;
-    }
+    setFailure(null);
+    return track(providerId, 'load', () => getProvider(providerId).loadCharacter(fileId), 'Failed to load character');
   }, [getProvider, track]);
 
   const deleteFile = useCallback(async (providerId: ProviderId, fileId: string) => {
-    setError(null);
-    try {
-      await track(providerId, async () => {
-        await getProvider(providerId).deleteCharacter(fileId);
-        removeCloudMetadataByFileId(fileId);
-      });
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to delete file');
-      throw err;
-    }
+    setFailure(null);
+    await track(providerId, 'delete', async () => {
+      await getProvider(providerId).deleteCharacter(fileId);
+      removeCloudMetadataByFileId(fileId);
+    }, 'Failed to delete file');
   }, [getProvider, track]);
 
-  const clearError = useCallback(() => setError(null), []);
+  const clearError = useCallback(() => setFailure(null), []);
 
   const setMetadata = useCallback((
     characterId: string,
@@ -211,6 +215,7 @@ export function useCloudStorage(): UseCloudStorageReturn {
     getMetadata: getCloudMetadata,
     setMetadata,
     loading,
+    saving,
     error,
     clearError,
   };
