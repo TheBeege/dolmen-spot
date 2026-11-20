@@ -16,6 +16,7 @@ import {
   getCharacterLanguages,
 } from '@/lib/gamedata';
 import { formatXpPercent } from '@/lib/character-sheet';
+import { withIndefiniteArticle } from '@/lib/grammar';
 
 interface CharacterInfoProps {
   character: Character;
@@ -194,7 +195,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             </p>
           ) : character.kindred && !character.class ? (
             <p className="text-[#f5e6c8]/60 text-xs mt-1 italic">
-              Playing as a {selectedKindred?.name} kindred-class (see appendix).
+              Playing as {withIndefiniteArticle(selectedKindred?.name ?? '')} kindred-class (see appendix).
             </p>
           ) : null}
         </div>

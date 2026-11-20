@@ -76,6 +76,7 @@ import {
   isSpellOnScroll,
   isStartingBookApplied,
 } from '@/lib/character-sheet';
+import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import type { PdfPageSize } from './page-size';
 import { pdfText as t } from './text';
 
@@ -528,7 +529,7 @@ function CharacterSection({ c }: { c: Character }) {
     classWarn = 'Humans must select a class.';
   } else if (isKindredClass(c)) {
     classValue = 'Kindred-class';
-    classNote = `Playing as a ${kindredName(c)} kindred-class (see appendix).`;
+    classNote = `Playing as ${withIndefiniteArticle(kindredName(c))} kindred-class (see appendix).`;
   }
 
   const hasMoonSign = canHaveMoonSign(c.kindred);
@@ -736,7 +737,7 @@ function classFeatureBlocks(c: Character): BlockSpec[] {
     blocks.push({
       key: 'talents',
       title: 'Combat Talents',
-      note: `(${talentSlots} slots)`,
+      note: `(${pluralize(talentSlots, 'slot')})`,
       body:
         talentSlots === 0 ? (
           <Empty>Combat talents unlock at Level 2.</Empty>
@@ -981,7 +982,7 @@ function languagesBlock(c: Character): BlockSpec {
           </Text>
         ) : null}
         <Text style={s.body}>
-          <Text style={s.bold}>{`Bonus (${bonusLangs.length} of ${langInfo.bonusSlots} slots used): `}</Text>
+          <Text style={s.bold}>{`Bonus (${bonusLangs.length} of ${pluralize(langInfo.bonusSlots, 'slot')} used): `}</Text>
           {bonusLangs.length > 0 ? t(bonusLangs.join(', ')) : EMPTY}
         </Text>
         {langInfo.bonusSlots === 0 ? <Text style={s.note}>INT modifier does not grant bonus languages.</Text> : null}
@@ -1381,6 +1382,7 @@ function InventorySection({ c }: { c: Character }) {
   const enc = calculateEncumbrance(c);
   const slotsMode = c.encumbranceMethod === 'slots';
   const { coins } = c;
+  const coinCount = pluralize(enc.totalCoinCount, 'coin');
 
   return (
     <>
@@ -1423,7 +1425,7 @@ function InventorySection({ c }: { c: Character }) {
                 <Text style={s.warn}>{`Exceeds standard equipped limit (${EQUIPPED_SLOT_LIMIT} slots)`}</Text>
               ) : null}
               <SummaryRow label="Stowed slots (items)" value={String(enc.itemStowedSlots)} />
-              <SummaryRow label="Coin slots" value={`${enc.coinSlots} (${enc.totalCoinCount} coins)`} />
+              <SummaryRow label="Coin slots" value={`${enc.coinSlots} (${coinCount})`} />
               <SummaryRow
                 label="Total stowed slots"
                 value={`${enc.totalStowedSlots} / ${STOWED_SLOT_LIMIT}`}
@@ -1436,7 +1438,7 @@ function InventorySection({ c }: { c: Character }) {
           ) : (
             <>
               <SummaryRow label="Item weight" value={String(enc.itemEquippedWeight + enc.itemStowedWeight)} />
-              <SummaryRow label="Coin weight" value={`${enc.coinWeight} (${enc.totalCoinCount} coins)`} />
+              <SummaryRow label="Coin weight" value={`${enc.coinWeight} (${coinCount})`} />
               <SummaryRow label="Total weight" value={String(enc.totalWeight)} warn={enc.overMaxLoad} />
             </>
           )}
@@ -1450,7 +1452,7 @@ function InventorySection({ c }: { c: Character }) {
           <SummaryRow label="Pellucidium" value={String(coins.pellucidium)} />
           <SummaryRow
             label="Total"
-            value={`${enc.totalCoinCount} coins (${getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)`}
+            value={`${coinCount} (${getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)`}
             total
           />
           <Text style={s.note}>Exchange: 1pp = 5gp = 50sp = 500cp</Text>

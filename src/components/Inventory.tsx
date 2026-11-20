@@ -20,6 +20,7 @@ import {
   getContainerItems,
   getContainerLoad,
 } from '@/lib/character-sheet';
+import { pluralize } from '@/lib/grammar';
 
 interface InventoryProps {
   character: Character;
@@ -1074,7 +1075,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <div className="flex justify-between">
               <span>Coin Slots:</span>
               <span className="text-[#f5e6c8]/70">
-                {coinSlots} ({totalCoinCount} coins)
+                {coinSlots} ({pluralize(totalCoinCount, 'coin')})
               </span>
             </div>
             <div>
@@ -1103,7 +1104,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             </div>
             <div className="flex justify-between">
               <span>Coin Weight:</span>
-              <span className="text-[#f5e6c8]/70">{coinWeight} ({totalCoinCount} coins)</span>
+              <span className="text-[#f5e6c8]/70">{coinWeight} ({pluralize(totalCoinCount, 'coin')})</span>
             </div>
             <div className="flex justify-between">
               <span>Total Weight:</span>
@@ -1189,7 +1190,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         <div className="mt-3 text-xs text-[#f5e6c8]/60 space-y-1">
           <p>Exchange: 1pp = 5gp = 50sp = 500cp</p>
           <p>
-            Total: {totalCoinCount} coins ({getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)
+            Total: {pluralize(totalCoinCount, 'coin')} ({getCoinGpEquivalent(coins).toFixed(1)}gp equivalent)
           </p>
         </div>
       </div>
