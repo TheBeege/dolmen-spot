@@ -112,6 +112,7 @@ python3 scripts/build-pdf-fonts.py --check  # verify the committed files are up 
 `patches/` holds fixes to react-pdf's PDF export, which [patch-package](https://github.com/ds300/patch-package) applies after every `npm install` and `npm ci` (the `postinstall` script):
 
 - `@react-pdf/textkit`: text cut off at its line limit (`maxLines`) ends in "…", also when the cut falls at a line break, which used to drop the rest of the text silently.
+- `@react-pdf/render`: accents that the font moves over their letter (a letter followed by a combining mark, as in n + U+0308) are drawn over it, not after it.
 
 After upgrading `@react-pdf/renderer`, check whether the new versions still need them. patch-package reports a patch that no longer applies, failing the install in CI and on Vercel, and warns when a package's version has changed. To change a patch, edit the package in `node_modules/` and run `npx patch-package <package name>`.
 
