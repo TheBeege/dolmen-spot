@@ -736,7 +736,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             {container ? container.name : 'Loose Items'}
           </span>
           {container && encumbranceMethod === 'weight' && (
-            <span className={`text-xs ${isOverCapacity ? 'text-[#b33a1a]' : 'text-[#f5e6c8]/50'}`}>
+            <span className={`text-xs ${isOverCapacity ? 'text-[#ff6b4a]' : 'text-[#f5e6c8]/50'}`}>
               ({usedWeight} / {capacity}w)
             </span>
           )}
@@ -767,7 +767,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               />
             </div>
             {isOverCapacity && (
-              <p className="text-[#b33a1a] text-xs mt-0.5">Over capacity!</p>
+              <p className="text-[#ff6b4a] text-xs mt-0.5">Over capacity!</p>
             )}
           </div>
         )}
@@ -957,10 +957,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     <div className="border-t border-[#5a3a28] pt-2 mt-2">
       <div className="flex justify-between">
         <span className="font-semibold">Calculated Speed:</span>
-        <span className={`font-bold ${calculatedSpeed === 0 ? 'text-[#b33a1a]' : 'text-[#c4a35a]'}`}>{calculatedSpeed} ft</span>
+        <span className={`font-bold ${calculatedSpeed === 0 ? 'text-[#ff6b4a]' : 'text-[#c4a35a]'}`}>{calculatedSpeed} ft</span>
       </div>
       {overloadNote && (
-        <p className="text-[#b33a1a] text-xs italic text-right">{overloadNote}</p>
+        <p className="text-[#ff6b4a] text-xs italic text-right">{overloadNote}</p>
       )}
     </div>
   );
@@ -1112,13 +1112,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="flex justify-between">
                 <span>Equipped Slots:</span>
                 <span
-                  className={equippedSlotsOverLimit ? 'text-[#b33a1a] font-bold' : ''}
+                  className={equippedSlotsOverLimit ? 'text-[#ff6b4a] font-bold' : ''}
                 >
                   {totalEquippedSlots} / {EQUIPPED_SLOT_LIMIT}
                 </span>
               </div>
               {equippedSlotsOverLimit && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Over the maximum of {EQUIPPED_SLOT_LIMIT} equipped slots</p>
+                <p className="text-[#ff6b4a] text-xs italic text-right">Over the maximum of {EQUIPPED_SLOT_LIMIT} equipped slots</p>
               )}
             </div>
             <div className="flex justify-between">
@@ -1135,13 +1135,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="flex justify-between">
                 <span>Total Stowed Slots:</span>
                 <span
-                  className={stowedSlotsOverLimit ? 'text-[#b33a1a] font-bold' : ''}
+                  className={stowedSlotsOverLimit ? 'text-[#ff6b4a] font-bold' : ''}
                 >
                   {totalStowedSlots} / {STOWED_SLOT_LIMIT}
                 </span>
               </div>
               {stowedSlotsOverLimit && (
-                <p className="text-[#b33a1a] text-xs italic text-right">Over the maximum of {STOWED_SLOT_LIMIT} stowed slots</p>
+                <p className="text-[#ff6b4a] text-xs italic text-right">Over the maximum of {STOWED_SLOT_LIMIT} stowed slots</p>
               )}
             </div>
             {speedSummary}
@@ -1159,7 +1159,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <div className="flex justify-between">
               <span>Total Weight:</span>
               <span
-                className={overMaxLoad ? 'text-[#b33a1a] font-bold' : ''}
+                className={overMaxLoad ? 'text-[#ff6b4a] font-bold' : ''}
               >
                 {totalWeight}
               </span>
