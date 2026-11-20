@@ -20,6 +20,7 @@ import {
   getMoonPhaseLabel,
   weeksElapsed,
   addDays,
+  isWysenday,
 } from '@/lib/gamedata';
 
 interface AdventuringProps {
@@ -172,10 +173,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const todaysCelestial = CELESTIAL_EVENTS.filter(
     (e) => e.month === currentDate.month && e.day === currentDate.day
   );
-  const isWysenday = currentMonth.wysendays.some((w) => {
-    // Check if today matches a festival that corresponds to a wysenday
-    return todaysFestivals.some((f) => f.name.includes(w) || w.includes(f.name));
-  });
+  const todayIsWysenday = isWysenday(currentDate);
 
   const exhaustionText = character.exhaustionLevel > 0
     ? `-${character.exhaustionLevel} to Attack & Damage`
@@ -239,7 +237,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
             {currentMonth.moonName} &middot; {moonPhaseLabel}
           </div>
           {/* Wysenday badge */}
-          {isWysenday && (
+          {todayIsWysenday && (
             <span className="inline-block mt-2 bg-[#c4a35a]/20 text-[#c4a35a] text-xs font-semibold px-3 py-1 rounded-full border border-[#c4a35a]/40">
               Wysenday
             </span>

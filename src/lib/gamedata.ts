@@ -239,12 +239,23 @@ export const MONTHS = [
 
 export const DAY_NAMES = ['Colly', 'Chime', 'Hayme', 'Moot', 'Frisk', 'Eggfast', 'Sunning'];
 
-// The 7-day weekday cycle runs continuously across months and years —
-// pre-PR this used (day-of-month - 1) % 7, which falsely reset to Colly
-// at the start of each month and lost track of weekday on month/year
-// boundaries that aren't multiples of 7.
+// Every month is 4 standard weeks, always starting on Colly, followed by
+// its Wysendays (days 29+). Wysendays have their own names and are not
+// part of any week, so weekdays restart with each month rather than
+// running on across months and years (Player's Book p174; Dolmenwood
+// Calendar).
+export const WEEK_DAYS_PER_MONTH = 28;
+
+export function isWysenday(date: CalendarDate): boolean {
+  return date.day > WEEK_DAYS_PER_MONTH;
+}
+
+// Weekday name for days 1-28; the Wysenday's own name for days 29+.
 export function getDayName(date: CalendarDate): string {
-  return DAY_NAMES[((getAbsoluteDay(date) - 1) % 7 + 7) % 7];
+  if (isWysenday(date)) {
+    return MONTHS[date.month]?.wysendays[date.day - WEEK_DAYS_PER_MONTH - 1] ?? 'Wysenday';
+  }
+  return DAY_NAMES[((date.day - 1) % 7 + 7) % 7];
 }
 
 export function formatCalendarDate(date: CalendarDate): string {
