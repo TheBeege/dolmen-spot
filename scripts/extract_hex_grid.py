@@ -1,34 +1,33 @@
-"""Extract the Dolmenwood hex grid from public/dolmenwood-map.png.
+"""Extract the Dolmenwood hex grid from the printed map, scripts/dolmenwood-map.png.
 
-Outputs src/lib/hex-grid.json with the canonical hex manifest:
+Writes src/lib/hex-grid.json:
   {
-    "meta": { "imageWidth", "imageHeight", "cols", "rows", "labelOrigin", "colPitch", "rowPitch", "hexSize" },
+    "meta": { "imageWidth", "imageHeight", "labelX_col1", "labelY_row1",
+              "colPitch", "rowPitch", "labelToCenterDy", "hexSize",
+              "orientation": "flat-top", "offset": "odd-q", "cellCount" },
     "hexes": { "0101": { "col": 1, "row": 1, "terrain": "woods" | "open" }, ... }
   }
+The calibration constants (label origin, pitches, label-to-centre offset)
+live in detect_drawn_hexes.py and are shared with it.
 
 Approach:
-  1. Calibration (hardcoded from scripts/find_labels.py + zoom_one.py):
-       - Flat-top hexes
-       - Column-major XXYY numbering
-       - Even columns offset DOWN by half a row pitch
-       - col_pitch = 232.5 px, row_pitch = 268.0 px
-       - Label centroid of (col=1, row=1) at pixel (447, 167)
-       - Hex center sits 90 px below the label centroid (label is in upper part of hex)
-       - Hex size (center-to-vertex) = 154.74 px (= row_pitch / sqrt(3))
+  1. Drawn hexes: detect_drawn_hexes() finds the hexes printed on the map
+     (see that module).
+  2. Terrain by flood fill:
+       - Dark pixels (grey < 120) are walls: the thick wood outline is
+         kept, while the lighter hex grid lines are not.
+       - Dilate the walls 4 times (4-connected) to close small gaps.
+       - Flood-fill from pixel (10, 10), outside the wood, through
+         non-wall pixels.
+       - A hex is "open" if at least half of a radius-8 px disk around its
+         centre was reached by the flood, else "woods".
 
-  2. Terrain classification by flood-fill:
-       - Threshold image to a binary mask of "dark" pixels (the dolmenwood boundary
-         line is thick and very dark; hex grid lines are lighter and thinner).
-       - Use threshold ~80 so that the boundary is kept and hex grid lines are not.
-       - Dilate slightly to close small gaps in the boundary.
-       - Flood-fill from (10, 10) — definitely outside the woods — through "light" pixels.
-       - For each hex center, look at a 3x3 neighborhood: if the majority of pixels were
-         reached by the flood (light/outside), classify as "open"; otherwise "woods".
+Requires Python 3.10+ with numpy and Pillow. Run from the repo root:
+    python3 scripts/extract_hex_grid.py
 """
 from __future__ import annotations
 
 import json
-import math
 import sys
 from collections import deque
 from pathlib import Path
@@ -39,24 +38,17 @@ import numpy as np
 # detect_drawn_hexes lives next to this file but isn't on sys.path when run
 # as `python3 scripts/extract_hex_grid.py`. Inject the scripts directory.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from detect_drawn_hexes import detect_drawn_hexes  # noqa: E402
-
-
-# --- Calibration ---
-LABEL_X_COL1 = 447      # x of label centroid for column 01 (odd)
-LABEL_Y_ROW1_ODD = 167  # y of label centroid for (col=1, row=1)
-COL_PITCH = 232.5       # px between adjacent columns horizontally
-ROW_PITCH = 268.0       # px between adjacent same-column rows vertically
-LABEL_TO_CENTER_DY = 90 # px hex center is below the label centroid
-HEX_SIZE = ROW_PITCH / math.sqrt(3)  # center-to-vertex distance, ~154.74
-
-
-def hex_center(col: int, row: int) -> tuple[float, float]:
-    """Pixel coordinates of the center of hex (col, row). col/row are 1-indexed."""
-    ci, ri = col - 1, row - 1
-    x = LABEL_X_COL1 + ci * COL_PITCH
-    y_label = LABEL_Y_ROW1_ODD + ri * ROW_PITCH + (ROW_PITCH / 2 if ci % 2 == 1 else 0)
-    return x, y_label + LABEL_TO_CENTER_DY
+from detect_drawn_hexes import (  # noqa: E402
+    COL_PITCH,
+    HEX_SIZE,
+    LABEL_TO_CENTER_DY,
+    LABEL_X_COL1,
+    LABEL_Y_ROW1_ODD,
+    MAP_IMAGE,
+    ROW_PITCH,
+    detect_drawn_hexes,
+    hex_center,
+)
 
 
 def build_outside_mask(arr: np.ndarray, threshold: int = 120, dilate_iters: int = 4) -> np.ndarray:
@@ -122,7 +114,7 @@ def classify_hex(visited: np.ndarray, cx: float, cy: float, radius: int = 8) -> 
 
 def main() -> None:
     root = Path(__file__).resolve().parent.parent
-    img_path = root / "public" / "dolmenwood-map.png"
+    img_path = MAP_IMAGE
     out_path = root / "src" / "lib" / "hex-grid.json"
 
     img = Image.open(img_path).convert("L")

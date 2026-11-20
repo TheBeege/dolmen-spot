@@ -1,14 +1,26 @@
-"""Detect which hexes are actually drawn on the printed PNG by finding
-their 4-digit coordinate labels. A hex without a label belongs to one of
-the decorated regions (compass rose, "Dolmenwood" title) and is excluded.
+"""Detect which hexes are drawn on the printed map (scripts/dolmenwood-map.png)
+by finding their 4-digit coordinate labels. A hex without a label belongs to
+one of the decorated regions (compass rose, "Dolmenwood" title) and is
+excluded. extract_hex_grid.py uses this module (and its calibration
+constants) to decide which hexes go into src/lib/hex-grid.json.
 
 Algorithm:
-  1. Threshold dark pixels (the text/labels are black).
-  2. Connected-components pass to find character-sized blobs.
-  3. Cluster blobs into 4-digit labels via proximity-based BFS.
-  4. Each cluster's centroid maps to the nearest expected hex center.
+  1. Threshold dark pixels (grey < 100; the labels are black text).
+  2. Connected components: keep digit-sized blobs (5-30 x 12-40 px,
+     20-400 px of ink).
+  3. Cluster blobs into labels by proximity (within 15 px vertically and
+     40 px horizontally); keep clusters of exactly four digits.
+  4. Map each label to the hex whose expected label position is nearest
+     (within 100 px).
+  5. Gap-fill: a hex whose label was hidden by forest texture is kept if at
+     least 4 of its 6 neighbours are kept (repeated until nothing changes).
+  6. Add EXTRA_DRAWN_HEXES, printed hexes that steps 1-5 miss.
 
-Outputs the kept hex set + a visualization next to this script (debug dir).
+Requires Python 3.10+ with numpy and Pillow. Run from the repo root:
+    python3 scripts/detect_drawn_hexes.py
+It prints the kept hexes and writes an overlay (green = kept, red =
+excluded) to <system temp dir>/dolmenwood_hex_map_debug/detected_hexes.png.
+The full-image scan is slow (around 20 seconds).
 """
 from __future__ import annotations
 import math
@@ -18,12 +30,26 @@ from pathlib import Path
 from PIL import Image, ImageDraw
 import numpy as np
 
-LABEL_X_COL1 = 447
-LABEL_Y_ROW1_ODD = 167
-COL_PITCH = 232.5
-ROW_PITCH = 268.0
-LABEL_TO_CENTER_DY = 90
-HEX_SIZE = ROW_PITCH / math.sqrt(3)
+MAP_IMAGE = Path(__file__).resolve().parent / "dolmenwood-map.png"
+
+# --- Calibration, measured by hand from the printed labels ---
+# Flat-top hexes, numbered column then row (XXYY). Even printed columns sit
+# half a row lower (odd-q offset in 0-indexed terms).
+LABEL_X_COL1 = 447       # x of the label (and centre) of every column-01 hex
+LABEL_Y_ROW1_ODD = 167   # y of hex 0101's label
+COL_PITCH = 232.5        # px between neighbouring columns
+ROW_PITCH = 268.0        # px between rows of one column
+LABEL_TO_CENTER_DY = 90  # a hex's centre is this far below its label
+HEX_SIZE = ROW_PITCH / math.sqrt(3)  # nominal centre-to-vertex distance, ~154.73
+# The grid isn't quite regular (1.5 * HEX_SIZE = 232.09 < COL_PITCH), so
+# vertices use one scale per axis, matching src/lib/hex.ts.
+SCALE_X = COL_PITCH / 1.5
+SCALE_Y = ROW_PITCH / math.sqrt(3)
+
+# Printed hexes the label detector misses. 0111's label overlaps the wood's
+# outline, so its digits merge with the outline's ink and no 4-digit cluster
+# is found; it has only 3 kept neighbours, so gap-fill doesn't rescue it.
+EXTRA_DRAWN_HEXES: frozenset[tuple[int, int]] = frozenset({(1, 11)})
 
 
 def hex_center(col: int, row: int) -> tuple[float, float]:
@@ -42,8 +68,8 @@ def expected_label_center(col: int, row: int) -> tuple[float, float]:
 def hex_vertices(col: int, row: int) -> list[tuple[float, float]]:
     cx, cy = hex_center(col, row)
     return [
-        (cx + HEX_SIZE * math.cos(math.radians(60 * i)),
-         cy + HEX_SIZE * math.sin(math.radians(60 * i)))
+        (cx + SCALE_X * math.cos(math.radians(60 * i)),
+         cy + SCALE_Y * math.sin(math.radians(60 * i)))
         for i in range(6)
     ]
 
@@ -200,12 +226,12 @@ def detect_drawn_hexes(
             if sum(1 for n in ns if n in kept) >= gap_fill_min_neighbors:
                 kept.add((col, row))
                 added = True
-    return kept
+    # Added after gap-fill so they can't pull further hexes in.
+    return kept | EXTRA_DRAWN_HEXES
 
 
 def main() -> None:
-    root = Path(__file__).resolve().parent.parent
-    img_path = root / "public" / "dolmenwood-map.png"
+    img_path = MAP_IMAGE
     img = Image.open(img_path).convert("L")
     arr = np.asarray(img, dtype=np.uint8)
 
