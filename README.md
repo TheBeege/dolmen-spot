@@ -75,7 +75,11 @@ src/
 docs/
   DEPLOYMENT-PHASES.md  # Feature roadmap
   rules/                # Extracted rule reference (gitignored — copyrighted, local only)
+scripts/
+  generate-icons.mjs    # Rebuilds the raster app icons from src/app/icon.svg
 ```
+
+The app icon is drawn in `src/app/icon.svg`. After changing it, run `node scripts/generate-icons.mjs` to rebuild `src/app/favicon.ico` (16, 32 and 48 px) and `src/app/apple-icon.png` (180 px, for iOS home screens) from it, and commit all three. Next.js adds the `<link>` tags for them automatically.
 
 ## Disclaimer
 

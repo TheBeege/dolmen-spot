@@ -6,9 +6,6 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Dolmen Spot — Dolmenwood Character Sheet',
   description: 'Your spot for tracking your Dolmenwood character. An unofficial digital character sheet for the Dolmenwood TTRPG by Necrotic Gnome.',
-  icons: {
-    icon: '/favicon.ico',
-  },
 };
 
 export default function RootLayout({
