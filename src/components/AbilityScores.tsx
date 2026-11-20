@@ -89,6 +89,9 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
                   {ability.abbr}
                 </span>
                 <div className="flex items-center gap-2 mt-1">
+                  {/* Wide enough for two bold digits beside the spinner (about 15px
+                      wide in Chrome, 18px in Firefox), and narrow enough to sit
+                      next to the modifier in a 320px-wide phone's card. */}
                   <input
                     type="number"
                     min={3}
@@ -96,7 +99,7 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
                     value={score || ''}
                     onChange={(e) => handleAbilityChange(ability.key, e.target.value)}
                     onBlur={() => handleAbilityBlur(ability.key)}
-                    className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 w-14 text-center text-xl font-bold focus:outline-none focus:border-[#c4a35a] transition-colors"
+                    className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-1 py-1 w-15 text-center text-xl font-bold focus:outline-none focus:border-[#c4a35a] transition-colors"
                     aria-label={`${ability.label} score`}
                   />
                   <span
@@ -123,7 +126,8 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
         <h2 className="text-lg font-bold text-[#c4a35a] mb-2 border-b border-[#5a3a28] pb-1">
           Save Targets
         </h2>
-        <div className="grid grid-cols-5 gap-3 mt-3">
+        {/* Five inputs don't fit side by side on a phone, so they take two rows there. */}
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mt-3">
           {SAVE_TARGET_INFO.map((save) => (
             <div key={save.key} className="flex flex-col items-center gap-1">
               <label className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide">
