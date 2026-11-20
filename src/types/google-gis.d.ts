@@ -20,7 +20,6 @@ interface TokenClientConfig {
 
 interface GoogleAccountsOauth2 {
   initTokenClient(config: TokenClientConfig): TokenClient;
-  revoke(token: string, callback?: () => void): void;
 }
 
 interface GoogleAccounts {
