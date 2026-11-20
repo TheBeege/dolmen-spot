@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
 import { hexCenter } from './hex';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from './hex-grid';
+import mainV12Save from './fixtures/main-v12-save.json';
 
 type AnyData = Record<string, unknown>;
 
@@ -717,5 +718,44 @@ describe('Scenario 23: text in map values of the wrong shape is kept in otherNot
   });
   test('a second load changes nothing', () => {
     for (const m of [textMap, lists, converted]) assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m));
+  });
+});
+
+// fixtures/main-v12-save.json is a save written by main at 3ef3c04, the last
+// version before this map (schema 12, with #14's Fairy time). Its pins were
+// placed with the old map's Place Pin, Clearing set as the current location.
+// Then, with main's Fairy time controls, the character spent a week in
+// Fairy, wrote a journal entry there and came back 3 days later, and is now
+// in Fairy again: the second visit is still open.
+describe('Scenario 24: a v12 save from main, with Fairy time and old map pins', () => {
+  const saved = clone(mainV12Save) as AnyData;
+  test("the save is v12, with two Fairy visits and the old map's pins", () => {
+    assert.equal(saved.schemaVersion, 12);
+    assert.equal((saved.fairyVisits as unknown[]).length, 2);
+    assert.ok((saved.otherNotes as string).startsWith('<!--MAP_PINS-->'));
+    assert.equal(saved.mapData, undefined);
+  });
+  const migrated = migrateCharacter(clone(mainV12Save) as never);
+  test('it loads as the current version', () => assert.equal(migrated.schemaVersion, CURRENT_SCHEMA_VERSION));
+  test("its pins become POIs on their hexes, and Clearing's hex is the current one", () => {
+    assert.deepEqual(migrated.mapData.pois.map((p) => [p.name, p.hex]), [['Clearing', '1103'], ['North lobe tip', '1101'], ['Woodland islets', '0203']]);
+    assert.equal(migrated.currentLocationHex, '1103');
+  });
+  test('pins off the grid are listed in Other Notes, and the marker is gone', () => {
+    assert.equal(migrated.otherNotes, `${UNPLACED_HEADING}\n- Compass rose\n- Dolmenwood title`);
+  });
+  test("its Fairy time is unchanged: the visits (the open one too), the counter's start, the frozen date and the journal", () => {
+    assert.deepEqual(migrated.fairyVisits, saved.fairyVisits);
+    assert.deepEqual(migrated.livedTimeStart, saved.livedTimeStart);
+    assert.deepEqual(migrated.currentDate, saved.currentDate);
+    assert.deepEqual(migrated.journalEntries, saved.journalEntries);
+  });
+  test('nothing else changes', () => {
+    const { schemaVersion: _version, otherNotes: _notes, mapData: _map, currentLocationHex: _hex, ...rest } = migrated;
+    const { schemaVersion: _savedVersion, otherNotes: _savedNotes, ...savedRest } = saved;
+    assert.deepEqual(rest, savedRest);
+  });
+  test('a second load changes nothing', () => {
+    assert.deepEqual(migrateCharacter(clone(migrated) as never), migrated);
   });
 });

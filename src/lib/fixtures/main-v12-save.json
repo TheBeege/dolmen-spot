@@ -1,0 +1,191 @@
+{
+  "schemaVersion": 12,
+  "id": "583c7146-248c-4341-be27-ac8e8c2cf0da",
+  "name": "New Adventurer",
+  "kindred": "",
+  "class": "",
+  "background": "",
+  "alignment": "",
+  "affiliation": "",
+  "moonSign": "",
+  "moonPhase": "",
+  "level": 1,
+  "xp": 0,
+  "xpNextLevel": 0,
+  "xpModifier": 0,
+  "abilityScores": {
+    "strength": 10,
+    "intelligence": 10,
+    "wisdom": 10,
+    "dexterity": 10,
+    "constitution": 10,
+    "charisma": 10
+  },
+  "maxHp": 1,
+  "currentHp": 1,
+  "armorClass": 10,
+  "attackBonus": 0,
+  "speed": 40,
+  "travelPointsPerDay": 8,
+  "magicResistance": 0,
+  "saveTargets": {
+    "doom": 14,
+    "ray": 14,
+    "hold": 13,
+    "blast": 16,
+    "spell": 14
+  },
+  "skillTargets": {
+    "listen": 6,
+    "search": 6,
+    "survival": 6
+  },
+  "equippedItems": [],
+  "stowedItems": [],
+  "containers": [],
+  "tinyItems": "",
+  "coins": {
+    "copper": 0,
+    "silver": 0,
+    "gold": 10,
+    "pellucidium": 0
+  },
+  "encumbranceMethod": "slots",
+  "equippedArmourName": "",
+  "hasShield": false,
+  "spells": [],
+  "spellNotes": "",
+  "glamours": [],
+  "runes": [],
+  "knack": null,
+  "startingSpellBook": "",
+  "knownSpells": [],
+  "spellStudy": {
+    "active": null,
+    "queue": []
+  },
+  "failedStudies": [],
+  "classTraits": "",
+  "kindredTraits": "",
+  "languages": "Woldish",
+  "combatTalents": "",
+  "otherNotes": "<!--MAP_PINS-->[{\"id\":\"a00747a7-334f-4b95-a9ee-1c37a03f5c3c\",\"x\":53.666666666666664,\"y\":21.286451589371364,\"label\":\"Clearing\",\"hex\":\"\",\"isCurrentLocation\":true},{\"id\":\"8ecee859-5e02-4827-8dfc-542e20ed96ed\",\"x\":55.00000000000001,\"y\":7.513723487680776,\"label\":\"North lobe tip\",\"hex\":\"north tip\",\"isCurrentLocation\":false},{\"id\":\"a7aa2388-d941-406c-8e39-d12162e38a7b\",\"x\":13,\"y\":26.18860904929513,\"label\":\"Woodland islets\",\"hex\":\"1313\",\"isCurrentLocation\":false},{\"id\":\"850e4bf9-6429-4012-8506-ab3d4df39e2e\",\"x\":4.166666666666666,\"y\":85.01449856838036,\"label\":\"Compass rose\",\"hex\":\"\",\"isCurrentLocation\":false},{\"id\":\"65d61ba5-d68a-4345-9e1b-6646ff5a5c7f\",\"x\":70.33333333333334,\"y\":90.15009209782431,\"label\":\"Dolmenwood title\",\"hex\":\"\",\"isCurrentLocation\":false}]",
+  "retainers": [],
+  "gazeUsesRemaining": 0,
+  "currentForm": "estray",
+  "wilderUsedToday": false,
+  "madRevelryUsesRemaining": 0,
+  "trophies": [],
+  "animalCompanion": null,
+  "liegeHouse": "",
+  "selectedCombatTalents": [],
+  "holyOrder": "",
+  "symbioticFleshTraits": [],
+  "fungalSymbiosisUsesRemaining": 0,
+  "currentDate": {
+    "day": 4,
+    "month": 0,
+    "year": 1
+  },
+  "currentLocation": "Clearing",
+  "journalEntries": [
+    {
+      "id": "d084221d-48cd-4eb1-8249-425beee426ae",
+      "date": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      },
+      "fairyEvent": {
+        "visitId": "df699f00-ca9e-4075-95a9-0b4d0594170d",
+        "kind": "entered"
+      },
+      "location": "Clearing",
+      "text": "Entered Fairy (visit 1)."
+    },
+    {
+      "id": "d56b6291-0f1a-4868-9721-b143e4f66f62",
+      "date": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      },
+      "fairyDate": {
+        "visitId": "df699f00-ca9e-4075-95a9-0b4d0594170d",
+        "day": 8
+      },
+      "location": "Clearing",
+      "text": "Danced at the Court of the Fairy Queen"
+    },
+    {
+      "id": "a6b0d20b-a61b-4701-ad76-fa325cd844ab",
+      "date": {
+        "day": 4,
+        "month": 0,
+        "year": 1
+      },
+      "fairyEvent": {
+        "visitId": "df699f00-ca9e-4075-95a9-0b4d0594170d",
+        "kind": "returned"
+      },
+      "location": "Clearing",
+      "text": "Returned from Fairy (visit 1) after 7 days; 3 days passed in Dolmenwood."
+    },
+    {
+      "id": "fca8390e-d99b-46a4-bcc8-2eb2c9d0604e",
+      "date": {
+        "day": 4,
+        "month": 0,
+        "year": 1
+      },
+      "fairyEvent": {
+        "visitId": "246db918-72ad-4214-b81c-cd49c4ad5241",
+        "kind": "entered"
+      },
+      "location": "Clearing",
+      "text": "Entered Fairy (visit 2)."
+    }
+  ],
+  "exhaustionLevel": 0,
+  "hungerDays": 0,
+  "thirstDays": 0,
+  "rations": {
+    "fresh": 0,
+    "preserved": 0
+  },
+  "activeLightSources": [],
+  "travelDaysWithoutRest": 0,
+  "forcedMarchActive": false,
+  "travelPointsRemaining": 0,
+  "fairyVisits": [
+    {
+      "id": "df699f00-ca9e-4075-95a9-0b4d0594170d",
+      "enteredOn": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      },
+      "returnedOn": {
+        "day": 4,
+        "month": 0,
+        "year": 1
+      },
+      "daysInFairy": 7
+    },
+    {
+      "id": "246db918-72ad-4214-b81c-cd49c4ad5241",
+      "enteredOn": {
+        "day": 4,
+        "month": 0,
+        "year": 1
+      },
+      "returnedOn": null,
+      "daysInFairy": 1
+    }
+  ],
+  "livedTimeStart": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  }
+}
