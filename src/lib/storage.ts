@@ -1,6 +1,6 @@
 import type { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
-import { migrateCharacter } from './migrations';
+import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
 
 /**
  * Saving and loading characters in localStorage without losing any.
@@ -9,22 +9,28 @@ import { migrateCharacter } from './migrations';
  * rules, each covered by storage.test.ts:
  *
  * 1. Each saved character is migrated on its own, from a copy. A character
- *    whose migration throws is *set aside*: it stays in the saved list as
+ *    this version can't open is *set aside*: it stays in the saved list as
  *    parsed (untouched by migration), every later save appends it again, and
- *    the next load tries it again, so a fixed migration brings it back. It is
- *    also copied to a backup (best-effort).
+ *    the next load tries it again. That covers a character whose migration
+ *    throws (a fixed migration brings it back; it's also copied to a backup,
+ *    best-effort) and one saved by a newer version of Dolmen Spot, with a
+ *    numeric `schemaVersion` above this version's (it isn't migrated or
+ *    "repaired", so it opens again once the newer version is deployed).
  * 2. Saved data that can never become a character (the whole value isn't a
  *    readable list, or an entry isn't an object) is only removed once a
  *    verified copy of it exists under a `dolmenwood-recovery-*` key. Until
  *    then an unreadable entry stays in the list, and an unreadable whole value
  *    pauses saving.
- * 3. Before each write, the saved list is compared with what this tab last
+ * 3. If no saved character can be opened, a new sheet is started in memory
+ *    and only saved once the player changes it, so the set-aside characters
+ *    come back exactly as they were.
+ * 4. Before each write, the saved list is compared with what this tab last
  *    read or wrote. If another tab changed it, this tab stops saving instead
  *    of overwriting that tab's work.
- * 4. While changes aren't being saved, this tab's characters survive a
+ * 5. While changes aren't being saved, this tab's characters survive a
  *    remount (load() hands them back) and `hasUnsavedChanges` asks the browser
  *    to warn before the tab closes.
- * 5. Nothing here throws. Problems are reported through getStatus().
+ * 6. Nothing here throws. Problems are reported through getStatus().
  *
  * The store takes its Storage as a parameter so it can be tested under Node.
  */
@@ -69,24 +75,31 @@ export interface StoredBackup {
   dismissed: boolean;
 }
 
+/**
+ * Why a saved entry was set aside:
+ * - `migration-failed`: its migration threw. Backed up, and kept until it loads.
+ * - `newer-version`: saved by a newer version of Dolmen Spot. Kept, unmigrated, until that version is back.
+ * - `not-a-character`: not an object at all. Kept only until a backup holds it.
+ */
+export type SetAsideReason = 'migration-failed' | 'newer-version' | 'not-a-character';
+
 /** A saved entry this load couldn't open. It stays in the saved list. */
 export interface SetAsideEntry {
   index: number;
+  reason: SetAsideReason;
   error: string;
   /** As parsed, untouched by migration. */
   value: unknown;
-  /** The backup that also holds it, or null if none could be made. */
+  /** The backup that also holds it, or null if none could be made (or none is needed). */
   backupKey: string | null;
 }
 
 export interface StorageStatus {
   backups: StoredBackup[];
-  /**
-   * Entries this load couldn't open: characters whose migration threw (kept
-   * until they load) and entries that aren't characters (kept until a backup
-   * holds them). They stay in the saved list and are tried again on every load.
-   */
+  /** Entries this load couldn't open. They stay in the saved list (see SetAsideReason). */
   setAside: SetAsideEntry[];
+  /** No saved character could be opened, so this load started a new sheet. It's saved once the player changes it. */
+  startedNewSheet: boolean;
   /** The unreadable whole saved value, while no verified backup of it exists. Saving is paused while this is non-empty. */
   unsavedRecovery: RecoveryEntry[];
   /** Storage couldn't be read at all. Nothing is written this visit. */
@@ -95,6 +108,8 @@ export interface StorageStatus {
   saveError: { message: string; since: string } | null;
   /** Another tab changed the saved characters, so this tab stopped saving. */
   conflict: { since: string } | null;
+  /** Changes weren't being saved earlier in this visit, and now they are. */
+  savingRecovered: boolean;
   /** This tab holds changes that aren't in storage. */
   hasUnsavedChanges: boolean;
   /** What the player downloaded this session, as far as it still applies. */
@@ -104,10 +119,12 @@ export interface StorageStatus {
 export const NO_STORAGE_PROBLEMS: StorageStatus = Object.freeze({
   backups: [],
   setAside: [],
+  startedNewSheet: false,
   unsavedRecovery: [],
   storageUnreadable: false,
   saveError: null,
   conflict: null,
+  savingRecovered: false,
   hasUnsavedChanges: false,
   downloaded: null,
 });
@@ -127,6 +144,14 @@ export interface Session {
   activeId: string;
 }
 
+/** Which data a recovery download covers. By default, everything. */
+export interface RecoveryScope {
+  /** Only these backup keys (default: every backup). */
+  backupKeys?: string[];
+  /** Include the unreadable data no backup holds (default: true). */
+  notBackedUp?: boolean;
+}
+
 export interface CharacterStore {
   /**
    * Read, migrate and (best-effort) re-save the characters. While changes
@@ -140,8 +165,8 @@ export interface CharacterStore {
   saveActiveId(id: string): void;
   getStatus(): StorageStatus;
   subscribe(listener: () => void): () => void;
-  /** JSON text of everything preserved, for the player to download. Remembers what it included. */
-  recoveryDownload(): string;
+  /** JSON text of the preserved data in `scope`, for the player to download. Remembers what it included. */
+  recoveryDownload(scope?: RecoveryScope): string;
   /** Delete backups, but only ones downloaded this session and unchanged since. */
   deleteBackups(keys: string[]): { deleted: string[]; kept: string[] };
   /**
@@ -152,11 +177,20 @@ export interface CharacterStore {
   releaseUnsavedRecovery(): boolean;
   /** Remember (best-effort) that the player dismissed the notice about these backups. */
   dismissBackups(keys: string[]): void;
+  /**
+   * This tab's characters, in the format Export All Characters writes (so
+   * Import Character accepts it), when storage may not have them: while
+   * changes aren't being saved, or with unsaved changes. Otherwise null.
+   * For error screens: never throws.
+   */
+  unsavedCharactersJson(): string | null;
 }
 
 export interface StoreOptions {
   /** Test seam: the per-character migration. Defaults to `migrateCharacter`. */
   migrate?: (data: unknown) => Character;
+  /** Test seam: the newest schema version this build understands. Defaults to `CURRENT_SCHEMA_VERSION`. */
+  currentSchemaVersion?: number;
   /** Test seam: the clock. */
   now?: () => Date;
   /** Test seam: randomness for backup key suffixes. */
@@ -182,6 +216,8 @@ export const IMPORT_MESSAGES = {
   recoveryFile:
     "That's a recovery file from the storage warning, not a character file. It holds saved data Dolmen Spot couldn't read, " +
     "so it can't be imported. Keep it, or attach it to a bug report.",
+  newerVersion:
+    "That file was saved by a newer version of Dolmen Spot, so this version can't import it yet. Try again once Dolmen Spot has been updated.",
   several: 'That file holds several characters. Use Import Character on the Local File tab to add them.',
   empty: 'That file has no characters in it.',
   notOpened: "That character couldn't be opened by this version of Dolmen Spot.",
@@ -194,7 +230,7 @@ const CHARACTER_KEYS = ['schemaVersion', 'level', 'abilityScores', 'kindred', 'c
  * Parse an imported character file (local or cloud) into characters with new
  * ids. A file holds one character, or (with `allowMany`) a list of them.
  * Throws an ImportError, before anything is added, if any of it isn't a
- * character: a bad file changes nothing.
+ * character this version can open: a bad file changes nothing.
  */
 export function parseImportedCharacters(
   json: string,
@@ -215,6 +251,7 @@ export function parseImportedCharacters(
     if (!looksLikeCharacter(item)) {
       throw new ImportError(many ? `Entry ${i + 1} in that file isn't a character, so nothing was imported.` : IMPORT_MESSAGES.notCharacter);
     }
+    if (isFromNewerVersion(item, CURRENT_SCHEMA_VERSION)) throw new ImportError(IMPORT_MESSAGES.newerVersion);
   });
   return items.map((item) => {
     let character: Character;
@@ -244,8 +281,17 @@ function looksLikeCharacter(data: unknown): boolean {
   return isPlainObject(data) && typeof data.name === 'string' && CHARACTER_KEYS.some((k) => k in data);
 }
 
+/**
+ * Saved by a newer version of Dolmen Spot. Only a numeric `schemaVersion` counts:
+ * a string one is an old quirk that `migrateCharacter` still handles.
+ */
+function isFromNewerVersion(data: unknown, currentSchemaVersion: number): boolean {
+  return isPlainObject(data) && typeof data.schemaVersion === 'number' && data.schemaVersion > currentSchemaVersion;
+}
+
 export function createCharacterStore(storage: StorageLike | null, options: StoreOptions = {}): CharacterStore {
   const migrate = options.migrate ?? migrateCharacter;
+  const currentSchemaVersion = options.currentSchemaVersion ?? CURRENT_SCHEMA_VERSION;
   const now = options.now ?? (() => new Date());
   const random = options.random ?? Math.random;
 
@@ -260,6 +306,8 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   let carried: unknown[] = [];
   /** The list (with carried entries) as last stored, or as load() returned it. Anything else is unsaved. */
   let baselineJson: string | null = null;
+  /** While every saved character is set aside: the new sheet as started, which isn't saved until it changes. */
+  let newSheetJson: string | null = null;
   /** Backup keys made by this tab. */
   const createdKeys = new Set<string>();
   /** Backup key -> its text when downloaded, and the identities of downloaded entries no backup held. */
@@ -272,7 +320,11 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   function setStatus(patch: Partial<StorageStatus>) {
     const changed = (Object.keys(patch) as (keyof StorageStatus)[]).some((k) => patch[k] !== status[k]);
     if (!changed) return;
-    status = { ...status, ...patch };
+    const next = { ...status, ...patch };
+    // Remember a recovery within this visit, so it can be announced.
+    if (changesNotSaved(next)) next.savingRecovered = false;
+    else if (changesNotSaved(status)) next.savingRecovered = true;
+    status = next;
     listeners.forEach((listener) => listener());
   }
 
@@ -378,7 +430,11 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
     return held;
   }
 
-  /** Write the list unless another tab changed it. True if storage now holds it. Never throws. */
+  /**
+   * Write the list unless another tab changed the stored one. Returns true if
+   * it was written, or needed no write because it equals what this tab last
+   * read or wrote (storage isn't read again in that case). Never throws.
+   */
   function writeList(json: string): boolean {
     if (!storage) return false;
     try {
@@ -394,11 +450,15 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       if (status.saveError) setStatus({ saveError: null });
       return true;
     } catch (err) {
-      console.warn('Could not save characters', err);
-      // Keep the time of the first failure, so the warning can say since when.
-      if (!status.saveError) setStatus({ saveError: { message: describeError(err), since: isoNow() } });
+      noteSaveError(err);
       return false;
     }
+  }
+
+  function noteSaveError(err: unknown) {
+    console.warn('Could not save characters', err);
+    // Keep the time of the first failure, so the warning can say since when.
+    if (!status.saveError) setStatus({ saveError: { message: describeError(err), since: isoNow() } });
   }
 
   function writeActiveId(id: string) {
@@ -426,7 +486,9 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   /** While paused for want of a backup, try it again (throttled). True once it exists. */
   function retryPausedBackup(): boolean {
     const at = now().getTime();
-    if (Number.isFinite(at) && at - lastBackupAttempt < BACKUP_RETRY_MS) return false;
+    const elapsed = at - lastBackupAttempt;
+    // A clock that jumped back (negative elapsed) counts as time up, so it can't stall retries.
+    if (Number.isFinite(at) && elapsed >= 0 && elapsed < BACKUP_RETRY_MS) return false;
     lastBackupAttempt = Number.isFinite(at) ? at : Date.now();
     const held = preserve(status.unsavedRecovery);
     if (!status.unsavedRecovery.every((e) => held.has(entryIdentity(e)))) return false;
@@ -437,8 +499,12 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
 
   function loadFromStorage(): Session {
     // Problems are found again by each load. Backups, downloads and dismissals carry over.
-    setStatus({ setAside: [], unsavedRecovery: [], storageUnreadable: false, saveError: null, conflict: null, hasUnsavedChanges: false });
+    setStatus({
+      setAside: [], startedNewSheet: false, unsavedRecovery: [], storageUnreadable: false,
+      saveError: null, conflict: null, hasUnsavedChanges: false,
+    });
     carried = [];
+    newSheetJson = null;
 
     let raw: string | null;
     let storedActiveId: string | null;
@@ -453,8 +519,10 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
     lastBackupAttempt = now().getTime();
     refreshBackups();
 
-    const { characters, whole, unreadable } = readCharacters(raw, storedActiveId, migrate);
-    const held = preserve(whole ? [whole] : unreadable);
+    const { characters, whole, entries } = readCharacters(raw, storedActiveId, migrate, currentSchemaVersion);
+    // Entries from a newer version aren't unreadable, so they need no backup.
+    const unreadable = entries.filter((e) => e.reason !== 'newer-version');
+    const held = preserve(whole ? [whole] : unreadable.map(asRecoveryEntry));
 
     if (whole && !held.has(entryIdentity(whole))) {
       // Writing would destroy the only copy. Run in memory with saving paused;
@@ -465,18 +533,26 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       return startSession([fresh], fresh.id);
     }
 
-    // Characters that failed to migrate stay in the list until they load.
-    // Anything else unreadable stays until a backup holds it.
-    const kept = unreadable.filter((e) => isPlainObject(e.value) || !held.has(entryIdentity(e)));
+    // Characters that can't be opened stay in the list until they can.
+    // Entries that aren't characters stay until a backup holds them.
+    const kept = entries.filter((e) => e.reason !== 'not-a-character' || !held.has(entryIdentity(asRecoveryEntry(e))));
     carried = kept.map((e) => e.value);
     setStatus({
-      setAside: kept.map((e) => ({ index: e.index, error: e.error, value: e.value, backupKey: held.get(entryIdentity(e)) ?? null })),
+      setAside: kept.map((e) => ({ ...e, backupKey: held.get(entryIdentity(asRecoveryEntry(e))) ?? null })),
     });
 
     if (characters.length === 0) {
-      // First visit, or nothing loadable (and that's safe now). A stored active
-      // id is left alone: it may name a set-aside character that loads later.
       const fresh = createNewAdventurer();
+      if (carried.length > 0) {
+        // Every saved character is set aside. Start a sheet for now, and save it
+        // only once the player changes it, so fixing (or rolling forward) brings
+        // back exactly the old list.
+        newSheetJson = JSON.stringify([fresh]);
+        setStatus({ startedNewSheet: true });
+        return startSession([fresh], fresh.id);
+      }
+      // First visit, or the old value was replaced after a verified backup. A
+      // stored active id is left alone.
       if (writeList(serialize([fresh])) && storedActiveId === null) writeActiveId(fresh.id);
       return startSession([fresh], fresh.id);
     }
@@ -490,6 +566,8 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   /** Storage can't be read, so we can't know what's there: write nothing this visit. */
   function runWithoutStorage(err: unknown): Session {
     console.error('Could not read saved characters; saving is off for this visit', err);
+    carried = [];
+    newSheetJson = null;
     setStatus({ storageUnreadable: true });
     if (session) return { ...session };
     const fresh = createNewAdventurer();
@@ -510,12 +588,25 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
     saveCharacters(characters) {
       if (!session) return;
       session = { ...session, characters };
-      const json = serialize(characters);
-      let written = false;
-      if (!status.storageUnreadable && !status.conflict && (status.unsavedRecovery.length === 0 || retryPausedBackup())) {
-        written = writeList(json);
+      try {
+        if (newSheetJson !== null) {
+          // Not saved until the player changes the new sheet (see loadFromStorage).
+          if (JSON.stringify(characters) === newSheetJson) {
+            setStatus({ hasUnsavedChanges: false });
+            return;
+          }
+          newSheetJson = null;
+        }
+        const json = serialize(characters);
+        let written = false;
+        if (!status.storageUnreadable && !status.conflict && (status.unsavedRecovery.length === 0 || retryPausedBackup())) {
+          written = writeList(json);
+        }
+        noteSaved(json, written);
+      } catch (err) {
+        noteSaveError(err);
+        setStatus({ hasUnsavedChanges: true });
       }
-      noteSaved(json, written);
     },
 
     saveActiveId(id) {
@@ -531,14 +622,14 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       return () => { listeners.delete(listener); };
     },
 
-    recoveryDownload() {
-      const notBackedUp: RecoveryEntry[] = [
+    recoveryDownload(scope = {}) {
+      const keys = scope.backupKeys ? new Set(scope.backupKeys) : null;
+      const backups = status.backups.filter((b) => keys === null || keys.has(b.key));
+      const notBackedUp: RecoveryEntry[] = scope.notBackedUp === false ? [] : [
         ...status.unsavedRecovery,
-        ...status.setAside
-          .filter((e) => e.backupKey === null)
-          .map((e): RecoveryEntry => ({ kind: 'character', index: e.index, error: e.error, value: e.value })),
+        ...status.setAside.filter((e) => e.backupKey === null && e.reason !== 'newer-version').map(asRecoveryEntry),
       ];
-      for (const b of status.backups) downloadedTexts.set(b.key, b.raw);
+      for (const b of backups) downloadedTexts.set(b.key, b.raw);
       for (const e of notBackedUp) downloadedIds.add(entryIdentity(e));
       refreshDownloaded();
       return JSON.stringify({
@@ -547,7 +638,7 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
         app: 'Dolmen Spot',
         about: "Saved data Dolmen Spot couldn't read. This isn't a character file: keep it, or attach it to a bug report at https://github.com/TheBeege/dolmen-spot/issues",
         downloadedAt: isoNow(),
-        backups: status.backups.map((b) => b.record ?? { key: b.key, damagedBackup: b.raw }),
+        backups: backups.map((b) => b.record ?? { key: b.key, damagedBackup: b.raw }),
         notBackedUp,
       }, null, 2);
     },
@@ -602,43 +693,85 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       }
       refreshBackups();
     },
+
+    unsavedCharactersJson() {
+      try {
+        if (!session || (!status.hasUnsavedChanges && !changesNotSaved(status))) return null;
+        return JSON.stringify(session.characters, null, 2);
+      } catch {
+        return null;
+      }
+    },
   };
+}
+
+/** A saved entry that couldn't be loaded, before the store decides what to keep. */
+interface ReadEntry {
+  index: number;
+  reason: SetAsideReason;
+  error: string;
+  value: unknown;
+}
+
+function asRecoveryEntry(entry: { index: number; error: string; value: unknown }): RecoveryEntry {
+  return { kind: 'character', index: entry.index, error: entry.error, value: entry.value };
 }
 
 /**
  * Parse and migrate the stored list. Never throws: anything that can't be
- * loaded comes back as `whole` (the exact stored text) or in `unreadable`
- * (entries as parsed, untouched by migration).
+ * loaded comes back as `whole` (the exact stored text) or in `entries`
+ * (as parsed, untouched by migration).
  */
 function readCharacters(
   raw: string | null,
   storedActiveId: string | null,
   migrate: (data: unknown) => Character,
-): { characters: Character[]; whole: RecoveryEntry | null; unreadable: Array<RecoveryEntry & { kind: 'character' }> } {
+  currentSchemaVersion: number,
+): { characters: Character[]; whole: RecoveryEntry | null; entries: ReadEntry[] } {
   const characters: Character[] = [];
-  const unreadable: Array<RecoveryEntry & { kind: 'character' }> = [];
-  if (raw === null || raw === '') return { characters, whole: null, unreadable };
+  const entries: ReadEntry[] = [];
+  if (raw === null || raw === '') return { characters, whole: null, entries };
+  const unreadableWhole = (error: string): RecoveryEntry => ({ kind: 'all-characters', error, raw, activeCharacterId: storedActiveId });
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
   } catch (err) {
-    return { characters, unreadable, whole: { kind: 'all-characters', error: describeError(err), raw, activeCharacterId: storedActiveId } };
+    return { characters, entries, whole: unreadableWhole(describeError(err)) };
   }
   if (!Array.isArray(parsed)) {
-    return { characters, unreadable, whole: { kind: 'all-characters', error: 'Saved data is not a list of characters', raw, activeCharacterId: storedActiveId } };
+    return { characters, entries, whole: unreadableWhole('Saved data is not a list of characters') };
+  }
+  try {
+    // A value nested too deeply to write back (only a hostile edit makes one)
+    // would make every later save throw, so the whole value counts as unreadable.
+    JSON.stringify(parsed);
+  } catch (err) {
+    return { characters, entries, whole: unreadableWhole(describeError(err)) };
   }
 
   parsed.forEach((item: unknown, index) => {
+    if (!isPlainObject(item)) {
+      entries.push({ index, reason: 'not-a-character', error: 'Not a character object', value: item });
+      return;
+    }
+    if (isFromNewerVersion(item, currentSchemaVersion)) {
+      entries.push({
+        index,
+        reason: 'newer-version',
+        error: `Saved by a newer version of Dolmen Spot (schema ${String(item.schemaVersion)}; this version reads up to ${currentSchemaVersion})`,
+        value: item,
+      });
+      return;
+    }
     try {
-      if (!isPlainObject(item)) throw new Error('Not a character object');
       // Migrations mutate their input, so give them a copy and keep `item` as parsed.
       characters.push(migrate(JSON.parse(JSON.stringify(item))));
     } catch (err) {
-      unreadable.push({ kind: 'character', index, error: describeError(err), value: item });
+      entries.push({ index, reason: 'migration-failed', error: describeError(err), value: item });
     }
   });
-  return { characters, whole: null, unreadable };
+  return { characters, whole: null, entries };
 }
 
 /** The stored active id if it still names a loaded character, else the first character. */
@@ -646,9 +779,14 @@ function pickActiveId(characters: Character[], storedActiveId: string | null): s
   return (characters.find((c) => c.id === storedActiveId) ?? characters[0]).id;
 }
 
-/** Identifies the same unreadable data across loads, so it's only backed up once. */
+/** Identifies the same unreadable data across loads, so it's only backed up once. Never throws. */
 function entryIdentity(entry: RecoveryEntry): string {
-  return entry.kind === 'all-characters' ? `raw:${entry.raw}` : `value:${JSON.stringify(entry.value) ?? 'undefined'}`;
+  if (entry.kind === 'all-characters') return `raw:${entry.raw}`;
+  try {
+    return `value:${JSON.stringify(entry.value) ?? 'undefined'}`;
+  } catch {
+    return `unidentifiable:${entry.index}:${entry.error}`;
+  }
 }
 
 /** A valid version-1 record, or null for anything else (treated as a damaged backup). */
@@ -656,6 +794,8 @@ function parseRecord(raw: string): RecoveryRecord | null {
   let data: unknown;
   try {
     data = JSON.parse(raw);
+    // Entries must also be writable again (a hostile, deeply nested one isn't).
+    if (isPlainObject(data)) JSON.stringify(data.entries);
   } catch {
     return null;
   }

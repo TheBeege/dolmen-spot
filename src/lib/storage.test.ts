@@ -422,12 +422,15 @@ test('characters set aside by a broken migration come back once it is fixed', ()
   const b = makeChar('Brannoc');
   const ls = new FakeStorage({ [CHARS]: JSON.stringify([a, b]), [ACTIVE]: b.id });
 
-  // Release N: the migration throws for everyone.
+  // Release N: the migration throws for everyone. A new sheet is started, but
+  // not saved until the player changes it.
   const broken = createCharacterStore(ls, { migrate: brokenFor('Aldric', 'Brannoc') });
   const r1 = broken.load();
   assert.deepEqual(names(r1.characters), ['New Adventurer']);
-  assert.deepEqual(stored(ls).map((c) => c.name), ['New Adventurer', 'Aldric', 'Brannoc']);
+  assert.equal(broken.getStatus().startedNewSheet, true);
+  assert.deepEqual(stored(ls).map((c) => c.name), ['Aldric', 'Brannoc']);
   broken.saveCharacters([{ ...r1.characters[0], name: 'Stopgap' }]);
+  assert.deepEqual(stored(ls).map((c) => c.name), ['Stopgap', 'Aldric', 'Brannoc'], 'saved once changed');
 
   // Same release, next visit: nothing new is backed up, and nothing is lost.
   createCharacterStore(ls, { migrate: brokenFor('Aldric', 'Brannoc') }).load();
@@ -454,8 +457,29 @@ test('a migration that throws on its own output on the next load sets the charac
   assert.deepEqual(names(createCharacterStore(ls, { migrate }).load().characters), ['Aldric']);
   const second = createCharacterStore(ls, { migrate }).load();
   assert.deepEqual(names(second.characters), ['New Adventurer']);
-  assert.deepEqual(stored(ls).map((x) => x.name), ['New Adventurer', 'Aldric'], 'still in the list');
+  assert.deepEqual(stored(ls).map((x) => x.name), ['Aldric'], 'still in the list, and the new sheet not saved');
   assert.ok(createCharacterStore(ls).load().characters.some((x) => x.name === 'Aldric'), 'and back once the migration is fixed');
+});
+
+test('when every saved character is set aside, the new sheet is only saved once it changes', () => {
+  const a = makeChar('Aldric');
+  const b = makeChar('Brannoc');
+  const raw = JSON.stringify([a, b]);
+  const ls = new FakeStorage({ [CHARS]: raw, [ACTIVE]: a.id });
+  const s = createCharacterStore(ls, { migrate: brokenFor('Aldric', 'Brannoc') });
+  const { characters, activeId } = s.load();
+  assert.deepEqual(names(characters), ['New Adventurer']);
+  assert.equal(s.getStatus().startedNewSheet, true);
+  // The page's first save effects, with the sheet untouched, write nothing.
+  s.saveCharacters(characters);
+  s.saveActiveId(activeId);
+  assert.equal(ls.getItem(CHARS), raw);
+  assert.equal(ls.getItem(ACTIVE), a.id);
+  assert.equal(s.getStatus().hasUnsavedChanges, false);
+  // Fixed before the player touched it: exactly the old list comes back.
+  const fixed = createCharacterStore(ls).load();
+  assert.deepEqual(names(fixed.characters), ['Aldric', 'Brannoc']);
+  assert.equal(fixed.activeId, a.id);
 });
 
 test('a set-aside character stays safe in the list even when no backup can be made', () => {
@@ -471,6 +495,77 @@ test('a set-aside character stays safe in the list even when no backup can be ma
   assert.deepEqual(stored(ls).map((c) => c.name), ['Aldric', 'Brannoc']);
   const download = JSON.parse(s.recoveryDownload()) as DownloadFile;
   assert.equal(asElement(download.notBackedUp[0]).index, 1);
+});
+
+// ------------------------------------------------ saved by a newer version
+
+/** A character as a newer version of Dolmen Spot might save it: a reshaped field and a new one. */
+function fromNewerVersion(name: string): Record<string, unknown> {
+  return {
+    ...makeChar(name),
+    schemaVersion: CURRENT_SCHEMA_VERSION + 1,
+    abilityScores: [{ key: 'strength', value: 17 }, { key: 'charisma', value: 15 }],
+    currentDate: { day: 3, month: 2, year: 5, era: 'Second Age' },
+  };
+}
+
+test('a character saved by a newer version is set aside as it is: not migrated, repaired, written back or backed up', () => {
+  const future = fromNewerVersion('Future');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([future]), [ACTIVE]: String(future.id) });
+  const before = ls.snapshot();
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  assert.deepEqual(names(characters), ['New Adventurer'], 'a new sheet, not saved');
+  s.saveCharacters(characters);
+  assert.deepEqual(ls.snapshot(), before, 'storage exactly as it was');
+  const [entry] = s.getStatus().setAside;
+  assert.equal(entry.reason, 'newer-version');
+  assert.equal(entry.backupKey, null);
+  assert.match(entry.error, /newer version/);
+  assert.deepEqual(entry.value, future);
+  assert.equal(changesNotSaved(s.getStatus()), false);
+  assert.deepEqual((JSON.parse(s.recoveryDownload()) as DownloadFile).notBackedUp, [], "it isn't unreadable data");
+});
+
+test('a character from a newer version is carried unchanged through every save', () => {
+  const future = fromNewerVersion('Future');
+  const a = makeChar('Aldric');
+  const quirk = { name: 'Quirk', level: 1, schemaVersion: '10' };
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([future, a, quirk]), [ACTIVE]: a.id });
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  assert.deepEqual(names(characters), ['Aldric', 'Quirk'], 'a string schemaVersion still loads as before');
+  s.saveCharacters([{ ...characters[0], otherNotes: 'edited' }, makeChar('Brannoc')]);
+  const list = stored(ls);
+  assert.deepEqual(list.map((c) => c.name), ['Aldric', 'Brannoc', 'Future']);
+  assert.equal(JSON.stringify(list[2]), JSON.stringify(future), 'byte for byte as parsed');
+});
+
+test('rolling forward to the newer version opens it exactly as it was saved', () => {
+  const future = fromNewerVersion('Future');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([makeChar('Aldric'), future]) });
+  // This version: set aside and carried, while the player keeps playing.
+  const current = createCharacterStore(ls);
+  const r = current.load();
+  current.saveCharacters([{ ...r.characters[0], otherNotes: 'edited in this version' }]);
+  // The newer version, simulated: it understands one more schema and migrates nothing here.
+  const newer = createCharacterStore(ls, { currentSchemaVersion: CURRENT_SCHEMA_VERSION + 1, migrate: (d) => d as Character });
+  const { characters } = newer.load();
+  assert.deepEqual(names(characters), ['Aldric', 'Future']);
+  assert.deepEqual(characters[1], future, 'nothing repaired or dropped');
+  assert.equal(characters[0].otherNotes, 'edited in this version');
+  assert.deepEqual(newer.getStatus().setAside, []);
+});
+
+test('importing a file from a newer version is refused, alone or in a list', () => {
+  const future = JSON.stringify(fromNewerVersion('Future'));
+  assert.throws(() => parseImportedCharacters(future), isImportError(IMPORT_MESSAGES.newerVersion));
+  assert.throws(() => parseImportedCharacter(future), isImportError(IMPORT_MESSAGES.newerVersion));
+  assert.throws(
+    () => parseImportedCharacters(`[${JSON.stringify(makeChar('A'))},${future}]`, { allowMany: true }),
+    isImportError(IMPORT_MESSAGES.newerVersion),
+  );
+  assert.doesNotThrow(() => parseImportedCharacter('{"name":"Quirk","schemaVersion":"12"}'), 'a string schemaVersion keeps its old handling');
 });
 
 // ------------------------------------------- entries that aren't characters
@@ -955,4 +1050,201 @@ test('imports: one character, or a list when allowed, each migrated with a new i
     () => parseImportedCharacters(JSON.stringify(old), { migrate: () => { throw new Error('x'); } }),
     isImportError(IMPORT_MESSAGES.notOpened),
   );
+});
+
+// ------------------------------------------------- hostile or broken data
+
+test('an entry nested too deeply to save again makes the whole value unreadable: backed up exactly, nothing throws', () => {
+  let deep = '0';
+  for (let i = 0; i < 12_000; i++) deep = `[${deep}]`;
+  const good = makeChar('Aldric');
+  const raw = `[${JSON.stringify(good)},{"name":"Deep","level":1,"x":${deep}}]`;
+  const ls = new FakeStorage({ [CHARS]: raw, [ACTIVE]: good.id });
+  const s = createCharacterStore(ls);
+  const loaded = s.load();
+  assert.equal(s.getStatus().storageUnreadable, false, 'not mistaken for blocked storage');
+  assert.equal(asWhole(ls.records()[0].entries[0]).raw, raw, 'backed up exactly');
+  assert.deepEqual(names(loaded.characters), ['New Adventurer']);
+  assert.equal(ls.getItem(CHARS), JSON.stringify(loaded.characters));
+  assert.doesNotThrow(() => s.saveCharacters([{ ...loaded.characters[0], name: 'After' }]));
+  assert.doesNotThrow(() => s.recoveryDownload());
+  assert.deepEqual(stored(ls).map((c) => c.name), ['After']);
+});
+
+test('a save that cannot be serialised is reported, not thrown', () => {
+  const a = makeChar('Aldric');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([a]), [ACTIVE]: a.id });
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  const before = ls.snapshot();
+  assert.doesNotThrow(() => s.saveCharacters([{ ...characters[0], otherNotes: BigInt(1) as unknown as string }]));
+  assert.ok(s.getStatus().saveError);
+  assert.equal(s.getStatus().hasUnsavedChanges, true);
+  assert.deepEqual(ls.snapshot(), before);
+  assert.equal(s.unsavedCharactersJson(), null, "doesn't throw either");
+});
+
+test('a clock that jumps back does not stall the paused backup retry', () => {
+  const clock = new Clock();
+  const ls = new FakeStorage({ [CHARS]: 'bad{' });
+  ls.failSet = (k) => (k.startsWith(PREFIX) ? quotaError(k) : null);
+  const s = createCharacterStore(ls, { now: clock.now });
+  const { characters } = s.load();
+  ls.failSet = null; // room again
+  clock.advance(-60 * 60 * 1000); // the clock is corrected back an hour
+  clock.advance(10_000);
+  s.saveCharacters(characters);
+  assert.equal(isSavingPaused(s.getStatus()), false, 'retried at once, not an hour later');
+  assert.equal(asWhole(ls.records()[0].entries[0]).raw, 'bad{');
+});
+
+// ------------------------------------------- unsaved changes, two tabs, release
+
+test('unsaved changes are measured from the last list this tab saved', () => {
+  const a = makeChar('Aldric');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([a]), [ACTIVE]: a.id });
+  const s = createCharacterStore(ls);
+  const r = s.load();
+  const saved = [{ ...r.characters[0], otherNotes: 'saved edit' }];
+  s.saveCharacters(saved);
+  // Another tab saves, so this tab's next change stops at the conflict...
+  ls.map.set(CHARS, JSON.stringify([makeChar('From another tab')]));
+  s.saveCharacters([{ ...saved[0], otherNotes: 'unsaved edit' }]);
+  assert.ok(s.getStatus().conflict);
+  assert.equal(s.getStatus().hasUnsavedChanges, true);
+  // ...and undoing that change leaves nothing this tab hasn't saved.
+  s.saveCharacters(saved);
+  assert.equal(s.getStatus().hasUnsavedChanges, false);
+});
+
+test('once another tab has changed the characters, this tab writes nothing more this visit, even if the list matches again', () => {
+  const x = makeChar('Xan');
+  const original = JSON.stringify([x]);
+  const ls = new FakeStorage({ [CHARS]: original, [ACTIVE]: x.id });
+  const s = createCharacterStore(ls);
+  const r = s.load();
+  ls.map.set(CHARS, JSON.stringify([makeChar('From another tab')]));
+  s.saveCharacters([{ ...r.characters[0], otherNotes: 'edit' }]);
+  assert.ok(s.getStatus().conflict);
+  ls.map.set(CHARS, original); // the other tab puts the list back
+  const calls = ls.setCalls.length;
+  s.saveCharacters([{ ...r.characters[0], otherNotes: 'another edit' }]);
+  assert.equal(ls.setCalls.length, calls, 'still stopped: the banner asks for a reload');
+  assert.equal(ls.getItem(CHARS), original);
+});
+
+test('storage that was unreadable at load stays off for the visit, even if it starts working', () => {
+  const ls = new FakeStorage({});
+  ls.failGet = () => new DOMException('The operation is insecure.', 'SecurityError');
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  assert.equal(s.getStatus().storageUnreadable, true);
+  ls.failGet = null; // readable again, and empty
+  s.saveCharacters([{ ...characters[0], name: 'Typed' }]);
+  s.saveActiveId('other');
+  assert.deepEqual(ls.setCalls, [], 'nothing written: a reload starts saving');
+});
+
+test("a first visit whose save failed still notices another tab's save", () => {
+  const ls = new FakeStorage({});
+  ls.failSet = (k) => (k === CHARS ? quotaError(k) : null);
+  const s = createCharacterStore(ls);
+  const r = s.load();
+  ls.failSet = null;
+  const other = JSON.stringify([makeChar('Other tab')]);
+  ls.map.set(CHARS, other);
+  s.saveCharacters([{ ...r.characters[0], name: 'Edit in this tab' }]);
+  assert.equal(ls.getItem(CHARS), other, 'not overwritten');
+  assert.ok(s.getStatus().conflict);
+});
+
+test("storage that becomes unreadable after a good load: a remount keeps this tab's characters", () => {
+  const a = makeChar('Aldric');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([a]), [ACTIVE]: a.id });
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  s.saveCharacters([{ ...characters[0], name: 'Aldric the Saved' }]);
+  ls.failGet = () => new DOMException('The operation is insecure.', 'SecurityError');
+  const again = s.load();
+  assert.deepEqual(names(again.characters), ['Aldric the Saved']);
+  assert.equal(s.getStatus().storageUnreadable, true);
+});
+
+test("Start Saving Again leaves the active character alone if the list couldn't be written", () => {
+  const raw = '[{"name":"Aldric","otherNotes":"truncated';
+  const ls = new FakeStorage({ [CHARS]: raw, [ACTIVE]: 'aldric-id' });
+  ls.failSet = (k) => (k.startsWith(PREFIX) ? quotaError(k) : null);
+  const s = createCharacterStore(ls);
+  s.load();
+  s.recoveryDownload();
+  ls.failSet = (k) => (k === CHARS || k.startsWith(PREFIX) ? quotaError(k) : null);
+  assert.equal(s.releaseUnsavedRecovery(), true);
+  assert.equal(ls.getItem(CHARS), raw, 'the list write failed');
+  assert.equal(ls.getItem(ACTIVE), 'aldric-id', 'so the active id is left as it was');
+  assert.ok(s.getStatus().saveError);
+});
+
+test('a recovery is remembered, so it can be announced, until the next problem', () => {
+  const a = makeChar('Aldric');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([a]), [ACTIVE]: a.id });
+  const s = createCharacterStore(ls);
+  const { characters } = s.load();
+  assert.equal(s.getStatus().savingRecovered, false);
+  ls.failSet = (k) => quotaError(k);
+  s.saveCharacters([{ ...characters[0], otherNotes: 'one' }]);
+  assert.equal(s.getStatus().savingRecovered, false);
+  ls.failSet = null;
+  s.saveCharacters([{ ...characters[0], otherNotes: 'two' }]);
+  assert.equal(s.getStatus().savingRecovered, true);
+  ls.failSet = (k) => quotaError(k);
+  s.saveCharacters([{ ...characters[0], otherNotes: 'three' }]);
+  assert.equal(s.getStatus().savingRecovered, false);
+});
+
+// ------------------------------------------------------ for other screens
+
+test("unsavedCharactersJson: this tab's characters, importable, only while storage may not have them", () => {
+  const a = makeChar('Aldric');
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([a]), [ACTIVE]: a.id });
+  const s = createCharacterStore(ls);
+  assert.equal(s.unsavedCharactersJson(), null, 'nothing loaded yet');
+  const { characters } = s.load();
+  assert.equal(s.unsavedCharactersJson(), null, 'everything is saved');
+  ls.failSet = (k) => quotaError(k);
+  const edited = [{ ...characters[0], name: 'Aldric (unsaved)' }, makeChar('Brannoc')];
+  s.saveCharacters(edited);
+  const json = s.unsavedCharactersJson();
+  assert.ok(json);
+  assert.deepEqual(JSON.parse(json), edited);
+  assert.deepEqual(names(parseImportedCharacters(json, { allowMany: true })), ['Aldric (unsaved)', 'Brannoc'], 'Import Character accepts it');
+
+  // Blocked storage counts too, even before any change.
+  const blocked = new FakeStorage({ [CHARS]: JSON.stringify([a]) });
+  blocked.failGet = () => new DOMException('denied', 'SecurityError');
+  const b = createCharacterStore(blocked);
+  b.load();
+  assert.ok(b.unsavedCharactersJson());
+});
+
+test('a download covers only the backups it was asked for, and only those can be deleted', () => {
+  const clock = new Clock();
+  const ls = new FakeStorage({ [CHARS]: 'old{' });
+  createCharacterStore(ls, { now: clock.now }).load(); // an earlier visit's backup
+  const [earlierKey] = ls.recoveryKeys();
+  clock.advance(1000);
+  ls.map.set(CHARS, 'new{');
+  const s = createCharacterStore(ls, { now: clock.now });
+  s.load();
+  const thisVisit = s.getStatus().backups.filter((b) => b.createdThisSession).map((b) => b.key);
+  assert.equal(thisVisit.length, 1);
+  const rawOf = (file: DownloadFile) => file.backups.map((b) => asWhole((b as RecoveryRecord).entries[0]).raw);
+
+  const notice = JSON.parse(s.recoveryDownload({ backupKeys: thisVisit, notBackedUp: true })) as DownloadFile;
+  assert.deepEqual(rawOf(notice), ['new{']);
+  assert.deepEqual(s.getStatus().downloaded?.backupKeys, thisVisit);
+  assert.deepEqual(s.deleteBackups([earlierKey, ...thisVisit]), { deleted: thisVisit, kept: [earlierKey] });
+
+  const calm = JSON.parse(s.recoveryDownload({ backupKeys: [earlierKey], notBackedUp: false })) as DownloadFile;
+  assert.deepEqual(rawOf(calm), ['old{']);
+  assert.deepEqual(calm.notBackedUp, []);
 });
