@@ -2328,9 +2328,16 @@ function spellNameKey(name: string): string {
   return name.trim().replace(/\s*\/\s*/g, '/').replace(/\s+/g, ' ').toLowerCase();
 }
 
+// Lookups by spellNameKey, since the Spells & Magic tab looks spells up for
+// every row each time it renders.
+function byNameKey<T extends { name: string }>(spells: readonly T[]): ReadonlyMap<string, T> {
+  return new Map(spells.map((s) => [spellNameKey(s.name), s]));
+}
+
+const ARCANE_SPELLS_BY_KEY = byNameKey(ARCANE_SPELLS);
+
 export function findArcaneSpell(name: string): { name: string; rank: number } | undefined {
-  const target = spellNameKey(name);
-  return ARCANE_SPELLS.find((s) => spellNameKey(s.name) === target);
+  return ARCANE_SPELLS_BY_KEY.get(spellNameKey(name));
 }
 
 // Arcane study costs and durations (Player's Book p78).
@@ -2409,9 +2416,10 @@ export const HOLY_SPELLS: { name: string; rank: number; saint: string }[] = [
   { name: 'Raise Dead', rank: 5, saint: 'St Clewyd' },
 ];
 
+const HOLY_SPELLS_BY_KEY = byNameKey(HOLY_SPELLS);
+
 export function findHolySpell(name: string): { name: string; rank: number; saint: string } | undefined {
-  const target = spellNameKey(name);
-  return HOLY_SPELLS.find((s) => spellNameKey(s.name) === target);
+  return HOLY_SPELLS_BY_KEY.get(spellNameKey(name));
 }
 
 // 5B-2: What each arcane and holy spell does, for the Spells & Magic tab.

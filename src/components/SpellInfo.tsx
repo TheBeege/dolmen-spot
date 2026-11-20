@@ -9,12 +9,14 @@
 // to the button, as does focusing the button from the keyboard. The card meets
 // WCAG 1.4.13: Escape dismisses it, the pointer can move onto it, and it stays
 // until the pointer or focus leaves. It repeats the panel's text, so it's hidden
-// from screen readers, which get the panel instead.
+// from screen readers, which get the panel instead. Only one card shows at a
+// time.
 //
 // A <select> option can't hold a summary, so ChosenSpellSummary shows the one
 // for the spell picked in a select.
 
 import {
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -28,69 +30,98 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { findSpell, getSpellSummary } from '@/lib/gamedata';
-import { placeHoverCard } from '@/lib/hover-card';
+import { HOVER_CARD_MARGIN, placeHoverCard, union, type Box } from '@/lib/hover-card';
 import type { SpellSummary, SpellType } from '@/lib/types';
 
 /** How long the pointer rests on a spell before its card appears, so a pointer passing over doesn't flash cards. */
 const SHOW_DELAY_MS = 250;
-/** How long the card waits after the pointer leaves, so it can cross the gap onto the card. */
+/** How long the card stays after the pointer leaves the spell, the card and the space between them. */
 const HIDE_DELAY_MS = 150;
 
 const summaryTextClasses = 'text-xs leading-snug text-[#f5e6c8]/90 border-l-2 border-[#c4a35a]/60 pl-2';
 
-/** One spell's open/closed summary panel within a list. */
+/**
+ * One spell's summary panel within a list, as props for its SpellInfo and
+ * SpellSummaryPanel: spread the same object into both.
+ */
 export interface SpellDisclosure {
   open: boolean;
-  toggle: () => void;
   panelId: string;
+  /** What to pass to onToggle: the key it was made from in useSpellDisclosures. */
+  toggleKey: string;
+  onToggle: (key: string) => void;
 }
 
 /**
  * Which spells in a list have their summary panel open. Call the result with
  * a key unique within the list (a row's id, or the spell's name) to get that
- * spell's disclosure, and pass it to both its SpellInfo and SpellSummaryPanel.
+ * spell's disclosure. Each value in it is a string, a boolean or a function
+ * that never changes, so memoised rows that are passed them skip re-rendering
+ * when nothing of theirs has changed.
  */
 export function useSpellDisclosures(): (key: string) => SpellDisclosure {
   const baseId = useId();
   const [openKeys, setOpenKeys] = useState<ReadonlySet<string>>(() => new Set());
-  return (key) => ({
-    open: openKeys.has(key),
-    toggle: () => setOpenKeys((prev) => {
+  const onToggle = useCallback((key: string) => {
+    setOpenKeys((prev) => {
       const next = new Set(prev);
       if (!next.delete(key)) next.add(key);
       return next;
-    }),
+    });
+  }, []);
+  return (key) => ({
+    open: openKeys.has(key),
     // An id can't contain spaces, and spell names do.
     panelId: `${baseId}spell-${key.replace(/\s/g, '_')}`,
+    toggleKey: key,
+    onToggle,
   });
 }
+
+// The card showing now, if any. Showing another dismisses it, so a card from
+// keyboard focus and one from the mouse never show together.
+let dismissShownCard: (() => void) | null = null;
 
 /**
  * `children` (usually the spell's name) followed by the info button, or just
  * `children` when `name` isn't an arcane or holy spell the app knows (a
  * homebrew prayer, say). Hovering `children` shows the card too.
+ * `labelClassName` styles `children` alone (a cast spell's faded name), so
+ * the button and card keep full contrast. `context` says where the button is
+ * ("known", "reference"), so screen readers can tell apart the buttons for the
+ * same spell in different lists. Mark the element around a list of these with
+ * `data-spell-list`, and the card keeps off the list's spells where it can;
+ * `data-spell-list="whole"` keeps it off the whole element, for a menu.
  */
-export function SpellInfo({
+export const SpellInfo = memo(function SpellInfo({
   spellType,
   name,
-  disclosure,
+  context,
+  open,
+  panelId,
+  toggleKey,
+  onToggle,
   children,
+  labelClassName = '',
   className = '',
 }: {
   spellType: SpellType;
   name: string;
-  disclosure: SpellDisclosure;
+  context: string;
   children?: ReactNode;
+  labelClassName?: string;
   className?: string;
-}) {
+} & SpellDisclosure) {
   const spell = findSpell(spellType, name);
   const summary = spell ? getSpellSummary(spellType, spell.name) : undefined;
 
   const buttonRef = useRef<HTMLButtonElement>(null);
-  // Whether the pointer is on the name (or button) and on the card. They're
-  // tracked apart because the card isn't inside the name's element.
+  // Whether the pointer is on the name (or button), and whether it's on the
+  // card or the space between them (see setBridge). They're tracked apart
+  // because the card isn't inside the name's element.
   const overAnchor = useRef(false);
-  const overCard = useRef(false);
+  const overBridge = useRef(false);
+  const bridge = useRef<Box | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [hover, setHover] = useState({ pointer: false, focus: false, dismissed: false });
 
@@ -102,25 +133,56 @@ export function SpellInfo({
       return next;
     });
   }, []);
+  const dismiss = useCallback(() => update({ dismissed: true }), [update]);
 
-  // After `delay`, show the card if the pointer is on the name or card, and hide it if not.
-  const settle = (delay: number) => {
+  // After `delay`, show the card if the pointer is on the name or the card, and hide it if not.
+  const settle = useCallback((delay: number) => {
     clearTimeout(timer.current);
-    timer.current = setTimeout(() => update({ pointer: overAnchor.current || overCard.current }), delay);
-  };
+    timer.current = setTimeout(() => update({ pointer: overAnchor.current || overBridge.current }), delay);
+  }, [update]);
+
+  // The box around the name and the card, from HoverCard each time it places
+  // the card (null while the card is hidden).
+  const setBridge = useCallback((box: Box | null) => {
+    bridge.current = box;
+  }, []);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
-  const shown = summary !== undefined && (hover.pointer || hover.focus) && !hover.dismissed && !disclosure.open;
+  const shown = summary !== undefined && (hover.pointer || hover.focus) && !hover.dismissed && !open;
 
   useEffect(() => {
     if (!shown) return;
+    if (dismissShownCard && dismissShownCard !== dismiss) dismissShownCard();
+    dismissShownCard = dismiss;
+    // Escape dismisses the card, and only the card: it's caught on its way
+    // down, so a menu the spell is in doesn't close as well.
     const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') update({ dismissed: true });
+      if (e.key !== 'Escape') return;
+      e.stopPropagation();
+      dismiss();
     };
-    document.addEventListener('keydown', onKeyDown);
-    return () => document.removeEventListener('keydown', onKeyDown);
-  }, [shown, update]);
+    // Anywhere in the box around the name and the card counts as on the card,
+    // so the pointer can cross the space between them (wider when the card has
+    // moved past other spells) without the card hiding.
+    const onPointerMove = (e: globalThis.PointerEvent) => {
+      if (e.pointerType === 'touch') return;
+      const box = bridge.current;
+      const inBridge = box !== null
+        && e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
+      if (inBridge === overBridge.current) return;
+      overBridge.current = inBridge;
+      settle(inBridge ? 0 : HIDE_DELAY_MS);
+    };
+    document.addEventListener('keydown', onKeyDown, true);
+    document.addEventListener('pointermove', onPointerMove);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown, true);
+      document.removeEventListener('pointermove', onPointerMove);
+      overBridge.current = false;
+      if (dismissShownCard === dismiss) dismissShownCard = null;
+    };
+  }, [shown, dismiss, settle]);
 
   // Touch has no hover: a tap on the button opens the panel instead.
   const onAnchorEnter = (e: PointerEvent) => {
@@ -133,14 +195,6 @@ export function SpellInfo({
     overAnchor.current = false;
     settle(HIDE_DELAY_MS);
   };
-  const onCardEnter = () => {
-    overCard.current = true;
-    settle(0);
-  };
-  const onCardLeave = () => {
-    overCard.current = false;
-    settle(HIDE_DELAY_MS);
-  };
 
   // Keyboard focus shows the card; a click (which also focuses the button in
   // most browsers) doesn't, since it opens the panel.
@@ -149,17 +203,18 @@ export function SpellInfo({
   };
   const onBlur = () => update({ focus: false });
   const onClick = () => {
-    disclosure.toggle();
-    update({ dismissed: true });
+    onToggle(toggleKey);
+    dismiss();
   };
 
   return (
     <span
+      data-spell-info=""
       className={`inline-flex max-w-full items-center gap-1 ${className}`}
       onPointerEnter={onAnchorEnter}
       onPointerLeave={onAnchorLeave}
     >
-      {children !== undefined && <span className="min-w-0 break-words">{children}</span>}
+      {children !== undefined && <span className={`min-w-0 break-words ${labelClassName}`}>{children}</span>}
       {spell && summary && (
         <>
           <button
@@ -168,71 +223,71 @@ export function SpellInfo({
             onClick={onClick}
             onFocus={onFocus}
             onBlur={onBlur}
-            aria-expanded={disclosure.open}
-            aria-controls={disclosure.panelId}
-            aria-label={`What ${spell.name} does`}
+            aria-expanded={open}
+            aria-controls={panelId}
+            aria-label={`What ${spell.name} does (${context})`}
             className={`shrink-0 inline-flex items-center justify-center w-6 h-6 rounded transition-colors ${
-              disclosure.open
+              open
                 ? 'bg-[#c4a35a]/25 text-[#c4a35a]'
                 : 'text-[#c4a35a]/80 hover:text-[#c4a35a] hover:bg-[#c4a35a]/15'
             }`}
           >
             <InfoIcon />
           </button>
-          {shown && (
-            <HoverCard
-              anchorRef={buttonRef}
-              title={spell.name}
-              summary={summary}
-              onPointerEnter={onCardEnter}
-              onPointerLeave={onCardLeave}
-            />
-          )}
+          {shown && <HoverCard anchorRef={buttonRef} title={spell.name} summary={summary} onPlace={setBridge} />}
         </>
       )}
     </span>
   );
-}
+});
 
 /**
  * The summary panel that a SpellInfo's button opens and closes. Put it right
  * after that SpellInfo in the page, so a screen reader comes to it next; in a
  * flex row, CSS `order` can still show it below the row's other controls.
+ * While closed it's an empty hidden element, there for the button's
+ * aria-controls to point at.
  */
-export function SpellSummaryPanel({
+export const SpellSummaryPanel = memo(function SpellSummaryPanel({
   spellType,
   name,
-  disclosure,
+  open,
+  panelId,
   className = '',
 }: {
   spellType: SpellType;
   name: string;
-  disclosure: SpellDisclosure;
   className?: string;
-}) {
+} & SpellDisclosure) {
   const summary = getSpellSummary(spellType, name);
   if (!summary) return null;
   return (
-    <div id={disclosure.panelId} hidden={!disclosure.open} className={`${summaryTextClasses} ${className}`}>
-      <SpellSummaryText summary={summary} />
+    <div id={panelId} hidden={!open} className={`${summaryTextClasses} ${className}`}>
+      {open && <SpellSummaryText summary={summary} />}
     </div>
   );
-}
+});
 
-/** The summary of the spell picked in a select, or nothing while none is. */
+/**
+ * The summary of the spell picked in a select, or nothing while none is.
+ * Give the select `aria-describedby={id}` while there's a summary (see
+ * getSpellSummary), so a screen reader reads it with the choice.
+ */
 export function ChosenSpellSummary({
   spellType,
   name,
+  id,
   className = '',
 }: {
   spellType: SpellType;
   name: string;
+  id: string;
   className?: string;
 }) {
   const summary = getSpellSummary(spellType, name);
   if (!summary) return null;
   return (
-    <div className={`${summaryTextClasses} ${className}`}>
+    <div id={id} className={`${summaryTextClasses} ${className}`}>
       <SpellSummaryText summary={summary} />
     </div>
   );
@@ -251,42 +306,48 @@ function SpellSummaryText({ summary }: { summary: SpellSummary }) {
   );
 }
 
-// Drawn in a portal at the end of the page, so that no ancestor can clip it
-// or fade it (a cast spell's row is half-transparent).
+// Drawn in a portal at the end of the page, so that no ancestor can clip it.
 function HoverCard({
   anchorRef,
   title,
   summary,
-  onPointerEnter,
-  onPointerLeave,
+  onPlace,
 }: {
   anchorRef: RefObject<HTMLElement | null>;
   title: string;
   summary: SpellSummary;
-  onPointerEnter: () => void;
-  onPointerLeave: () => void;
+  /** Called with the box around the spell and the card, or null while it's hidden. */
+  onPlace: (bridge: Box | null) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
   // Placed before the browser paints, and again whenever anything scrolls or
-  // the window resizes, so it stays beside the button and on screen. While
-  // the button is scrolled out of view, so is the card.
+  // the window resizes, so it stays next to the button.
   useLayoutEffect(() => {
     const place = () => {
       const anchor = anchorRef.current;
       const card = cardRef.current;
       if (!anchor || !card) return;
-      const root = document.documentElement;
-      const viewport = { width: root.clientWidth, height: root.clientHeight };
+      card.style.visibility = 'hidden';
+      onPlace(null);
+      // Hidden while the button can't be seen: scrolled out of the window or
+      // the Memorise menu, or under the page's sticky header. Cards (this one,
+      // or one on its way out) don't count as hiding it.
       const box = anchor.getBoundingClientRect();
-      if (box.bottom < 0 || box.top > viewport.height || box.right < 0 || box.left > viewport.width) {
-        card.style.visibility = 'hidden';
-        return;
-      }
-      const { left, top } = placeHoverCard(box, { width: card.offsetWidth, height: card.offsetHeight }, viewport);
+      const topmost = document
+        .elementsFromPoint((box.left + box.right) / 2, (box.top + box.bottom) / 2)
+        .find((el) => !el.closest('[data-hover-card]'));
+      if (!topmost || !anchor.contains(topmost)) return;
+      const root = document.documentElement;
+      const area = { left: 0, top: stickyHeaderBottom(), right: root.clientWidth, bottom: root.clientHeight };
+      card.style.maxHeight = `${Math.max(0, area.bottom - area.top - 2 * HOVER_CARD_MARGIN)}px`;
+      const size = { width: card.offsetWidth, height: card.offsetHeight };
+      const { left, top } = placeHoverCard(box, size, area, spellListObstacles(anchor));
       card.style.left = `${left}px`;
       card.style.top = `${top}px`;
       card.style.visibility = 'visible';
+      const spellBox = anchor.closest('[data-spell-info]')?.getBoundingClientRect() ?? box;
+      onPlace(union(spellBox, { left, top, right: left + size.width, bottom: top + size.height }));
     };
     place();
     window.addEventListener('scroll', place, true);
@@ -294,21 +355,19 @@ function HoverCard({
     return () => {
       window.removeEventListener('scroll', place, true);
       window.removeEventListener('resize', place);
+      onPlace(null);
     };
-  }, [anchorRef]);
+  }, [anchorRef, onPlace]);
 
   return createPortal(
     <div
       ref={cardRef}
+      data-hover-card=""
       aria-hidden="true"
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
-      // The card isn't inside the menu or panel it was opened from, so keep a
-      // press on it from counting as a click outside one (the Memorise menu
-      // closes on those).
-      onMouseDown={(e) => e.stopPropagation()}
+      // Not a stop for the keyboard, even when a small window makes it scroll.
+      tabIndex={-1}
       style={{ left: 0, top: 0, visibility: 'hidden' }}
-      className="fixed z-[55] w-max max-w-[min(20rem,calc(100%_-_1rem))] max-h-[calc(100%_-_1rem)] overflow-y-auto bg-[#1a1a2e] border border-[#c4a35a]/50 rounded shadow-lg shadow-black/50 px-3 py-2 text-xs leading-snug text-[#f5e6c8]"
+      className="fixed z-[55] w-max max-w-[min(20rem,calc(100%_-_1rem))] overflow-y-auto bg-[#1a1a2e] border border-[#c4a35a]/50 rounded shadow-lg shadow-black/50 px-3 py-2 text-xs leading-snug text-[#f5e6c8]"
     >
       <span className="block font-semibold text-[#c4a35a] mb-0.5">{title}</span>
       <SpellSummaryText summary={summary} />
@@ -317,12 +376,37 @@ function HoverCard({
   );
 }
 
+// The bottom of the page's sticky header, which the card stays below, or 0
+// when there's none.
+function stickyHeaderBottom(): number {
+  const header = document.querySelector('header');
+  if (!header) return 0;
+  const { position } = getComputedStyle(header);
+  if (position !== 'sticky' && position !== 'fixed') return 0;
+  return Math.max(0, header.getBoundingClientRect().bottom);
+}
+
+// What the card should keep off: every spell (name and button) in the
+// anchor's list, or the whole list when it's marked data-spell-list="whole".
+function spellListObstacles(anchor: Element): Box[] {
+  const list = anchor.closest<HTMLElement>('[data-spell-list]');
+  if (!list) return [];
+  if (list.dataset.spellList === 'whole') return [list.getBoundingClientRect()];
+  return [...list.querySelectorAll('[data-spell-info]')]
+    .map((el) => el.getBoundingClientRect())
+    .filter((r) => r.width > 0 && r.height > 0);
+}
+
+// A circled "i", drawn as one shape (ring, dot and stem) to keep the page
+// light: a long spell list has hundreds of these.
 function InfoIcon() {
   return (
     <svg viewBox="0 0 16 16" className="w-3.5 h-3.5" aria-hidden="true" focusable="false">
-      <circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" strokeWidth="1.5" />
-      <circle cx="8" cy="4.9" r="1" fill="currentColor" />
-      <path d="M8 7.4v4.2" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path
+        fill="currentColor"
+        fillRule="evenodd"
+        d="M8 .5a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0-15ZM8 2a6 6 0 1 0 0 12A6 6 0 0 0 8 2Zm0 1.9a1 1 0 1 1 0 2 1 1 0 0 1 0-2Zm-.8 3.5a.8.8 0 0 1 1.6 0v4.2a.8.8 0 0 1-1.6 0Z"
+      />
     </svg>
   );
 }
