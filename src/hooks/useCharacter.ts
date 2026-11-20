@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Character } from '@/lib/types';
+import { Character, CharacterUpdater } from '@/lib/types';
 import { downloadFile, localFileStamp } from '@/lib/download';
 import { characterFileJson, createNewAdventurer, getCharacterStore, ImportError, parseImportedCharacters } from '@/lib/storage';
 
@@ -38,12 +38,20 @@ export function useCharacter() {
 
   const activeCharacter = characters.find(c => c.id === activeId) ?? null;
 
-  const updateCharacter = useCallback((updates: Partial<Character>) => {
+  // `updates` may be either a partial-character object or a function that
+  // receives the current character and returns one. The functional form is
+  // necessary when multiple in-tick writes need to compose without losing
+  // each other — the second writer otherwise reads a stale snapshot. Either
+  // way the updater stays pure (React may call it twice), and the save
+  // happens in the effect above.
+  const updateCharacter = useCallback((updates: CharacterUpdater) => {
     setSession(prev => ({
       ...prev,
-      characters: prev.characters.map(c =>
-        c.id === prev.activeId ? { ...c, ...updates } : c
-      ),
+      characters: prev.characters.map(c => {
+        if (c.id !== prev.activeId) return c;
+        const patch = typeof updates === 'function' ? updates(c) : updates;
+        return { ...c, ...patch };
+      }),
     }));
   }, []);
 

@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Character, JournalEntry, ActiveLightSource, CalendarDate } from '@/lib/types';
+import { Character, CharacterUpdater, JournalEntry, ActiveLightSource, CalendarDate } from '@/lib/types';
 import {
   LATEST_DATE,
   MAX_YEAR,
@@ -41,7 +41,7 @@ import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 
 interface AdventuringProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =

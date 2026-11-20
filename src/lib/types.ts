@@ -152,6 +152,85 @@ export interface CalendarDate {
   year: number;  // campaign year; defaults to 1 for new characters
 }
 
+// 4-digit column-row hex coordinate (e.g. "0303" = column 3, row 3).
+// See src/lib/hex-grid.ts for the canonical set of valid hexes.
+export type HexCoord = string;
+
+// 1-indexed column/row of a hex, as printed in its coordinate.
+export interface HexPos {
+  col: number;
+  row: number;
+}
+
+export type Terrain = 'woods' | 'open';
+
+// One hex of the printed map (src/lib/hex-grid.json).
+export interface HexCell extends HexPos {
+  terrain: Terrain;
+}
+
+// Calibration of the printed map image the hex grid was extracted from
+// (scripts/extract_hex_grid.py). Pixel values are in that image's frame.
+export interface HexGridMeta {
+  imageWidth: number;
+  imageHeight: number;
+  labelX_col1: number;     // x of hex 0101's printed label (and of every column-01 centre)
+  labelY_row1: number;     // y of hex 0101's printed label
+  colPitch: number;        // horizontal distance between neighbouring columns
+  rowPitch: number;        // vertical distance between rows of one column
+  labelToCenterDy: number; // a hex's centre sits this far below its label
+  hexSize: number;         // nominal centre-to-vertex distance (rowPitch / √3)
+  orientation: 'flat-top';
+  offset: 'odd-q';
+  /** Number of hexes in the manifest; checked against the loaded data. */
+  cellCount: number;
+}
+
+export interface MapPOI {
+  id: string;
+  hex: HexCoord;
+  name: string;
+  notes: string;
+}
+
+export type FairyDoorDestination =
+  | { kind: 'wild' }
+  | { kind: 'roaded'; pairedDoorId: string; roadName: string };
+
+export interface FairyDoor {
+  id: string;
+  hex: HexCoord;
+  name: string;
+  notes: string;
+  destination: FairyDoorDestination;
+}
+
+export interface LeyLine {
+  id: string;
+  type: string;      // free-text label, e.g. "Ley line", "Ancient Road", "Ward"
+  name: string;
+  color: string;     // CSS hex color, e.g. "#c4a35a"
+  hexes: HexCoord[]; // ordered sequence of hex coords the line passes through
+  notes: string;
+}
+
+export interface LeyLineDraft {
+  name: string;
+  type: string;
+  color: string;
+  notes: string;
+  hexes: HexCoord[];
+}
+
+export interface CharacterMapData {
+  pois: MapPOI[];
+  fairyDoors: FairyDoor[];
+  leyLines: LeyLine[];
+  // In-progress ley line draft. Persisted so it survives tab unmounts;
+  // absent when not drawing.
+  draftLeyLine?: LeyLineDraft;
+}
+
 export interface Character {
   schemaVersion: number;
   id: string;
@@ -222,6 +301,8 @@ export interface Character {
 
   currentDate: CalendarDate;
   currentLocation: string;
+  currentLocationHex: HexCoord | '';
+  mapData: CharacterMapData;
   journalEntries: JournalEntry[];
 
   exhaustionLevel: number;
@@ -248,6 +329,15 @@ export interface Character {
 export interface CountingStart extends CalendarDate {
   sinceReturnFrom?: string;
 }
+
+// Polymorphic onChange contract used by every character-tab component and
+// useCharacter.updateCharacter. Accepting both a partial-character object
+// and a functional updater means callers that need to compose several
+// writes in one tick (e.g. HexMap's map edits) can do so without losing
+// any. Components that only ever write a single object can keep passing one.
+export type CharacterUpdater =
+  | Partial<Character>
+  | ((prev: Character) => Partial<Character>);
 
 export interface JournalEntry {
   id: string;

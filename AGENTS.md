@@ -66,7 +66,8 @@ Character data is stored in localStorage and must survive schema changes across 
 
 ### Testing migrations:
 
-- Add a case to `src/lib/storage.test.ts` and run `npm test` (Node's test runner via `tsx`, against a fake localStorage). Its "set aside ... come back once it is fixed" tests show the pattern for a migration that throws
+- Add a scenario to the relevant `src/lib/*.test.ts` file (the hex map's are in `src/lib/map-migration.test.ts`) and run `npm test`, which runs every `src/lib/*.test.ts` file with Node's test runner (via `tsx`). CI runs it on every PR. `src/lib/migrations.test.ts` also fails if `CURRENT_SCHEMA_VERSION` isn't one more than the last migration's version, which catches a bump lost when two branches that each add a migration merge
+- How loading treats migrations (one character at a time, a throwing migration setting that character aside) is tested in `src/lib/storage.test.ts`, against a fake localStorage. Its "set aside ... come back once it is fixed" tests show the pattern for a migration that throws
 - Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
 - Test import/export round-trip with old-format files
 - Verify `npm run build` passes after any schema change
@@ -79,7 +80,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- base background `#1a1a2e`, cards `#2a2a3e`, text `#f5e6c8`, gold accent `#c4a35a`, warm-brown borders `#5a3a28`, written as arbitrary-value classes (e.g. `bg-[#2a2a3e]`)
 - **Types**: All game interfaces live in `src/lib/types.ts`
-- **Game data**: All static game data lives in `src/lib/gamedata.ts`
+- **Game data**: All static game data lives in `src/lib/gamedata.ts`, except the hex-map manifest `src/lib/hex-grid.json`. It is generated from the printed map by `scripts/extract_hex_grid.py` (don't edit it by hand) and loaded through `src/lib/hex-grid.ts`; its types are in `types.ts` like the rest
 
 ## Pre-commit Hook & CI
 

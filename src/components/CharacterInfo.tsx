@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Character, KindredId, ClassId } from '@/lib/types';
+import { Character, CharacterUpdater, KindredId, ClassId } from '@/lib/types';
 import {
   KINDREDS,
   isKnownClassId,
@@ -21,7 +21,7 @@ import { formatXpPercent } from '@/lib/character-sheet';
 
 interface CharacterInfoProps {
   character: Character;
-  onChange: (updates: Partial<Character>) => void;
+  onChange: (updates: CharacterUpdater) => void;
 }
 
 const inputClasses =
