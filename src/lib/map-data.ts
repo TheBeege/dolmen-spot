@@ -1,11 +1,13 @@
 import type { CharacterMapData, FairyDoor, FairyDoorDestination } from './types';
 
-/** Map data with nothing on it. Read-only: copy it before changing anything. */
-export const EMPTY_MAP_DATA: Readonly<CharacterMapData> = Object.freeze({
-  pois: [],
-  fairyDoors: [],
-  leyLines: [],
-});
+/**
+ * `md` with all three lists, an empty one in place of any that's missing.
+ * Loading repairs saved map data, but the map reads and writes it through
+ * this so that it never has to check.
+ */
+export function withMapLists(md: Partial<CharacterMapData> | null | undefined): CharacterMapData {
+  return { ...md, pois: md?.pois ?? [], fairyDoors: md?.fairyDoors ?? [], leyLines: md?.leyLines ?? [] };
+}
 
 /** Colors given to new ley lines, in turn. */
 export const LEY_LINE_COLORS = ['#c4a35a', '#7a5fc4', '#5fa3c4', '#c45f7a', '#7ac45f'] as const;

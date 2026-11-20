@@ -16,11 +16,11 @@ import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
 import { gridBounds, hexCenterOf, hexPath, hexVertices, isValidHex, pixelToHex } from '@/lib/hex';
 import {
   DEFAULT_LEY_LINE_TYPE,
-  EMPTY_MAP_DATA,
   LEY_LINE_COLORS,
   deleteFairyDoor,
   pairableDoors,
   upsertFairyDoor,
+  withMapLists,
 } from '@/lib/map-data';
 
 interface HexMapProps {
@@ -110,6 +110,14 @@ const HEX_POINTS: ReadonlyMap<HexCoord, string> = new Map(
 const HEX_PATHS: ReadonlyMap<HexCoord, string> = new Map(
   ALL_HEXES.map((h) => [h, hexPath(HEX_CELLS[h].col, HEX_CELLS[h].row)]),
 );
+
+// How much of an item's notes its marker's label and tooltip show.
+const NOTES_PREVIEW_LENGTH = 120;
+
+/** " — " and the start of `notes`, for a marker's label; '' if there are none. */
+function notesPreview(notes: string): string {
+  return notes ? ` — ${notes.slice(0, NOTES_PREVIEW_LENGTH)}` : '';
+}
 
 function newId(): string {
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
@@ -260,10 +268,10 @@ function useFocusOnRequest(
 
 export default function HexMap({ character, onChange }: HexMapProps) {
   // Migration + sanitizer guarantee a well-formed mapData, but stay defensive.
-  const mapData: CharacterMapData = character.mapData ?? EMPTY_MAP_DATA;
-  const pois = mapData.pois ?? [];
-  const doors = mapData.fairyDoors ?? [];
-  const leyLines = mapData.leyLines ?? [];
+  const mapData = withMapLists(character.mapData);
+  const pois = mapData.pois;
+  const doors = mapData.fairyDoors;
+  const leyLines = mapData.leyLines;
   const draft = mapData.draftLeyLine ?? null;
   const currentHex = character.currentLocationHex ?? '';
   const baseBounds = gridBounds();
@@ -342,7 +350,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // writes in one event tick compose (each reads the result of the last).
   const updateMap = useCallback(
     (updater: (md: CharacterMapData) => CharacterMapData) => {
-      onChange((prev) => ({ mapData: updater(prev.mapData ?? EMPTY_MAP_DATA) }));
+      onChange((prev) => ({ mapData: updater(withMapLists(prev.mapData)) }));
     },
     [onChange],
   );
@@ -636,7 +644,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         hexes: fresh.hexes,
         notes: fresh.notes,
       };
-      return { ...rest, leyLines: [...(md.leyLines ?? []), newLine] };
+      return { ...rest, leyLines: [...md.leyLines, newLine] };
     });
   }, [updateMap]);
 
@@ -694,8 +702,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const renderLeyLines = () =>
     leyLines.map((ll) => {
       if (ll.hexes.length < 2) return null;
-      const notesSnippet = ll.notes ? ` — ${ll.notes.slice(0, 120)}` : '';
-      const label = `${ll.type || DEFAULT_LEY_LINE_TYPE}: ${ll.name || 'Unnamed'}${notesSnippet}`;
+      const label = `${ll.type || DEFAULT_LEY_LINE_TYPE}: ${ll.name || 'Unnamed'}${notesPreview(ll.notes)}`;
       return (
         <g
           key={ll.id}
@@ -839,8 +846,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         const m = slotAt(i);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
         if (entry.kind === 'poi') {
-          const notesSnippet = entry.item.notes ? ` — ${entry.item.notes.slice(0, 120)}` : '';
-          const label = `POI: ${entry.item.name || 'Unnamed'}${notesSnippet}`;
+          const label = `POI: ${entry.item.name || 'Unnamed'}${notesPreview(entry.item.notes)}`;
           els.push(
             <g key={`poi-${entry.item.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>
@@ -851,8 +857,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           const door = entry.item;
           const dest = door.destination;
           const destLabel = dest.kind === 'wild' ? 'wild → Fairy' : `roaded${dest.roadName ? ` via "${dest.roadName}"` : ''}`;
-          const notesSnippet = door.notes ? ` — ${door.notes.slice(0, 120)}` : '';
-          const label = `Fairy Door: ${door.name || 'Unnamed'} (${destLabel})${notesSnippet}`;
+          const label = `Fairy Door: ${door.name || 'Unnamed'} (${destLabel})${notesPreview(door.notes)}`;
           els.push(
             <g key={`door-${door.id}`} {...markerProps} aria-label={label}>
               <title>{label}</title>

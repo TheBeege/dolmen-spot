@@ -1,7 +1,7 @@
 // Tests for the fairy-door pairing rules in map-data.ts. Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deleteFairyDoor, isValidDestination, pairableDoors, partnerUpdates, upsertFairyDoor } from './map-data';
+import { deleteFairyDoor, isValidDestination, pairableDoors, partnerUpdates, upsertFairyDoor, withMapLists } from './map-data';
 import type { FairyDoor, FairyDoorDestination } from './types';
 
 const wild: FairyDoorDestination = { kind: 'wild' };
@@ -91,5 +91,16 @@ describe('deleteFairyDoor and isValidDestination', () => {
   });
   test('wild is always valid; a road needs a pairable partner', () => {
     assert.ok(isValidDestination(doors, 'C', wild) && !isValidDestination(doors, 'C', road('A')) && isValidDestination(after, 'C', road('B')));
+  });
+});
+
+describe('withMapLists', () => {
+  test('fills in missing lists and keeps everything else', () => {
+    const pois = [{ id: 'p', hex: '0303', name: 'P', notes: '' }];
+    const draft = { name: '', type: '', color: '#c4a35a', notes: '', hexes: [] };
+    const md = withMapLists({ pois, draftLeyLine: draft });
+    assert.deepEqual(md, { pois, fairyDoors: [], leyLines: [], draftLeyLine: draft });
+    assert.equal(md.pois, pois, 'an existing list is kept as it is');
+    assert.deepEqual(withMapLists(undefined), { pois: [], fairyDoors: [], leyLines: [] });
   });
 });
