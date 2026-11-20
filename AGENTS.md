@@ -63,6 +63,7 @@ Character data is stored in localStorage and must survive schema changes across 
 
 ### Testing migrations:
 
+- Add a scenario to the relevant `src/lib/*.test.ts` file (the hex map's are in `src/lib/map-migration.test.ts`) and run `npm test`, which runs every `src/lib/*.test.ts` file with Node's test runner (via `tsx`). CI runs it on every PR
 - Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
 - Test import/export round-trip with old-format files
 - Verify `npm run build` passes after any schema change
@@ -85,7 +86,7 @@ Next.js 16's `next build` no longer lints, so these checks do instead:
   - ESLint on staged `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` files.
   - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
   - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
-- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck` and `npm run check:msal-bridge`.
+- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`.
   - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
   - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
 

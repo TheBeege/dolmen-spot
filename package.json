@@ -8,9 +8,8 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
+    "test": "tsx --test src/lib/*.test.ts",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
-    "test:migration": "tsx scripts/test_migration.ts",
-    "test:map-data": "tsx scripts/test_map_data.ts",
     "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
