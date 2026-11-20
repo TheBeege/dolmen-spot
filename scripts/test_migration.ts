@@ -1,8 +1,8 @@
-// Migration sanity test. Runs migrateCharacter across a handful of legacy
+// Migration sanity test. Runs migrateCharacter across legacy and malformed
 // save shapes and prints PASS/FAIL summaries. Run with:
-//   npx tsx scripts/test_migration.ts
-// (Plain `node --experimental-strip-types` doesn't resolve the .ts-less
-// relative imports inside the migration module.)
+//   npm run test:migration
+// (tsx, because Node's built-in type stripping can't resolve src/lib's
+// extensionless imports or its value-style imports of types.)
 import { migrateCharacter, CURRENT_SCHEMA_VERSION } from '../src/lib/migrations.ts';
 import { hexCenter } from '../src/lib/hex.ts';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '../src/lib/hex-grid.ts';
@@ -10,7 +10,7 @@ import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '../src/lib/hex-grid.ts';
 type AnyData = Record<string, unknown>;
 
 // Where a hex sits on the old map, as the x/y percentages the old map stored
-// for its pins (pixel position in public/dolmenwood-map.png ÷ image size).
+// for its pins (pixel position in scripts/dolmenwood-map.png ÷ image size).
 // dx/dy nudge the point off the hex centre, in image pixels.
 function oldMapPosition(hex: string, dx = 0, dy = 0): { x: number; y: number } {
   const cell = HEX_CELLS[hex];
@@ -188,8 +188,7 @@ section('Scenario 6: marker followed by non-array JSON');
   const data = baseV10();
   data.otherNotes = 'Notes.\n<!--MAP_PINS-->{"oops":1}';
   const migrated = migrateCharacter(data as never);
-  check('marker stripped (parse succeeded)', !migrated.otherNotes.includes('MAP_PINS'));
-  check('trailing newline trimmed', migrated.otherNotes === 'Notes.');
+  check('notes left untouched (nothing to convert)', migrated.otherNotes === 'Notes.\n<!--MAP_PINS-->{"oops":1}');
   check('no POIs imported', migrated.mapData.pois.length === 0);
 }
 
@@ -211,18 +210,18 @@ section('Scenario 8: pre-existing mapData with garbage entries');
   data.mapData = {
     pois: [
       { id: '1', hex: '0303', name: 'good', notes: '' },     // keep
-      { id: '2', hex: 'bad!', name: 'bad', notes: '' },     // drop (hex regex)
-      'not an object',                                       // drop (non-object)
+      { id: '2', hex: 'bad!', name: 'bad', notes: 'x' },    // off the map
+      'not an object',                                       // not an item
       { id: '4', hex: '0404', name: 'good2', notes: '' },   // keep
     ],
     fairyDoors: [
       { id: 'd1', hex: '0505', name: 'D', notes: '', destination: { kind: 'wild' } },
-      { hex: 'bad', name: 'x' }, // drop (bad hex)
+      { hex: 'bad', name: 'x' }, // off the map
     ],
     leyLines: [
       { id: 'l1', name: 'L', type: 'Ley line', color: '#fff', hexes: ['0101', '0102'], notes: '' },
-      { id: 'l2', name: 'short', hexes: ['0101'], notes: '' }, // drop (< 2 hexes)
-      { id: 'l3', name: 'noarray', hexes: 'oops', notes: '' }, // drop (hexes not array)
+      { id: 'l2', name: 'short', hexes: ['0101'], notes: '' }, // < 2 hexes
+      { id: 'l3', name: 'noarray', hexes: 'oops', notes: '' }, // hexes not an array
     ],
   };
   const migrated = migrateCharacter(data as never);
@@ -231,6 +230,15 @@ section('Scenario 8: pre-existing mapData with garbage entries');
   check('second POI is good2', migrated.mapData.pois[1].name === 'good2');
   check('fairyDoors filtered to 1', migrated.mapData.fairyDoors.length === 1);
   check('leyLines filtered to 1', migrated.mapData.leyLines.length === 1);
+  check('everything removed is listed in otherNotes', migrated.otherNotes === [
+    UNPLACED_HEADING,
+    '- bad (Hex bad!): x',
+    '- not an object',
+    '- Fairy door x (Hex bad)',
+    '- Ley line short (hexes 0101)',
+    '- Ley line noarray',
+  ].join('\n'), JSON.stringify(migrated.otherNotes));
+  check('a 3-digit colour is replaced by a 6-digit default', migrated.mapData.leyLines[0].color === '#c4a35a');
 }
 
 // ----- Scenario 9: malformed mapData wholesale -----
@@ -290,12 +298,12 @@ section('Scenario 11e: hex refs pointing at non-manifest hexes get cleared');
       { id: 'd2', hex: '1313', name: 'Orphan door', notes: '', destination: { kind: 'wild' } },
     ],
     leyLines: [
-      // LeyLine that survives after pruning orphans (2 live hexes left).
+      // Ley line that survives after pruning orphans (2 live hexes left).
       { id: 'll1', name: 'Mixed', type: 'Ley line', color: '#fff',
         hexes: ['0303', '1313', '0404'], notes: '' },
-      // LeyLine that disappears (only 1 live hex left after pruning).
+      // Ley line that disappears (no live hex left after pruning).
       { id: 'll2', name: 'AllOrphan', type: 'Ley line', color: '#fff',
-        hexes: ['1313', '1414'], notes: '' },
+        hexes: ['1313', '1414'], notes: 'hums' },
     ],
   };
   const migrated = migrateCharacter(data as never);
@@ -308,6 +316,13 @@ section('Scenario 11e: hex refs pointing at non-manifest hexes get cleared');
     migrated.mapData.leyLines[0].hexes[0] === '0303' &&
     migrated.mapData.leyLines[0].hexes[1] === '0404');
   check('orphan currentLocationHex cleared', migrated.currentLocationHex === '');
+  check('removed items and hexes are listed in otherNotes', migrated.otherNotes === [
+    UNPLACED_HEADING,
+    '- Orphan POI (Hex 1313)',
+    '- Fairy door Orphan door (Hex 1313)',
+    '- Ley line Mixed: hexes 1313 left out (not on the map)',
+    '- Ley line AllOrphan (hexes 1313 → 1414): hums',
+  ].join('\n'), JSON.stringify(migrated.otherNotes));
 }
 
 // ----- Scenario 11g: non-string currentLocationHex coerced to '' -----
@@ -349,6 +364,9 @@ section('Scenario 11d: self-paired door (pairedDoorId === own id) → wild');
   };
   const migrated = migrateCharacter(data as never);
   check('self-paired downgraded to wild', migrated.mapData.fairyDoors[0].destination.kind === 'wild');
+  check('its road name is kept in its notes',
+    migrated.mapData.fairyDoors[0].notes === 'Was on the fairy road "Loop" (its other end couldn\'t be found).',
+    JSON.stringify(migrated.mapData.fairyDoors[0].notes));
 }
 
 // ----- Scenario 11c: asymmetric door pair in hand-edited v12 save -----
@@ -378,6 +396,8 @@ section('Scenario 11c: asymmetric door pair gets repaired to wild');
   check('C stays roaded', byId.C.destination.kind === 'roaded');
   check('D stays roaded', byId.D.destination.kind === 'roaded');
   check('E (orphan) repaired to wild', byId.E.destination.kind === 'wild');
+  check('repaired doors keep their road names in their notes',
+    byId.A.notes.includes('"Solo Road"') && byId.E.notes.includes('"Ghost Road"') && byId.C.notes === '');
 }
 
 // ----- Scenario 11: pins with no usable hex and no position -----
@@ -388,8 +408,8 @@ section("Scenario 11: pins that can't be placed are kept in otherNotes");
   const migrated = migrateCharacter(data as never);
   check('only the good pin becomes a POI', migrated.mapData.pois.length === 1);
   check('good pin label', migrated.mapData.pois[0].name === 'good');
-  check('marker stripped, unplaced pins listed after the prose (empty / non-object entries ignored)',
-    migrated.otherNotes === `Prose.\n\n${UNPLACED_HEADING}\n- no-hex\n- Marker (Hex abcd)`, JSON.stringify(migrated.otherNotes));
+  check('marker stripped, unplaced pins (and text-only entries) listed after the prose; empty ones ignored',
+    migrated.otherNotes === `Prose.\n\n${UNPLACED_HEADING}\n- no-hex\n- Marker (Hex abcd)\n- str`, JSON.stringify(migrated.otherNotes));
 }
 
 // ----- Scenario 12: pins placed by their position on the old map -----
@@ -425,6 +445,10 @@ section('Scenario 12: pins without a usable hex are placed by their old-map posi
   check('numeric hex padded, not crashing', hexOf['numeric'] === '0303', String(hexOf['numeric']));
   check('converted current-location pin sets currentLocationHex', migrated.currentLocationHex === '1004', migrated.currentLocationHex);
   check('POIs keep the pin labels', migrated.mapData.pois.find((p) => p.id === 'no-hex')?.name === 'Hidden Shrine');
+  const notesOf = Object.fromEntries(migrated.mapData.pois.map((p) => [p.id, p.notes]));
+  check('text typed into "Hex #" is kept in the notes of a pin placed by position',
+    notesOf['junk'] === 'Old map hex: by the river' && notesOf['off-grid-hex'] === 'Old map hex: 1313', JSON.stringify(notesOf));
+  check('…and pins placed by their typed hex get no such note', notesOf['typed'] === '' && notesOf['no-hex'] === '' && notesOf['numeric'] === '');
   check('off-grid / invalid positions are not POIs', !('margin' in hexOf) && !('bad-pos' in hexOf));
   check('…their labels stay in otherNotes, marker stripped',
     migrated.otherNotes === `Notes.\n\n${UNPLACED_HEADING}\n- Compass Rose\n- Lost (Hex nowhere)`, JSON.stringify(migrated.otherNotes));
@@ -439,6 +463,184 @@ section('Scenario 13: each hex centre, as an old-map position, migrates back to 
   const wrong = migrated.mapData.pois.filter((p) => p.id !== p.hex).map((p) => `${p.id}→${p.hex}`);
   check(`all ${ALL_HEXES.length} hexes round-trip`,
     migrated.mapData.pois.length === ALL_HEXES.length && wrong.length === 0, wrong.join(', '));
+}
+
+function baseV12(mapData: unknown): AnyData {
+  const data = baseV10();
+  data.schemaVersion = CURRENT_SCHEMA_VERSION;
+  data.currentDate = { day: 1, month: 0, year: 1 };
+  data.currentLocationHex = '';
+  data.mapData = mapData;
+  return data;
+}
+const clone = <T,>(v: T): T => JSON.parse(JSON.stringify(v));
+
+// ----- Scenario 14: malformed map elements are normalized -----
+section('Scenario 14: malformed map elements are normalized to the shape the map draws');
+{
+  const migrated = migrateCharacter(baseV12({
+    pois: [{ id: 'p', hex: '0303', name: 'P', notes: 5 }, { hex: '0404', name: { a: 1 } }],
+    fairyDoors: [
+      { id: 'd0', hex: '0303', name: 'No destination', notes: '' },
+      { id: 'd1', hex: '0404', name: 'Null destination', notes: '', destination: null },
+      { id: 'd2', hex: '0505', name: 'String destination', notes: '', destination: 'wild' },
+      { id: 'd3', hex: '0606', name: 'Unknown kind', notes: '', destination: { kind: 'portal' } },
+      { id: 'd4', hex: '0707', name: 'R1', notes: null, destination: { kind: 'roaded', pairedDoorId: 'd5', roadName: { x: 1 } } },
+      { id: 'd5', hex: '0808', name: 7, destination: { kind: 'roaded', pairedDoorId: 'd4' } },
+      { id: 'd6', hex: '0909', name: 'No partner id', notes: '', destination: { kind: 'roaded', roadName: 'Lost Lane' } },
+    ],
+    leyLines: [
+      { hexes: ['0303', '0404'] },
+      { id: 7, name: null, type: 3, color: 'red', hexes: ['0505', '0606'], notes: {} },
+    ],
+    draftLeyLine: { name: 5, hexes: ['0101', 'zz'], color: '#ABCDEF' },
+  }) as never);
+  const md = migrated.mapData;
+  const isStr = (v: unknown) => typeof v === 'string';
+  check('every POI has string id / name / notes', md.pois.every((p) => isStr(p.id) && p.id !== '' && isStr(p.name) && isStr(p.notes)),
+    JSON.stringify(md.pois));
+  check('non-string notes / names are coerced (number → text, object → empty)', md.pois[0].notes === '5' && md.pois[1].name === '');
+  const door = Object.fromEntries(md.fairyDoors.map((d) => [d.id, d]));
+  check('missing / null / string / unknown destinations become wild',
+    ['d0', 'd1', 'd2', 'd3'].every((id) => door[id].destination.kind === 'wild'));
+  check('a mutual roaded pair stays roaded, with string road names',
+    door.d4.destination.kind === 'roaded' && door.d4.destination.roadName === '' &&
+    door.d5.destination.kind === 'roaded' && door.d5.destination.roadName === '', JSON.stringify([door.d4, door.d5]));
+  check('non-string door names / notes are coerced', door.d5.name === '7' && door.d4.notes === '' && door.d5.notes === '');
+  check('a roaded door without a partner id goes wild and keeps its road name',
+    door.d6.destination.kind === 'wild' && door.d6.notes.includes('"Lost Lane"'));
+  check('every ley line gets a string id / name / type / notes and a #rrggbb colour',
+    md.leyLines.length === 2 && md.leyLines.every((l) => isStr(l.id) && l.id !== '' && isStr(l.name) && isStr(l.type) && isStr(l.notes) && /^#[0-9a-f]{6}$/i.test(l.color)),
+    JSON.stringify(md.leyLines));
+  check('ley line fields are coerced', md.leyLines[1].id === '7' && md.leyLines[1].type === '3' && md.leyLines[1].name === '');
+  check('the draft is normalized and keeps only hexes on the map',
+    JSON.stringify(md.draftLeyLine) === JSON.stringify({ name: '5', type: '', color: '#ABCDEF', notes: '', hexes: ['0101'] }),
+    JSON.stringify(md.draftLeyLine));
+}
+
+// ----- Scenario 15: duplicate ids are made unique -----
+section('Scenario 15: duplicate ids are made unique');
+{
+  const data = baseV10();
+  data.otherNotes = '<!--MAP_PINS-->[{"id":"p1","label":"A","hex":"0303"},{"id":"p1","label":"B","hex":"0404"}]';
+  const a = migrateCharacter(data as never);
+  check('two legacy pins with one id → two POIs, two ids', a.mapData.pois.length === 2 && a.mapData.pois[0].id !== a.mapData.pois[1].id);
+
+  const withExisting = baseV10();
+  withExisting.mapData = { pois: [{ id: 'p1', hex: '0505', name: 'Existing', notes: 'keep me' }], fairyDoors: [], leyLines: [] };
+  withExisting.otherNotes = '<!--MAP_PINS-->[{"id":"p1","label":"Legacy","hex":"0303"}]';
+  const b = migrateCharacter(withExisting as never);
+  const existing = b.mapData.pois.find((p) => p.name === 'Existing');
+  const legacy = b.mapData.pois.find((p) => p.name === 'Legacy');
+  check('a pin whose id clashes with an existing POI gets a fresh id; the existing POI keeps its own',
+    existing?.id === 'p1' && legacy !== undefined && legacy.id !== 'p1');
+
+  const c = migrateCharacter(baseV12({
+    pois: [{ id: 'x', hex: '0303', name: 'P', notes: '' }],
+    fairyDoors: [{ id: 'x', hex: '0404', name: 'D', notes: '', destination: { kind: 'wild' } }],
+    leyLines: [{ id: 'x', name: 'L', type: 'Ley line', color: '#c4a35a', hexes: ['0303', '0404'], notes: '' }],
+  }) as never);
+  const ids = [...c.mapData.pois, ...c.mapData.fairyDoors, ...c.mapData.leyLines].map((i) => i.id);
+  check('ids are unique across POIs, doors and ley lines', new Set(ids).size === 3, JSON.stringify(ids));
+}
+
+// ----- Scenario 16: text after the pins JSON, several markers, a repaired export -----
+section('Scenario 16: text after the pins JSON is kept, and a repaired export converts on re-import');
+{
+  const data = baseV10();
+  data.otherNotes = 'Session 1.<!--MAP_PINS-->[{"id":"a","label":"Inn","hex":"0507","isCurrentLocation":true}]\nSession 2: the Drune are in 0707.';
+  const a = migrateCharacter(data as never);
+  check('pins before trailing text are converted', a.mapData.pois.length === 1 && a.currentLocationHex === '0507');
+  check('the trailing text is kept', a.otherNotes === 'Session 1.\nSession 2: the Drune are in 0707.', JSON.stringify(a.otherNotes));
+
+  const two = baseV10();
+  two.otherNotes = 'A<!--MAP_PINS-->[{"id":"x","label":"X","hex":"0303"}]<!--MAP_PINS-->[{"id":"y","label":"Y","hex":"0404"}]';
+  const b = migrateCharacter(two as never);
+  check('every marker in the notes is converted', b.mapData.pois.map((p) => p.name).join() === 'X,Y' && b.otherNotes === 'A', JSON.stringify(b.otherNotes));
+
+  // A marker the migration couldn't parse is left for the player to fix.
+  const broken = baseV10();
+  broken.otherNotes = 'Notes.<!--MAP_PINS-->[{"id":"a","label":"Inn","hex":"0507"';
+  const c = migrateCharacter(broken as never);
+  check('an unparseable marker is left in the notes', c.otherNotes === 'Notes.<!--MAP_PINS-->[{"id":"a","label":"Inn","hex":"0507"' && c.mapData.pois.length === 0);
+  // ...they repair the exported (now v12) file and import it again:
+  const repaired = clone(c);
+  repaired.otherNotes = `${repaired.otherNotes}}]`;
+  const d = migrateCharacter(repaired as never);
+  check('a repaired v12 export converts its pins on re-import', d.mapData.pois.length === 1 && d.otherNotes === 'Notes.', JSON.stringify(d.otherNotes));
+}
+
+// ----- Scenario 17: pin fields read strictly -----
+section('Scenario 17: legacy pin fields are read strictly');
+{
+  const data = baseV10();
+  data.otherNotes = '<!--MAP_PINS-->[{"id":"a","label":"A","hex":"0303","isCurrentLocation":"false"},{"id":"b","label":"B","hex":"0404","isCurrentLocation":1}]';
+  const a = migrateCharacter(data as never);
+  check('only isCurrentLocation === true marks the current hex ("false", 1 don\'t)', a.currentLocationHex === '', JSON.stringify(a.currentLocationHex));
+  const labels = baseV10();
+  labels.otherNotes = 'x<!--MAP_PINS-->[{"label":"odd <!--MAP_PINS-->[] label","hex":"","x":1,"y":98},{"label":"two\\nlines","hex":"","x":1,"y":98}]';
+  const b = migrateCharacter(labels as never);
+  check('a marker inside a label is defused and multi-line labels are indented',
+    b.otherNotes === `x\n\n${UNPLACED_HEADING}\n- odd <!--MAP PINS-->[] label\n- two\n  lines`, JSON.stringify(b.otherNotes));
+  check('…so a second load changes nothing', JSON.stringify(migrateCharacter(clone(b) as never)) === JSON.stringify(b));
+}
+
+// ----- Scenario 18: idempotency on messy saves -----
+section('Scenario 18: migrating twice gives the same result');
+{
+  const noMap = baseV12(undefined);
+  delete (noMap as AnyData).mapData;
+  noMap.currentLocationHex = '1313';
+  const once = migrateCharacter(clone(noMap) as never);
+  check('a v12 save with no mapData still gets currentLocationHex repaired', once.currentLocationHex === '', JSON.stringify(once.currentLocationHex));
+  const corrupt = baseV12('corrupt');
+  corrupt.currentLocationHex = 303;
+  const c = migrateCharacter(clone(corrupt) as never);
+  check('mapData "corrupt" + numeric currentLocationHex → empty map, ""', c.currentLocationHex === '' && c.mapData.pois.length === 0);
+  const messy = baseV10();
+  messy.otherNotes = 'Prose\n<!--MAP_PINS-->[{"id":"p","label":"P","hex":"junk","x":40,"y":40},{"label":"Gone","hex":"","x":1,"y":98},"text"]';
+  messy.mapData = { pois: [{ id: 'p', hex: '1313', name: 'Old', notes: 7 }], fairyDoors: [{ id: 'd', hex: '0303', destination: { kind: 'roaded', pairedDoorId: 'z', roadName: 'R' } }], leyLines: [{ hexes: ['0303'] }] };
+  const first = migrateCharacter(clone(messy) as never);
+  const second = migrateCharacter(clone(first) as never);
+  check('migrate(migrate(x)) equals migrate(x)', JSON.stringify(second) === JSON.stringify(first));
+}
+
+// ----- Scenario 19: prototype keys are not hexes -----
+section('Scenario 19: names inherited from Object.prototype are not hexes');
+{
+  const bad = ['constructor', '__proto__', 'toString', 'hasOwnProperty', 'valueOf'];
+  const results = bad.map((k) => {
+    const d = baseV12({ pois: [{ id: 'p', hex: k, name: 'P', notes: '' }], fairyDoors: [], leyLines: [] });
+    d.currentLocationHex = k;
+    const m = migrateCharacter(d as never);
+    return m.currentLocationHex === '' && m.mapData.pois.length === 0;
+  });
+  check('currentLocationHex and POI hexes reject prototype names', results.every(Boolean), JSON.stringify(results));
+}
+
+// ----- Scenario 20: long whitespace before the marker is fast -----
+section('Scenario 20: whitespace before the marker is trimmed in linear time');
+{
+  const data = baseV10();
+  data.otherNotes = `a${' '.repeat(40000)}b<!--MAP_PINS-->[]`;
+  const t = Date.now();
+  const m = migrateCharacter(data as never);
+  const ms = Date.now() - t;
+  check('40,000 spaces inside the prose take well under a second', ms < 500 && m.otherNotes === `a${' '.repeat(40000)}b`, `${ms} ms`);
+}
+
+// ----- Scenario 21: hex 0111 is on the map -----
+section('Scenario 21: printed hex 0111 is on the grid');
+{
+  const data = baseV10();
+  data.otherNotes = `<!--MAP_PINS-->${JSON.stringify([
+    { id: 'a', label: 'Hut by the wood edge', hex: '', ...oldMapPosition('0111'), isCurrentLocation: true },
+    { id: 'b', label: 'Typed 0111', hex: '0111', x: 1, y: 98, isCurrentLocation: false },
+  ])}`;
+  const m = migrateCharacter(data as never);
+  check('pins on 0111 (typed or by position) become POIs there',
+    m.mapData.pois.length === 2 && m.mapData.pois.every((p) => p.hex === '0111') && m.currentLocationHex === '0111',
+    JSON.stringify(m.mapData.pois));
 }
 
 console.log(`\n=== Summary: ${passed} passed, ${failed} failed ===`);

@@ -1,7 +1,8 @@
-import { Character, HexCoord } from './types';
+import type { Character, FairyDoor, FairyDoorDestination, HexCoord, LeyLine, MapPOI } from './types';
 import { createDefaultCharacter, MONTHS } from './gamedata';
-import { HEX_CELLS, HEX_GRID_META } from './hex-grid';
-import { pixelToHex } from './hex';
+import { HEX_GRID_META } from './hex-grid';
+import { isValidHex, pixelToHex } from './hex';
+import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS } from './map-data';
 
 export const CURRENT_SCHEMA_VERSION = 12;
 
@@ -104,132 +105,186 @@ function sanitizeCharacterDates(data: any): void {
   }
 }
 
-const HEX_COORD_RE = /^\d{4}$/;
+const MAP_PINS_MARKER = '<!--MAP_PINS-->';
+// Heading of the list, appended to otherNotes, of map items that couldn't be
+// kept on the map (legacy pins with no usable position, items on hexes that
+// aren't on the printed map), so nothing the player wrote is thrown away.
+const LOST_ITEMS_HEADING = "Map markers that couldn't be placed:";
+const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
+
+function newMapId(): string {
+  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `map-${Math.random().toString(36).slice(2)}`;
+}
+
+/** A text field read defensively: strings as is, finite numbers as text, anything else ''. */
+function asText(v: unknown): string {
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
+  return '';
+}
+
+/** "Label (Hex 1313): notes" for the couldn't-be-placed list. */
+function lostItem(label: string, hex: string, notes: string): string {
+  return `${label}${hex ? ` (Hex ${hex})` : ''}${notes ? `: ${notes}` : ''}`;
+}
+
+/** `notes` plus a line recording a fairy road that had to be unlinked. */
+function withLostRoad(notes: string, roadName: string): string {
+  if (!roadName) return notes;
+  const line = `Was on the fairy road "${roadName}" (its other end couldn't be found).`;
+  return notes ? `${notes}\n${line}` : line;
+}
 
 /**
- * Repair `mapData` shape on a partially-trusted save. Runs as part of the
- * v11→v12 migration *and* unconditionally at the end of migrateCharacter so
- * that a hand-edited save already at v12 (which the migration loop skips)
- * gets the same defensive cleanup.
+ * Repair `mapData` and `currentLocationHex` on a partially-trusted save
+ * (hand-edited imports, saves made on an older grid). Runs after the
+ * migration loop on every load and import, so it must be idempotent.
+ * Every element is normalized to the shape the map UI relies on, ids are
+ * made unique, and items that can't stay on the map are described in `lost`
+ * (kept in Other Notes) instead of being deleted.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sanitizeMapData(data: any): void {
-  if (!isPlainObject(data.mapData)) {
-    data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
-    return;
-  }
+function sanitizeMapData(data: any, lost: string[]): void {
+  if (!isPlainObject(data.mapData)) data.mapData = {};
   const md = data.mapData as Record<string, unknown>;
-  if (!Array.isArray(md.pois)) md.pois = [];
-  if (!Array.isArray(md.fairyDoors)) md.fairyDoors = [];
-  if (!Array.isArray(md.leyLines)) md.leyLines = [];
-  // Validate hex coords both for format (4-digit) AND for existence in the
-  // canonical manifest. The grid shape changed between releases (the bounding
-  // rectangle once held 250 cells; the manifest is now smaller after we
-  // pinned to the printed map's actual outline — see hex-grid.json
-  // `meta.cellCount`). Saves can carry POIs / doors / ley line hexes pointing
-  // at cells that no longer exist — drop those.
-  const isLiveHex = (raw: unknown): raw is string =>
-    typeof raw === 'string' && HEX_COORD_RE.test(raw) && raw in HEX_CELLS;
+  const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+  // Non-object entries aren't map items; keep any text they carry.
+  const keepText = (v: unknown) => {
+    const t = asText(v).trim();
+    if (t) lost.push(t);
+  };
+  // Ids must be unique across POIs, doors and ley lines: the UI keys,
+  // focuses, edits and deletes items by id.
+  const usedIds = new Set<string>();
+  const uniqueId = (raw: unknown): string => {
+    let id = asText(raw);
+    while (!id || usedIds.has(id)) id = newMapId();
+    usedIds.add(id);
+    return id;
+  };
 
-  md.pois = (md.pois as unknown[]).filter(
-    (p): p is Record<string, unknown> =>
-      isPlainObject(p) && isLiveHex((p as { hex?: unknown }).hex),
-  );
-  md.fairyDoors = (md.fairyDoors as unknown[]).filter(
-    (d): d is Record<string, unknown> =>
-      isPlainObject(d) && isLiveHex((d as { hex?: unknown }).hex),
-  );
-  // For leyLines: trim each hexes[] to keep only live coords, then drop the
-  // whole ley line if fewer than 2 valid hexes remain.
-  md.leyLines = (md.leyLines as unknown[])
-    .filter(
-      (l): l is Record<string, unknown> =>
-        isPlainObject(l) && Array.isArray((l as { hexes?: unknown }).hexes),
-    )
-    .map((l) => {
-      const hexes = (l.hexes as unknown[]).filter(isLiveHex);
-      return { ...l, hexes };
-    })
-    .filter((l) => (l.hexes as string[]).length >= 2);
-
-  // Validate the in-progress ley line draft the same way; trim invalid hexes,
-  // drop the draft entirely if it would shrink below 1 hex.
-  if (isPlainObject(md.draftLeyLine)) {
-    const draft = md.draftLeyLine as Record<string, unknown>;
-    if (Array.isArray(draft.hexes)) {
-      draft.hexes = (draft.hexes as unknown[]).filter(isLiveHex);
-      if ((draft.hexes as string[]).length === 0) {
-        delete md.draftLeyLine;
-      }
-    } else {
-      delete md.draftLeyLine;
+  const pois: MapPOI[] = [];
+  for (const raw of list(md.pois)) {
+    if (!isPlainObject(raw)) { keepText(raw); continue; }
+    const p = raw as Record<string, unknown>;
+    const name = asText(p.name);
+    const notes = asText(p.notes);
+    if (!isValidHex(p.hex)) {
+      lost.push(lostItem(name || 'Unnamed point of interest', asText(p.hex), notes));
+      continue;
     }
+    pois.push({ id: uniqueId(p.id), hex: p.hex, name, notes });
   }
+  md.pois = pois;
 
-  // currentLocationHex lives on the character (not in mapData), but the
-  // validity check belongs here next to its siblings. The field is typed
-  // HexCoord | ''; coerce any non-string (null, number, object from a
-  // hand-edited save) to '' and clear it if the live hex is no longer in
-  // the manifest.
-  if (typeof data.currentLocationHex !== 'string') {
-    data.currentLocationHex = '';
-  } else if (data.currentLocationHex !== '' && !(data.currentLocationHex in HEX_CELLS)) {
-    data.currentLocationHex = '';
+  const doors: FairyDoor[] = [];
+  for (const raw of list(md.fairyDoors)) {
+    if (!isPlainObject(raw)) { keepText(raw); continue; }
+    const d = raw as Record<string, unknown>;
+    const name = asText(d.name);
+    let notes = asText(d.notes);
+    const dest = (isPlainObject(d.destination) ? d.destination : {}) as Record<string, unknown>;
+    const roadName = dest.kind === 'roaded' ? asText(dest.roadName) : '';
+    if (!isValidHex(d.hex)) {
+      lost.push(lostItem(`Fairy door ${name || 'Unnamed'}`, asText(d.hex), withLostRoad(notes, roadName)));
+      continue;
+    }
+    // Anything but a well-formed wild or roaded destination becomes wild.
+    let destination: FairyDoorDestination = { kind: 'wild' };
+    if (dest.kind === 'roaded' && asText(dest.pairedDoorId)) {
+      destination = { kind: 'roaded', pairedDoorId: asText(dest.pairedDoorId), roadName };
+    } else {
+      notes = withLostRoad(notes, roadName);
+    }
+    doors.push({ id: uniqueId(d.id), hex: d.hex, name, notes, destination });
   }
-  // draftLeyLine non-object types get dropped here; the live-hex trim
-  // above handles the object-with-bad-hexes case.
-  if (md.draftLeyLine !== undefined && !isPlainObject(md.draftLeyLine)) {
+  // A roaded door whose partner doesn't link back (partner wild, pointing
+  // elsewhere, missing, or the door itself) becomes wild, keeping its road
+  // name in its notes. Checks read the doors as they were, so order is
+  // irrelevant.
+  const byId = new Map(doors.map((d) => [d.id, d]));
+  md.fairyDoors = doors.map((d): FairyDoor => {
+    if (d.destination.kind !== 'roaded') return d;
+    const partner = byId.get(d.destination.pairedDoorId);
+    const linked = partner !== undefined && partner !== d
+      && partner.destination.kind === 'roaded' && partner.destination.pairedDoorId === d.id;
+    return linked ? d : { ...d, notes: withLostRoad(d.notes, d.destination.roadName), destination: { kind: 'wild' } };
+  });
+
+  const leyLines: LeyLine[] = [];
+  for (const raw of list(md.leyLines)) {
+    if (!isPlainObject(raw)) { keepText(raw); continue; }
+    const l = raw as Record<string, unknown>;
+    const name = asText(l.name);
+    const type = asText(l.type);
+    const notes = asText(l.notes);
+    const color = typeof l.color === 'string' && HEX_COLOR_RE.test(l.color) ? l.color : LEY_LINE_COLORS[0];
+    const allHexes = list(l.hexes);
+    const hexes = allHexes.filter(isValidHex);
+    const off = allHexes.filter((h) => !isValidHex(h)).map(asText).filter(Boolean);
+    const label = `${type || DEFAULT_LEY_LINE_TYPE} ${name || 'Unnamed'}`;
+    if (hexes.length < 2) {
+      const route = allHexes.map(asText).filter(Boolean).join(' → ');
+      lost.push(`${label}${route ? ` (hexes ${route})` : ''}${notes ? `: ${notes}` : ''}`);
+      continue;
+    }
+    if (off.length > 0) lost.push(`${label}: hexes ${off.join(', ')} left out (not on the map)`);
+    leyLines.push({ id: uniqueId(l.id), type, name, color, hexes, notes });
+  }
+  md.leyLines = leyLines;
+
+  // The in-progress draft only needs a sane shape; a draft with no hexes yet
+  // is normal (the player clicked Draw Ley Line and hasn't picked any).
+  if (isPlainObject(md.draftLeyLine)) {
+    const dft = md.draftLeyLine as Record<string, unknown>;
+    md.draftLeyLine = {
+      name: asText(dft.name),
+      type: asText(dft.type),
+      color: typeof dft.color === 'string' && HEX_COLOR_RE.test(dft.color) ? dft.color : LEY_LINE_COLORS[0],
+      notes: asText(dft.notes),
+      hexes: list(dft.hexes).filter(isValidHex),
+    };
+  } else {
     delete md.draftLeyLine;
   }
 
-  // Repair asymmetric fairy-door pairings from hand-edited imports. A
-  // roaded door whose partner doesn't reciprocate (partner is wild, or
-  // points elsewhere, or doesn't exist) is downgraded to wild — that
-  // leaves it visible and editable, instead of drawing a one-sided
-  // connector or blocking the partner from being re-paired.
-  //
-  // Two-pass to keep iteration order irrelevant: pass 1 reads the
-  // ORIGINAL destination kinds and records which doors need to be
-  // downgraded; pass 2 applies the downgrade. (A single-pass loop is
-  // actually order-safe too because a wild-marked partner just fails
-  // the reciprocation test, which is the correct outcome — but the
-  // explicit two-pass version is easier to reason about.)
-  const doors = md.fairyDoors as Array<Record<string, unknown>>;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const isRoaded = (d: any): boolean => isPlainObject(d?.destination) && d.destination.kind === 'roaded';
-  const toDowngrade = new Set<unknown>();
-  for (const d of doors) {
-    if (!isRoaded(d)) continue;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dest = (d as any).destination;
-    const ownId = (d as { id?: unknown }).id;
-    const partnerId = typeof dest.pairedDoorId === 'string' ? dest.pairedDoorId : null;
-    // Self-paired doors (a door whose pairedDoorId is its own id) trivially
-    // "reciprocate" but are nonsense — a door can't be a road to itself.
-    // Reject up-front so they get downgraded to wild.
-    if (partnerId === null || partnerId === ownId) {
-      toDowngrade.add(d);
-      continue;
-    }
-    const partner = doors.find((x) => (x as { id?: unknown }).id === partnerId);
-    const reciprocates =
-      partner &&
-      isRoaded(partner) &&
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (partner as any).destination.pairedDoorId === ownId;
-    if (!reciprocates) {
-      toDowngrade.add(d);
+  // currentLocationHex lives on the character, but its check belongs with
+  // the other hex references: anything but a hex on the map becomes ''.
+  if (!isValidHex(data.currentLocationHex)) data.currentLocationHex = '';
+}
+
+/**
+ * Index just past the JSON array that `text` starts with (after optional
+ * whitespace), or -1 if it doesn't start with a complete array.
+ */
+function endOfLeadingJsonArray(text: string): number {
+  let i = 0;
+  while (i < text.length && /\s/.test(text[i])) i++;
+  if (text[i] !== '[') return -1;
+  let depth = 0;
+  let inString = false;
+  for (; i < text.length; i++) {
+    const c = text[i];
+    if (inString) {
+      if (c === '\\') i++;
+      else if (c === '"') inString = false;
+    } else if (c === '"') {
+      inString = true;
+    } else if (c === '[' || c === '{') {
+      depth++;
+    } else if (c === ']' || c === '}') {
+      depth--;
+      if (depth === 0) return i + 1;
     }
   }
-  for (const d of toDowngrade) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    (d as any).destination = { kind: 'wild' };
-  }
+  return -1;
 }
 
 /**
  * Hex under a pre-v12 map pin. The old map stored each pin's position as x/y
- * percentages (0–100) of the printed map image, public/dolmenwood-map.png.
+ * percentages (0–100) of the printed map image (now scripts/dolmenwood-map.png).
  * hex-grid.json was extracted from that same image, so percentage × image
  * size is a point in pixelToHex's pixel space. Returns null when the position
  * is missing or out of range, or isn't on a hex of the current grid.
@@ -239,6 +294,81 @@ function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return null;
   if (x < 0 || x > 100 || y < 0 || y > 100) return null;
   return pixelToHex((x / 100) * HEX_GRID_META.imageWidth, (y / 100) * HEX_GRID_META.imageHeight);
+}
+
+/**
+ * Convert pins saved by the pre-v12 map, a <!--MAP_PINS--> marker followed by
+ * a JSON array in otherNotes, into POIs. Each pin goes on the hex typed into
+ * the old "Hex #" field if that's a hex on the map, otherwise on the hex
+ * under its position (keeping the typed text in the POI's notes); pins that
+ * fit neither are described in `lost`. Text after the array is kept.
+ *
+ * Runs after the migration loop on every load and import, not only in
+ * v11 → v12, so a save whose marker had to be repaired by hand still
+ * converts when re-imported. A marker not followed by a complete array is
+ * left alone so the player can recover it.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function convertLegacyMapPins(data: any, lost: string[]): void {
+  for (;;) { // a save can hold more than one marker
+    if (typeof data.otherNotes !== 'string') return;
+    const notes: string = data.otherNotes;
+    const idx = notes.indexOf(MAP_PINS_MARKER);
+    if (idx === -1) return;
+    const rest = notes.slice(idx + MAP_PINS_MARKER.length);
+    const end = endOfLeadingJsonArray(rest);
+    if (end === -1) return;
+    let pins: unknown;
+    try {
+      pins = JSON.parse(rest.slice(0, end));
+    } catch {
+      return;
+    }
+    if (!Array.isArray(pins)) return;
+    // Every pin below becomes a POI or a `lost` entry, so stripping the
+    // marker and its JSON loses nothing.
+    data.otherNotes = [notes.slice(0, idx).trimEnd(), rest.slice(end).trim()].filter(Boolean).join('\n');
+    if (!isPlainObject(data.mapData)) data.mapData = {};
+    if (!Array.isArray(data.mapData.pois)) data.mapData.pois = [];
+
+    for (const raw of pins) {
+      if (!isPlainObject(raw)) {
+        const t = asText(raw).trim();
+        if (t) lost.push(t);
+        continue;
+      }
+      const pin = raw as Record<string, unknown>;
+      const label = asText(pin.label);
+      const typedHex = asText(pin.hex).trim();
+      // Users typed things like "303" expecting the canonical 4-digit form.
+      const padded = /^\d{1,4}$/.test(typedHex) ? typedHex.padStart(4, '0') : '';
+      const typedIsHex = isValidHex(padded);
+      const hex = typedIsHex ? padded : legacyPinPositionToHex(pin.x, pin.y);
+      if (hex === null) {
+        if (label || typedHex) lost.push(typedHex ? `${label || 'Marker'} (Hex ${typedHex})` : label);
+        continue;
+      }
+      data.mapData.pois.push({
+        id: asText(pin.id), // made unique by sanitizeMapData
+        hex,
+        name: label || 'Marker',
+        notes: !typedIsHex && typedHex ? `Old map hex: ${typedHex}` : '',
+      });
+      if (pin.isCurrentLocation === true) data.currentLocationHex = hex;
+    }
+  }
+}
+
+/** Append `lost` to otherNotes under LOST_ITEMS_HEADING. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function keepLostMapItems(data: any, lost: string[]): void {
+  if (lost.length === 0) return;
+  // One "- " entry per item; continuation lines are indented. A marker
+  // inside an entry is defused so a later load can't treat it as pins.
+  const entries = lost.map((s) => `- ${s.split(MAP_PINS_MARKER).join('<!--MAP PINS-->').replace(/\n/g, '\n  ')}`);
+  const block = `${LOST_ITEMS_HEADING}\n${entries.join('\n')}`;
+  const notes = asText(data.otherNotes).trimEnd();
+  data.otherNotes = notes ? `${notes}\n\n${block}` : block;
 }
 
 // Each migration transforms from version N to N+1.
@@ -341,81 +471,13 @@ const migrations: Record<number, (data: any) => any> = {
     sanitizeCharacterDates(data);
     return data;
   },
-  // v11 -> v12: Structured hex-map data. Adds mapData + currentLocationHex
-  // and migrates the legacy <!--MAP_PINS--> marker stashed in otherNotes
-  // into MapPOI records: each pin goes on the hex the player typed or, failing
-  // that, the hex under its position on the old map. Pins that fit neither
-  // are listed by name in otherNotes instead of being dropped.
+  // v11 -> v12: Structured hex-map data. Adds mapData + currentLocationHex.
+  // Pins from the old map (the <!--MAP_PINS--> marker in otherNotes) are
+  // converted after the migration loop, by convertLegacyMapPins, so that a
+  // save whose marker was repaired by hand still converts on re-import.
   11: (data) => {
-    // Ensure mapData is well-shaped before we push into it. The same helper
-    // also runs unconditionally in migrateCharacter() so a hand-edited v12
-    // save with a borked `mapData.pois` field gets repaired too.
-    sanitizeMapData(data);
+    if (!isPlainObject(data.mapData)) data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
     if (typeof data.currentLocationHex !== 'string') data.currentLocationHex = '';
-
-    const PIN_MARKER = '<!--MAP_PINS-->';
-    const notes: string = typeof data.otherNotes === 'string' ? data.otherNotes : '';
-    const idx = notes.indexOf(PIN_MARKER);
-    if (idx === -1) return data;
-
-    const before = notes.slice(0, idx);
-    const payload = notes.slice(idx + PIN_MARKER.length);
-    let parsed: unknown = null;
-    try {
-      parsed = JSON.parse(payload);
-    } catch {
-      // Payload is unparseable. Leave the marker in place so the user can
-      // still see / recover their raw data by hand-editing the export.
-      return data;
-    }
-
-    // Parse succeeded. Whether the shape was an array or not, we strip the
-    // marker — keeping it around would leave it visible in the notes UI with
-    // no recovery path. (Every pin below becomes a POI or is listed in the
-    // notes, so stripping loses nothing.) Trim trailing whitespace that
-    // preceded the marker so re-saved notes don't accumulate phantom blank
-    // lines.
-    data.otherNotes = before.replace(/\s+$/, '');
-    if (!Array.isArray(parsed)) return data;
-
-    // The old UI always wrote strings and numbers here, but hand-edited
-    // saves can hold anything, so read every field defensively.
-    type LegacyPin = { id?: unknown; label?: unknown; hex?: unknown; x?: unknown; y?: unknown; isCurrentLocation?: unknown };
-    const unplaced: string[] = [];
-    for (const pin of parsed as LegacyPin[]) {
-      if (!isPlainObject(pin)) continue;
-      const label = typeof pin.label === 'string' ? pin.label : typeof pin.label === 'number' ? String(pin.label) : '';
-      const typedHex = typeof pin.hex === 'string' ? pin.hex.trim() : typeof pin.hex === 'number' ? String(pin.hex) : '';
-      // Prefer the hex the player typed into the optional "Hex #" field.
-      // Users typed things like "303" expecting the canonical 4-digit form,
-      // so left-pad before checking it against the grid. If it's empty,
-      // malformed or not a hex on the current grid, use where the pin sat.
-      const padded = /^\d{1,4}$/.test(typedHex) ? typedHex.padStart(4, '0') : '';
-      const hex = padded && padded in HEX_CELLS ? padded : legacyPinPositionToHex(pin.x, pin.y);
-      if (hex === null) {
-        // Can't be placed: keep what the player wrote (skip pins with
-        // neither a label nor a hex, which hold nothing to keep).
-        if (label || typedHex) unplaced.push(typedHex ? `${label || 'Marker'} (Hex ${typedHex})` : label);
-        continue;
-      }
-      data.mapData.pois.push({
-        id: typeof pin.id === 'string' && pin.id
-          ? pin.id
-          : typeof crypto !== 'undefined' && crypto.randomUUID
-            ? crypto.randomUUID()
-            : `poi-${Math.random().toString(36).slice(2)}`,
-        hex,
-        name: label || 'Marker',
-        notes: '',
-      });
-      if (pin.isCurrentLocation) {
-        data.currentLocationHex = hex;
-      }
-    }
-    if (unplaced.length > 0) {
-      const list = `Map markers that couldn't be placed:\n${unplaced.map((l) => `- ${l}`).join('\n')}`;
-      data.otherNotes = data.otherNotes ? `${data.otherNotes}\n\n${list}` : list;
-    }
     return data;
   },
 };
@@ -529,7 +591,9 @@ export function migrateCharacter(data: any): Character {
   // JSON import that smuggles in non-numeric date fields or a malformed
   // mapData shape gets cleaned before downstream code tries to use it.
   // reconcileWithDefaults only fills MISSING top-level keys; deeper
-  // shape repair has to happen here.
+  // shape repair has to happen here. Old-map pins are converted first so
+  // the map sanitizer also normalizes (and de-duplicates) the new POIs;
+  // map items that can't be kept end up listed in otherNotes.
   //
   // Call order: sanitizers run BEFORE reconcileWithDefaults. This is safe
   // because reconcileWithDefaults's object-merge branch only fills
@@ -537,7 +601,10 @@ export function migrateCharacter(data: any): Character {
   // populated by sanitizers above are never undefined, so reconcile
   // won't overwrite them.
   sanitizeCharacterDates(data);
-  sanitizeMapData(data);
+  const lostMapItems: string[] = [];
+  convertLegacyMapPins(data, lostMapItems);
+  sanitizeMapData(data, lostMapItems);
+  keepLostMapItems(data, lostMapItems);
 
   return reconcileWithDefaults(data) as Character;
 }
