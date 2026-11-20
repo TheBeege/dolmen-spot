@@ -17,7 +17,8 @@ interface Props {
   onLoad(providerId: 'google-drive' | 'onedrive', fileId: string, fileName: string): Promise<void>;
   onDelete(providerId: 'google-drive' | 'onedrive', fileId: string): Promise<void>;
   onExportLocal(): void;
-  onImportLocal(file: File): void;
+  /** Resolves to false if the file was refused (nothing added). */
+  onImportLocal(file: File): Promise<boolean>;
   loading: boolean;
   error: string | null;
   onClearError(): void;
@@ -209,7 +210,7 @@ export default function CloudStorageModal({
               <div className="border-t border-[#5a3a28] pt-4">
                 <h4 className="text-[#c4a35a] text-sm font-semibold mb-2">Import from File</h4>
                 <p className="text-[#f5e6c8]/60 text-xs mb-2">
-                  Load a character from a .dolmenwood.json file. This adds a new character.
+                  Load a character from a .dolmenwood.json file. This adds the characters in it.
                 </p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
@@ -222,14 +223,13 @@ export default function CloudStorageModal({
                   type="file"
                   accept=".json"
                   className="hidden"
-                  onChange={(e) => {
+                  onChange={async (e) => {
                     const file = e.target.files?.[0];
-                    if (file) {
-                      onImportLocal(file);
-                      showSuccess('Character imported!');
-                      onClose();
-                    }
+                    // Reset now, so picking the same file again still fires a change.
                     e.target.value = '';
+                    // Close only once the file is read and imported. A refused
+                    // file keeps the dialog open, after an alert says why.
+                    if (file && await onImportLocal(file)) onClose();
                   }}
                 />
               </div>

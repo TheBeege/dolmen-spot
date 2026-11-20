@@ -77,7 +77,8 @@ export function useCharacter() {
     downloadFile(`dolmen-spot-characters-${localFileStamp()}.dolmenwood.json`, JSON.stringify(characters, null, 2));
   }, [characters]);
 
-  const importCharacter = useCallback((file: File) => {
+  /** Add the characters in a file. Resolves to false, with nothing added, if the file was refused. */
+  const importCharacter = useCallback((file: File): Promise<boolean> => new Promise(resolve => {
     const reader = new FileReader();
     reader.onload = (e) => {
       let imported: Character[];
@@ -86,12 +87,18 @@ export function useCharacter() {
         imported = parseImportedCharacters(String(e.target?.result ?? ''), { allowMany: true });
       } catch (err) {
         alert(err instanceof ImportError ? err.message : 'Invalid character file.');
+        resolve(false);
         return;
       }
       setSession(prev => ({ characters: [...prev.characters, ...imported], activeId: imported[0].id }));
+      resolve(true);
+    };
+    reader.onerror = () => {
+      alert("That file couldn't be read.");
+      resolve(false);
     };
     reader.readAsText(file);
-  }, []);
+  }), []);
 
   const getCharacterJson = useCallback((): string | null => {
     if (!activeCharacter) return null;
