@@ -363,14 +363,14 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // Set after a real pan/pinch; the click that ends it must not select anything.
   const suppressClickRef = useRef(false);
 
-  const startPan = (start: Point, v: View) => {
+  const startPan = (start: Point, v: View, moved = false) => {
     const rect = svgRef.current!.getBoundingClientRect();
     gestureRef.current = {
       kind: 'pan',
       start,
       view: v,
       scale: 1 / Math.min(rect.width / v.w, rect.height / v.h), // image units per CSS px
-      moved: false,
+      moved,
     };
   };
 
@@ -400,7 +400,28 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     }
   };
 
+  // `id` no longer takes part in the gesture: it was lifted, or its press
+  // was dropped before it became a pan.
+  const removePointer = (id: number) => {
+    pointersRef.current.delete(id);
+    releasePointer(svgRef.current, id);
+    const rest = [...pointersRef.current.values()];
+    if (rest.length === 1 && gestureRef.current?.kind === 'pinch') {
+      // One finger left after a pinch: carry on panning from where it is.
+      startPan(rest[0], view, true);
+    } else if (rest.length === 0) {
+      gestureRef.current = null;
+      setIsPanning(false);
+    }
+  };
+
   const handlePointerMove = (e: React.PointerEvent<SVGSVGElement>) => {
+    // A mouse press released outside the map before it became a pan was
+    // never captured, so its pointerup went elsewhere. With no button held
+    // it's over: drop it, and treat this move as a hover.
+    if (e.pointerType === 'mouse' && (e.buttons & 1) === 0 && pointersRef.current.has(e.pointerId)) {
+      removePointer(e.pointerId);
+    }
     const g = gestureRef.current;
     if (!pointersRef.current.has(e.pointerId) || !g) {
       if (e.pointerType === 'mouse') {
@@ -437,20 +458,17 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return;
-    pointersRef.current.delete(e.pointerId);
     const g = gestureRef.current;
-    const gestured = g !== null && (g.kind === 'pinch' || g.moved);
-    if (gestured) suppressClickRef.current = true;
-    releasePointer(svgRef.current, e.pointerId);
-    const rest = [...pointersRef.current.values()];
-    if (rest.length === 1 && g?.kind === 'pinch') {
-      // One finger left after a pinch: carry on panning from where it is.
-      startPan(rest[0], view);
-      (gestureRef.current as { moved: boolean }).moved = true;
-    } else if (rest.length === 0) {
-      gestureRef.current = null;
-      setIsPanning(false);
-    }
+    if (g !== null && (g.kind === 'pinch' || g.moved)) suppressClickRef.current = true;
+    removePointer(e.pointerId);
+  };
+
+  // A press that leaves the map before it becomes a pan isn't captured, so
+  // its release may never come here: drop it now.
+  const handlePointerLeave = (e: React.PointerEvent<SVGSVGElement>) => {
+    const g = gestureRef.current;
+    if (g?.kind === 'pan' && !g.moved && pointersRef.current.has(e.pointerId)) removePointer(e.pointerId);
+    if (e.pointerType === 'mouse' && !gestureRef.current) setHoverHex(null);
   };
 
   // Wheel / trackpad zoom about the cursor, scaled by how far the wheel
@@ -895,9 +913,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerEnd}
           onPointerCancel={handlePointerEnd}
-          onPointerLeave={(e) => {
-            if (e.pointerType === 'mouse' && !gestureRef.current) setHoverHex(null);
-          }}
+          onPointerLeave={handlePointerLeave}
           onClick={handleMapClick}
           onKeyDown={handleMapKeyDown}
         >
