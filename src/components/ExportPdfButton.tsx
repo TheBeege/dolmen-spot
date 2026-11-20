@@ -2,6 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { Character } from '@/lib/types';
+import { PDF_FONT_LOAD_ERROR } from '@/lib/pdf/errors';
 
 type ExportState =
   | { status: 'idle' }
@@ -13,11 +14,12 @@ type ExportState =
 // was busy rendering and delivered late.
 const REPEAT_CLICK_MS = 1000;
 
-/** The PDF code couldn't be downloaded: offline, or replaced by a newer deployment. */
+/** The PDF code or its fonts couldn't be downloaded: offline, or replaced by a newer deployment. */
 function isLoadError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   return (
     err.name === 'ChunkLoadError' ||
+    err.name === PDF_FONT_LOAD_ERROR ||
     /loading (css )?chunk|dynamically imported module|importing a module script failed|failed to fetch/i.test(err.message)
   );
 }
@@ -29,7 +31,8 @@ function nextPaint(): Promise<void> {
 
 /**
  * Header control that downloads the active character as a PDF. The PDF code
- * (@react-pdf/renderer and the sheet layout) is fetched on the first click.
+ * (@react-pdf/renderer and the sheet layout) and its fonts are fetched on the
+ * first click.
  */
 export default function ExportPdfButton({ character }: { character: Character }) {
   const [state, setState] = useState<ExportState>({ status: 'idle' });

@@ -76,11 +76,33 @@ src/
 docs/
   DEPLOYMENT-PHASES.md  # Feature roadmap
   rules/                # Extracted rule reference (gitignored — copyrighted, local only)
+public/fonts/pdf/       # Fonts the PDF export embeds (see below)
 scripts/
+  build-pdf-fonts.py    # Rebuilds the PDF fonts in public/fonts/pdf/ (see below)
   generate-icons.mjs    # Rebuilds the raster app icons from src/app/icon.svg
 ```
 
 The app icon is drawn in `src/app/icon.svg`. After changing it, run `node scripts/generate-icons.mjs` to rebuild `src/app/favicon.ico` (16, 32 and 48 px) and `src/app/apple-icon.png` (180 px, for iOS home screens) from it, and commit all three. Next.js adds the `<link>` tags for them automatically.
+
+## PDF Fonts
+
+The "Download PDF" export draws the sheet with fonts from `public/fonts/pdf/`, which the browser fetches only when a sheet is exported:
+
+| File | Covers | Size | Fetched |
+|------|--------|------|---------|
+| `NotoSans-Regular.ttf`, `NotoSans-Bold.ttf`, `NotoSans-Italic.ttf`, `NotoSerif-Bold.ttf` | Latin (incl. Latin Extended and Vietnamese), Greek (incl. polytonic), Cyrillic | 0.78 MB together | on every export |
+| `NotoSansCJK-Hangul.otf` | Korean Hangul | 1.2 MB | only for sheets with Korean text |
+| `NotoSansCJK-HanKana.otf` | Japanese kana and the Han characters of JIS X 0208, GB 2312, Big5 level 1 and KS X 1001 | 2.4 MB | only for sheets with Japanese or Chinese text |
+
+They are subsets of [Noto Sans, Noto Serif](https://github.com/notofonts/latin-greek-cyrillic) 2.015 and [Noto Sans CJK](https://github.com/notofonts/noto-cjk) 2.004, licensed under the SIL Open Font License 1.1 (`public/fonts/pdf/LICENSE-*.txt`). Emoji are left out, and letters from scripts the fonts don't cover (Arabic, Hebrew, Devanagari, Thai...) print as `?`.
+
+To rebuild them (for example to cover more characters), edit and run the script. It downloads the pinned releases, checks their SHA-256 and writes the subsets; with the same fontTools version the output is byte-identical:
+
+```bash
+pip install 'fonttools==4.63.0'
+python3 scripts/build-pdf-fonts.py          # rebuild public/fonts/pdf/
+python3 scripts/build-pdf-fonts.py --check  # verify the committed files are up to date
+```
 
 ## Disclaimer
 
