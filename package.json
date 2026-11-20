@@ -25,5 +25,16 @@
     "eslint-config-next": "^16.4.6",
     "tailwindcss": "^4.3.5",
     "typescript": "^6.0.3"
+  },
+  "overrides": {
+    "eslint-plugin-import": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-jsx-a11y": {
+      "eslint": "$eslint"
+    },
+    "eslint-plugin-react": {
+      "eslint": "$eslint"
+    }
   }
 }

@@ -70,6 +70,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **Tech stack**: Next.js 16, TypeScript, Tailwind CSS v4 (utility classes only, no `@apply`)
 - **State management**: React hooks + localStorage persistence via `src/hooks/useCharacter.ts`
 - **No external UI libraries**: All components are custom
+- **ESLint 10 overrides**: The `overrides` in `package.json` let eslint-plugin-import, eslint-plugin-jsx-a11y and eslint-plugin-react (from eslint-config-next) use ESLint 10 before their peer ranges allow it. Remove each entry once `npm view <plugin> peerDependencies.eslint` includes ESLint 10
 - **Theme**: Dark fantasy -- see `MEMORY.md` for exact color values
 - **Types**: All game interfaces live in `src/lib/types.ts`
 - **Game data**: All static game data lives in `src/lib/gamedata.ts`
