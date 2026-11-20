@@ -1192,10 +1192,10 @@ function HexInspectorPanel({
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4 space-y-3">
       <div className="flex items-center justify-between border-b border-[#5a3a28] pb-2">
-        <div>
-          <span className="text-[#c4a35a] font-bold">Hex {selectedHex}</span>
-          <span className="text-[#f5e6c8]/60 text-xs ml-2">{terrain}</span>
-          {isCurrent && <span className="text-[#c4a35a] text-xs ml-2">★ current</span>}
+        <div className="flex items-baseline gap-2 flex-wrap">
+          <h3 className="text-[#c4a35a] font-bold">Hex {selectedHex}</h3>
+          <span className="text-[#f5e6c8]/60 text-xs">{terrain}</span>
+          {isCurrent && <span className="text-[#c4a35a] text-xs">★ current</span>}
         </div>
         <button type="button" onClick={onClose} aria-label="Close hex inspector" className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] text-xs transition-colors">
           ✕
@@ -1340,8 +1340,14 @@ function POIEditor({
           aria-label="Point of interest name"
           className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
-        <button type="button" onClick={() => setExpanded((x) => !x)} aria-expanded={expanded} className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
-          {expanded ? 'Less' : 'Notes'}
+        <button
+          type="button"
+          onClick={() => setExpanded((x) => !x)}
+          aria-expanded={expanded}
+          aria-label={`Notes for ${label}`}
+          className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors whitespace-nowrap"
+        >
+          Notes <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
         </button>
         <button type="button" onClick={onDelete} aria-label={`Delete POI ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
           Del
@@ -1499,8 +1505,14 @@ function DoorEditor({
           className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
         <span className="text-xs text-[#f5e6c8]/40">{door.destination.kind === 'wild' ? 'wild' : `→ ${partner?.hex ?? '?'}`}</span>
-        <button type="button" onClick={() => setExpanded((x) => !x)} aria-expanded={expanded} className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
-          {expanded ? 'Less' : 'Edit'}
+        <button
+          type="button"
+          onClick={() => setExpanded((x) => !x)}
+          aria-expanded={expanded}
+          aria-label={`Edit ${label}`}
+          className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors whitespace-nowrap"
+        >
+          Edit <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
         </button>
         <button type="button" onClick={onDelete} aria-label={`Delete fairy door ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
           Del
