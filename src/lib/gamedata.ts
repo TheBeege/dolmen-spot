@@ -1,5 +1,6 @@
 import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
+import { pluralize } from './grammar';
 
 // Kindred-class restrictions from the Player's Book.
 // 'forbidden' = cannot take this class at all.
@@ -317,11 +318,6 @@ export function formatShortDate(date: CalendarDate): string {
   return `${date.day} ${MONTHS[date.month]?.name ?? 'Unknown'}, Year ${date.year}`;
 }
 
-// "1 day", "12 days", "1,058 days".
-export function plural(count: number, unit: string): string {
-  return `${count.toLocaleString('en-US')} ${unit}${count === 1 ? '' : 's'}`;
-}
-
 // "a", "a and b", "a, b and c".
 function joinParts(parts: string[]): string {
   if (parts.length <= 1) return parts[0] ?? '';
@@ -331,7 +327,7 @@ function joinParts(parts: string[]): string {
 // Years, months and days, leaving out any that are zero.
 function describeParts(years: number, months: number, days: number): string {
   const parts: [number, string][] = [[years, 'year'], [months, 'month'], [days, 'day']];
-  return joinParts(parts.filter(([n]) => n > 0).map(([n, unit]) => plural(n, unit)));
+  return joinParts(parts.filter(([n]) => n > 0).map(([n, unit]) => pluralize(n, unit, { grouping: true })));
 }
 
 // The time between two dates in calendar terms, e.g. "3 years, 2 months and
@@ -1632,6 +1628,23 @@ export const TURNING_UNDEAD_TABLE = {
 } as const;
 
 // ──────────────────────────────────────────────────────────
+// Feature Notes: rules reminders the Traits and Spells tabs (and the PDF)
+// print beside a class or kindred feature
+// Source: docs/rules/02-kindreds.md, 03-classes.md, 04-kindred-classes.md
+// ──────────────────────────────────────────────────────────
+
+export const FEATURE_NOTES = {
+  turningUndead: "Present holy symbol, roll 2d6 within 30'.",
+  trophies: '+1 Attack/Save per creature type',
+  chivalryVirtues: 'Honour, Service, Glory, Protecting the weak, Hierarchy',
+  chivalryRules: "Must match liege's alignment. Cannot use missile weapons. Scorn light armour.",
+  madRevelry: "30' range, affects all living creatures (including allies). Save vs Spell. Fairies/demi-fey +2 to save.",
+  fungalSymbiosis: 'Spend 1 Turn to bond with non-hostile monstrous fungus (3+ levels below you). Save vs Spell.',
+  // Enchanters and elves: the saints are loath to aid those allied with Fairy.
+  resistanceToDivineAid: '2-in-6 chance that a beneficial holy spell cast on you has no effect.',
+} as const;
+
+// ──────────────────────────────────────────────────────────
 // Feature Profile Helper
 // ──────────────────────────────────────────────────────────
 
@@ -2104,6 +2117,12 @@ export function calculateXpToNextLevel(kindred: KindredId | '', classId: ClassId
   const nextRow = table.rows.find(r => r.level === level + 1);
   return nextRow ? nextRow.xp : null;
 }
+
+// Encumbrance limits (docs/rules/08-adventuring.md)
+export const EQUIPPED_SLOT_LIMIT = 10;
+export const STOWED_SLOT_LIMIT = 16;
+/** Maximum load in coins of weight; above this the character can't move. */
+export const MAX_LOAD_WEIGHT = 1600;
 
 // 2h. Speed Functions (used by calculateEncumbrance in character-sheet.ts, for
 // the Inventory tab and the PDF)
@@ -2984,7 +3003,11 @@ export const MOSSLING_KNACKS: { id: number; name: string; tiers: { level: number
   },
 ];
 
-// 5F: Magician Starting Spell Books
+// 5F: Spell Books
+// Each spell book holds up to 3 spells.
+export const SPELLBOOK_CAPACITY = 3;
+
+// Magician starting spell books
 export const MAGICIAN_STARTING_SPELL_BOOKS: { roll: number; name: string; spells: string[] }[] = [
   { roll: 1, name: 'Charms of the Fey Court', spells: ['Fairy Servant', 'Ingratiate', 'Ventriloquism'] },
   { roll: 2, name: 'Hogbrand\'s Incandescence', spells: ['Firelight', 'Ignite/Extinguish', 'Shield of Force'] },

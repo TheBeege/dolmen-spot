@@ -25,6 +25,8 @@ import {
   FAIRY_RUNES,
   MOSSLING_KNACKS,
   MAGICIAN_STARTING_SPELL_BOOKS,
+  SPELLBOOK_CAPACITY,
+  FEATURE_NOTES,
   findArcaneSpell,
   getStudyConfig,
 } from '@/lib/gamedata';
@@ -36,7 +38,6 @@ import {
   isSpellInAnyBook,
   isSpellOnScroll,
   isStartingBookApplied,
-  FEATURE_NOTES,
   KNOWN_SPELL_SOURCE_LABELS,
 } from '@/lib/character-sheet';
 import {
@@ -198,12 +199,12 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
         </div>
       )}
 
-      {/* Divine Resistance flag */}
+      {/* Resistance to Divine Aid (enchanters and elves) */}
       {profile.hasDivineResistance && (
         <div className="bg-[#1a1a2e] border border-[#c4a35a]/30 rounded p-3 mb-4">
-          <span className="text-[#c4a35a] font-semibold text-sm">Divine Resistance:</span>{' '}
+          <span className="text-[#c4a35a] font-semibold text-sm">Resistance to Divine Aid:</span>{' '}
           <span className="text-[#f5e6c8] text-sm">
-            {FEATURE_NOTES.divineResistance}
+            {FEATURE_NOTES.resistanceToDivineAid}
           </span>
         </div>
       )}
@@ -308,7 +309,6 @@ const KNOWN_SOURCES: KnownSpellSource[] = [
 ];
 const KNOWN_SOURCE_ORDER: Record<KnownSpellSource, number> = KNOWN_SOURCES
   .reduce((acc, src, i) => { acc[src] = i; return acc; }, {} as Record<KnownSpellSource, number>);
-const KNOWN_SOURCE_LABEL = KNOWN_SPELL_SOURCE_LABELS;
 
 function SpellCasterSection({
   character,
@@ -762,7 +762,7 @@ function KnownSpellsBlock({
         >
           <option value="all">Any source</option>
           {KNOWN_SOURCES.map((s) => (
-            <option key={s} value={s}>{KNOWN_SOURCE_LABEL[s]}</option>
+            <option key={s} value={s}>{KNOWN_SPELL_SOURCE_LABELS[s]}</option>
           ))}
         </select>
       </div>
@@ -823,7 +823,7 @@ function KnownSpellsBlock({
               className="text-[#f5e6c8]/40 text-xs shrink-0"
               title={k.learnedAt ? `Learned on ${formatRecordDate(character, k.learnedAt, k.learnedInFairy)}` : undefined}
             >
-              {KNOWN_SOURCE_LABEL[k.source]}
+              {KNOWN_SPELL_SOURCE_LABELS[k.source]}
             </span>
             <button
               type="button"
@@ -877,7 +877,7 @@ function KnownSpellsBlock({
               title="How was this spell learned?"
             >
               {KNOWN_SOURCES.map((s) => (
-                <option key={s} value={s}>{KNOWN_SOURCE_LABEL[s]}</option>
+                <option key={s} value={s}>{KNOWN_SPELL_SOURCE_LABELS[s]}</option>
               ))}
             </select>
             <button
@@ -924,7 +924,7 @@ function SpellStudyBlock({
   const [draftNotes, setDraftNotes] = useState('');
 
   const availableBooks = useMemo(
-    () => getSpellbooks(character).filter((b) => (b.spellbookContents?.length ?? 0) < 3),
+    () => getSpellbooks(character).filter((b) => (b.spellbookContents?.length ?? 0) < SPELLBOOK_CAPACITY),
     // Narrow deps: only reads inventory.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [character.equippedItems, character.stowedItems],
@@ -1070,7 +1070,7 @@ function SpellStudyBlock({
           items.map((i) => {
             if (i.id !== active.targetSpellbookId) return i;
             const contents = i.spellbookContents ?? [];
-            if (contents.length >= 3) return i;
+            if (contents.length >= SPELLBOOK_CAPACITY) return i;
             const alreadyThere = contents.some((e) => e.name.toLowerCase() === active.spellName.toLowerCase());
             if (alreadyThere) return i;
             return {
@@ -1369,7 +1369,7 @@ function SpellStudyBlock({
               <option value="">(none — known list only)</option>
               {availableBooks.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.name} ({(b.spellbookContents?.length ?? 0)}/3)
+                  {b.name} ({(b.spellbookContents?.length ?? 0)}/{SPELLBOOK_CAPACITY})
                 </option>
               ))}
             </select>
