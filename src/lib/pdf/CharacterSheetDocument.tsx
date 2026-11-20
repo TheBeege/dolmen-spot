@@ -330,7 +330,9 @@ const s = StyleSheet.create({
 });
 
 // Table rows never split across pages, so a cell's text is capped to keep
-// every row shorter than a page (60 lines of 8.5pt text is about 560pt).
+// every row shorter than a page (60 lines of 8.5pt text is about 560pt). A
+// row that tall moves to the next page whole when it doesn't fit, which can
+// leave the table's column headings alone at the foot of the page before.
 const CELL_MAX_LINES = 60;
 
 // Spell table column widths; the scrolls table's name column spans all but the rank.
@@ -356,8 +358,9 @@ function useSheet(): Sheet {
 // react-pdf's Text props, without its SVG variant (which requires x and y).
 type TextProps = Exclude<ComponentProps<typeof PdfText>, { x: string | number }>;
 
-// textkit's "infinity": a hyphenation point with this penalty is never a
-// place to break a line.
+// textkit's "infinity": its line breaker never breaks a line at a hyphenation
+// point with this penalty (its fallback, for a word too long for any line,
+// still may).
 const NO_HYPHEN_BREAKS = 10000;
 
 /** Whether any string in `children`, nested Text included, has Korean, Japanese or Chinese in it. */
@@ -373,9 +376,11 @@ function containsCjk(children: ReactNode): boolean {
 
 /**
  * react-pdf's Text, with every string it prints made printable. Text with
- * Korean, Japanese or Chinese in it breaks lines only at spaces and the points
- * line-breaks.ts adds, never at a hyphenation point, since react-pdf also
- * treats every font change as one.
+ * Korean, Japanese or Chinese in it breaks lines at spaces and the points
+ * line-breaks.ts adds, not at hyphenation points, because react-pdf treats
+ * every change of font or script inside a word as one, and breaking there
+ * could start a line with a comma. Only a word too long for its line (a URL,
+ * say) still breaks with a hyphen.
  */
 function Text({ children, render, ...props }: TextProps) {
   const { text } = useSheet();

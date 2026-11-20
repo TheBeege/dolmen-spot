@@ -2,19 +2,23 @@
  * Where the PDF may break a line inside a word.
  *
  * react-pdf (its textkit) breaks lines at spaces, and inside a word at two
- * kinds of point, drawing a hyphen at the break in the font of the text
- * before it: where a hyphenation callback splits the word, and where the font
- * changes (Korean followed by a ".", which comes from Noto Sans). An empty
- * string between two parts is a break point that draws nothing instead
- * (textkit makes it zero-width glue, not a hyphenation point). That is how
- * Japanese and Chinese, written without spaces, get to wrap between
+ * kinds of hyphenation point, drawing a hyphen at the break in the font of
+ * the text before it: where a hyphenation callback splits the word, and
+ * where the text inside a word switches to another font or another script,
+ * which ends one run of text and starts the next (Korean followed by a "."
+ * from Noto Sans; "霧の", Han then Hiragana, even in the same font). An
+ * empty string between two parts is a break point that draws nothing
+ * instead (textkit makes it zero-width glue, not a hyphenation point). That
+ * is how Japanese and Chinese, written without spaces, get to wrap between
  * characters, and how a name can wrap after one of its own hyphens without
  * gaining a second one.
  *
- * Text with Korean, Japanese or Chinese in it is laid out without hyphen
- * breaks at all (see `hasCjk` and the sheet's Text), so it breaks only at
- * spaces and empty strings: never at a font change, where it might leave a
- * comma at the start of a line.
+ * Text with Korean, Japanese or Chinese in it is laid out with hyphenation
+ * points switched off (see `hasCjk` and the sheet's Text), so it breaks at
+ * spaces and empty strings, and not where a run ends, which might leave a
+ * comma at the start of a line. Only a word too long for its line (a URL in
+ * a note, say) still breaks with a hyphen: react-pdf's fallback line
+ * breaker, used when nothing else fits, takes any hyphenation point.
  */
 
 type Hyphenate = (word: string) => string[];
@@ -98,8 +102,8 @@ function breakCjk(word: string, hyphenate: Hyphenate): string[] {
 
   const parts: string[] = [];
   // Japanese and Chinese may wrap before a character that follows other text
-  // directly (as in "HPは"): a break the font change would otherwise make, with
-  // a hyphen. Korean keeps a word together.
+  // directly (as in "HPは"): a break the change of font or script would
+  // otherwise make, with a hyphen. Korean keeps a word together.
   if (chunks[0]?.open && !NO_LINE_START.has(firstChar(chunks[0].text))) parts.push('');
   let group = '';
   const flush = () => {
