@@ -2,10 +2,12 @@
 
 // The modal for setting the Dolmenwood date a character comes back on from
 // Fairy: "return" closes the open visit, "edit" corrects the last visit's
-// return date (see planReturnEdit in src/lib/livedTime.ts).
+// return date (see planReturnEdit in src/lib/livedTime.ts). A return also
+// asks which map hex they came back in.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { CalendarDate, Character, FairyVisit } from '@/lib/types';
+import { isValidHex, readHexInput } from '@/lib/hex';
 import {
   LATEST_DATE,
   addElapsedTime,
@@ -41,6 +43,7 @@ import {
   type NumberField,
   type Reading,
 } from '@/components/FairyFields';
+import HexField from '@/components/HexField';
 
 export type DialogOutcome = 'cancelled' | 'saved';
 type DateMode = 'elapsed' | 'exact';
@@ -109,6 +112,10 @@ export default function FairyDateDialog({
   const [elapsed, setElapsed] = useState(BLANK_ELAPSED);
   const [exact, setExact] = useState(() => draftFrom(visit.returnedOn ?? visit.enteredOn));
   const [roll, setRoll] = useState<{ dice: [number, number]; total: number } | null>(null);
+  // Where they came back, on a return: the map's current hex unless changed.
+  const [hexText, setHexText] = useState(() => (isValidHex(character.currentLocationHex) ? character.currentLocationHex : ''));
+  const [hexError, setHexError] = useState<string | null>(null);
+  const hexRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -163,7 +170,18 @@ export default function FairyDateDialog({
 
   const confirm = () => {
     if (!valid || !target) return;
-    const patch = editing ? plan?.patch : returnFromFairy(character, target);
+    let patch: Partial<Character> | null | undefined;
+    if (editing) {
+      patch = plan?.patch;
+    } else {
+      const cameBackIn = readHexInput(hexText);
+      if (cameBackIn.error !== undefined) {
+        setHexError(cameBackIn.error);
+        hexRef.current?.focus();
+        return;
+      }
+      patch = returnFromFairy(character, target, cameBackIn.hex);
+    }
     if (!patch) return;
     close('saved');
     onChange(patch);
@@ -328,6 +346,23 @@ export default function FairyDateDialog({
               rune, 2d20 days pass in the mortal world.
             </p>
           </div>
+
+          {!editing && (
+            <div className="border-t border-[#5a3a28]/60 pt-3">
+              <HexField
+                label="Came back in hex"
+                labelClassName="text-[#c4a35a] text-sm font-semibold"
+                value={hexText}
+                onChange={(next) => {
+                  setHexText(next);
+                  setHexError(null);
+                }}
+                error={hexError}
+                hint="Its number on the map, like 1105. It starts as the map's current hex; leave it blank if you don't know."
+                inputRef={hexRef}
+              />
+            </div>
+          )}
 
           <div
             aria-live="polite"

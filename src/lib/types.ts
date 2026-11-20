@@ -346,7 +346,7 @@ export interface JournalEntry {
   fairyEvent?: FairyEvent; // set on the entries the app writes when entering or leaving Fairy
   sinceReturnFrom?: string; // the Fairy visit the character had last come back from (see FairyVisit)
   location: string;
-  hex?: HexCoord;          // the map hex it was written in (currentLocationHex then); absent for none
+  hex?: HexCoord;          // the map hex it was written in; absent for none (an entry written in Fairy has none unless set)
   text: string;
 }
 

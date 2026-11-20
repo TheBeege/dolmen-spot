@@ -649,8 +649,12 @@ function migrateAddJournalHexes(data: any): any {
  *   - every entry has an id of its own, a non-empty string. The Journal tab
  *     lists, edits and deletes entries by id, so a missing or repeated one is
  *     replaced; nothing else refers to an entry's id;
- *   - an entry's hex is a hex on the map, or it has none. No hex is ever
- *     guessed here, so an entry whose hex the player cleared stays without one.
+ *   - its text and location are strings, which the journal and editing a
+ *     return date (planReturnEdit) rely on. Anything else keeps the text it
+ *     holds, as nonItemText writes it: a number as written, a list or object
+ *     as JSON, and nothing for null;
+ *   - its hex is a hex on the map, or it has none. No hex is ever guessed
+ *     here, so an entry whose hex the player cleared stays without one.
  * Nothing else about an entry changes.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -663,6 +667,8 @@ function sanitizeJournalEntries(data: any): void {
     while (id === '' || ids.has(id)) id = newId();
     entry.id = id;
     ids.add(id);
+    if (typeof entry.text !== 'string') entry.text = nonItemText(entry.text);
+    if (typeof entry.location !== 'string') entry.location = nonItemText(entry.location);
     if (entry.hex !== undefined && !isValidHex(entry.hex)) delete entry.hex;
   }
 }
@@ -915,8 +921,9 @@ export function migrateCharacter(data: any): Character {
 
   // Defensive: also runs for already-current saves, so a hand-edited
   // JSON import that smuggles in non-numeric date fields, a malformed
-  // mapData shape, or journal entries with a repeated id or a hex that
-  // isn't on the map gets cleaned before downstream code tries to use it.
+  // mapData shape, or journal entries with a repeated id, text that isn't
+  // a string or a hex that isn't on the map gets cleaned before downstream
+  // code tries to use it.
   // reconcileWithDefaults only fills MISSING top-level keys; deeper
   // shape repair has to happen here. Old-map pins are converted first so
   // the map sanitizer also normalizes (and de-duplicates) the new POIs;

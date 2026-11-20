@@ -41,6 +41,17 @@ export function parseTypedHex(text: string): HexCoord | null {
 }
 
 /**
+ * A field for an optional hex, read: blank is no hex (''); anything else is
+ * the hex typed (parseTypedHex), or why it isn't one.
+ */
+export function readHexInput(text: string): { hex: HexCoord | ''; error?: undefined } | { hex?: undefined; error: string } {
+  const typed = text.trim();
+  if (typed === '') return { hex: '' };
+  const hex = parseTypedHex(typed);
+  return hex ? { hex } : { error: `No hex "${typed}" on the map.` };
+}
+
+/**
  * Pixel coordinates (in the source image's frame) for the center of a hex.
  * Useful for rendering an SVG that scales with viewBox = (0, 0, imageWidth, imageHeight).
  */

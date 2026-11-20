@@ -1264,7 +1264,7 @@ function JumpToHexInput({ drafting, onJump }: { drafting: boolean; onJump: (hex:
       <button type="submit" className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 text-xs transition-colors">
         Go
       </button>
-      <span id={statusId} role="status" className="text-xs text-[#ff8a70]">
+      <span id={statusId} role="status" className="text-xs text-[#ff8a70] min-w-0 [overflow-wrap:anywhere]">
         {error ?? ''}
       </span>
     </form>
@@ -1378,7 +1378,7 @@ function HexInspectorPanel({
         <button
           type="button"
           onClick={() => onOpenJournal(selectedHex)}
-          className={`text-[#c4a35a] hover:underline text-sm rounded ${FOCUS_RING}`}
+          className={`text-[#c4a35a] hover:underline text-sm rounded px-1 py-1 -mx-1 ${FOCUS_RING}`}
         >
           Journal entries here ({journalCount.toLocaleString('en-US')}) <span aria-hidden="true">→</span>
         </button>

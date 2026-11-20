@@ -1,7 +1,8 @@
-// Tests for the fairy-door pairing rules in map-data.ts. Run with `npm test`.
+// Tests for the fairy-door pairing rules in map-data.ts, and naming the
+// place on a hex. Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deleteFairyDoor, isValidDestination, pairableDoors, partnerUpdates, upsertFairyDoor, withMapLists } from './map-data';
+import { deleteFairyDoor, getPlaceNameOn, isValidDestination, pairableDoors, partnerUpdates, upsertFairyDoor, withMapLists } from './map-data';
 import type { FairyDoor, FairyDoorDestination } from './types';
 
 const wild: FairyDoorDestination = { kind: 'wild' };
@@ -102,5 +103,24 @@ describe('withMapLists', () => {
     assert.deepEqual(md, { pois, fairyDoors: [], leyLines: [], draftLeyLine: draft });
     assert.equal(md.pois, pois, 'an existing list is kept as it is');
     assert.deepEqual(withMapLists(undefined), { pois: [], fairyDoors: [], leyLines: [] });
+  });
+});
+
+describe('getPlaceNameOn', () => {
+  const poi = (hex: string, name: string) => ({ id: `${hex}-${name}`, hex, name, notes: '' });
+  const named = (hex: string, name: string): FairyDoor => ({ ...door(`${hex}-${name}`), hex, name });
+  const md = {
+    pois: [poi('0606', ' '), poi('0606', ' Old Mill '), poi('0707', 'Inn')],
+    fairyDoors: [named('0606', 'Oak Door'), named('0303', 'Stone Door')],
+    leyLines: [],
+  };
+  test('the first named point of interest on the hex, else its first named fairy door', () => {
+    assert.equal(getPlaceNameOn(md, '0606'), 'Old Mill');
+    assert.equal(getPlaceNameOn(md, '0303'), 'Stone Door');
+  });
+  test('nothing for a hex with nothing named on it, no hex, or no map data', () => {
+    assert.equal(getPlaceNameOn(md, '1106'), '');
+    assert.equal(getPlaceNameOn(md, ''), '');
+    assert.equal(getPlaceNameOn(undefined, '0606'), '');
   });
 });

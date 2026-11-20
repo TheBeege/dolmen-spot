@@ -7,11 +7,12 @@
 
 import { memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Character, CharacterUpdater, HexCoord, JournalEntry } from '@/lib/types';
-import { parseTypedHex } from '@/lib/hex';
+import { readHexInput } from '@/lib/hex';
 import {
   createJournalEntry,
   describeJournalList,
   getEntryHex,
+  getEntryMatches,
   getJournalEntries,
   hexFilterOptions,
   highlightSegments,
@@ -24,10 +25,12 @@ import {
   type JournalEntryText,
   type JournalHexFilter,
   type JournalListItem,
+  type SearchTerm,
   type TextRange,
 } from '@/lib/journal';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
-import { errorClasses, labelClasses } from '@/components/FairyFields';
+import { labelClasses } from '@/components/FairyFields';
+import HexField from '@/components/HexField';
 
 /** How another tab opened the Journal: from the map's hex inspector (with its hex), or from Adventuring. */
 export interface JournalOpening {
@@ -47,22 +50,27 @@ interface JournalProps {
 
 // Inputs are 16 px, so iOS doesn't zoom the page when they get focus, and
 // placeholders are bright enough to read (AA contrast).
-const fieldBase =
-  'bg-[#1a1a2e] border text-[#f5e6c8] placeholder:text-[#f5e6c8]/60 rounded px-2 py-1 text-base focus:outline-none';
-const fieldClasses = `${fieldBase} border-[#5a3a28] focus:border-[#c4a35a]`;
+const fieldClasses =
+  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] placeholder:text-[#f5e6c8]/60 rounded px-2 py-1 text-base focus:outline-none focus:border-[#c4a35a]';
 const buttonClasses = 'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors';
-const linkClasses = 'text-[#c4a35a] hover:underline rounded';
+// Padded so that each is at least 24 px tall to tap.
+const linkClasses = 'text-[#c4a35a] hover:underline rounded px-1 py-1';
 const markClasses = 'bg-[#c4a35a] text-[#1a1a2e] rounded-sm';
 const focusRing = 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]/60';
 
-// The result count is announced this long after the search or filter last
-// changed, so screen readers don't read it out at every letter typed.
+// The result count is read out this long after the search or filter last
+// changed (once the list has caught up), so screen readers don't read it at
+// every letter typed.
 const RESULTS_ANNOUNCE_DELAY_MS = 800;
 // Other messages wait a moment too: the region is emptied first, so that
 // the same message twice in a row is read both times.
 const MESSAGE_ANNOUNCE_DELAY_MS = 100;
+// Entries drawn at a time; "Show more" draws the next lot. Drawing every
+// entry of a long journal at once stalls slower phones for seconds.
+const PAGE_SIZE = 50;
 
 const NONE_KEPT: ReadonlySet<string> = new Set();
+const formatCount = (n: number) => n.toLocaleString('en-US');
 
 export default function Journal({ character, onChange, opening, onOpened }: JournalProps) {
   const entries = getJournalEntries(character);
@@ -74,21 +82,34 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   // stay listed even if they don't match, so one doesn't vanish while it's
   // being typed in, or as soon as it's moved to another hex.
   const [kept, setKept] = useState<ReadonlySet<string>>(NONE_KEPT);
+  // How many of the listed entries are drawn.
+  const [limit, setLimit] = useState(PAGE_SIZE);
 
   // The list follows the search a moment behind the field, so that typing
   // stays quick in a long journal: React redraws the list when it's free.
+  // The terms are kept by their content, so that a letter that doesn't
+  // change them (a space) leaves every entry's marks as they are.
   const searched = useDeferredValue(query);
-  const words = useMemo(() => parseJournalQuery(searched), [searched]);
+  const searching = searched !== query; // the list hasn't caught up yet
+  const termsKey = useMemo(() => JSON.stringify(parseJournalQuery(searched)), [searched]);
+  const terms = useMemo(() => JSON.parse(termsKey) as SearchTerm[], [termsKey]);
   const list = useMemo(
-    () => listJournal(entries, { fairyVisits: visits }, hexFilter, words, kept),
-    [entries, visits, hexFilter, words, kept],
+    () => listJournal(entries, { fairyVisits: visits }, hexFilter, terms, kept),
+    [entries, visits, hexFilter, terms, kept],
   );
+  // The first `limit` entries, and any being worked on further down.
+  const shownItems = useMemo(
+    () => list.items.filter((item, i) => i < limit || kept.has(item.entry.id)),
+    [list.items, limit, kept],
+  );
+  const hiddenCount = list.items.length - shownItems.length;
   const options = useMemo(() => hexFilterOptions(entries, hexFilter), [entries, hexFilter]);
   const summary = describeJournalList(list, hexFilter, searched);
 
   const headingId = useId();
   const summaryId = useId();
   const searchId = useId();
+  const searchHintId = useId();
   const filterId = useId();
   const rootRef = useRef<HTMLElement>(null);
   const headingRef = useRef<HTMLHeadingElement>(null);
@@ -113,42 +134,54 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
     el?.scrollIntoView({ block: 'nearest' });
   }, [focusRequest]);
 
-  // Screen-reader announcements, in a polite live region. `null` stands for
-  // the summary as it is when the announcement is made.
+  // Screen-reader announcements, in a polite live region: a message, or
+  // (null) the result count after a change to the search or filter.
   const [announcement, setAnnouncement] = useState('');
   const [pending, setPending] = useState<{ message: string | null; seq: number } | null>(null);
+  const [countReadFor, setCountReadFor] = useState(0); // the change whose count was read out
   const announce = useCallback((message: string | null) => {
     setAnnouncement('');
     setPending((p) => ({ message, seq: (p?.seq ?? 0) + 1 }));
   }, []);
-  // The latest summary and list, for the timer above and for deleting.
-  const summaryRef = useRef(summary);
-  const itemsRef = useRef<JournalListItem[]>(list.items);
   useEffect(() => {
-    summaryRef.current = summary;
-    itemsRef.current = list.items;
-  });
-  useEffect(() => {
-    if (!pending) return;
+    if (pending?.message == null) return;
     const { message } = pending;
-    const timer = setTimeout(
-      () => setAnnouncement(message ?? summaryRef.current),
-      message === null ? RESULTS_ANNOUNCE_DELAY_MS : MESSAGE_ANNOUNCE_DELAY_MS,
-    );
+    const timer = setTimeout(() => setAnnouncement(message), MESSAGE_ANNOUNCE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [pending]);
+  // The count is read out once per change, a while after it, and only once
+  // the list on screen has caught up with the search: never a stale count.
+  useEffect(() => {
+    if (!pending || pending.message !== null || pending.seq === countReadFor || searching) return;
+    const { seq } = pending;
+    const timer = setTimeout(() => {
+      setAnnouncement(summary);
+      setCountReadFor(seq);
+    }, RESULTS_ANNOUNCE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [pending, countReadFor, searching, summary]);
+
+  // The entries on screen, for working out where focus goes after a delete.
+  const shownRef = useRef<JournalListItem[]>(shownItems);
+  useEffect(() => {
+    shownRef.current = shownItems;
+  });
 
   // ── Search and filter ──
 
+  // A new search or filter starts a new list: from the top, with nothing kept.
+  const startOver = () => {
+    setKept(NONE_KEPT);
+    setLimit(PAGE_SIZE);
+    announce(null);
+  };
   const changeQuery = (next: string) => {
     setQuery(next);
-    setKept(NONE_KEPT);
-    announce(null);
+    startOver();
   };
   const changeFilter = (next: JournalHexFilter) => {
     setHexFilter(next);
-    setKept(NONE_KEPT);
-    announce(null);
+    startOver();
   };
   const clearSearch = () => {
     changeQuery('');
@@ -157,9 +190,18 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   const clearAll = () => {
     setQuery('');
     setHexFilter('all');
-    setKept(NONE_KEPT);
-    announce(null);
+    startOver();
     moveFocusTo('search');
+  };
+
+  // Draw the next lot, with focus on the first of them.
+  const showMore = () => {
+    const next = limit + PAGE_SIZE;
+    const firstNew = list.items.find((item, i) => i >= limit && !kept.has(item.entry.id));
+    const nowShown = list.items.filter((item, i) => i < next || kept.has(item.entry.id)).length;
+    setLimit(next);
+    if (firstNew) moveFocusTo(`entry:${firstNew.entry.id}`);
+    announce(`Showing ${formatCount(nowShown)} of ${formatCount(list.items.length)} entries.`);
   };
 
   // ── Entries ──
@@ -200,11 +242,11 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
     [updateEntries, keepInView, announce],
   );
 
-  // Focus goes to the entry listed after the deleted one, or else the one
+  // Focus goes to the entry shown after the deleted one, or else the one
   // before it, or else the heading.
   const deleteEntry = useCallback(
     (id: string) => {
-      const items = itemsRef.current;
+      const items = shownRef.current;
       const i = items.findIndex((item) => item.entry.id === id);
       const next = items[i + 1] ?? items[i - 1];
       updateEntries((all) => all.filter((e) => e.id !== id));
@@ -257,7 +299,12 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
                 value={query}
                 onChange={(e) => changeQuery(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Escape' && query !== '') {
+                  if (e.key !== 'Escape') return;
+                  // While an input method is composing, Escape is its own (to
+                  // cancel what's being composed): the search stays, and so
+                  // the browser mustn't clear the field either.
+                  if (e.nativeEvent.isComposing) e.preventDefault();
+                  else if (query !== '') {
                     e.preventDefault();
                     changeQuery('');
                   }
@@ -265,7 +312,8 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
                 placeholder="Text, place, hex or date"
                 enterKeyHint="search"
                 autoComplete="off"
-                className={`${fieldClasses} w-full pr-9 [&::-webkit-search-cancel-button]:appearance-none`}
+                aria-describedby={searchHintId}
+                className={`${fieldClasses} w-full pr-9 [&::-webkit-search-cancel-button]:hidden`}
               />
               {query !== '' && (
                 <button
@@ -278,6 +326,9 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
                   <span aria-hidden="true">✕</span>
                 </button>
               )}
+            </div>
+            <div id={searchHintId} className="text-[#f5e6c8]/80 text-xs mt-1">
+              {'Use "quotes" for an exact phrase.'}
             </div>
           </div>
           <div className="min-w-0">
@@ -301,7 +352,7 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
       )}
 
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 mb-3 text-sm text-[#f5e6c8]/80">
-        <p id={summaryId}>
+        <p id={summaryId} className="min-w-0 [overflow-wrap:anywhere]">
           {summary}
           {entries.length === 0 && ' Add one to start recording your adventures.'}
         </p>
@@ -320,16 +371,21 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
         </div>
       )}
 
-      {list.items.length > 0 && (
+      {shownItems.length > 0 && (
         // role="list" keeps the list's semantics in Safari, which drops them
-        // for unstyled lists.
-        <ol role="list" className="space-y-2">
-          {list.items.map(({ entry, shown, ranges, matches }) => (
+        // for unstyled lists. While it's behind the search it's marked busy,
+        // and dimmed if that lasts more than a moment.
+        <ol
+          role="list"
+          aria-busy={searching || undefined}
+          className={`space-y-2 transition-opacity ${searching ? 'opacity-60 delay-300' : ''}`}
+        >
+          {shownItems.map(({ entry, shown, matches }) => (
             <li key={entry.id}>
               <JournalEntryCard
                 entry={entry}
                 shown={shown}
-                ranges={ranges}
+                ranges={getEntryMatches(entry, { fairyVisits: visits }, terms)}
                 matches={matches}
                 onTextChange={setText}
                 onHexChange={setHex}
@@ -338,6 +394,17 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
             </li>
           ))}
         </ol>
+      )}
+
+      {hiddenCount > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-sm text-[#f5e6c8]/80">
+          <p>
+            Showing {formatCount(shownItems.length)} of {formatCount(list.items.length)}.
+          </p>
+          <button type="button" onClick={showMore} className={buttonClasses}>
+            Show {formatCount(Math.min(PAGE_SIZE, hiddenCount))} more
+          </button>
+        </div>
       )}
     </section>
   );
@@ -393,30 +460,20 @@ const JournalEntryCard = memo(function JournalEntryCard({
       data-journal-focus={`entry:${entry.id}`}
       className={`bg-[#1a1a2e] rounded p-3 ${focusRing}`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <h3
-            id={headingId}
-            className={`${entry.fairyDate ? 'text-[#c9b3f0]' : 'text-[#c4a35a]'} text-sm font-semibold break-words`}
-          >
-            <Highlighted text={shown.date} ranges={ranges.date} />
-          </h3>
-          {shown.location && (
-            <p className="text-[#f5e6c8]/80 text-xs break-words">
-              <Highlighted text={shown.location} ranges={ranges.location} />
-            </p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={() => onDelete(entry.id)}
-          aria-describedby={headingId}
-          className="shrink-0 text-red-400 hover:text-red-300 text-sm px-2 py-0.5 rounded hover:bg-red-400/10 transition-colors"
-        >
-          Delete
-        </button>
-      </div>
+      <h3
+        id={headingId}
+        className={`${entry.fairyDate ? 'text-[#c9b3f0]' : 'text-[#c4a35a]'} text-sm font-semibold break-words`}
+      >
+        <Highlighted text={shown.date} ranges={ranges.date} />
+      </h3>
+      {shown.location && (
+        <p className="text-[#f5e6c8]/80 text-xs break-words">
+          <Highlighted text={shown.location} ranges={ranges.location} />
+        </p>
+      )}
 
+      {/* Delete sits at the end of this row, which wraps, so a long date
+          above it keeps the card's whole width. */}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         {hex && (
           <span className="text-[#f5e6c8]/80 tabular-nums">
@@ -432,6 +489,14 @@ const JournalEntryCard = memo(function JournalEntryCard({
           className={linkClasses}
         >
           {hex ? 'Change hex' : 'Set hex'}
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(entry.id)}
+          aria-describedby={headingId}
+          className="ml-auto text-red-400 hover:text-red-300 text-sm px-2 py-0.5 rounded hover:bg-red-400/10 transition-colors"
+        >
+          Delete
         </button>
       </div>
 
@@ -468,7 +533,7 @@ const JournalEntryCard = memo(function JournalEntryCard({
           </ul>
           {moreMatches > 0 && (
             <p>
-              and {moreMatches.toLocaleString('en-US')} more {moreMatches === 1 ? 'match' : 'matches'}
+              and {formatCount(moreMatches)} more {moreMatches === 1 ? 'match' : 'matches'}
             </p>
           )}
         </div>
@@ -508,74 +573,45 @@ function HexEditor({
 }) {
   const [value, setValue] = useState<string>(hex);
   const [error, setError] = useState<string | null>(null);
-  const inputId = useId();
-  const hintId = useId();
-  const errorId = useId();
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const typed = value.trim();
-    if (typed === '') {
-      onSave('');
-      return;
-    }
-    const next = parseTypedHex(typed);
-    if (!next) {
-      setError(`No hex "${typed}" on the map.`);
-      return;
-    }
-    onSave(next);
+    const reading = readHexInput(value);
+    if (reading.error !== undefined) setError(reading.error);
+    else onSave(reading.hex);
   };
 
   return (
     <form
       onSubmit={submit}
       onKeyDown={(e) => {
-        if (e.key === 'Escape') {
+        if (e.key === 'Escape' && !e.nativeEvent.isComposing) {
           e.preventDefault();
           onCancel();
         }
       }}
       className="mt-2 bg-[#2a2a3e] rounded p-2"
     >
-      <div className="flex flex-wrap items-center gap-2">
-        <label htmlFor={inputId} className="text-[#c4a35a] text-xs font-semibold">
-          Hex
-        </label>
-        <input
-          id={inputId}
-          // Focus goes straight to the field when the editor opens.
-          autoFocus
-          type="text"
-          inputMode="numeric"
-          enterKeyHint="done"
-          autoComplete="off"
-          value={value}
-          onChange={(e) => {
-            setValue(e.target.value);
-            setError(null);
-          }}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-          className={`${error ? `${fieldBase} border-[#ff8a6a]` : fieldClasses} w-24`}
-        />
+      <HexField
+        label="Hex"
+        labelClassName="text-[#c4a35a] text-xs font-semibold"
+        value={value}
+        onChange={(next) => {
+          setValue(next);
+          setError(null);
+        }}
+        error={error}
+        hint="Its number on the map, like 0606. Leave it blank for no hex."
+        // Focus goes straight to the field when the editor opens.
+        autoFocus
+      >
         <button type="submit" className={buttonClasses}>
           Save
         </button>
         <button type="button" onClick={onCancel} className="text-[#f5e6c8]/80 hover:text-[#f5e6c8] rounded px-2 py-1">
           Cancel
         </button>
-      </div>
-      <p id={hintId} className="text-[#f5e6c8]/80 text-xs mt-1">
-        Its number on the map, like 0606. Leave it blank for no hex.
-      </p>
-      <div aria-live="polite">
-        {error && (
-          <p id={errorId} className={errorClasses}>
-            {error}
-          </p>
-        )}
-      </div>
+      </HexField>
     </form>
   );
 }

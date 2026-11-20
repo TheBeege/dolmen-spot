@@ -2,7 +2,7 @@
 // Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CENTRE_HULL, MIN_VIEW_FRACTION, PAN_MARGIN as MARGIN, gridBounds, hexCenterOf, hexVertices, nearestPointOnMap, parseTypedHex } from './hex';
+import { CENTRE_HULL, MIN_VIEW_FRACTION, PAN_MARGIN as MARGIN, gridBounds, hexCenterOf, hexVertices, nearestPointOnMap, parseTypedHex, readHexInput } from './hex';
 import { ALL_HEXES, HEX_CELLS } from './hex-grid';
 
 type Point = { x: number; y: number };
@@ -140,5 +140,17 @@ describe('parseTypedHex', () => {
     for (const typed of ['', '   ', '9999', '7', '06 06', '0606a', 'Hex 0606', '00606', '-606', '6.06']) {
       assert.equal(parseTypedHex(typed), null, typed);
     }
+  });
+});
+
+describe('readHexInput', () => {
+  test('blank is no hex; a hex on the map is read as on the map', () => {
+    assert.deepEqual(readHexInput(''), { hex: '' });
+    assert.deepEqual(readHexInput('   '), { hex: '' });
+    assert.deepEqual(readHexInput(' 606 '), { hex: '0606' });
+  });
+  test('anything else says why it is not a hex', () => {
+    assert.deepEqual(readHexInput('9999'), { error: 'No hex "9999" on the map.' });
+    assert.deepEqual(readHexInput(' Hex 0606 '), { error: 'No hex "Hex 0606" on the map.' });
   });
 });

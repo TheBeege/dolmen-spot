@@ -4,6 +4,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultCharacter } from './gamedata';
+import { editReturnDate } from './livedTime';
 import { CURRENT_SCHEMA_VERSION, MIGRATION_VERSIONS, migrateCharacter } from './migrations';
 import { CHARACTERS_KEY, characterFileJson, createCharacterStore, parseImportedCharacter, type StorageLike } from './storage';
 import type { Character } from './types';
@@ -114,6 +115,7 @@ describe('v13 → v14: journal entries get a hex', () => {
       assert.ok(Array.isArray(migrated.journalEntries), JSON.stringify(journal));
       for (const e of migrated.journalEntries) {
         assert.ok(!('hex' in e) || /^\d{4}$/.test(e.hex ?? ''), JSON.stringify(e));
+        assert.ok(typeof e.text === 'string' && typeof e.location === 'string', JSON.stringify(e));
       }
     }
   });
@@ -152,6 +154,36 @@ describe("on every load: entries' hexes are repaired, never guessed", () => {
     assert.ok(ids.every((id) => typeof id === 'string' && id !== ''));
     assert.deepEqual(migrated.journalEntries.map((e) => e.location), ['a', 'b', 'c', 'd', 'e', 'f']);
     assert.deepEqual(migrateCharacter(clone(migrated)), migrated, 'and a second load changes nothing');
+  });
+
+  test("text and a location that aren't strings become text, keeping what they hold", () => {
+    const migrated = migrateCharacter(
+      current([
+        entry('x', { text: 42 }),
+        entry(null, { text: true }),
+        entry({ a: ['Ford'] }, { text: { a: [] } }),
+        entry(7, { text: ['Met', 'a', 'goblin'] }),
+        { id: 'bare', date: { day: 1, month: 0, year: 1 } },
+      ]),
+    );
+    assert.deepEqual(
+      migrated.journalEntries.map((e) => [e.text, e.location]),
+      [['42', 'x'], ['true', ''], ['', '{"a":["Ford"]}'], ['["Met","a","goblin"]', '7'], ['', '']],
+    );
+    assert.deepEqual(migrateCharacter(clone(migrated)), migrated, 'and a second load changes nothing');
+  });
+
+  test("editing the return date works on a save whose \"Returned\" entry has text that isn't a string", () => {
+    const saved = current([
+      { id: 'r', date: { day: 5, month: 0, year: 1 }, fairyEvent: { visitId: 'v1', kind: 'returned' }, location: 'The Ring', text: 42 },
+    ]);
+    saved.fairyVisits = [{ id: 'v1', enteredOn: { day: 1, month: 0, year: 1 }, returnedOn: { day: 5, month: 0, year: 1 }, daysInFairy: 2 }];
+    saved.currentDate = { day: 6, month: 0, year: 1 };
+    const loaded = migrateCharacter(saved);
+    assert.equal(loaded.journalEntries[0].text, '42');
+    const patch = editReturnDate(loaded, { day: 7, month: 0, year: 1 });
+    assert.ok(patch);
+    assert.deepEqual(patch.journalEntries?.[0].date, { day: 7, month: 0, year: 1 });
   });
 });
 

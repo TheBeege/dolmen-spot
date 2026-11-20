@@ -40,9 +40,11 @@ import type {
   CountingStart,
   FairyDate,
   FairyVisit,
+  HexCoord,
   JournalEntry,
 } from './types';
 import { isValidHex } from './hex';
+import { getPlaceNameOn } from './map-data';
 import {
   MAX_YEAR,
   daysBetween,
@@ -194,14 +196,16 @@ export function getCurrentTimelinePoint(character: WithClock): TimelinePoint & {
 /**
  * Where the character is now, to stamp on a new journal entry alongside
  * getCurrentTimelinePoint: the location typed on the Adventuring tab, and the
- * map's current hex. An entry stamped while no hex is set has no `hex`.
+ * map's current hex. In Fairy that hex is where the party left Dolmenwood,
+ * not where they are, so there's none. An entry stamped without one has no
+ * `hex`; the player can set it in the journal.
  */
 export function getCurrentPlace(
-  character: Pick<Character, 'currentLocation' | 'currentLocationHex'>,
+  character: Pick<Character, 'currentLocation' | 'currentLocationHex' | 'fairyVisits'>,
 ): Pick<JournalEntry, 'location' | 'hex'> {
   const location = character.currentLocation ?? '';
   const hex = character.currentLocationHex;
-  return isValidHex(hex) ? { location, hex } : { location };
+  return isValidHex(hex) && !isInFairy(character) ? { location, hex } : { location };
 }
 
 /**
@@ -528,17 +532,32 @@ export function setDaysInFairy(character: Character, days: number): Partial<Char
  * counts the same days; a study start the timeline no longer reaches (the
  * calendar was moved back past it, or days in Fairy were taken back) moves to
  * wherever its lived day now falls.
+ *
+ * `cameBackIn` is the map hex the party came back in ('' for none), by
+ * default the map's current hex: where they left from, as the map still
+ * shows it. The return's journal entry is stamped with it. If it's another
+ * hex, the map's current hex moves there, and the entry's location is the
+ * name of a place marked on that hex, if there is one, rather than the
+ * location typed before they left.
  */
-export function returnFromFairy(character: Character, returnedOn: CalendarDate): Partial<Character> | null {
+export function returnFromFairy(
+  character: Character,
+  returnedOn: CalendarDate,
+  cameBackIn?: HexCoord | '',
+): Partial<Character> | null {
   const open = getOpenFairyVisit(character);
   if (!open || !canReturnOn(open, returnedOn) || !isWithinCalendar(returnedOn)) return null;
   const visits = getFairyVisits(character);
   const date = { day: returnedOn.day, month: returnedOn.month, year: returnedOn.year };
+  const leftFrom = isValidHex(character.currentLocationHex) ? character.currentLocationHex : '';
+  const hex = cameBackIn === undefined ? leftFrom : isValidHex(cameBackIn) ? cameBackIn : '';
+  const elsewhere = hex !== leftFrom;
   const entry: JournalEntry = {
     id: crypto.randomUUID(),
     date: { ...date },
     fairyEvent: { visitId: open.id, kind: 'returned' },
-    ...getCurrentPlace(character),
+    location: elsewhere ? getPlaceNameOn(character.mapData, hex) : character.currentLocation ?? '',
+    ...(hex ? { hex } : {}),
     text: describeReturn(visits.length, open.daysInFairy, open.enteredOn, date),
   };
   const fairyVisits = visits.map((v) => (v.id === open.id ? { ...v, returnedOn: { ...date } } : v));
@@ -546,6 +565,7 @@ export function returnFromFairy(character: Character, returnedOn: CalendarDate):
     fairyVisits,
     currentDate: { ...date },
     journalEntries: [...(character.journalEntries ?? []), entry],
+    ...(elsewhere ? { currentLocationHex: hex } : {}),
     ...refitCountingStart(character, fairyVisits, open.enteredOn),
     ...refitOvertakenStudy(character, fairyVisits, open),
   };
