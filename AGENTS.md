@@ -85,7 +85,7 @@ Next.js 16's `next build` no longer lints, so these checks do instead:
   - ESLint on staged `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` files.
   - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
   - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
-- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck` and `npm run check:msal-bridge`.
+- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`.
   - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
   - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
 
