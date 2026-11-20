@@ -10,7 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
-    "postinstall": "patch-package",
+    "postinstall": "patch-package --error-on-fail",
     "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
