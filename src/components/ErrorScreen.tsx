@@ -1,12 +1,16 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { currentStore } from '@/lib/current-store';
+import { downloadFile, localFileStamp } from '@/lib/download';
 import { SAVE_DATA_FORMAT } from '@/lib/save-data-file';
 
 /**
  * What app/error.tsx and app/global-error.tsx show when the sheet fails to
- * render. It must never throw itself, so it imports only a dependency-free
- * constant, and every storage or download call sits inside try/catch.
+ * render. It must never throw itself, so it imports only dependency-free
+ * modules, and every store, storage or download call sits inside try/catch.
+ * It reaches this tab's character store through current-store.ts rather than
+ * importing the store, so it still loads when the store's modules can't.
  */
 
 // Every key Dolmen Spot keeps in localStorage starts with this.
@@ -28,11 +32,68 @@ const MESSAGES: Record<SaveState, { status: string; next: string }> = {
     status: "This browser's storage is full, so Dolmen Spot couldn't save your latest change. Everything saved before it is still in this browser.",
     next: 'Try again to go back to your last saved version, or download a copy of your save data to keep.',
   },
+  // The sheet runs without storage (in memory), so blocked storage never stops
+  // it opening: an error that reaches this screen has some other cause.
   blocked: {
-    status: "Dolmen Spot couldn't open this page because the browser is blocking its storage (site data), so your characters can't be loaded or saved here.",
-    next: "Allow site data for this site in your browser's settings, then reload the page.",
+    status: "Dolmen Spot hit an error and couldn't show this page. The browser is also blocking its storage (site data), so nothing can be saved here.",
+    next: "Try again. To save characters in this browser, allow site data for this site in your browser's settings, then reload the page.",
   },
 };
+
+/** What to say instead, from what this tab's store reports. */
+const STORE_MESSAGES = {
+  // This tab holds changes that aren't in storage.
+  unsaved: {
+    status: "Dolmen Spot hit an error and couldn't show this page. Your latest changes haven't been saved in this browser yet.",
+    next: 'Choose Try Again to get back to them, or download them first. Reloading the page would lose them.',
+  },
+  unsavedBlocked: {
+    status: "Dolmen Spot hit an error and couldn't show this page. The browser is blocking its storage (site data), so your changes haven't been saved.",
+    next: 'Choose Try Again to get back to them, or download them first. Reloading the page would lose them.',
+  },
+  // Saved data that couldn't be read is left exactly as it was (no backup of it could be made yet).
+  untouched: {
+    status: "Dolmen Spot hit an error and couldn't show this page. Nothing in this browser has been changed.",
+    next: 'Try again, or download a copy of your save data to keep.',
+  },
+} satisfies Record<string, { status: string; next: string }>;
+
+/** What this tab's store reports, if the app opened one. */
+interface StoreView {
+  /** This tab holds changes that aren't in storage. */
+  unsaved: boolean;
+  /** The store couldn't read storage, so nothing is saved this visit. */
+  blocked: boolean;
+  /** Saved data the store couldn't read is kept as it was, with saving paused. */
+  untouched: boolean;
+}
+
+/** Reads the store once. Never throws. */
+function readStore(): StoreView {
+  try {
+    const status = currentStore()?.getStatus();
+    return {
+      unsaved: status?.hasUnsavedChanges === true,
+      blocked: status?.storageUnreadable === true,
+      untouched: (status?.unsavedRecovery.length ?? 0) > 0,
+    };
+  } catch {
+    return { unsaved: false, blocked: false, untouched: false };
+  }
+}
+
+/**
+ * This tab's characters, in the format Export All Characters writes (so
+ * Import Character takes them back), or null if no store holds any that
+ * storage may not have. Never throws.
+ */
+function unsavedCharacters(): string | null {
+  try {
+    return currentStore()?.unsavedCharactersJson() ?? null;
+  } catch {
+    return null;
+  }
+}
 
 function isQuotaError(error: unknown): boolean {
   try {
@@ -90,32 +151,6 @@ function formatErrorDetails(details: ErrorDetails): string {
   ].filter(Boolean).join('\n');
 }
 
-// These behave like downloadFile / localFileStamp in PR #16's
-// src/lib/download.ts; use those instead once both are merged.
-/** Local date and time for a file name, e.g. `2026-11-20-1837`. */
-function localFileStamp(date: Date = new Date()): string {
-  const pad = (n: number) => String(n).padStart(2, '0');
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}-${pad(date.getHours())}${pad(date.getMinutes())}`;
-}
-
-/**
- * Offers `text` as a file download. The link is added to the page before
- * clicking (some browsers ignore clicks on detached links), and the object URL
- * is revoked only after a minute: revoking it at once can cancel a download
- * that hasn't started yet.
- */
-function downloadFile(fileName: string, text: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  link.style.display = 'none';
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 60_000);
-}
-
 /** Everything the app has saved in this browser, exactly as stored, in a file that explains itself. Throws if storage can't be read. */
 function buildSaveDataFile(details: ErrorDetails): string {
   const saved: Record<string, string | null> = {};
@@ -146,6 +181,9 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
   // Chosen when the screen appears (getSaveState never throws), and switched
   // to 'blocked' if storage later can't be read, so the message stays true.
   const [saveState, setSaveState] = useState<SaveState>(() => getSaveState(error));
+  // Read once: nothing changes the store while this screen shows.
+  const [store] = useState(readStore);
+  const { unsaved } = store;
   const [details] = useState(() => getErrorDetails(error));
   // The save data, shown for copying on request or when a download fails.
   const [copyText, setCopyText] = useState<string | null>(null);
@@ -153,6 +191,7 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
   const [problem, setProblem] = useState<string | null>(null);
   const copyRef = useRef<HTMLTextAreaElement>(null);
   const reloadRef = useRef<HTMLButtonElement>(null);
+  const unsavedRef = useRef<HTMLButtonElement>(null);
 
   // Move focus to the copy box when it opens, ready to copy.
   useEffect(() => {
@@ -171,12 +210,12 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
       return buildSaveDataFile(details);
     } catch {
       setSaveState('blocked');
-      setProblem(UNREADABLE);
+      setProblem(unsaved ? `${UNREADABLE} Your unsaved characters can still be downloaded.` : UNREADABLE);
       // The button just pressed goes away with the blocked state; keep focus on
-      // the one thing left to do instead of letting it fall to the page.
+      // what's left to do instead of letting it fall to the page.
       setTimeout(() => {
         try {
-          reloadRef.current?.focus();
+          (unsavedRef.current ?? reloadRef.current)?.focus();
         } catch {
           // Focus is a convenience.
         }
@@ -196,6 +235,21 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
     }
   };
 
+  const downloadUnsavedCharacters = () => {
+    setProblem(null);
+    const json = unsavedCharacters();
+    if (json === null) {
+      setProblem("Dolmen Spot couldn't get the unsaved characters. Choose Try Again to get back to them.");
+      return;
+    }
+    try {
+      downloadFile(`dolmen-spot-characters-${localFileStamp()}.dolmenwood.json`, json);
+    } catch {
+      setCopyNote("The download didn't start. Copy this text into a file, and import it later with Import Character:");
+      setCopyText(json);
+    }
+  };
+
   const showSaveData = () => {
     const text = readSaveData();
     if (text === null) return;
@@ -211,8 +265,12 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
     }
   };
 
-  const message = MESSAGES[saveState];
   const canReadSaves = saveState !== 'blocked';
+  const blocked = !canReadSaves || store.blocked;
+  let message = MESSAGES[saveState];
+  if (unsaved) message = blocked ? STORE_MESSAGES.unsavedBlocked : STORE_MESSAGES.unsaved;
+  else if (blocked) message = MESSAGES.blocked;
+  else if (store.untouched) message = STORE_MESSAGES.untouched;
 
   return (
     <main className="min-h-screen flex items-center justify-center px-4 py-8 bg-[#1a1a2e] text-[#f5e6c8]">
@@ -225,9 +283,13 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
         <p className="text-sm leading-relaxed mt-2 text-[#f5e6c8]/80">{message.next}</p>
 
         <div className="flex flex-wrap gap-2 mt-4">
-          {canReadSaves && (
-            <button type="button" onClick={onTryAgain} className={`${BUTTON} bg-[#2d4a2e] hover:bg-[#3d6b3e]`}>
-              Try Again
+          {/* Always offered: the sheet runs even with storage blocked, and Try Again gets this tab's characters back from the store. */}
+          <button type="button" onClick={onTryAgain} className={`${BUTTON} bg-[#2d4a2e] hover:bg-[#3d6b3e]`}>
+            Try Again
+          </button>
+          {unsaved && (
+            <button type="button" ref={unsavedRef} onClick={downloadUnsavedCharacters} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#7a5a38]`}>
+              Download Unsaved Characters
             </button>
           )}
           <button type="button" ref={reloadRef} onClick={reloadPage} className={`${BUTTON} bg-[#3a3a5e] hover:bg-[#4a4a6e]`}>
