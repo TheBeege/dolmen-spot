@@ -86,8 +86,9 @@ export function FairyStatusPanel({ character, onChange }: FairyTimeProps) {
           In Fairy &mdash; day {visit.daysInFairy + 1}
         </div>
         <div className="text-[#f5e6c8]/70 text-sm mt-1">
-          entered {formatShortDate(visit.enteredOn)} &middot; visit {visitNumber} &middot;{' '}
-          {dayCount(visit.daysInFairy)} lived here
+          <span className="whitespace-nowrap">entered {formatShortDate(visit.enteredOn)}</span> &middot;{' '}
+          <span className="whitespace-nowrap">visit {visitNumber}</span> &middot;{' '}
+          <span className="whitespace-nowrap">{dayCount(visit.daysInFairy)} lived here</span>
         </div>
       </div>
 
