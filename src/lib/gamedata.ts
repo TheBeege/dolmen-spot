@@ -39,7 +39,7 @@ export const KINDRED_CLASS_RESTRICTIONS: Record<KindredId, Partial<Record<ClassI
 
 export function getAvailableClasses(kindred: KindredId | ''): { class: ClassInfo; restriction?: 'rare' }[] {
   if (!kindred) return CLASSES.map(c => ({ class: c }));
-  const restrictions = KINDRED_CLASS_RESTRICTIONS[kindred] || {};
+  const restrictions = isKnownKindredId(kindred) ? KINDRED_CLASS_RESTRICTIONS[kindred] : {};
   return CLASSES.filter(c => restrictions[c.id] !== 'forbidden')
     .map(c => ({ class: c, restriction: restrictions[c.id] === 'rare' ? 'rare' as const : undefined }));
 }
@@ -190,8 +190,22 @@ export const CLASSES: ClassInfo[] = [
   },
 ];
 
-// Display names. Saved data can hold an id the app doesn't know (a hand-edited
-// or newer-version file), and the sheet shows that id as stored rather than
+// Saved data can hold a kindred or class id the app doesn't know (a hand-edited
+// or newer-version file). Check with these before indexing any table by such an
+// id: they test own properties, so names every object inherits, like
+// "constructor" or "__proto__", don't pass as known ids.
+const KNOWN_KINDRED_IDS = Object.fromEntries(KINDREDS.map(k => [k.id, true]));
+const KNOWN_CLASS_IDS = Object.fromEntries(CLASSES.map(c => [c.id, true]));
+
+export function isKnownKindredId(id: string): id is KindredId {
+  return Object.hasOwn(KNOWN_KINDRED_IDS, id);
+}
+
+export function isKnownClassId(id: string): id is ClassId {
+  return Object.hasOwn(KNOWN_CLASS_IDS, id);
+}
+
+// Display names. The sheet shows an id it doesn't know as stored rather than
 // hiding it.
 export function getKindredName(id: string): string {
   return KINDREDS.find(k => k.id === id)?.name ?? id;
@@ -1153,11 +1167,11 @@ export const KINDRED_CLASS_ADVANCEMENT: Record<KindredId, ClassAdvancementTable 
 export function getAdvancementTable(kindred: KindredId | '', classId: ClassId | ''): ClassAdvancementTable | null {
   // If using a kindred-class, use kindred advancement table
   if (kindred && kindred !== 'human' && !classId) {
-    return KINDRED_CLASS_ADVANCEMENT[kindred] ?? null;
+    return isKnownKindredId(kindred) ? KINDRED_CLASS_ADVANCEMENT[kindred] : null;
   }
   // Standard class
   if (classId) {
-    return CLASS_ADVANCEMENT[classId] ?? null;
+    return isKnownClassId(classId) ? CLASS_ADVANCEMENT[classId] : null;
   }
   return null;
 }
@@ -1283,6 +1297,7 @@ export const DETECT_MAGIC_PROGRESSION: Record<string, Record<number, number>> = 
 };
 
 export function getDetectMagicTarget(classOrKindred: string, level: number): number | null {
+  if (!isKnownClassId(classOrKindred) && !isKnownKindredId(classOrKindred)) return null;
   const table = DETECT_MAGIC_PROGRESSION[classOrKindred];
   if (!table) return null;
   const clamped = Math.max(1, Math.min(level, 15));
@@ -1351,6 +1366,7 @@ export const SPELLS_PER_DAY: Record<string, Record<number, number[]>> = {
 };
 
 export function getSpellsPerDay(classOrKindred: string, level: number): number[] | null {
+  if (!isKnownClassId(classOrKindred) && !isKnownKindredId(classOrKindred)) return null;
   const table = SPELLS_PER_DAY[classOrKindred];
   if (!table) return null;
   const clamped = Math.max(1, Math.min(level, 15));
@@ -1581,7 +1597,7 @@ export function calculateXpModifier(
   abilityScores: AbilityScoresType,
 ): { primeBonus: number; humanBonus: number; total: number } {
   // No class, or a class id the app doesn't know: no modifier.
-  const primeKeys = classId ? CLASS_PRIME_ABILITIES[classId] : undefined;
+  const primeKeys = classId && isKnownClassId(classId) ? CLASS_PRIME_ABILITIES[classId] : undefined;
   if (!primeKeys) return { primeBonus: 0, humanBonus: 0, total: 0 };
 
   const lowestPrime = Math.min(...primeKeys.map(k => abilityScores[k]));
@@ -1760,7 +1776,7 @@ export function rollD6(): number {
 }
 
 export function rollStartingEquipment(classId: ClassId, category: 'armour' | 'weapons'): { roll: number; result: string } {
-  const table = STARTING_EQUIPMENT[classId]?.[category] ?? [];
+  const table = isKnownClassId(classId) ? STARTING_EQUIPMENT[classId][category] : [];
   const roll = rollD6();
   const entry = table.find(e => e.roll.includes(roll));
   return { roll, result: entry?.result ?? 'Unknown' };
@@ -1786,7 +1802,7 @@ export function getCharacterLanguages(
 } {
   const kindred = KINDREDS.find(k => k.id === kindredId);
   const nativeLanguages = kindred?.nativeLanguages ?? ['Woldish'];
-  const classLanguages: string[] = (classId ? CLASS_LANGUAGES[classId] : undefined) ?? [];
+  const classLanguages: string[] = (classId && isKnownClassId(classId) ? CLASS_LANGUAGES[classId] : undefined) ?? [];
   const intMod = getAbilityModifier(intScore);
   const bonusSlots = Math.max(0, intMod);
 
@@ -1845,9 +1861,8 @@ function getArmourBulkCategory(bulk: string): 'light' | 'medium' | 'heavy' | nul
 }
 
 export function getArmourRestrictionWarning(classId: ClassId | '', armourName: string, hasShield: boolean): string | null {
-  if (!classId) return null;
+  if (!classId || !isKnownClassId(classId)) return null;
   const restrictions = CLASS_ARMOUR_RESTRICTIONS[classId];
-  if (!restrictions) return null; // a class id the app doesn't know
 
   if (hasShield && !restrictions.shield) {
     const classInfo = CLASSES.find(c => c.id === classId);
@@ -2052,8 +2067,8 @@ export function calculateSkillTargets(
   autoSkillKeys.add('survival');
 
   // 2. Apply kindred base overrides (e.g., Elf Listen 5)
-  if (kindred) {
-    const kindredOverrides = KINDRED_BASE_SKILL_OVERRIDES[kindred as KindredId];
+  if (kindred && isKnownKindredId(kindred)) {
+    const kindredOverrides = KINDRED_BASE_SKILL_OVERRIDES[kindred];
     if (kindredOverrides) {
       for (const [key, value] of Object.entries(kindredOverrides)) {
         targets[key] = Math.min(targets[key] ?? 6, value);
@@ -2063,8 +2078,8 @@ export function calculateSkillTargets(
   }
 
   // 3. Apply class base overrides (e.g., Friar Survival 5)
-  if (classId) {
-    const classOverrides = CLASS_BASE_SKILL_OVERRIDES[classId as ClassId];
+  if (classId && isKnownClassId(classId)) {
+    const classOverrides = CLASS_BASE_SKILL_OVERRIDES[classId];
     if (classOverrides) {
       for (const [key, value] of Object.entries(classOverrides)) {
         targets[key] = Math.min(targets[key] ?? 6, value);
@@ -2074,8 +2089,8 @@ export function calculateSkillTargets(
   }
 
   // 4. Apply class skill tables (Bard, Hunter, Thief)
-  if (classId) {
-    const classSkillTable = CLASS_SKILL_TABLES[classId as ClassId];
+  if (classId && isKnownClassId(classId)) {
+    const classSkillTable = CLASS_SKILL_TABLES[classId];
     if (classSkillTable) {
       const row = classSkillTable.rows[clampedLevel];
       if (row) {
@@ -2090,8 +2105,8 @@ export function calculateSkillTargets(
   }
 
   // 5. Apply kindred-class skill tables (Grimalkin Pick Lock, Woodgrue Stealth)
-  if (isKindredClass && kindred) {
-    const kindredSkillTable = KINDRED_CLASS_SKILL_TABLES[kindred as KindredId];
+  if (isKindredClass && kindred && isKnownKindredId(kindred)) {
+    const kindredSkillTable = KINDRED_CLASS_SKILL_TABLES[kindred];
     if (kindredSkillTable) {
       const row = kindredSkillTable.rows[clampedLevel];
       if (row) {
@@ -2114,8 +2129,8 @@ export function calculateSkillTargets(
 
   // 7. Expertise points
   let expertisePoints: number | null = null;
-  if (classId) {
-    const config = EXPERTISE_POINTS_CONFIG[classId as ClassId];
+  if (classId && isKnownClassId(classId)) {
+    const config = EXPERTISE_POINTS_CONFIG[classId];
     if (config) {
       expertisePoints = config.base + config.perLevel * clampedLevel;
     }
@@ -2473,7 +2488,7 @@ export function getCharacterMagicProfile(kindred: KindredId | '', classId: Class
         result.hasRunes = true;
         let glamourCount = ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0;
         // Add innate kindred glamours (1 for Elf/Grimalkin) on top of class glamours
-        glamourCount += INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0;
+        if (isKnownKindredId(kindred)) glamourCount += INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0;
         result.glamourCount = glamourCount;
         break;
       }

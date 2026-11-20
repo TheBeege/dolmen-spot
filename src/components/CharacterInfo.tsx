@@ -4,8 +4,9 @@ import { useState } from 'react';
 import { Character, KindredId, ClassId } from '@/lib/types';
 import {
   KINDREDS,
-  CLASSES,
   getKindredName,
+  isKnownClassId,
+  isKnownKindredId,
   MOON_SIGNS,
   ALIGNMENTS,
   getAvailableClasses,
@@ -39,8 +40,8 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
   const selectedClassEntry = availableClasses.find((c) => c.class.id === character.class);
   // Ids the app doesn't know (e.g. from a hand-edited save) stay as stored; the
   // dropdowns show them, and nothing is calculated from them.
-  const isUnknownKindred = !!character.kindred && !selectedKindred;
-  const isUnknownClass = !!character.class && !CLASSES.some((c) => c.id === character.class);
+  const isUnknownKindred = !!character.kindred && !isKnownKindredId(character.kindred);
+  const isUnknownClass = !!character.class && !isKnownClassId(character.class);
 
   const calculated = calculateXpModifier(character.class, character.kindred, character.abilityScores);
   const xpOutOfSync = character.xpModifier !== calculated.total;
@@ -90,7 +91,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
   };
 
   const handleRollEquipment = () => {
-    if (!character.class) return;
+    if (!isKnownClassId(character.class)) return;
     const table = STARTING_EQUIPMENT[character.class];
     // Roll armour
     const armourRoll = rollD6();
@@ -108,7 +109,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
     });
   };
 
-  const equipTable = character.class ? STARTING_EQUIPMENT[character.class] : null;
+  const equipTable = isKnownClassId(character.class) ? STARTING_EQUIPMENT[character.class] : null;
   const isSmallKindred = selectedKindred?.size === 'Small';
 
   return (

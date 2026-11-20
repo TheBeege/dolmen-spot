@@ -16,7 +16,6 @@ import type { Character, CharacterContainer, InventoryItem } from '@/lib/types';
 import {
   ARMOUR_TABLE,
   BREGGLE_HORN_PROGRESSION,
-  CLASSES,
   CLERIC_HOLY_ORDERS,
   FAIRY_RUNES,
   FIGHTER_COMBAT_TALENTS,
@@ -48,6 +47,7 @@ import {
   getKindredClassLabel,
   getKindredName,
   getRuneUsageFrequency,
+  isKnownClassId,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
 import {
@@ -515,7 +515,7 @@ function CharacterSection({ c }: { c: Character }) {
   const kindred = KINDREDS.find((k) => k.id === c.kindred);
   const classEntry = getAvailableClasses(c.kindred).find((entry) => entry.class.id === c.class);
   // Ids the app doesn't know are printed as the Character tab's dropdowns show them.
-  const knownClass = CLASSES.some((cl) => cl.id === c.class);
+  const knownClass = isKnownClassId(c.class);
   const unknownKindred = !!c.kindred && !kindred;
 
   let classValue = className(c);
