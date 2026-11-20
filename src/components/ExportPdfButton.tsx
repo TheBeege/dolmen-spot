@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react';
 import type { Character } from '@/lib/types';
-import { PDF_FONT_LOAD_ERROR } from '@/lib/pdf/errors';
+import { PDF_LOAD_ERROR, pdfLoadError } from '@/lib/pdf/errors';
 
 type ExportState =
   | { status: 'idle' }
@@ -14,12 +14,26 @@ type ExportState =
 // was busy rendering and delivered late.
 const REPEAT_CLICK_MS = 1000;
 
-/** The PDF code or its fonts couldn't be downloaded: offline, or replaced by a newer deployment. */
+// The PDF code is one download of about 0.5 MB that can't report its
+// progress (the fonts' downloads can, see fonts.ts), so a stalled one is only
+// given up on after this long, enough for a very slow connection.
+const TOOLS_TIMEOUT_MS = 180_000;
+
+/** Loads the PDF code, or fails with a PDF load error if it takes over TOOLS_TIMEOUT_MS. */
+function loadPdfTools() {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(pdfLoadError('The PDF code took too long to download.')), TOOLS_TIMEOUT_MS);
+  });
+  return Promise.race([import('@/lib/pdf/download'), timeout]).finally(() => clearTimeout(timer));
+}
+
+/** The PDF code or its fonts couldn't be downloaded: offline, stalled, or replaced by a newer deployment. */
 function isLoadError(err: unknown): boolean {
   if (!(err instanceof Error)) return false;
   return (
     err.name === 'ChunkLoadError' ||
-    err.name === PDF_FONT_LOAD_ERROR ||
+    err.name === PDF_LOAD_ERROR ||
     /loading (css )?chunk|dynamically imported module|importing a module script failed|failed to fetch/i.test(err.message)
   );
 }
@@ -50,7 +64,7 @@ export default function ExportPdfButton({ character }: { character: Character })
     setState({ status: 'busy' });
     try {
       await nextPaint();
-      const { downloadCharacterPdf } = await import('@/lib/pdf/download');
+      const { downloadCharacterPdf } = await loadPdfTools();
       await downloadCharacterPdf(character);
       lastSuccessAt.current = performance.now();
       setState({ status: 'idle' });

@@ -12,7 +12,7 @@
  * first family in the list that has it.
  */
 import { Font } from '@react-pdf/renderer';
-import { PDF_FONT_LOAD_ERROR } from './errors';
+import { pdfLoadError } from './errors';
 import { PDF_FONT_FILES } from './font-files';
 import { breakWords } from './line-breaks';
 import type { HasGlyph } from './text';
@@ -20,6 +20,12 @@ import type { HasGlyph } from './text';
 Font.registerHyphenationCallback(breakWords);
 
 const FONT_DIR = '/fonts/pdf/';
+
+// A font download that receives nothing for this long has stalled, and the
+// export gives up so the player can try again. Only silence counts, not the
+// total time: on a slow mobile connection the fonts for a Japanese sheet take
+// over a minute, which is fine as long as they keep arriving.
+const STALL_MS = 30_000;
 
 // Italic is a family of its own rather than a fontStyle: every family in a
 // style's list must have a face for that style, and the CJK fonts have no italic.
@@ -73,33 +79,96 @@ export interface SheetFonts {
   hasGlyph: HasGlyph;
 }
 
-// react-pdf keeps a font that failed to load as failed, so every later export
-// would fail too. After a failure the next attempt registers the families
-// again under new names, which makes it fetch them afresh.
-let generation = 0;
-
-function registerFamily(key: FamilyKey): string {
-  const family = `dolmen-${key}-${generation}`;
-  if (!Font.getRegisteredFontFamilies().includes(family)) {
-    Font.register({
-      family,
-      fonts: FACES[key].map(({ file, fontWeight }) => ({ src: `${FONT_DIR}${file}`, fontWeight })),
-    });
+/** Downloads a file, giving up if nothing arrives for STALL_MS or `signal` aborts. */
+async function download(url: string, signal: AbortSignal): Promise<Blob> {
+  const controller = new AbortController();
+  const stop = () => controller.abort(signal.reason);
+  if (signal.aborted) stop();
+  signal.addEventListener('abort', stop);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const waitForData = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => controller.abort(new Error(`Nothing arrived from ${url} for ${STALL_MS / 1000} s`)), STALL_MS);
+  };
+  try {
+    waitForData();
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok || !response.body) throw new Error(`Couldn't fetch ${url}: HTTP ${response.status}`);
+    const reader = response.body.getReader();
+    const chunks: BlobPart[] = [];
+    for (;;) {
+      waitForData();
+      const { done, value } = await reader.read();
+      if (done) break;
+      chunks.push(value);
+    }
+    return new Blob(chunks);
+  } finally {
+    clearTimeout(timer);
+    signal.removeEventListener('abort', stop);
   }
-  return family;
 }
 
-async function loadFamily(family: string, key: FamilyKey): Promise<LoadedFont[]> {
-  return Promise.all(
-    FACES[key].map(async ({ fontWeight }) => {
-      const descriptor = { fontFamily: family, fontWeight };
+/**
+ * The file as a data: URL. react-pdf can fetch a font itself, but with no way
+ * to notice a stalled download, or read one from a data: URL; so the export
+ * downloads each font (above) and hands it over this way.
+ */
+function toDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+interface Family {
+  name: string;
+  fonts: LoadedFont[];
+}
+
+// Each family is downloaded once per page load (and kept by the browser's
+// cache after that), unless the download fails.
+const families = new Map<FamilyKey, Promise<Family>>();
+
+// react-pdf keeps a font it couldn't read as failed. A family registered again
+// after such a failure needs a name react-pdf hasn't seen.
+let registrations = 0;
+
+async function fetchFamily(key: FamilyKey, signal: AbortSignal): Promise<Family> {
+  const faces = await Promise.all(
+    FACES[key].map(async ({ file, fontWeight }) => ({
+      src: await toDataUrl(await download(`${FONT_DIR}${file}`, signal)),
+      fontWeight,
+    })),
+  );
+  registrations += 1;
+  const name = `dolmen-${key}-${registrations}`;
+  Font.register({ family: name, fonts: faces });
+  const fonts = await Promise.all(
+    faces.map(async ({ fontWeight }) => {
+      const descriptor = { fontFamily: name, fontWeight };
       await Font.load(descriptor);
       const font = Font.getFont(descriptor).data as unknown as LoadedFont | null;
-      if (!font) throw new Error(`Font ${family} ${fontWeight} did not load`);
+      if (!font) throw new Error(`Font ${name} ${fontWeight} did not load`);
       if (HAS_COMPOSITE_GLYPHS.has(key)) warmGlyphCache(font);
       return font;
     }),
   );
+  return { name, fonts };
+}
+
+function loadFamily(key: FamilyKey, signal: AbortSignal): Promise<Family> {
+  const known = families.get(key);
+  if (known) return known;
+  const family = fetchFamily(key, signal);
+  families.set(key, family);
+  // Forget a failed download, so the next export tries again.
+  family.catch(() => {
+    if (families.get(key) === family) families.delete(key);
+  });
+  return family;
 }
 
 const isHangul = (cp: number) =>
@@ -138,34 +207,26 @@ export function cjkFontsFor(text: string): CjkFamilyKey[] {
 }
 
 /**
- * Registers and downloads the fonts for a sheet whose printable text is
- * `text`. Rejects with an error named PDF_FONT_LOAD_ERROR if a font can't be
- * fetched; calling it again then retries the download.
+ * Downloads (the first time) and registers the fonts for a sheet whose
+ * printable text is `text`. Rejects with a PDF load error (errors.ts) if a
+ * font can't be fetched or its download stalls; calling it again then retries
+ * the fonts that failed.
  */
 export async function loadSheetFonts(text: string): Promise<SheetFonts> {
-  const cjk = cjkFontsFor(text);
-  const sans = registerFamily('sans');
-  const italic = registerFamily('italic');
-  const serif = registerFamily('serif');
-  const cjkFamilies = cjk.map(registerFamily);
-
-  let latinFonts: LoadedFont[];
-  let cjkFonts: LoadedFont[];
+  const keys: FamilyKey[] = ['sans', 'italic', 'serif', ...cjkFontsFor(text)];
+  const controller = new AbortController();
+  let loaded: Family[];
   try {
-    const [sansFonts, italicFonts, serifFonts, ...cjkLoaded] = await Promise.all([
-      loadFamily(sans, 'sans'),
-      loadFamily(italic, 'italic'),
-      loadFamily(serif, 'serif'),
-      ...cjk.map((key, i) => loadFamily(cjkFamilies[i], key)),
-    ]);
-    latinFonts = [...sansFonts, ...italicFonts, ...serifFonts];
-    cjkFonts = cjkLoaded.flat();
+    loaded = await Promise.all(keys.map((key) => loadFamily(key, controller.signal)));
   } catch (cause) {
-    generation += 1;
-    const error = new Error("Couldn't download the fonts for the PDF.", { cause });
-    error.name = PDF_FONT_LOAD_ERROR;
-    throw error;
+    // Stop the other downloads: this export is over.
+    controller.abort();
+    throw pdfLoadError("Couldn't download the fonts for the PDF.", cause);
   }
+  const [sans, italic, serif, ...cjk] = loaded;
+  const latinFonts = [...sans.fonts, ...italic.fonts, ...serif.fonts];
+  const cjkFonts = cjk.flatMap((family) => family.fonts);
+  const cjkFamilies = cjk.map((family) => family.name);
 
   // A character is printable if every Latin face has it (they cover the same
   // characters, so text keeps its look in every style) or a CJK font does.
@@ -182,9 +243,9 @@ export async function loadSheetFonts(text: string): Promise<SheetFonts> {
   };
 
   return {
-    sans: [sans, ...cjkFamilies],
-    italic: [italic, ...cjkFamilies],
-    serif: [serif, ...cjkFamilies],
+    sans: [sans.name, ...cjkFamilies],
+    italic: [italic.name, ...cjkFamilies],
+    serif: [serif.name, ...cjkFamilies],
     hasGlyph,
   };
 }
