@@ -2620,7 +2620,7 @@ export function createDefaultCharacter(): Character {
     currentDate: { day: 1, month: 0, year: 1 },
     currentLocation: '',
     currentLocationHex: '',
-    mapData: { pois: [], fayeDoors: [], laylines: [] },
+    mapData: { pois: [], fairyDoors: [], leyLines: [] },
     journalEntries: [],
 
     exhaustionLevel: 0,

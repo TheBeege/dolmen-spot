@@ -12,11 +12,11 @@ import type {
   Character,
   CharacterMapData,
   CharacterUpdater,
-  FayeDoor,
-  FayeDoorDestination,
+  FairyDoor,
+  FairyDoorDestination,
   HexCoord,
-  Layline,
-  LaylineDraft,
+  LeyLine,
+  LeyLineDraft,
   MapPOI,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
@@ -34,7 +34,7 @@ const TERRAIN_FILL: Record<string, string> = {
 };
 
 const TERRAIN_STROKE = '#5a3a28';
-const DEFAULT_LAYLINE_COLORS = ['#c4a35a', '#7a5fc4', '#5fa3c4', '#c45f7a', '#7ac45f'];
+const DEFAULT_LEY_LINE_COLORS = ['#c4a35a', '#7a5fc4', '#5fa3c4', '#c45f7a', '#7ac45f'];
 
 // Hex-coord label opacity ramps from MIN at view.w ≥ COORD_LABEL_FADE_AT
 // (zoomed out) to MAX at view.w → 0 (fully zoomed in). With the default
@@ -59,7 +59,7 @@ function newId(): string {
  * claimed by anyone (other than self), and roaded doors whose current
  * partner is missing or is the self.
  */
-function pairableDoors(allDoors: FayeDoor[], selfId: string | null): FayeDoor[] {
+function pairableDoors(allDoors: FairyDoor[], selfId: string | null): FairyDoor[] {
   // Build reverse index: doorId -> set of other doors targeting it.
   const targetedBy = new Map<string, Set<string>>();
   for (const d of allDoors) {
@@ -97,11 +97,11 @@ function pairableDoors(allDoors: FayeDoor[], selfId: string | null): FayeDoor[] 
  */
 function computePartnerUpdates(
   selfId: string,
-  selfPrev: FayeDoorDestination,
-  nextDestination: FayeDoorDestination,
-  allDoors: FayeDoor[],
-): FayeDoor[] {
-  const updates = new Map<string, FayeDoor>();
+  selfPrev: FairyDoorDestination,
+  nextDestination: FairyDoorDestination,
+  allDoors: FairyDoor[],
+): FairyDoor[] {
+  const updates = new Map<string, FairyDoor>();
   const setWild = (doorId: string) => {
     if (doorId === selfId || updates.has(doorId)) return;
     const door = allDoors.find((d) => d.id === doorId);
@@ -149,14 +149,14 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   // Migration v11→v12 + reconcileWithDefaults guarantee mapData is a
   // well-shaped object, so we can read it directly.
   const mapData = character.mapData;
-  const drawingLayline = mapData.draftLayline ?? null;
+  const drawingLeyLine = mapData.draftLeyLine ?? null;
   // gridBounds() returns a module-level frozen constant; no useMemo needed.
   const baseBounds = gridBounds();
 
   const [view, setView] = useState({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
   const [hoverHex, setHoverHex] = useState<HexCoord | null>(null);
   const [selectedHex, setSelectedHex] = useState<HexCoord | null>(null);
-  const [selectedLayline, setSelectedLayline] = useState<string | null>(null);
+  const [selectedLeyLine, setSelectedLeyLine] = useState<string | null>(null);
   // When the user clicks a specific marker (POI or door) on the map, we
   // record its id so the inspector knows which editor to auto-expand. Also
   // used as the trigger for "auto-expand singletons" when there's only one
@@ -170,23 +170,23 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   // Single-source-of-truth selection helpers. Every entry point that
   // changes "what's currently selected" goes through one of these so the
-  // four selection-state fields (selectedHex, selectedLayline,
+  // four selection-state fields (selectedHex, selectedLeyLine,
   // focusedItemId, pendingForm) stay mutually consistent.
   const selectHex = useCallback((hex: HexCoord | null, focusedId: string | null = null) => {
     setSelectedHex(hex);
     setFocusedItemId(focusedId);
-    setSelectedLayline(null);
+    setSelectedLeyLine(null);
     setPendingForm(null);
   }, []);
-  const selectLayline = useCallback((id: string | null) => {
-    setSelectedLayline(id);
+  const selectLeyLine = useCallback((id: string | null) => {
+    setSelectedLeyLine(id);
     setSelectedHex(null);
     setFocusedItemId(null);
     setPendingForm(null);
   }, []);
   const clearSelection = useCallback(() => {
     setSelectedHex(null);
-    setSelectedLayline(null);
+    setSelectedLeyLine(null);
     setFocusedItemId(null);
     setPendingForm(null);
   }, []);
@@ -216,7 +216,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   if (
     focusedItemId !== null &&
     !mapData.pois.some((p) => p.id === focusedItemId) &&
-    !mapData.fayeDoors.some((d) => d.id === focusedItemId)
+    !mapData.fairyDoors.some((d) => d.id === focusedItemId)
   ) {
     setFocusedItemId(null);
   }
@@ -240,7 +240,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const [isPanning, setIsPanning] = useState(false);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // `updateMap` and `setDraftLayline` route through the functional form of
+  // `updateMap` and `setDraftLeyLine` route through the functional form of
   // onChange so that multiple writes in one event tick compose correctly
   // (the second update reads the result of the first, not a stale render
   // snapshot). Without this, a fast typist + Finish click can lose the
@@ -252,18 +252,18 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     [onChange],
   );
 
-  const setDraftLayline = useCallback(
-    (next: LaylineDraft | null | ((prev: LaylineDraft | null) => LaylineDraft | null)) => {
+  const setDraftLeyLine = useCallback(
+    (next: LeyLineDraft | null | ((prev: LeyLineDraft | null) => LeyLineDraft | null)) => {
       updateMap((md) => {
-        const resolved = typeof next === 'function' ? next(md.draftLayline ?? null) : next;
+        const resolved = typeof next === 'function' ? next(md.draftLeyLine ?? null) : next;
         if (resolved === null) {
-          if (md.draftLayline === undefined) return md;
-          // Strip draftLayline from the object so JSON-serialised state
+          if (md.draftLeyLine === undefined) return md;
+          // Strip draftLeyLine from the object so JSON-serialised state
           // doesn't carry a stale draft. Destructure drops the key cleanly.
-          const { draftLayline: _drop, ...rest } = md;
+          const { draftLeyLine: _drop, ...rest } = md;
           return rest as CharacterMapData;
         }
-        return { ...md, draftLayline: resolved };
+        return { ...md, draftLeyLine: resolved };
       });
     },
     [updateMap],
@@ -463,8 +463,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const handleHexClick = useCallback(
     (hex: HexCoord) => {
-      if (drawingLayline) {
-        setDraftLayline((draft) => {
+      if (drawingLeyLine) {
+        setDraftLeyLine((draft) => {
           if (!draft) return draft;
           // Click last-added hex: remove it (one-step undo).
           if (draft.hexes[draft.hexes.length - 1] === hex) {
@@ -486,10 +486,10 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       // fields stay consistent.
       selectHex(hex);
     },
-    [drawingLayline, setDraftLayline, selectHex],
+    [drawingLeyLine, setDraftLeyLine, selectHex],
   );
 
-  const finishLayline = useCallback(() => {
+  const finishLeyLine = useCallback(() => {
     // Compute the ID once, OUTSIDE the updater, so React StrictMode's
     // double-invocation of the updater produces identical results (same
     // ID both times) — React picks one and we never see a duplicate.
@@ -499,36 +499,36 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       // Read everything from `md` (the fresh state React passes us); no
       // render-closure variables in the commit path, so a keystroke that
       // lands between render and click can't be lost.
-      const fresh = md.draftLayline;
+      const fresh = md.draftLeyLine;
       // Nothing to commit AND nothing to clear → return the same `md` so
       // React skips the state update and we don't churn localStorage.
       if (!fresh) return md;
       // Drop the draft from the mapData object on commit.
-      const { draftLayline: _drop, ...rest } = md;
+      const { draftLeyLine: _drop, ...rest } = md;
       // Below-2-hex finish behaves like a cancel — clear the draft only.
       if (fresh.hexes.length < 2) return rest as CharacterMapData;
-      const newLine: Layline = {
+      const newLine: LeyLine = {
         id: newLineId,
-        type: fresh.type || 'Layline',
-        name: fresh.name || 'Unnamed Layline',
+        type: fresh.type || 'Ley line',
+        name: fresh.name || 'Unnamed Ley Line',
         color: fresh.color,
         hexes: fresh.hexes,
         notes: fresh.notes,
       };
-      return { ...rest, laylines: [...md.laylines, newLine] };
+      return { ...rest, leyLines: [...md.leyLines, newLine] };
     });
   }, [updateMap]);
 
-  const cancelLayline = useCallback(() => setDraftLayline(null), [setDraftLayline]);
+  const cancelLeyLine = useCallback(() => setDraftLeyLine(null), [setDraftLeyLine]);
 
   const contentsByHex = useMemo(() => {
-    const map = new Map<HexCoord, { pois: MapPOI[]; doors: FayeDoor[] }>();
+    const map = new Map<HexCoord, { pois: MapPOI[]; doors: FairyDoor[] }>();
     for (const p of mapData.pois) {
       const e = map.get(p.hex) ?? { pois: [], doors: [] };
       e.pois.push(p);
       map.set(p.hex, e);
     }
-    for (const d of mapData.fayeDoors) {
+    for (const d of mapData.fairyDoors) {
       const e = map.get(d.hex) ?? { pois: [], doors: [] };
       e.doors.push(d);
       map.set(d.hex, e);
@@ -543,7 +543,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     const isCurrent = character.currentLocationHex === coord;
     const isHover = hoverHex === coord;
     const isSelected = selectedHex === coord;
-    const isInDraft = drawingLayline?.hexes.includes(coord) ?? false;
+    const isInDraft = drawingLeyLine?.hexes.includes(coord) ?? false;
     const center = hexCenter(cell.col, cell.row);
 
     return (
@@ -557,7 +557,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           // role="img" + aria-label exposes the hex to screen readers but
           // keeps it OUT of the keyboard tab order — putting all ~200 hex
           // polygons in the tab sequence would dominate every Tab press
-          // across the page. Markers (POIs / Faye doors / laylines) ARE
+          // across the page. Markers (POIs / fairy doors / ley lines) ARE
           // tabbable since there are only a handful of those per character.
           // Mouse / touch users keep direct activation via the click handler.
           role="img"
@@ -572,7 +572,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             }
             handleHexClick(coord);
           }}
-          style={{ cursor: drawingLayline ? 'crosshair' : 'pointer' }}
+          style={{ cursor: drawingLeyLine ? 'crosshair' : 'pointer' }}
         />
         {isInDraft && (
           <text
@@ -584,7 +584,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             fontWeight="bold"
             pointerEvents="none"
           >
-            {drawingLayline!.hexes.indexOf(coord) + 1}
+            {drawingLeyLine!.hexes.indexOf(coord) + 1}
           </text>
         )}
         {/* Coordinate label near the top of the hex. Always rendered;
@@ -618,23 +618,23 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       .filter((s): s is string => s !== null)
       .join(' ');
 
-  const renderLaylines = () => {
+  const renderLeyLines = () => {
     const lines: React.ReactElement[] = [];
-    for (const ll of mapData.laylines) {
+    for (const ll of mapData.leyLines) {
       if (ll.hexes.length < 2) continue;
       const notesSnippet = ll.notes ? ` — ${ll.notes.slice(0, 120)}` : '';
-      const label = `${ll.type || 'Layline'}: ${ll.name || 'Unnamed'}${notesSnippet}`;
+      const label = `${ll.type || 'Ley line'}: ${ll.name || 'Unnamed'}${notesSnippet}`;
       const toggleSelect = () => {
         // Drop the synthetic click that ends a shift-drag pan.
         if (suppressNextClickRef.current) {
           suppressNextClickRef.current = false;
           return;
         }
-        // Toggle: clicking the already-selected layline deselects it.
+        // Toggle: clicking the already-selected ley line deselects it.
         // Goes through the unified selection helpers so the hex inspector
         // and focused-item state are cleared in lock-step.
-        if (selectedLayline === ll.id) clearSelection();
-        else selectLayline(ll.id);
+        if (selectedLeyLine === ll.id) clearSelection();
+        else selectLeyLine(ll.id);
       };
       lines.push(
         <g key={ll.id} role="button" tabIndex={0} aria-label={label}
@@ -656,18 +656,18 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             strokeWidth={14}
             strokeLinejoin="round"
             strokeLinecap="round"
-            opacity={selectedLayline && selectedLayline !== ll.id ? 0.35 : 0.9}
+            opacity={selectedLeyLine && selectedLeyLine !== ll.id ? 0.35 : 0.9}
           />
         </g>,
       );
     }
-    if (drawingLayline && drawingLayline.hexes.length >= 2) {
+    if (drawingLeyLine && drawingLeyLine.hexes.length >= 2) {
       lines.push(
         <polyline
           key="draft"
-          points={polylinePoints(drawingLayline.hexes)}
+          points={polylinePoints(drawingLeyLine.hexes)}
           fill="none"
-          stroke={drawingLayline.color}
+          stroke={drawingLeyLine.color}
           strokeWidth={14}
           strokeDasharray="20 12"
           strokeLinejoin="round"
@@ -683,13 +683,13 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const renderDoorConnectors = () => {
     const seen = new Set<string>();
     const out: React.ReactElement[] = [];
-    for (const d of mapData.fayeDoors) {
+    for (const d of mapData.fairyDoors) {
       if (d.destination.kind !== 'roaded') continue;
       const otherId = d.destination.pairedDoorId;
       const pairKey = [d.id, otherId].sort().join('|');
       if (seen.has(pairKey)) continue;
       seen.add(pairKey);
-      const other = mapData.fayeDoors.find((x) => x.id === otherId);
+      const other = mapData.fairyDoors.find((x) => x.id === otherId);
       if (!other) continue;
       const a = parseCoord(d.hex);
       const b = parseCoord(other.hex);
@@ -783,8 +783,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         const mx = x + r * Math.cos(angle);
         const my = y + r * Math.sin(angle);
         // Marker activation routes to either focusItemOnMap (default) or
-        // handleHexClick (when a layline draft is in progress, so the user
-        // can include a decorated hex in their layline without the marker
+        // handleHexClick (when a ley line draft is in progress, so the user
+        // can include a decorated hex in their ley line without the marker
         // hijacking the click). Also drops the synthetic click that ends
         // a shift-drag pan, matching the polygon click handler.
         const activateMarker = (itemId: string) => {
@@ -792,7 +792,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             suppressNextClickRef.current = false;
             return;
           }
-          if (drawingLayline) {
+          if (drawingLeyLine) {
             handleHexClick(hex);
           } else {
             focusItemOnMap(hex, itemId);
@@ -825,10 +825,10 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           const door = entry.item;
           const dest = door.destination;
           const destLabel = dest.kind === 'wild'
-            ? 'wild → fey realm'
+            ? 'wild → Fairy'
             : `roaded${dest.roadName ? ` via "${dest.roadName}"` : ''}`;
           const notesSnippet = door.notes ? ` — ${door.notes.slice(0, 120)}` : '';
-          const label = `Faye Door: ${door.name || 'Unnamed'} (${destLabel})${notesSnippet}`;
+          const label = `Fairy Door: ${door.name || 'Unnamed'} (${destLabel})${notesSnippet}`;
           els.push(
             <g key={`door-${door.id}`} role="button" tabIndex={0} aria-label={label}
               style={{ cursor: 'pointer' }}
@@ -872,16 +872,16 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const resetView = () => setView({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
 
-  const startLayline = () => {
-    setDraftLayline({
+  const startLeyLine = () => {
+    setDraftLeyLine({
       name: '',
-      type: 'Layline',
-      color: DEFAULT_LAYLINE_COLORS[mapData.laylines.length % DEFAULT_LAYLINE_COLORS.length],
+      type: 'Ley line',
+      color: DEFAULT_LEY_LINE_COLORS[mapData.leyLines.length % DEFAULT_LEY_LINE_COLORS.length],
       notes: '',
       hexes: [],
     });
     // Use the unified helper so focusedItemId / pendingForm get cleared
-    // alongside the hex+layline selection (otherwise a partly-filled door
+    // alongside the hex+ley line selection (otherwise a partly-filled door
     // form or marker focus would survive into the draft session).
     clearSelection();
   };
@@ -904,23 +904,23 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-sm">
-          {!drawingLayline ? (
-            <button onClick={startLayline} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors">
-              ≈ Draw Layline
+          {!drawingLeyLine ? (
+            <button onClick={startLeyLine} className="bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors">
+              ≈ Draw Ley Line
             </button>
           ) : (
             <>
               <span className="text-[#c4a35a] font-semibold">
-                Drawing layline ({drawingLayline.hexes.length} hex{drawingLayline.hexes.length === 1 ? '' : 'es'})
+                Drawing ley line ({drawingLeyLine.hexes.length} hex{drawingLeyLine.hexes.length === 1 ? '' : 'es'})
               </span>
               <button
-                onClick={finishLayline}
-                disabled={drawingLayline.hexes.length < 2}
+                onClick={finishLeyLine}
+                disabled={drawingLeyLine.hexes.length < 2}
                 className="bg-[#c4a35a] disabled:opacity-40 hover:bg-[#d4b66a] text-[#1a1a2e] font-semibold rounded px-3 py-1 transition-colors"
               >
                 Finish
               </button>
-              <button onClick={cancelLayline} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
+              <button onClick={cancelLeyLine} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
                 Cancel
               </button>
             </>
@@ -929,23 +929,23 @@ export default function HexMap({ character, onChange }: HexMapProps) {
               (199 of them would dominate every Tab press), so this input
               lets keyboard-only users open the inspector for any hex by
               typing its coord (e.g. "0303"). Routes through handleHexClick
-              so it respects the layline-draft branch and the unified
+              so it respects the ley-line-draft branch and the unified
               selection contract. Also re-centres the viewBox so a jumped
               hex doesn't sit off-screen. */}
           <JumpToHexInput
-            drafting={drawingLayline !== null}
+            drafting={drawingLeyLine !== null}
             onJump={(hex) => { recenterOnHex(hex); handleHexClick(hex); }}
           />
-          {/* Draft-specific guidance lives inside LaylineDraftForm; the
+          {/* Draft-specific guidance lives inside LeyLineDraftForm; the
               toolbar hint is suppressed while drafting to avoid duplicating
               the same message in two places. */}
-          {!drawingLayline && (
+          {!drawingLeyLine && (
             <span className="text-[#f5e6c8]/40 text-xs ml-auto basis-full md:basis-auto md:whitespace-nowrap">
               Scroll to zoom · Shift-drag to pan · Click a hex to inspect · Hover a marker for details
             </span>
           )}
         </div>
-        {drawingLayline && <LaylineDraftForm draft={drawingLayline} setDraft={setDraftLayline} />}
+        {drawingLeyLine && <LeyLineDraftForm draft={drawingLeyLine} setDraft={setDraftLeyLine} />}
       </div>
 
       <div className="bg-[#1a1a2e] rounded-lg overflow-hidden relative" style={{ height: '60vh' }}>
@@ -954,7 +954,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           viewBox={`${view.x} ${view.y} ${view.w} ${view.h}`}
           xmlns="http://www.w3.org/2000/svg"
           className="w-full h-full select-none"
-          style={{ cursor: isPanning ? 'grabbing' : drawingLayline ? 'crosshair' : 'default' }}
+          style={{ cursor: isPanning ? 'grabbing' : drawingLeyLine ? 'crosshair' : 'default' }}
           onMouseMove={handleMouseMove}
           onMouseDown={handleMouseDown}
           onMouseUp={handleMouseUp}
@@ -968,7 +968,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             fill="#1a1a2e"
           />
           <g>{ALL_HEXES.map(renderHex)}</g>
-          <g>{renderLaylines()}</g>
+          <g>{renderLeyLines()}</g>
           <g>{renderDoorConnectors()}</g>
           <g>{renderMarkers()}</g>
         </svg>
@@ -987,20 +987,20 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           focusedItemId={focusedItemId}
           onClose={clearSelection}
         />
-        <LaylinesPanel
+        <LeyLinesPanel
           mapData={mapData}
           updateMap={updateMap}
-          selectedLayline={selectedLayline}
+          selectedLeyLine={selectedLeyLine}
           // Toggle through the unified selection helpers so the hex
           // inspector / focused-item / pending form clear in lock-step.
-          onToggleSelected={(id) => (selectedLayline === id ? clearSelection() : selectLayline(id))}
+          onToggleSelected={(id) => (selectedLeyLine === id ? clearSelection() : selectLeyLine(id))}
         />
       </div>
     </div>
   );
 }
 
-// --- Layline draft form ---
+// --- Ley line draft form ---
 // --- Jump-to-hex input (toolbar) ---
 // Accessibility entry point: lets keyboard-only users open the inspector
 // for any hex by typing its 4-digit coord. Short input (e.g. "33") is
@@ -1044,10 +1044,10 @@ function JumpToHexInput({
           submit();
         }
       }}
-      placeholder={drafting ? 'Add to layline' : 'Go to hex'}
+      placeholder={drafting ? 'Add to ley line' : 'Go to hex'}
       aria-label={
         drafting
-          ? 'Add a hex to the in-progress layline by typing its coordinate'
+          ? 'Add a hex to the in-progress ley line by typing its coordinate'
           : 'Jump to a hex by typing its 4-digit coordinate'
       }
       aria-invalid={invalid || undefined}
@@ -1056,12 +1056,12 @@ function JumpToHexInput({
   );
 }
 
-function LaylineDraftForm({
+function LeyLineDraftForm({
   draft,
   setDraft,
 }: {
-  draft: LaylineDraft;
-  setDraft: (d: LaylineDraft) => void;
+  draft: LeyLineDraft;
+  setDraft: (d: LeyLineDraft) => void;
 }) {
   return (
     <div className="mt-3 pt-3 border-t border-[#5a3a28] grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
@@ -1074,7 +1074,7 @@ function LaylineDraftForm({
       <input
         value={draft.type}
         onChange={(e) => setDraft({ ...draft, type: e.target.value })}
-        placeholder="Type (Layline, Ward…)"
+        placeholder="Type (Ley line, Ward…)"
         className="bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]"
       />
       <input
@@ -1111,7 +1111,7 @@ function HexInspectorPanel({
 }: {
   selectedHex: HexCoord | null;
   mapData: CharacterMapData;
-  contentsByHex: Map<HexCoord, { pois: MapPOI[]; doors: FayeDoor[] }>;
+  contentsByHex: Map<HexCoord, { pois: MapPOI[]; doors: FairyDoor[] }>;
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
   pendingForm: { type: 'poi' | 'door'; hex: HexCoord } | null;
   setPendingForm: (f: { type: 'poi' | 'door'; hex: HexCoord } | null) => void;
@@ -1169,12 +1169,12 @@ function HexInspectorPanel({
       {activeForm === 'door' && (
         <DoorForm
           hex={selectedHex}
-          existingDoors={mapData.fayeDoors}
+          existingDoors={mapData.fairyDoors}
           onSubmit={(door, pairUpdates) => {
             updateMap((md) => ({
               ...md,
-              fayeDoors: [
-                ...md.fayeDoors.map((x) => pairUpdates.find((u) => u.id === x.id) ?? x),
+              fairyDoors: [
+                ...md.fairyDoors.map((x) => pairUpdates.find((u) => u.id === x.id) ?? x),
                 door,
               ],
             }));
@@ -1202,7 +1202,7 @@ function HexInspectorPanel({
             onClick={() => setPendingForm({ type: 'door', hex: selectedHex })}
             className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors"
           >
-            ✦ Faye Door
+            ✦ Fairy Door
           </button>
         </div>
       )}
@@ -1239,19 +1239,19 @@ function HexInspectorPanel({
           {doors.length > 0 && (
             <div>
               <h4 className="text-[#c4a35a] text-xs uppercase tracking-wide font-semibold mb-1">
-                Faye Doors
+                Fairy Doors
               </h4>
               <div className="space-y-2">
                 {doors.map((d) => (
                   <DoorEditor
                     key={d.id}
                     door={d}
-                    allDoors={mapData.fayeDoors}
+                    allDoors={mapData.fairyDoors}
                     initiallyExpanded={focusedItemId === d.id || (doors.length === 1 && pois.length === 0)}
                     onSave={(updated, pairUpdates) =>
                       updateMap((md) => ({
                         ...md,
-                        fayeDoors: md.fayeDoors.map((x) => {
+                        fairyDoors: md.fairyDoors.map((x) => {
                           if (x.id === updated.id) return updated;
                           const u = pairUpdates.find((p) => p.id === x.id);
                           return u ?? x;
@@ -1261,7 +1261,7 @@ function HexInspectorPanel({
                     onDelete={() =>
                       updateMap((md) => ({
                         ...md,
-                        fayeDoors: md.fayeDoors
+                        fairyDoors: md.fairyDoors
                           .filter((x) => x.id !== d.id)
                           .map((x) => {
                             if (x.destination.kind === 'roaded' && x.destination.pairedDoorId === d.id) {
@@ -1409,7 +1409,7 @@ function POIEditor({
   );
 }
 
-// --- Faye door form / editor ---
+// --- Fairy door form / editor ---
 function DoorForm({
   hex,
   existingDoors,
@@ -1417,8 +1417,8 @@ function DoorForm({
   onCancel,
 }: {
   hex: HexCoord;
-  existingDoors: FayeDoor[];
-  onSubmit: (d: FayeDoor, pairUpdates: FayeDoor[]) => void;
+  existingDoors: FairyDoor[];
+  onSubmit: (d: FairyDoor, pairUpdates: FairyDoor[]) => void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState('');
@@ -1435,7 +1435,7 @@ function DoorForm({
   const submit = () => {
     if (!name.trim()) return onCancel();
     const newDoorId = newId();
-    let destination: FayeDoorDestination;
+    let destination: FairyDoorDestination;
     if (kind === 'wild') {
       destination = { kind: 'wild' };
     } else {
@@ -1468,7 +1468,7 @@ function DoorForm({
       <div className="flex gap-3 text-xs">
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" checked={kind === 'wild'} onChange={() => setKind('wild')} />
-          Wild (into the fey realm)
+          Wild (into Fairy)
         </label>
         <label className="flex items-center gap-1 cursor-pointer">
           <input type="radio" checked={kind === 'roaded'} onChange={() => setKind('roaded')} />
@@ -1527,10 +1527,10 @@ function DoorEditor({
   onSave,
   onDelete,
 }: {
-  door: FayeDoor;
-  allDoors: FayeDoor[];
+  door: FairyDoor;
+  allDoors: FairyDoor[];
   initiallyExpanded?: boolean;
-  onSave: (d: FayeDoor, pairUpdates: FayeDoor[]) => void;
+  onSave: (d: FairyDoor, pairUpdates: FairyDoor[]) => void;
   onDelete: () => void;
 }) {
   const [name, setName] = useState(door.name);
@@ -1586,7 +1586,7 @@ function DoorEditor({
   // clearing a *new* partner's prior partner — that orphan case the
   // previous code missed).
   const saveAll = () => {
-    let destination: FayeDoorDestination;
+    let destination: FairyDoorDestination;
     if (destKind === 'wild') {
       destination = { kind: 'wild' };
     } else {
@@ -1622,7 +1622,7 @@ function DoorEditor({
         </button>
         <button
           onClick={onDelete}
-          aria-label={`Delete Faye door ${door.name || 'unnamed'}`}
+          aria-label={`Delete fairy door ${door.name || 'unnamed'}`}
           className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
         >
           Del
@@ -1690,17 +1690,17 @@ function DoorEditor({
   );
 }
 
-// --- Laylines list panel ---
-function LaylinesPanel({
+// --- Ley lines list panel ---
+function LeyLinesPanel({
   mapData,
   updateMap,
-  selectedLayline,
+  selectedLeyLine,
   onToggleSelected,
 }: {
   mapData: CharacterMapData;
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
-  selectedLayline: string | null;
-  // Toggle this layline's selected state. Goes through the parent's
+  selectedLeyLine: string | null;
+  // Toggle this ley line's selected state. Goes through the parent's
   // unified selection helpers so all four selection-state fields stay
   // mutually consistent.
   onToggleSelected: (id: string) => void;
@@ -1708,28 +1708,28 @@ function LaylinesPanel({
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
       <h3 className="text-[#c4a35a] text-sm font-semibold mb-2 border-b border-[#5a3a28] pb-1">
-        Laylines &amp; Crossings
+        Ley Lines &amp; Crossings
       </h3>
-      {mapData.laylines.length === 0 ? (
-        <div className="text-xs text-[#f5e6c8]/40 italic">None yet. Use “Draw Layline” above.</div>
+      {mapData.leyLines.length === 0 ? (
+        <div className="text-xs text-[#f5e6c8]/40 italic">None yet. Use “Draw Ley Line” above.</div>
       ) : (
         <div className="space-y-2">
-          {mapData.laylines.map((ll) => (
-            <LaylineEditor
+          {mapData.leyLines.map((ll) => (
+            <LeyLineEditor
               key={ll.id}
-              layline={ll}
-              selected={selectedLayline === ll.id}
+              leyLine={ll}
+              selected={selectedLeyLine === ll.id}
               onSelect={() => onToggleSelected(ll.id)}
               onSave={(updated) =>
                 updateMap((md) => ({
                   ...md,
-                  laylines: md.laylines.map((x) => (x.id === updated.id ? updated : x)),
+                  leyLines: md.leyLines.map((x) => (x.id === updated.id ? updated : x)),
                 }))
               }
               onDelete={() =>
                 updateMap((md) => ({
                   ...md,
-                  laylines: md.laylines.filter((x) => x.id !== ll.id),
+                  leyLines: md.leyLines.filter((x) => x.id !== ll.id),
                 }))
               }
             />
@@ -1740,39 +1740,39 @@ function LaylinesPanel({
   );
 }
 
-function LaylineEditor({
-  layline,
+function LeyLineEditor({
+  leyLine,
   selected,
   onSelect,
   onSave,
   onDelete,
 }: {
-  layline: Layline;
+  leyLine: LeyLine;
   selected: boolean;
   onSelect: () => void;
-  onSave: (l: Layline) => void;
+  onSave: (l: LeyLine) => void;
   onDelete: () => void;
 }) {
-  const [name, setName] = useState(layline.name);
-  const [type, setType] = useState(layline.type);
-  const [color, setColor] = useState(layline.color);
-  const [notes, setNotes] = useState(layline.notes);
+  const [name, setName] = useState(leyLine.name);
+  const [type, setType] = useState(leyLine.type);
+  const [color, setColor] = useState(leyLine.color);
+  const [notes, setNotes] = useState(leyLine.notes);
   // Sync local state with external prop changes (parity with POIEditor and
-  // DoorEditor). Today no path mutates a layline outside this editor, but
+  // DoorEditor). Today no path mutates a ley line outside this editor, but
   // an import or multi-tab write could desync otherwise.
-  const [syncedLayline, setSyncedLayline] = useState(layline);
+  const [syncedLeyLine, setSyncedLeyLine] = useState(leyLine);
   if (
-    layline.id !== syncedLayline.id ||
-    layline.name !== syncedLayline.name ||
-    layline.type !== syncedLayline.type ||
-    layline.color !== syncedLayline.color ||
-    layline.notes !== syncedLayline.notes
+    leyLine.id !== syncedLeyLine.id ||
+    leyLine.name !== syncedLeyLine.name ||
+    leyLine.type !== syncedLeyLine.type ||
+    leyLine.color !== syncedLeyLine.color ||
+    leyLine.notes !== syncedLeyLine.notes
   ) {
-    setSyncedLayline(layline);
-    setName(layline.name);
-    setType(layline.type);
-    setColor(layline.color);
-    setNotes(layline.notes);
+    setSyncedLeyLine(leyLine);
+    setName(leyLine.name);
+    setType(leyLine.type);
+    setColor(leyLine.color);
+    setNotes(leyLine.notes);
   }
   return (
     <div className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${selected ? 'ring-1 ring-[#c4a35a]/60' : ''}`}>
@@ -1780,22 +1780,22 @@ function LaylineEditor({
         <button
           onClick={onSelect}
           aria-pressed={selected}
-          aria-label={`Toggle highlight for ${layline.name || 'unnamed layline'}`}
+          aria-label={`Toggle highlight for ${leyLine.name || 'unnamed ley line'}`}
           className="w-3 h-3 rounded-full shrink-0 border border-[#f5e6c8]/40"
           style={{ background: color }}
         />
         <input
           value={name}
           onChange={(e) => setName(e.target.value)}
-          onBlur={() => onSave({ ...layline, name, type, color, notes })}
+          onBlur={() => onSave({ ...leyLine, name, type, color, notes })}
           className="flex-1 bg-transparent text-[#f5e6c8] text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
         <span className="text-xs text-[#f5e6c8]/40">
-          {layline.hexes.length} hex{layline.hexes.length === 1 ? '' : 'es'}
+          {leyLine.hexes.length} hex{leyLine.hexes.length === 1 ? '' : 'es'}
         </span>
         <button
           onClick={onDelete}
-          aria-label={`Delete layline ${layline.name || 'unnamed'}`}
+          aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`}
           className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors"
         >
           Del
@@ -1805,7 +1805,7 @@ function LaylineEditor({
         <input
           value={type}
           onChange={(e) => setType(e.target.value)}
-          onBlur={() => onSave({ ...layline, name, type, color, notes })}
+          onBlur={() => onSave({ ...leyLine, name, type, color, notes })}
           placeholder="Type"
           className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-0.5 focus:outline-none focus:border-[#c4a35a]"
         />
@@ -1817,19 +1817,19 @@ function LaylineEditor({
           // duplicate the final write.
           onChange={(e) => {
             setColor(e.target.value);
-            onSave({ ...layline, name, type, color: e.target.value, notes });
+            onSave({ ...leyLine, name, type, color: e.target.value, notes });
           }}
           className="bg-[#2a2a3e] border border-[#5a3a28] rounded h-6 w-full"
         />
         <input
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          onBlur={() => onSave({ ...layline, name, type, color, notes })}
+          onBlur={() => onSave({ ...leyLine, name, type, color, notes })}
           placeholder="Notes"
           className="bg-[#2a2a3e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-0.5 focus:outline-none focus:border-[#c4a35a]"
         />
       </div>
-      <div className="text-[10px] text-[#f5e6c8]/40 truncate">{layline.hexes.join(' → ')}</div>
+      <div className="text-[10px] text-[#f5e6c8]/40 truncate">{leyLine.hexes.join(' → ')}</div>
     </div>
   );
 }

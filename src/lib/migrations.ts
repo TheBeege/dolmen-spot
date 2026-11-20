@@ -115,18 +115,18 @@ const HEX_COORD_RE = /^\d{4}$/;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeMapData(data: any): void {
   if (!isPlainObject(data.mapData)) {
-    data.mapData = { pois: [], fayeDoors: [], laylines: [] };
+    data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
     return;
   }
   const md = data.mapData as Record<string, unknown>;
   if (!Array.isArray(md.pois)) md.pois = [];
-  if (!Array.isArray(md.fayeDoors)) md.fayeDoors = [];
-  if (!Array.isArray(md.laylines)) md.laylines = [];
+  if (!Array.isArray(md.fairyDoors)) md.fairyDoors = [];
+  if (!Array.isArray(md.leyLines)) md.leyLines = [];
   // Validate hex coords both for format (4-digit) AND for existence in the
   // canonical manifest. The grid shape changed between releases (the bounding
   // rectangle once held 250 cells; the manifest is now smaller after we
   // pinned to the printed map's actual outline — see hex-grid.json
-  // `meta.cellCount`). Saves can carry POIs / doors / layline hexes pointing
+  // `meta.cellCount`). Saves can carry POIs / doors / ley line hexes pointing
   // at cells that no longer exist — drop those.
   const isLiveHex = (raw: unknown): raw is string =>
     typeof raw === 'string' && HEX_COORD_RE.test(raw) && raw in HEX_CELLS;
@@ -135,13 +135,13 @@ function sanitizeMapData(data: any): void {
     (p): p is Record<string, unknown> =>
       isPlainObject(p) && isLiveHex((p as { hex?: unknown }).hex),
   );
-  md.fayeDoors = (md.fayeDoors as unknown[]).filter(
+  md.fairyDoors = (md.fairyDoors as unknown[]).filter(
     (d): d is Record<string, unknown> =>
       isPlainObject(d) && isLiveHex((d as { hex?: unknown }).hex),
   );
-  // For laylines: trim each hexes[] to keep only live coords, then drop the
-  // whole layline if fewer than 2 valid hexes remain.
-  md.laylines = (md.laylines as unknown[])
+  // For leyLines: trim each hexes[] to keep only live coords, then drop the
+  // whole ley line if fewer than 2 valid hexes remain.
+  md.leyLines = (md.leyLines as unknown[])
     .filter(
       (l): l is Record<string, unknown> =>
         isPlainObject(l) && Array.isArray((l as { hexes?: unknown }).hexes),
@@ -152,17 +152,17 @@ function sanitizeMapData(data: any): void {
     })
     .filter((l) => (l.hexes as string[]).length >= 2);
 
-  // Validate the in-progress layline draft the same way; trim invalid hexes,
+  // Validate the in-progress ley line draft the same way; trim invalid hexes,
   // drop the draft entirely if it would shrink below 1 hex.
-  if (isPlainObject(md.draftLayline)) {
-    const draft = md.draftLayline as Record<string, unknown>;
+  if (isPlainObject(md.draftLeyLine)) {
+    const draft = md.draftLeyLine as Record<string, unknown>;
     if (Array.isArray(draft.hexes)) {
       draft.hexes = (draft.hexes as unknown[]).filter(isLiveHex);
       if ((draft.hexes as string[]).length === 0) {
-        delete md.draftLayline;
+        delete md.draftLeyLine;
       }
     } else {
-      delete md.draftLayline;
+      delete md.draftLeyLine;
     }
   }
 
@@ -176,13 +176,13 @@ function sanitizeMapData(data: any): void {
   } else if (data.currentLocationHex !== '' && !(data.currentLocationHex in HEX_CELLS)) {
     data.currentLocationHex = '';
   }
-  // draftLayline non-object types get dropped here; the live-hex trim
+  // draftLeyLine non-object types get dropped here; the live-hex trim
   // above handles the object-with-bad-hexes case.
-  if (md.draftLayline !== undefined && !isPlainObject(md.draftLayline)) {
-    delete md.draftLayline;
+  if (md.draftLeyLine !== undefined && !isPlainObject(md.draftLeyLine)) {
+    delete md.draftLeyLine;
   }
 
-  // Repair asymmetric Faye-door pairings from hand-edited imports. A
+  // Repair asymmetric fairy-door pairings from hand-edited imports. A
   // roaded door whose partner doesn't reciprocate (partner is wild, or
   // points elsewhere, or doesn't exist) is downgraded to wild — that
   // leaves it visible and editable, instead of drawing a one-sided
@@ -194,7 +194,7 @@ function sanitizeMapData(data: any): void {
   // actually order-safe too because a wild-marked partner just fails
   // the reciprocation test, which is the correct outcome — but the
   // explicit two-pass version is easier to reason about.)
-  const doors = md.fayeDoors as Array<Record<string, unknown>>;
+  const doors = md.fairyDoors as Array<Record<string, unknown>>;
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const isRoaded = (d: any): boolean => isPlainObject(d?.destination) && d.destination.kind === 'roaded';
   const toDowngrade = new Set<unknown>();

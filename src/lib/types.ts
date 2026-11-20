@@ -155,21 +155,21 @@ export interface MapPOI {
   notes: string;
 }
 
-export type FayeDoorDestination =
+export type FairyDoorDestination =
   | { kind: 'wild' }
   | { kind: 'roaded'; pairedDoorId: string; roadName: string };
 
-export interface FayeDoor {
+export interface FairyDoor {
   id: string;
   hex: HexCoord;
   name: string;
   notes: string;
-  destination: FayeDoorDestination;
+  destination: FairyDoorDestination;
 }
 
-export interface Layline {
+export interface LeyLine {
   id: string;
-  type: string;      // free-text label, e.g. "Layline", "Ancient Road", "Ward"
+  type: string;      // free-text label, e.g. "Ley line", "Ancient Road", "Ward"
   name: string;
   color: string;     // CSS hex color, e.g. "#c4a35a"
   hexes: HexCoord[]; // ordered sequence of hex coords the line passes through
@@ -179,13 +179,13 @@ export interface Layline {
 // Polymorphic onChange contract used by every character-tab component.
 // Accepting both a partial-character object and a functional updater means
 // callers that need to compose multiple writes in one tick (e.g. HexMap's
-// finishLayline + an in-flight keystroke) can do so without losing edits.
+// finishLeyLine + an in-flight keystroke) can do so without losing edits.
 // Components that only ever write a single object can keep passing one.
 export type CharacterUpdater =
   | Partial<Character>
   | ((prev: Character) => Partial<Character>);
 
-export interface LaylineDraft {
+export interface LeyLineDraft {
   name: string;
   type: string;
   color: string;
@@ -195,11 +195,11 @@ export interface LaylineDraft {
 
 export interface CharacterMapData {
   pois: MapPOI[];
-  fayeDoors: FayeDoor[];
-  laylines: Layline[];
-  // In-progress layline draft. Persisted so it survives tab unmounts;
+  fairyDoors: FairyDoor[];
+  leyLines: LeyLine[];
+  // In-progress ley line draft. Persisted so it survives tab unmounts;
   // absent when not drawing.
-  draftLayline?: LaylineDraft;
+  draftLeyLine?: LeyLineDraft;
 }
 
 export interface Character {

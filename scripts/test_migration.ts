@@ -125,8 +125,8 @@ section('Scenario 1: clean v10 save (no marker, no mapData)');
   check('reaches current schema', migrated.schemaVersion === CURRENT_SCHEMA_VERSION);
   check('mapData created', Array.isArray(migrated.mapData?.pois));
   check('mapData.pois empty', migrated.mapData.pois.length === 0);
-  check('mapData.fayeDoors empty', migrated.mapData.fayeDoors.length === 0);
-  check('mapData.laylines empty', migrated.mapData.laylines.length === 0);
+  check('mapData.fairyDoors empty', migrated.mapData.fairyDoors.length === 0);
+  check('mapData.leyLines empty', migrated.mapData.leyLines.length === 0);
   check('currentLocationHex empty', migrated.currentLocationHex === '');
   check('CalendarDate gets year', migrated.currentDate.year === 1);
 }
@@ -215,12 +215,12 @@ section('Scenario 8: pre-existing mapData with garbage entries');
       'not an object',                                       // drop (non-object)
       { id: '4', hex: '0404', name: 'good2', notes: '' },   // keep
     ],
-    fayeDoors: [
+    fairyDoors: [
       { id: 'd1', hex: '0505', name: 'D', notes: '', destination: { kind: 'wild' } },
       { hex: 'bad', name: 'x' }, // drop (bad hex)
     ],
-    laylines: [
-      { id: 'l1', name: 'L', type: 'Layline', color: '#fff', hexes: ['0101', '0102'], notes: '' },
+    leyLines: [
+      { id: 'l1', name: 'L', type: 'Ley line', color: '#fff', hexes: ['0101', '0102'], notes: '' },
       { id: 'l2', name: 'short', hexes: ['0101'], notes: '' }, // drop (< 2 hexes)
       { id: 'l3', name: 'noarray', hexes: 'oops', notes: '' }, // drop (hexes not array)
     ],
@@ -229,8 +229,8 @@ section('Scenario 8: pre-existing mapData with garbage entries');
   check('pois filtered to 2 good', migrated.mapData.pois.length === 2);
   check('first POI is good', migrated.mapData.pois[0].name === 'good');
   check('second POI is good2', migrated.mapData.pois[1].name === 'good2');
-  check('fayeDoors filtered to 1', migrated.mapData.fayeDoors.length === 1);
-  check('laylines filtered to 1', migrated.mapData.laylines.length === 1);
+  check('fairyDoors filtered to 1', migrated.mapData.fairyDoors.length === 1);
+  check('leyLines filtered to 1', migrated.mapData.leyLines.length === 1);
 }
 
 // ----- Scenario 9: malformed mapData wholesale -----
@@ -263,7 +263,7 @@ section('Scenario 11b: v12 save with borked mapData.pois (string)');
   data.schemaVersion = CURRENT_SCHEMA_VERSION;
   // The migration loop should be skipped entirely; only the post-loop
   // sanitizers + reconcileWithDefaults run.
-  (data as AnyData).mapData = { pois: 'oh no', fayeDoors: [], laylines: [] };
+  (data as AnyData).mapData = { pois: 'oh no', fairyDoors: [], leyLines: [] };
   data.currentDate = { day: 1, month: 0, year: 1 };
   const migrated = migrateCharacter(data as never);
   check('pois repaired to array', Array.isArray(migrated.mapData.pois));
@@ -285,28 +285,28 @@ section('Scenario 11e: hex refs pointing at non-manifest hexes get cleared');
       { id: 'live', hex: '0303', name: 'Live POI', notes: '' },
       { id: 'orphan', hex: '1313', name: 'Orphan POI', notes: '' },
     ],
-    fayeDoors: [
+    fairyDoors: [
       { id: 'd1', hex: '0404', name: 'Live door', notes: '', destination: { kind: 'wild' } },
       { id: 'd2', hex: '1313', name: 'Orphan door', notes: '', destination: { kind: 'wild' } },
     ],
-    laylines: [
-      // Layline that survives after pruning orphans (2 live hexes left).
-      { id: 'll1', name: 'Mixed', type: 'Layline', color: '#fff',
+    leyLines: [
+      // LeyLine that survives after pruning orphans (2 live hexes left).
+      { id: 'll1', name: 'Mixed', type: 'Ley line', color: '#fff',
         hexes: ['0303', '1313', '0404'], notes: '' },
-      // Layline that disappears (only 1 live hex left after pruning).
-      { id: 'll2', name: 'AllOrphan', type: 'Layline', color: '#fff',
+      // LeyLine that disappears (only 1 live hex left after pruning).
+      { id: 'll2', name: 'AllOrphan', type: 'Ley line', color: '#fff',
         hexes: ['1313', '1414'], notes: '' },
     ],
   };
   const migrated = migrateCharacter(data as never);
   check('orphan POI dropped', migrated.mapData.pois.length === 1 && migrated.mapData.pois[0].name === 'Live POI');
-  check('orphan door dropped', migrated.mapData.fayeDoors.length === 1 && migrated.mapData.fayeDoors[0].name === 'Live door');
-  check('orphan-only layline dropped',
-    migrated.mapData.laylines.length === 1 && migrated.mapData.laylines[0].name === 'Mixed');
-  check('mixed layline pruned to live hexes',
-    migrated.mapData.laylines[0].hexes.length === 2 &&
-    migrated.mapData.laylines[0].hexes[0] === '0303' &&
-    migrated.mapData.laylines[0].hexes[1] === '0404');
+  check('orphan door dropped', migrated.mapData.fairyDoors.length === 1 && migrated.mapData.fairyDoors[0].name === 'Live door');
+  check('orphan-only ley line dropped',
+    migrated.mapData.leyLines.length === 1 && migrated.mapData.leyLines[0].name === 'Mixed');
+  check('mixed ley line pruned to live hexes',
+    migrated.mapData.leyLines[0].hexes.length === 2 &&
+    migrated.mapData.leyLines[0].hexes[0] === '0303' &&
+    migrated.mapData.leyLines[0].hexes[1] === '0404');
   check('orphan currentLocationHex cleared', migrated.currentLocationHex === '');
 }
 
@@ -317,7 +317,7 @@ section("Scenario 11g: non-string currentLocationHex (null/number) coerced to ''
   data.schemaVersion = CURRENT_SCHEMA_VERSION;
   data.currentDate = { day: 1, month: 0, year: 1 };
   (data as AnyData).currentLocationHex = null;
-  (data as AnyData).mapData = { pois: [], fayeDoors: [], laylines: [] };
+  (data as AnyData).mapData = { pois: [], fairyDoors: [], leyLines: [] };
   const migrated = migrateCharacter(data as never);
   check('null currentLocationHex coerced to empty string', migrated.currentLocationHex === '');
 }
@@ -329,7 +329,7 @@ section('Scenario 11f: a live currentLocationHex survives migration');
   data.schemaVersion = CURRENT_SCHEMA_VERSION;
   data.currentDate = { day: 1, month: 0, year: 1 };
   data.currentLocationHex = '0303';
-  (data as AnyData).mapData = { pois: [], fayeDoors: [], laylines: [] };
+  (data as AnyData).mapData = { pois: [], fairyDoors: [], leyLines: [] };
   const migrated = migrateCharacter(data as never);
   check('currentLocationHex preserved', migrated.currentLocationHex === '0303');
 }
@@ -342,13 +342,13 @@ section('Scenario 11d: self-paired door (pairedDoorId === own id) → wild');
   data.currentDate = { day: 1, month: 0, year: 1 };
   (data as AnyData).mapData = {
     pois: [],
-    fayeDoors: [
+    fairyDoors: [
       { id: 'S', hex: '0303', name: 'Self', notes: '', destination: { kind: 'roaded', pairedDoorId: 'S', roadName: 'Loop' } },
     ],
-    laylines: [],
+    leyLines: [],
   };
   const migrated = migrateCharacter(data as never);
-  check('self-paired downgraded to wild', migrated.mapData.fayeDoors[0].destination.kind === 'wild');
+  check('self-paired downgraded to wild', migrated.mapData.fairyDoors[0].destination.kind === 'wild');
 }
 
 // ----- Scenario 11c: asymmetric door pair in hand-edited v12 save -----
@@ -359,7 +359,7 @@ section('Scenario 11c: asymmetric door pair gets repaired to wild');
   data.currentDate = { day: 1, month: 0, year: 1 };
   (data as AnyData).mapData = {
     pois: [],
-    fayeDoors: [
+    fairyDoors: [
       // A claims B, but B is wild → A should become wild.
       { id: 'A', hex: '0303', name: 'A', notes: '', destination: { kind: 'roaded', pairedDoorId: 'B', roadName: 'Solo Road' } },
       { id: 'B', hex: '0404', name: 'B', notes: '', destination: { kind: 'wild' } },
@@ -369,10 +369,10 @@ section('Scenario 11c: asymmetric door pair gets repaired to wild');
       // E points at non-existent door → E should become wild.
       { id: 'E', hex: '0707', name: 'E', notes: '', destination: { kind: 'roaded', pairedDoorId: 'ghost', roadName: 'Ghost Road' } },
     ],
-    laylines: [],
+    leyLines: [],
   };
   const migrated = migrateCharacter(data as never);
-  const byId = Object.fromEntries(migrated.mapData.fayeDoors.map((d) => [d.id, d]));
+  const byId = Object.fromEntries(migrated.mapData.fairyDoors.map((d) => [d.id, d]));
   check('A repaired to wild', byId.A.destination.kind === 'wild');
   check('B stays wild', byId.B.destination.kind === 'wild');
   check('C stays roaded', byId.C.destination.kind === 'roaded');
