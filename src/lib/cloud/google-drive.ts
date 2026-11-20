@@ -92,12 +92,12 @@ export function createGoogleDriveProvider(): CloudProvider | null {
     },
 
     disconnect(): void {
-      // Forget the token in this browser only, as OneDrive's Disconnect does.
-      // There is no revoke call: google.accounts.oauth2.revoke() posts to
-      // oauth2.googleapis.com, which the site's CSP connect-src doesn't allow,
-      // so the browser always blocked it and Disconnect was only ever local.
-      // The token expires within the hour, and players can remove the app's
-      // access in their Google Account settings.
+      // Forget the token in this browser only. There is no revoke call:
+      // google.accounts.oauth2.revoke() posts to oauth2.googleapis.com, which
+      // the site's CSP connect-src doesn't allow, so the browser always blocked
+      // it and Disconnect was only ever local. The token expires within the
+      // hour, and players can remove the app's access in their Google Account
+      // settings.
       clearToken();
     },
 
