@@ -844,10 +844,24 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         <div className="text-[#f5e6c8] text-sm mb-2">
           {currentMonth.days} days &middot; {currentMonth.description}
         </div>
+        {/* Lines may break before "(new …)" and between Wysendays, never inside them. */}
         <div className="text-[#f5e6c8]/60 text-sm mb-2">
-          Moon: {currentMonth.moonName} (new {ordinal(currentMonth.newMoon)}, full {ordinal(currentMonth.fullMoon)})
+          <div>
+            Moon: {currentMonth.moonName}{' '}
+            <span className="whitespace-nowrap">
+              (new {ordinal(currentMonth.newMoon)}, full {ordinal(currentMonth.fullMoon)})
+            </span>
+          </div>
           {currentMonth.wysendays.length > 0 && (
-            <span> &middot; Wysendays: {currentMonth.wysendays.join(', ')}</span>
+            <div>
+              Wysendays:{' '}
+              {currentMonth.wysendays.map((w, i) => (
+                <span key={w}>
+                  {i > 0 && ', '}
+                  <span className="whitespace-nowrap">{w}</span>
+                </span>
+              ))}
+            </div>
           )}
         </div>
 
