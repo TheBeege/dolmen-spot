@@ -12,6 +12,7 @@ import {
   findArcaneSpell,
   EquipmentEntry,
 } from '@/lib/gamedata';
+import GrowingTextarea from './GrowingTextarea';
 import {
   calculateEncumbrance,
   getOverloadNote,
@@ -30,6 +31,10 @@ const inputClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
+
+// The height of a one-line field (py-1, a 24px line and the border), so a
+// smaller control can be centred on the first line of a field that has grown.
+const ONE_LINE_FIELD_HEIGHT = 'h-8.5';
 
 type CatalogTarget = { section: 'equipped' } | { section: 'stowed'; containerId?: string };
 
@@ -484,12 +489,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             >
               {isFull ? 'Full (3/3)' : '+ Add spell'}
             </button>
-            <textarea
+            <GrowingTextarea
               value={item.notes}
-              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes (language, source, etc.)"
-              rows={1}
-              className={`${inputClasses} w-full mt-1 text-xs resize-y`}
+              className="mt-1"
+              fieldClassName={`${inputClasses} text-xs`}
             />
           </div>
         )}
@@ -612,36 +617,42 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   // From sm up: one line per item, under the column headers (which leave room for
-  // the move select when there are containers). On phones: the name, move select
-  // and × on the first line, then the labelled fields. The move select and × are
-  // rendered for each layout, with the other copy hidden (display: none), so the
-  // keyboard order always matches what's on screen.
+  // the move select when there are containers), with a quarter of the width for
+  // the name and the rest after Slots and Weight for the notes. On phones: the
+  // name, move select and × on the first line, then the labelled fields. Long
+  // names wrap and notes can have several lines, so a row can grow taller: its
+  // controls line up along the top, with the move select and × centred on the
+  // first line. The move select and × are rendered for each layout, with the
+  // other copy hidden (display: none), so the keyboard order always matches
+  // what's on screen.
   const renderItemRow = (item: InventoryItem, equipped: boolean) => {
     const itemName = item.name.trim() || 'item';
     const moveSelect = (layoutClass: string) =>
       !equipped && containers.length > 0 ? (
-        <select
-          value={item.containerId ?? ''}
-          onChange={(e) =>
-            handleMoveToContainer(item.id, e.target.value || undefined)
-          }
-          className={`${inputClasses} w-10 shrink-0 text-xs p-0.5 ${layoutClass}`}
-          title="Move to container"
-          aria-label={`Move ${itemName} to a container`}
-        >
-          <option value="">Loose</option>
-          {containers.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
+        <div className={`${ONE_LINE_FIELD_HEIGHT} shrink-0 items-center ${layoutClass}`}>
+          <select
+            value={item.containerId ?? ''}
+            onChange={(e) =>
+              handleMoveToContainer(item.id, e.target.value || undefined)
+            }
+            className={`${inputClasses} w-10 text-xs p-0.5`}
+            title="Move to container"
+            aria-label={`Move ${itemName} to a container`}
+          >
+            <option value="">Loose</option>
+            {containers.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </div>
       ) : null;
     const removeButton = (layoutClass: string) => (
       <button
         type="button"
         onClick={() => handleDeleteItem(equipped, item.id)}
-        className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${layoutClass}`}
+        className={`text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg shrink-0 w-6 ${ONE_LINE_FIELD_HEIGHT} ${layoutClass}`}
         title={`Remove ${itemName}`}
         aria-label={`Remove ${itemName}`}
       >
@@ -656,18 +667,19 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
 
     return (
-      <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
-        <input
-          type="text"
+      <div key={item.id} className="flex flex-wrap items-start gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
+        <GrowingTextarea
           value={item.name}
-          onChange={(e) => handleUpdateItem(equipped, item.id, 'name', e.target.value)}
+          onValueChange={(name) => handleUpdateItem(equipped, item.id, 'name', name)}
+          singleLine
           placeholder="Item name"
           aria-label="Item name"
-          className={`${inputClasses} flex-1 min-w-[120px]`}
+          className="flex-1 min-w-[120px] sm:flex-none sm:w-1/4"
+          fieldClassName={inputClasses}
         />
-        {moveSelect('sm:hidden')}
+        {moveSelect('flex sm:hidden')}
         {removeButton('sm:hidden')}
-        <div className="flex items-end gap-2 w-full sm:w-auto sm:items-center">
+        <div className="flex items-start gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0">
           <label className="flex flex-col gap-0.5">
             {phoneLabel('Slots')}
             <input
@@ -698,18 +710,17 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               className={`${inputClasses} w-20 text-center`}
             />
           </label>
-          <label className="flex flex-col gap-0.5 flex-1 min-w-0 sm:flex-none">
+          <label className="flex flex-col gap-0.5 flex-1 min-w-0">
             {phoneLabel('Notes')}
-            <input
-              type="text"
+            <GrowingTextarea
               value={item.notes}
-              onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
+              onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes"
               aria-label={`${itemName} notes`}
-              className={`${inputClasses} w-full sm:w-32`}
+              fieldClassName={inputClasses}
             />
           </label>
-          {moveSelect('hidden sm:block')}
+          {moveSelect('hidden sm:flex')}
         </div>
         {removeButton('hidden sm:block')}
       </div>
@@ -783,10 +794,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               <div className="ml-4">
                 {/* Column headers (hidden on mobile) */}
                 <div className="hidden sm:flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
-                  <span className="flex-1">Name</span>
+                  <span className="w-1/4">Name</span>
                   <span className="w-16 text-center">Slots</span>
                   <span className="w-20 text-center">Weight</span>
-                  <span className="w-32">Notes</span>
+                  <span className="flex-1">Notes</span>
                   {/* Stowed rows have a move-to-container select when there are containers */}
                   {containers.length > 0 && <span className="w-10" />}
                   <span className="w-6" />
@@ -1024,10 +1035,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
         {/* Column headers (hidden on mobile) */}
         <div className="hidden sm:flex items-center gap-2 text-[#f5e6c8]/50 text-xs mb-1 px-2">
-          <span className="flex-1">Name</span>
+          <span className="w-1/4">Name</span>
           <span className="w-16 text-center">Slots</span>
           <span className="w-20 text-center">Weight</span>
-          <span className="w-32">Notes</span>
+          <span className="flex-1">Notes</span>
           <span className="w-6" />
         </div>
 
