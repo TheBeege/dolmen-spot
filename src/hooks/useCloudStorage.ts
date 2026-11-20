@@ -23,6 +23,8 @@ interface UseCloudStorageReturn {
   loading: Record<ProviderId, boolean>;
   /** Whether each provider has a save in flight. */
   saving: Record<ProviderId, boolean>;
+  /** Whether each provider has a file list in flight. */
+  listing: Record<ProviderId, boolean>;
   error: string | null;
   clearError(): void;
 }
@@ -45,6 +47,10 @@ export function useCloudStorage(): UseCloudStorageReturn {
   );
   const saving = useMemo(
     () => ({ 'google-drive': inFlight['google-drive'].includes('save'), 'onedrive': inFlight.onedrive.includes('save') }),
+    [inFlight],
+  );
+  const listing = useMemo(
+    () => ({ 'google-drive': inFlight['google-drive'].includes('list'), 'onedrive': inFlight.onedrive.includes('list') }),
     [inFlight],
   );
   // The message for the last failed operation, and which provider and operation it was.
@@ -227,6 +233,7 @@ export function useCloudStorage(): UseCloudStorageReturn {
     setMetadata,
     loading,
     saving,
+    listing,
     error,
     clearError,
   };
