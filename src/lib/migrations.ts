@@ -498,6 +498,16 @@ const migrations: Record<number, (data: any) => any> = {
   },
 };
 
+/**
+ * The versions that have a migration to the next one, in order. Exported for
+ * migrations.test.ts, which checks that they run without a gap from 1 to
+ * CURRENT_SCHEMA_VERSION - 1: two branches that each add a migration can
+ * merge without a conflict on the version line and leave it one too low.
+ */
+export const MIGRATION_VERSIONS: readonly number[] = Object.freeze(
+  Object.keys(migrations).map(Number).sort((a, b) => a - b),
+);
+
 // Required subkeys for the schema's nullable-object fields. If a saved
 // plain-object value is missing any of these, the field is reset to
 // `null` so the UI's "you must select X" flow handles it cleanly

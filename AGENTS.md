@@ -63,7 +63,7 @@ Character data is stored in localStorage and must survive schema changes across 
 
 ### Testing migrations:
 
-- Add a scenario to the relevant `src/lib/*.test.ts` file (the hex map's are in `src/lib/map-migration.test.ts`) and run `npm test`, which runs every `src/lib/*.test.ts` file with Node's test runner (via `tsx`). CI runs it on every PR
+- Add a scenario to the relevant `src/lib/*.test.ts` file (the hex map's are in `src/lib/map-migration.test.ts`) and run `npm test`, which runs every `src/lib/*.test.ts` file with Node's test runner (via `tsx`). CI runs it on every PR. `src/lib/migrations.test.ts` also fails if `CURRENT_SCHEMA_VERSION` isn't one more than the last migration's version, which catches a bump lost when two branches that each add a migration merge
 - Manually test with a character JSON that has no `schemaVersion` (simulates legacy data)
 - Test import/export round-trip with old-format files
 - Verify `npm run build` passes after any schema change
