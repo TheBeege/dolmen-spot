@@ -1284,8 +1284,8 @@ function MagicSection({ c }: { c: Character }) {
       ) : null}
       {profile.hasDivineResistance ? (
         <Text style={s.body}>
-          <Text style={s.bold}>Divine Resistance: </Text>
-          {FEATURE_NOTES.divineResistance}
+          <Text style={s.bold}>Resistance to Divine Aid: </Text>
+          {FEATURE_NOTES.resistanceToDivineAid}
         </Text>
       ) : null}
     </>

@@ -188,12 +188,12 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
         </div>
       )}
 
-      {/* Divine Resistance flag */}
+      {/* Resistance to Divine Aid (enchanters and elves) */}
       {profile.hasDivineResistance && (
         <div className="bg-[#1a1a2e] border border-[#c4a35a]/30 rounded p-3 mb-4">
-          <span className="text-[#c4a35a] font-semibold text-sm">Divine Resistance:</span>{' '}
+          <span className="text-[#c4a35a] font-semibold text-sm">Resistance to Divine Aid:</span>{' '}
           <span className="text-[#f5e6c8] text-sm">
-            {FEATURE_NOTES.divineResistance}
+            {FEATURE_NOTES.resistanceToDivineAid}
           </span>
         </div>
       )}

@@ -1518,7 +1518,8 @@ export const FEATURE_NOTES = {
   chivalryRules: "Must match liege's alignment. Cannot use missile weapons. Scorn light armour.",
   madRevelry: "30' range, affects all living creatures (including allies). Save vs Spell. Fairies/demi-fey +2 to save.",
   fungalSymbiosis: 'Spend 1 Turn to bond with non-hostile monstrous fungus (3+ levels below you). Save vs Spell.',
-  divineResistance: 'Immune to holy magic effects (blessings and curses). Holy healing works at half effect.',
+  // Enchanters and elves: the saints are loath to aid those allied with Fairy.
+  resistanceToDivineAid: '2-in-6 chance that a beneficial holy spell cast on you has no effect.',
 } as const;
 
 // ──────────────────────────────────────────────────────────
