@@ -39,7 +39,7 @@ export const KINDRED_CLASS_RESTRICTIONS: Record<KindredId, Partial<Record<ClassI
 
 export function getAvailableClasses(kindred: KindredId | ''): { class: ClassInfo; restriction?: 'rare' }[] {
   if (!kindred) return CLASSES.map(c => ({ class: c }));
-  const restrictions = KINDRED_CLASS_RESTRICTIONS[kindred] || {};
+  const restrictions = isKnownKindredId(kindred) ? KINDRED_CLASS_RESTRICTIONS[kindred] : {};
   return CLASSES.filter(c => restrictions[c.id] !== 'forbidden')
     .map(c => ({ class: c, restriction: restrictions[c.id] === 'rare' ? 'rare' as const : undefined }));
 }
@@ -189,6 +189,47 @@ export const CLASSES: ClassInfo[] = [
     weapons: 'Small and Medium',
   },
 ];
+
+// Saved data can hold a kindred or class id the app doesn't know (a hand-edited
+// or newer-version file). Check with these before indexing any table by such an
+// id: they test own properties, so names every object inherits, like
+// "constructor" or "__proto__", don't pass as known ids.
+const KNOWN_KINDRED_IDS = Object.fromEntries(KINDREDS.map(k => [k.id, true]));
+const KNOWN_CLASS_IDS = Object.fromEntries(CLASSES.map(c => [c.id, true]));
+
+export function isKnownKindredId(id: string): id is KindredId {
+  return Object.hasOwn(KNOWN_KINDRED_IDS, id);
+}
+
+export function isKnownClassId(id: string): id is ClassId {
+  return Object.hasOwn(KNOWN_CLASS_IDS, id);
+}
+
+/** True when the kindred or the class is an id the app doesn't know, so values that depend on it can't be calculated. */
+export function hasUnknownKindredOrClass(character: Pick<Character, 'kindred' | 'class'>): boolean {
+  return (!!character.kindred && !isKnownKindredId(character.kindred))
+    || (!!character.class && !isKnownClassId(character.class));
+}
+
+// Display names. The sheet shows an id it doesn't know as stored rather than
+// hiding it.
+export function getKindredName(id: string): string {
+  return KINDREDS.find(k => k.id === id)?.name ?? id;
+}
+
+export function getClassName(id: string): string {
+  return CLASSES.find(c => c.id === id)?.name ?? id;
+}
+
+/** "Woodgrue Enchanter", "Elf (kindred-class)", "Human"; '' when neither is chosen. */
+export function getKindredClassLabel(character: Pick<Character, 'kindred' | 'class'>): string {
+  const parts: string[] = [];
+  if (character.kindred) parts.push(getKindredName(character.kindred));
+  if (character.class) parts.push(getClassName(character.class));
+  // Only a known kindred has a kindred-class; an unknown one is shown as stored, alone.
+  else if (character.kindred && character.kindred !== 'human' && isKnownKindredId(character.kindred)) parts.push('(kindred-class)');
+  return parts.join(' ');
+}
 
 export const ALIGNMENTS = ['Lawful', 'Neutral', 'Chaotic'] as const;
 
@@ -1133,11 +1174,11 @@ export const KINDRED_CLASS_ADVANCEMENT: Record<KindredId, ClassAdvancementTable 
 export function getAdvancementTable(kindred: KindredId | '', classId: ClassId | ''): ClassAdvancementTable | null {
   // If using a kindred-class, use kindred advancement table
   if (kindred && kindred !== 'human' && !classId) {
-    return KINDRED_CLASS_ADVANCEMENT[kindred] ?? null;
+    return isKnownKindredId(kindred) ? KINDRED_CLASS_ADVANCEMENT[kindred] : null;
   }
   // Standard class
   if (classId) {
-    return CLASS_ADVANCEMENT[classId] ?? null;
+    return isKnownClassId(classId) ? CLASS_ADVANCEMENT[classId] : null;
   }
   return null;
 }
@@ -1263,6 +1304,7 @@ export const DETECT_MAGIC_PROGRESSION: Record<string, Record<number, number>> = 
 };
 
 export function getDetectMagicTarget(classOrKindred: string, level: number): number | null {
+  if (!isKnownClassId(classOrKindred) && !isKnownKindredId(classOrKindred)) return null;
   const table = DETECT_MAGIC_PROGRESSION[classOrKindred];
   if (!table) return null;
   const clamped = Math.max(1, Math.min(level, 15));
@@ -1331,6 +1373,7 @@ export const SPELLS_PER_DAY: Record<string, Record<number, number[]>> = {
 };
 
 export function getSpellsPerDay(classOrKindred: string, level: number): number[] | null {
+  if (!isKnownClassId(classOrKindred) && !isKnownKindredId(classOrKindred)) return null;
   const table = SPELLS_PER_DAY[classOrKindred];
   if (!table) return null;
   const clamped = Math.max(1, Math.min(level, 15));
@@ -1563,6 +1606,21 @@ export const CLASS_PRIME_ABILITIES: Record<ClassId, (keyof AbilityScoresType)[]>
   thief: ['dexterity'],
 };
 
+// Kindred-class Prime Abilities. Source: docs/rules/04-kindred-classes.md, and
+// "Prime Abilities" in each kindred-class entry of the Player's Book appendix
+// (Breggle p180, Elf p182, Grimalkin p184, Mossling p186, Woodgrue p188). The
+// XP modifier applies to them as to any class (p22: "A character's score in
+// their Prime Ability determines a modifier applied to all Experience Points
+// earned"). Humans have no kindred-class.
+export const KINDRED_CLASS_PRIME_ABILITIES: Record<KindredId, (keyof AbilityScoresType)[] | null> = {
+  breggle: ['intelligence', 'strength'],
+  elf: ['charisma', 'strength'],
+  grimalkin: ['dexterity'],
+  human: null,
+  mossling: ['constitution', 'wisdom'],
+  woodgrue: ['charisma', 'dexterity'],
+};
+
 // 1b. XP Modifier Calculation
 export function getPrimeAbilityXpModifier(score: number): number {
   if (score <= 5) return -20;
@@ -1572,14 +1630,23 @@ export function getPrimeAbilityXpModifier(score: number): number {
   return 10;
 }
 
+/**
+ * XP modifier from the Prime Abilities of the character's class, or of their
+ * kindred-class when they have no class, plus the human bonus. null when there's
+ * nothing to calculate it from (no class or kindred-class, or a kindred or class
+ * id the app doesn't know): callers then keep the stored modifier.
+ */
 export function calculateXpModifier(
   classId: ClassId | '',
   kindredId: KindredId | '',
   abilityScores: AbilityScoresType,
-): { primeBonus: number; humanBonus: number; total: number } {
-  if (!classId) return { primeBonus: 0, humanBonus: 0, total: 0 };
+): { primeBonus: number; humanBonus: number; total: number } | null {
+  if ((classId && !isKnownClassId(classId)) || (kindredId && !isKnownKindredId(kindredId))) return null;
+  const primeKeys = classId
+    ? CLASS_PRIME_ABILITIES[classId]
+    : kindredId ? KINDRED_CLASS_PRIME_ABILITIES[kindredId] : null;
+  if (!primeKeys) return null;
 
-  const primeKeys = CLASS_PRIME_ABILITIES[classId];
   const lowestPrime = Math.min(...primeKeys.map(k => abilityScores[k]));
   const primeBonus = getPrimeAbilityXpModifier(lowestPrime);
   const humanBonus = kindredId === 'human' ? 10 : 0;
@@ -1756,7 +1823,7 @@ export function rollD6(): number {
 }
 
 export function rollStartingEquipment(classId: ClassId, category: 'armour' | 'weapons'): { roll: number; result: string } {
-  const table = STARTING_EQUIPMENT[classId][category];
+  const table = isKnownClassId(classId) ? STARTING_EQUIPMENT[classId][category] : [];
   const roll = rollD6();
   const entry = table.find(e => e.roll.includes(roll));
   return { roll, result: entry?.result ?? 'Unknown' };
@@ -1782,7 +1849,7 @@ export function getCharacterLanguages(
 } {
   const kindred = KINDREDS.find(k => k.id === kindredId);
   const nativeLanguages = kindred?.nativeLanguages ?? ['Woldish'];
-  const classLanguages: string[] = (classId ? CLASS_LANGUAGES[classId] : undefined) ?? [];
+  const classLanguages: string[] = (classId && isKnownClassId(classId) ? CLASS_LANGUAGES[classId] : undefined) ?? [];
   const intMod = getAbilityModifier(intScore);
   const bonusSlots = Math.max(0, intMod);
 
@@ -1841,7 +1908,7 @@ function getArmourBulkCategory(bulk: string): 'light' | 'medium' | 'heavy' | nul
 }
 
 export function getArmourRestrictionWarning(classId: ClassId | '', armourName: string, hasShield: boolean): string | null {
-  if (!classId) return null;
+  if (!classId || !isKnownClassId(classId)) return null;
   const restrictions = CLASS_ARMOUR_RESTRICTIONS[classId];
 
   if (hasShield && !restrictions.shield) {
@@ -1870,7 +1937,10 @@ export function calculateAC(
   kindred: KindredId | '',
   classId: ClassId | '',
   level: number,
-): { ac: number; notes: string[] } {
+): { ac: number; notes: string[] } | null {
+  // Kindred (breggle fur) and class (friar Armour of Faith) both add to AC, so
+  // there's nothing to calculate with an id the app doesn't know.
+  if (hasUnknownKindredOrClass({ kindred, class: classId })) return null;
   const armour = ARMOUR_TABLE.find(a => a.name === equippedArmourName);
   let ac = armour ? armour.ac : 10; // Unarmoured = 10
   const notes: string[] = [];
@@ -1928,7 +1998,9 @@ export function calculateSaveTargets(kindred: KindredId | '', classId: ClassId |
 }
 
 // 2d. Magic Resistance
-export function calculateMagicResistance(wisScore: number, kindred: KindredId | ''): { value: number; notes: string[] } {
+export function calculateMagicResistance(wisScore: number, kindred: KindredId | ''): { value: number; notes: string[] } | null {
+  // Fairy kindreds add +2, so there's nothing to calculate with a kindred the app doesn't know.
+  if (kindred && !isKnownKindredId(kindred)) return null;
   let value = getAbilityModifier(wisScore);
   const notes: string[] = [];
 
@@ -1973,19 +2045,30 @@ export const STOWED_SLOT_LIMIT = 16;
 /** Maximum load in coins of weight; above this the character can't move. */
 export const MAX_LOAD_WEIGHT = 1600;
 
-// 2h. Speed Functions (shared between CombatStats and Inventory)
+// 2h. Speed Functions (used by calculateEncumbrance in character-sheet.ts, for
+// the Inventory tab and the PDF)
+// Above the maximum load Speed is 0:
+// - Weight: "The maximum load any character can carry is 1,600 coins of weight.
+//   Characters carrying more than this cannot move." (Player's Book p148;
+//   docs/rules/08-adventuring.md)
+// - Slots: "A character cannot carry more than 10 slots of equipped items" and
+//   "cannot carry more than a total of 16 slots of stowed items" (p149). The
+//   book doesn't give a Speed above those; treating it like the weight limit
+//   (can't move) is this app's interpretation.
 export function getSpeedByEquippedSlots(equippedSlots: number): number {
   if (equippedSlots <= 3) return 40;
   if (equippedSlots <= 5) return 30;
   if (equippedSlots <= 7) return 20;
-  return 10;
+  if (equippedSlots <= 10) return 10;
+  return 0;
 }
 
 export function getSpeedByStowedSlots(stowedSlots: number): number {
   if (stowedSlots <= 10) return 40;
   if (stowedSlots <= 12) return 30;
   if (stowedSlots <= 14) return 20;
-  return 10;
+  if (stowedSlots <= 16) return 10;
+  return 0;
 }
 
 export function getSpeedBySlots(equippedSlots: number, stowedSlots: number): number {
@@ -1996,7 +2079,8 @@ export function getSpeedByWeight(totalWeight: number): number {
   if (totalWeight <= 400) return 40;
   if (totalWeight <= 600) return 30;
   if (totalWeight <= 800) return 20;
-  return 10;
+  if (totalWeight <= 1600) return 10;
+  return 0;
 }
 
 // ──────────────────────────────────────────────────────────
@@ -2048,8 +2132,8 @@ export function calculateSkillTargets(
   autoSkillKeys.add('survival');
 
   // 2. Apply kindred base overrides (e.g., Elf Listen 5)
-  if (kindred) {
-    const kindredOverrides = KINDRED_BASE_SKILL_OVERRIDES[kindred as KindredId];
+  if (kindred && isKnownKindredId(kindred)) {
+    const kindredOverrides = KINDRED_BASE_SKILL_OVERRIDES[kindred];
     if (kindredOverrides) {
       for (const [key, value] of Object.entries(kindredOverrides)) {
         targets[key] = Math.min(targets[key] ?? 6, value);
@@ -2059,8 +2143,8 @@ export function calculateSkillTargets(
   }
 
   // 3. Apply class base overrides (e.g., Friar Survival 5)
-  if (classId) {
-    const classOverrides = CLASS_BASE_SKILL_OVERRIDES[classId as ClassId];
+  if (classId && isKnownClassId(classId)) {
+    const classOverrides = CLASS_BASE_SKILL_OVERRIDES[classId];
     if (classOverrides) {
       for (const [key, value] of Object.entries(classOverrides)) {
         targets[key] = Math.min(targets[key] ?? 6, value);
@@ -2070,8 +2154,8 @@ export function calculateSkillTargets(
   }
 
   // 4. Apply class skill tables (Bard, Hunter, Thief)
-  if (classId) {
-    const classSkillTable = CLASS_SKILL_TABLES[classId as ClassId];
+  if (classId && isKnownClassId(classId)) {
+    const classSkillTable = CLASS_SKILL_TABLES[classId];
     if (classSkillTable) {
       const row = classSkillTable.rows[clampedLevel];
       if (row) {
@@ -2086,8 +2170,8 @@ export function calculateSkillTargets(
   }
 
   // 5. Apply kindred-class skill tables (Grimalkin Pick Lock, Woodgrue Stealth)
-  if (isKindredClass && kindred) {
-    const kindredSkillTable = KINDRED_CLASS_SKILL_TABLES[kindred as KindredId];
+  if (isKindredClass && kindred && isKnownKindredId(kindred)) {
+    const kindredSkillTable = KINDRED_CLASS_SKILL_TABLES[kindred];
     if (kindredSkillTable) {
       const row = kindredSkillTable.rows[clampedLevel];
       if (row) {
@@ -2110,8 +2194,8 @@ export function calculateSkillTargets(
 
   // 7. Expertise points
   let expertisePoints: number | null = null;
-  if (classId) {
-    const config = EXPERTISE_POINTS_CONFIG[classId as ClassId];
+  if (classId && isKnownClassId(classId)) {
+    const config = EXPERTISE_POINTS_CONFIG[classId];
     if (config) {
       expertisePoints = config.base + config.perLevel * clampedLevel;
     }
@@ -2389,7 +2473,8 @@ export interface MagicProfile {
   systems: MagicSystem[];
   spellsPerDay: number[] | null;
   maxSpellRank: number;
-  glamourCount: number;
+  /** null when it depends on a kindred the app doesn't know (an Enchanter's innate glamours). */
+  glamourCount: number | null;
   hasRunes: boolean;
   hasKnacks: boolean;
   hasDivineResistance: boolean;
@@ -2471,10 +2556,11 @@ export function getCharacterMagicProfile(kindred: KindredId | '', classId: Class
         result.systems = ['glamours', 'runes'];
         result.hasDivineResistance = true;
         result.hasRunes = true;
-        let glamourCount = ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0;
-        // Add innate kindred glamours (1 for Elf/Grimalkin) on top of class glamours
-        glamourCount += INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0;
-        result.glamourCount = glamourCount;
+        // Add innate kindred glamours (1 for Elf/Grimalkin) on top of class
+        // glamours; an unknown kindred's are unknown, so is the maximum.
+        result.glamourCount = kindred && !isKnownKindredId(kindred)
+          ? null
+          : (ENCHANTER_GLAMOUR_COUNT[clampedLevel] ?? 0) + (kindred ? INNATE_KINDRED_GLAMOUR_COUNT[kindred] ?? 0 : 0);
         break;
       }
       default: {

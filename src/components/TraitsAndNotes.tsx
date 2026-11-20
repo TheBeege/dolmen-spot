@@ -52,7 +52,12 @@ const cardClasses =
 
 function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
   const totalSlots = getFighterTalentCount(character.level);
-  const selections = character.selectedCombatTalents;
+  // One entry per unlocked slot. Pad a copy: the stored array is a prop and
+  // must not be changed while rendering.
+  const stored = character.selectedCombatTalents;
+  const selections = stored.length >= totalSlots
+    ? stored
+    : [...stored, ...Array.from({ length: totalSlots - stored.length }, () => ({ talentId: '', specification: '' }))];
 
   const updateTalent = (index: number, talentId: string) => {
     const next = [...selections];
@@ -65,11 +70,6 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
     next[index] = { ...next[index], specification };
     onChange({ selectedCombatTalents: next });
   };
-
-  // Ensure array is the right length
-  while (selections.length < totalSlots) {
-    selections.push({ talentId: '', specification: '' });
-  }
 
   if (totalSlots === 0) {
     return (
@@ -462,7 +462,9 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
 // ── Woodgrue Mad Revelry ───────────────────────────────────
 
 function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
-  const maxUses = getMaxMadRevelryUses(character.level);
+  const maxUses = getMaxMadRevelryUses(character);
+  // A count saved under the old one-use-per-level rule can be above the real maximum.
+  const usesLeft = Math.min(character.madRevelryUsesRemaining, maxUses);
   const [selectedMelody, setSelectedMelody] = useState('');
 
   const melody = MAD_REVELRY_MELODIES.find(m => m.id === selectedMelody);
@@ -470,19 +472,19 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <label className={labelClasses}>
-        Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{character.madRevelryUsesRemaining}/{maxUses} uses</span>
+        Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{usesLeft}/{maxUses} uses</span>
       </label>
       <div className="flex items-center gap-2 mb-2">
         <button
           type="button"
-          onClick={() => onChange({ madRevelryUsesRemaining: Math.max(0, character.madRevelryUsesRemaining - 1) })}
-          disabled={character.madRevelryUsesRemaining <= 0}
+          onClick={() => onChange({ madRevelryUsesRemaining: Math.max(0, usesLeft - 1) })}
+          disabled={usesLeft <= 0}
           className={btnClasses}
         >
           Use
         </button>
         <span className="text-[#f5e6c8] font-semibold text-sm">
-          {character.madRevelryUsesRemaining} / {maxUses}
+          {usesLeft} / {maxUses}
         </span>
         <button
           type="button"

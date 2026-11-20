@@ -19,7 +19,6 @@ import type { Character, CharacterContainer, InventoryItem } from '@/lib/types';
 import {
   ARMOUR_TABLE,
   BREGGLE_HORN_PROGRESSION,
-  CLASSES,
   CLERIC_HOLY_ORDERS,
   EQUIPPED_SLOT_LIMIT,
   FAIRY_RUNES,
@@ -49,9 +48,13 @@ import {
   getArmourRestrictionWarning,
   getAvailableClasses,
   getCharacterFeatureProfile,
+  getClassName,
   getCoinGpEquivalent,
   getFighterTalentCount,
+  getKindredClassLabel,
+  getKindredName,
   getRuneUsageFrequency,
+  isKnownClassId,
   skillKeyToDisplayName,
 } from '@/lib/gamedata';
 import {
@@ -69,6 +72,7 @@ import {
   getMaxFungalSymbiosisUses,
   getMaxGazeUses,
   getMaxMadRevelryUses,
+  getOverloadNote,
   getRetainerLimits,
   getScrollItems,
   getSkillTargetLayout,
@@ -574,23 +578,18 @@ function SummaryRow({ label, value, warn, total }: { label: string; value: strin
 
 // ── Shared display helpers ───────────────────────────────────
 
+// An id the app doesn't know is printed as stored, as the app shows it.
 function kindredName(c: Character): string {
-  return KINDREDS.find((k) => k.id === c.kindred)?.name ?? '';
+  return getKindredName(c.kindred);
 }
 
 function className(c: Character): string {
-  return CLASSES.find((cl) => cl.id === c.class)?.name ?? '';
+  return getClassName(c.class);
 }
 
-/** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" */
+/** "Level 3 Elf (kindred-class)", "Level 5 Human Fighter" (the same label as the app's header) */
 function identityLine(c: Character): string {
-  const parts = [`Level ${c.level}`];
-  const kindred = kindredName(c);
-  const cls = className(c);
-  if (kindred) parts.push(kindred);
-  if (cls) parts.push(cls);
-  else if (isKindredClass(c)) parts.push('(kindred-class)');
-  return parts.join(' ');
+  return [`Level ${c.level}`, getKindredClassLabel(c)].filter(Boolean).join(' ');
 }
 
 function calcNote(stored: number, calculated: number | null, format: (n: number) => string = String): string | undefined {
@@ -621,11 +620,17 @@ function Header({ c, exportedOn }: { c: Character; exportedOn: string }) {
 function CharacterSection({ c }: { c: Character }) {
   const kindred = KINDREDS.find((k) => k.id === c.kindred);
   const classEntry = getAvailableClasses(c.kindred).find((entry) => entry.class.id === c.class);
+  // Ids the app doesn't know are printed as the Character tab's dropdowns show them.
+  const knownClass = isKnownClassId(c.class);
+  const unknownKindred = !!c.kindred && !kindred;
 
   let classValue = className(c);
   let classNote: string | undefined;
   let classWarn: string | undefined;
-  if (classEntry) {
+  if (c.class && !knownClass) {
+    classValue = `${c.class} (unknown class)`;
+    classWarn = "Dolmen Spot doesn't recognise this class, so it can't calculate class-based values.";
+  } else if (classEntry) {
     classNote = classEntry.class.description + (classEntry.restriction === 'rare' ? ' Unusual combination for this kindred.' : '');
   } else if (c.kindred === 'human' && !c.class) {
     classWarn = 'Humans must select a class.';
@@ -642,11 +647,12 @@ function CharacterSection({ c }: { c: Character }) {
 
   const alignmentWarning = getAlignmentWarning(c.class, c.alignment);
 
-  // The Character tab shows the calculated XP modifier for classed characters
-  // and offers "Sync" when the stored value differs; the stored one is in effect.
+  // The Character tab shows the calculated XP modifier (class or kindred-class)
+  // whenever it can be calculated, and offers "Sync" when the stored value
+  // differs; the stored one is in effect.
   const xpCalc = calculateXpModifier(c.class, c.kindred, c.abilityScores);
   let xpNote: string | undefined;
-  if (c.class) {
+  if (xpCalc) {
     const breakdown = [`Prime ${formatXpPercent(xpCalc.primeBonus)}`];
     if (xpCalc.humanBonus > 0) breakdown.push(`Human ${formatXpPercent(xpCalc.humanBonus)}`);
     xpNote = c.xpModifier === xpCalc.total
@@ -659,7 +665,12 @@ function CharacterSection({ c }: { c: Character }) {
     <View>
       <SectionTitle>Character</SectionTitle>
       <View style={s.fieldGrid}>
-        <Field label="Kindred" value={kindredName(c)} note={kindred?.description} />
+        <Field
+          label="Kindred"
+          value={unknownKindred ? `${c.kindred} (unknown kindred)` : kindredName(c)}
+          note={kindred?.description}
+          warn={unknownKindred ? "Dolmen Spot doesn't recognise this kindred, so it can't calculate kindred-based values." : undefined}
+        />
         <Field label="Class" value={classValue} note={classNote} warn={classWarn} />
         <Field label="Level" value={c.level} last />
         <Field label="Background" value={c.background} />
@@ -732,7 +743,7 @@ function CombatSection({ c }: { c: Character }) {
       <SectionTitle>Combat</SectionTitle>
       <View style={s.boxRow}>
         <StatBox label="Hit Points" value={`${c.currentHp} / ${c.maxHp}`} sub="Current / Max" highlight />
-        <StatBox label="Armour Class" value={String(c.armorClass)} calc={calcNote(c.armorClass, calcAC.ac)} highlight />
+        <StatBox label="Armour Class" value={String(c.armorClass)} calc={calcNote(c.armorClass, calcAC?.ac ?? null)} highlight />
         <StatBox
           label="Attack"
           value={formatModifier(c.attackBonus)}
@@ -744,20 +755,24 @@ function CombatSection({ c }: { c: Character }) {
           value={formatModifier(missile)}
           sub={`ATK ${formatModifier(c.attackBonus)} + DEX ${dexMod}${c.class === 'hunter' ? ' +1 Hunter' : ''}`}
         />
-        <StatBox label="Speed" value={`${speed} ft`} sub={`By ${c.encumbranceMethod === 'slots' ? 'slots' : 'weight'}`} />
+        <StatBox
+          label="Speed"
+          value={`${speed} ft`}
+          sub={speed === 0 ? 'Over max load' : `By ${c.encumbranceMethod === 'slots' ? 'slots' : 'weight'}`}
+        />
         <StatBox
           label="Magic Resist."
           value={formatModifier(c.magicResistance)}
-          calc={calcNote(c.magicResistance, calcMR.value, formatModifier)}
+          calc={calcNote(c.magicResistance, calcMR?.value ?? null, formatModifier)}
         />
       </View>
       <Text style={s.body}>
         <Text style={s.bold}>Armour: </Text>
         {armourLine}
-        {calcAC.notes.length > 0 ? <Text style={s.note}>{`   AC ${calcAC.notes.join(', ')}`}</Text> : null}
+        {calcAC && calcAC.notes.length > 0 ? <Text style={s.note}>{`   AC ${calcAC.notes.join(', ')}`}</Text> : null}
       </Text>
       {armourWarning ? <Text style={s.warn}>{armourWarning}</Text> : null}
-      {calcMR.notes.length > 0 ? (
+      {calcMR && calcMR.notes.length > 0 ? (
         <Text style={s.note}>{`Magic resistance: ${calcMR.notes.join(', ')}`}</Text>
       ) : null}
       <Text style={s.note}>{`CON modifier: ${conMod} applied per Hit Die`}</Text>
@@ -1043,10 +1058,11 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
   }
 
   if (profile.hasMadRevelry) {
+    const maxRevelry = getMaxMadRevelryUses(c);
     blocks.push({
       key: 'revelry',
       title: 'Mad Revelry',
-      note: `${c.madRevelryUsesRemaining}/${getMaxMadRevelryUses(c.level)} uses`,
+      note: `${Math.min(c.madRevelryUsesRemaining, maxRevelry)}/${maxRevelry} uses`,
       body: (
         <>
           <Text style={s.note}>{FEATURE_NOTES.madRevelry}</Text>
@@ -1337,8 +1353,9 @@ function SpellcastingBlock({
   );
 }
 
-function GlamoursBlock({ c, max, lead }: { c: Character; max: number; lead?: ReactNode }) {
-  const over = c.glamours.length > max;
+function GlamoursBlock({ c, max, lead }: { c: Character; max: number | null; lead?: ReactNode }) {
+  // max is null when it depends on a kindred the app doesn't know.
+  const over = max !== null && c.glamours.length > max;
   return (
     <>
       <KeepWithNext>
@@ -1346,7 +1363,7 @@ function GlamoursBlock({ c, max, lead }: { c: Character; max: number; lead?: Rea
         <Text style={s.subTitle}>
           Glamours
           <Text style={[s.subTitleNote, over ? { color: COLOR.warn } : {}]}>
-            {`  ${c.glamours.length}/${max} glamours known${over ? ' (over maximum!)' : ''}`}
+            {`  ${c.glamours.length}${max === null ? '' : `/${max}`} glamours known${over ? ' (over maximum!)' : ''}`}
           </Text>
         </Text>
       </KeepWithNext>
@@ -1427,12 +1444,13 @@ function KnackBlock({ c, lead }: { c: Character; lead?: ReactNode }) {
 }
 
 function MagicSection({ c }: { c: Character }) {
-  const { profile, hasNoMagic, hasSpells, hasGlamours, hasRunes, hasKnacks, isBregglesPreMagic } = getMagicSections(c);
+  const { profile, unknownNote, hasNoMagic, hasSpells, hasGlamours, hasRunes, hasKnacks, isBregglesPreMagic } = getMagicSections(c);
   if (hasNoMagic) return null;
 
   const lead = (
     <>
       <SectionTitle>Spells & Magic</SectionTitle>
+      {unknownNote ? <Text style={s.warn}>{unknownNote}</Text> : null}
       {isBregglesPreMagic ? (
         <Empty>{`Breggle arcane magic unlocks at Level 4. Current level: ${c.level}.`}</Empty>
       ) : null}
@@ -1462,7 +1480,11 @@ function MagicSection({ c }: { c: Character }) {
   if (hasRunes) blocks.push((l) => <RunesBlock key="runes" c={c} lead={l} />);
   if (hasKnacks) blocks.push((l) => <KnackBlock key="knack" c={c} lead={l} />);
 
-  if (blocks.length === 0) return <View wrap={false}>{lead}</View>;
+  if (blocks.length === 0) {
+    // Never print the heading on its own.
+    if (!unknownNote && !isBregglesPreMagic && !profile.hasDivineResistance) return null;
+    return <View wrap={false}>{lead}</View>;
+  }
   return <>{blocks.map((render, i) => render(i === 0 ? lead : undefined))}</>;
 }
 
@@ -1541,6 +1563,7 @@ function ContainerGroup({ c, container, lead }: {
 function InventorySection({ c }: { c: Character }) {
   const { text } = useSheet();
   const enc = calculateEncumbrance(c);
+  const overloadNote = getOverloadNote(enc, c.encumbranceMethod);
   const slotsMode = c.encumbranceMethod === 'slots';
   const { coins } = c;
   const coinCount = pluralize(enc.totalCoinCount, 'coin');
@@ -1585,7 +1608,7 @@ function InventorySection({ c }: { c: Character }) {
                 warn={enc.equippedSlotsOverLimit}
               />
               {enc.equippedSlotsOverLimit ? (
-                <Text style={s.warn}>{`Exceeds standard equipped limit (${EQUIPPED_SLOT_LIMIT} slots)`}</Text>
+                <Text style={s.warn}>{`Over the maximum of ${EQUIPPED_SLOT_LIMIT} equipped slots`}</Text>
               ) : null}
               <SummaryRow label="Stowed slots (items)" value={String(enc.itemStowedSlots)} />
               <SummaryRow label="Coin slots" value={`${enc.coinSlots} (${coinCount})`} />
@@ -1595,7 +1618,7 @@ function InventorySection({ c }: { c: Character }) {
                 warn={enc.stowedSlotsOverLimit}
               />
               {enc.stowedSlotsOverLimit ? (
-                <Text style={s.warn}>{`Exceeds standard stowed limit (${STOWED_SLOT_LIMIT} slots)`}</Text>
+                <Text style={s.warn}>{`Over the maximum of ${STOWED_SLOT_LIMIT} stowed slots`}</Text>
               ) : null}
             </>
           ) : (
@@ -1605,7 +1628,8 @@ function InventorySection({ c }: { c: Character }) {
               <SummaryRow label="Total weight" value={String(enc.totalWeight)} warn={enc.overMaxLoad} />
             </>
           )}
-          <SummaryRow label="Calculated speed" value={`${enc.speed} ft`} total />
+          <SummaryRow label="Calculated speed" value={`${enc.speed} ft`} total warn={enc.speed === 0} />
+          {overloadNote ? <Text style={s.warn}>{overloadNote}</Text> : null}
         </View>
         <View style={s.col}>
           <Text style={s.caption}>Coins</Text>

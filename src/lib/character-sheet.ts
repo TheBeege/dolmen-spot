@@ -21,7 +21,6 @@ import type {
 import {
   BREGGLE_GAZE_PER_DAY,
   EQUIPPED_SLOT_LIMIT,
-  KINDREDS,
   MAX_LOAD_WEIGHT,
   STOWED_SLOT_LIMIT,
   calculateAttackBonus,
@@ -34,6 +33,10 @@ import {
   getSpeedBySlots,
   getSpeedByWeight,
   getTotalCoinCount,
+  hasUnknownKindredOrClass,
+  isKnownClassId,
+  isKnownKindredId,
+  type MagicSystem,
 } from './gamedata';
 
 // ── Labels ───────────────────────────────────────────────────
@@ -77,7 +80,7 @@ export const KNOWN_SPELL_SOURCE_LABELS: Record<KnownSpellSource, string> = {
  * version, or an edited file) has no kindred-class to play.
  */
 export function isKindredClass(character: Pick<Character, 'kindred' | 'class'>): boolean {
-  return !character.class && character.kindred !== 'human' && KINDREDS.some((k) => k.id === character.kindred);
+  return !character.class && character.kindred !== 'human' && isKnownKindredId(character.kindred);
 }
 
 /** True when the sheet has a class, or a non-human kindred playing its kindred-class. */
@@ -108,7 +111,9 @@ export function isSkillOutOfSync(stored: number | undefined, calculated: number 
 
 /**
  * Which skills the sheet lists: auto-calculated ones (from kindred/class/level)
- * and custom ones the player added, each sorted by key.
+ * and custom ones the player added, each sorted by key. With a kindred or class
+ * the app doesn't know, the calculated targets are only a guess, so none is
+ * reported out of sync (and none offered to sync).
  */
 export function getSkillTargetLayout(character: Pick<Character, 'kindred' | 'class' | 'level' | 'skillTargets'>) {
   const calculated = calculateSkillTargets(character.kindred, character.class, character.level);
@@ -116,7 +121,9 @@ export function getSkillTargetLayout(character: Pick<Character, 'kindred' | 'cla
   const customKeys = Object.keys(character.skillTargets)
     .filter(key => !calculated.autoSkillKeys.has(key))
     .sort();
-  const outOfSyncKeys = autoKeys.filter(key => isSkillOutOfSync(character.skillTargets[key], calculated.targets[key]));
+  const outOfSyncKeys = hasUnknownKindredOrClass(character)
+    ? []
+    : autoKeys.filter(key => isSkillOutOfSync(character.skillTargets[key], calculated.targets[key]));
   return { calculated, autoKeys, customKeys, outOfSyncKeys };
 }
 
@@ -175,6 +182,17 @@ export function calculateEncumbrance(
     stowedSlotsOverLimit: totalStowedSlots > STOWED_SLOT_LIMIT,
     overMaxLoad: totalWeight > MAX_LOAD_WEIGHT,
   };
+}
+
+/**
+ * What the sheet says under a Speed of 0 (over the maximum load); null when the
+ * character can move. Stowing an item helps only when the equipped slots are
+ * over their maximum and there's still room in the stowed slots.
+ */
+export function getOverloadNote(enc: Encumbrance, method: Character['encumbranceMethod']): string | null {
+  if (enc.speed !== 0) return null;
+  const stowingHelps = method === 'slots' && enc.equippedSlotsOverLimit && enc.totalStowedSlots < STOWED_SLOT_LIMIT;
+  return `Over maximum load: can't move until items are ${stowingHelps ? 'stowed or dropped' : 'dropped'}.`;
 }
 
 /** Stowed items in a container, or the loose ones when `containerId` is undefined. */
@@ -249,16 +267,26 @@ export function countPreparedByRank(spells: SpellSlot[]): Record<number, number>
   return preparedByRank;
 }
 
-/** Which magic sections the Spells & Magic tab shows for this character. */
+/**
+ * Which magic sections the Spells & Magic tab (and the PDF) shows. A character's
+ * magic comes from their class, or their kindred-class when they have none; if
+ * that id is one the app doesn't know, `unknownNote` says so and no section
+ * (and no "no magical abilities") is shown.
+ */
 export function getMagicSections(character: Pick<Character, 'kindred' | 'class' | 'level'>) {
   const profile = getCharacterMagicProfile(character.kindred, character.class, character.level);
+  const unknown = character.class
+    ? (isKnownClassId(character.class) ? null : 'class')
+    : (character.kindred && !isKnownKindredId(character.kindred) ? 'kindred' : null);
+  const has = (system: MagicSystem) => !unknown && profile.systems.includes(system);
   return {
     profile,
-    hasNoMagic: profile.systems.length === 1 && profile.systems[0] === 'none',
-    hasSpells: profile.systems.includes('arcane') || profile.systems.includes('holy'),
-    hasGlamours: profile.systems.includes('glamours'),
-    hasRunes: profile.systems.includes('runes'),
-    hasKnacks: profile.systems.includes('knacks'),
+    unknownNote: unknown ? `Dolmen Spot doesn't recognise this ${unknown}, so it can't show its magic.` : null,
+    hasNoMagic: !unknown && profile.systems.length === 1 && profile.systems[0] === 'none',
+    hasSpells: has('arcane') || has('holy'),
+    hasGlamours: has('glamours'),
+    hasRunes: has('runes'),
+    hasKnacks: has('knacks'),
     // Breggle kindred-class arcane magic unlocks at Level 4.
     isBregglesPreMagic: character.kindred === 'breggle' && !character.class && character.level < 4,
   };
@@ -282,9 +310,14 @@ export function getMaxFungalSymbiosisUses(level: number): number {
   return Math.floor(level / 2);
 }
 
-/** Mad Revelry: 1x/day per level. */
-export function getMaxMadRevelryUses(level: number): number {
-  return level;
+/**
+ * Mad Revelry uses per day. Every woodgrue gets it once a day (Player's Book
+ * p53); only the woodgrue kindred-class gets once per day per Level (p189).
+ * See docs/rules/02-kindreds.md and docs/rules/04-kindred-classes.md.
+ */
+export function getMaxMadRevelryUses(character: Pick<Character, 'kindred' | 'class' | 'level'>): number {
+  const isWoodgrueKindredClass = character.kindred === 'woodgrue' && !character.class;
+  return isWoodgrueKindredClass ? Math.max(1, Math.min(character.level, 15)) : 1;
 }
 
 /** Max retainers = 4 + CHA modifier (min 1); initial Loyalty = 7 + CHA modifier. */
