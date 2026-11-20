@@ -686,6 +686,7 @@ function KnownSpellsBlock({
     // Narrow deps: this only reads knownSpells + inventory, not the rest of
     // the character (notes, abilities, etc.). Re-running on every keystroke
     // in unrelated fields was wasteful.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character.knownSpells, character.equippedItems, character.stowedItems]);
 
   const filtered = decorated
@@ -935,6 +936,8 @@ function SpellStudyBlock({
 
   const availableBooks = useMemo(
     () => getSpellbooks(character).filter((b) => (b.spellbookContents?.length ?? 0) < 3),
+    // Narrow deps: only reads inventory.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [character.equippedItems, character.stowedItems],
   );
 
@@ -979,6 +982,7 @@ function SpellStudyBlock({
     return ARCANE_SPELLS.filter((s) => s.rank <= maxRank);
     // knownNames is a memo of character.knownSpells; depending on
     // character.knownSpells alone is enough.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, maxRank]);
 
   // Reset selection if it falls outside the new pool when source changes.
