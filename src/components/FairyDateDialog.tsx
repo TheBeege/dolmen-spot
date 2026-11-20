@@ -271,15 +271,19 @@ export default function FairyDateDialog({
         }}
         className="bg-[#2a2a3e] rounded-lg border border-[#8a6fb0]/60 flex flex-col max-h-[85dvh]"
       >
-        <div className="flex items-center justify-between gap-2 p-4 border-b border-[#5a3a28] shrink-0">
-          <h2 id={titleId} className="text-[#c4a35a] text-lg font-bold">
+        {/* The title and the close button share a line when the title's
+            longest word leaves room; otherwise (a large font on a narrow
+            screen) the button goes on a line above it, rather than past the
+            dialog's edge. */}
+        <div className="flex flex-wrap-reverse items-center justify-between gap-2 p-4 border-b border-[#5a3a28] shrink-0">
+          <h2 id={titleId} className="flex-1 text-[#c4a35a] text-lg font-bold">
             {editing ? 'Edit return date' : 'Return to Dolmenwood'}
           </h2>
           <button
             type="button"
             onClick={() => close('cancelled')}
             aria-label="Close"
-            className="text-[#f5e6c8]/80 hover:text-[#f5e6c8] text-2xl leading-none px-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9b3f0]"
+            className="ml-auto text-[#f5e6c8]/80 hover:text-[#f5e6c8] text-2xl leading-none px-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9b3f0]"
           >
             &times;
           </button>
@@ -358,7 +362,7 @@ export default function FairyDateDialog({
                   setHexError(null);
                 }}
                 error={hexError}
-                hint="Its number on the map, like 1105. It starts as the map's current hex; leave it blank if you don't know."
+                hint="Its number on the map, like 1105. It starts as the map's current hex. Leave it blank if you don't know: that clears the map's current hex."
                 inputRef={hexRef}
               />
             </div>

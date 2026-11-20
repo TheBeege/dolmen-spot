@@ -161,10 +161,10 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
     return () => clearTimeout(timer);
   }, [pending, countReadFor, searching, summary]);
 
-  // The entries on screen, for working out where focus goes after a delete.
-  const shownRef = useRef<JournalListItem[]>(shownItems);
+  // The list as drawn, for working out where focus goes after a delete.
+  const drawnRef = useRef({ items: list.items, limit, kept });
   useEffect(() => {
-    shownRef.current = shownItems;
+    drawnRef.current = { items: list.items, limit, kept };
   });
 
   // ── Search and filter ──
@@ -243,12 +243,16 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   );
 
   // Focus goes to the entry shown after the deleted one, or else the one
-  // before it, or else the heading.
+  // before it, or else the heading. The entries after it move up a place, so
+  // the next one may only now be drawn (deleting the last of a page).
   const deleteEntry = useCallback(
     (id: string) => {
-      const items = shownRef.current;
+      const { items, limit, kept } = drawnRef.current;
+      const drawn = (at: number, item: JournalListItem) => at < limit || kept.has(item.entry.id);
       const i = items.findIndex((item) => item.entry.id === id);
-      const next = items[i + 1] ?? items[i - 1];
+      let next: JournalListItem | undefined;
+      for (let j = i + 1; i !== -1 && j < items.length && !next; j += 1) if (drawn(j - 1, items[j])) next = items[j];
+      for (let j = i - 1; j >= 0 && !next; j -= 1) if (drawn(j, items[j])) next = items[j];
       updateEntries((all) => all.filter((e) => e.id !== id));
       moveFocusTo(next ? `entry:${next.entry.id}` : 'heading');
       announce('Entry deleted.');
@@ -472,8 +476,6 @@ const JournalEntryCard = memo(function JournalEntryCard({
         </p>
       )}
 
-      {/* Delete sits at the end of this row, which wraps, so a long date
-          above it keeps the card's whole width. */}
       <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs">
         {hex && (
           <span className="text-[#f5e6c8]/80 tabular-nums">
@@ -489,14 +491,6 @@ const JournalEntryCard = memo(function JournalEntryCard({
           className={linkClasses}
         >
           {hex ? 'Change hex' : 'Set hex'}
-        </button>
-        <button
-          type="button"
-          onClick={() => onDelete(entry.id)}
-          aria-describedby={headingId}
-          className="ml-auto text-red-400 hover:text-red-300 text-sm px-2 py-0.5 rounded hover:bg-red-400/10 transition-colors"
-        >
-          Delete
         </button>
       </div>
 
@@ -554,6 +548,20 @@ const JournalEntryCard = memo(function JournalEntryCard({
           This entry doesn&apos;t match the search or filter. It stays here until you change them.
         </p>
       )}
+
+      {/* Delete comes last, on a row of its own: after the hex editor, so
+          stepping back from its field never lands on it, and below the date,
+          which keeps the card's whole width. */}
+      <div className="mt-1 flex justify-end">
+        <button
+          type="button"
+          onClick={() => onDelete(entry.id)}
+          aria-describedby={headingId}
+          className="text-red-400 hover:text-red-300 text-sm px-2 py-0.5 rounded hover:bg-red-400/10 transition-colors"
+        >
+          Delete
+        </button>
+      </div>
     </article>
   );
 });
