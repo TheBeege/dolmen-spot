@@ -20,8 +20,9 @@ function v13(journalEntries: unknown): AnyData {
   return data;
 }
 
+let entryCount = 0;
 const entry = (location: unknown, extra: AnyData = {}): AnyData => ({
-  id: `entry-${JSON.stringify(location)}-${Object.keys(extra).join()}`,
+  id: `entry-${(entryCount += 1)}`,
   date: { day: 1, month: 0, year: 1 },
   location,
   text: 'Something happened.',
@@ -36,7 +37,7 @@ describe('v13 → v14: journal entries get a hex', () => {
     assert.equal(CURRENT_SCHEMA_VERSION, Math.max(...MIGRATION_VERSIONS) + 1);
   });
 
-  test('an old entry gets no hex: where it was written isn’t known', () => {
+  test("an old entry gets no hex: where it was written isn't known", () => {
     const migrated = migrateCharacter(v13([entry('Lankshorn'), entry('')]));
     assert.equal(migrated.schemaVersion, CURRENT_SCHEMA_VERSION);
     assert.deepEqual(hexes(migrated), ['(none)', '(none)']);
@@ -53,7 +54,7 @@ describe('v13 → v14: journal entries get a hex', () => {
     assert.deepEqual(hexes(migrateCharacter(v13(locations.map((l) => entry(l))))), locations.map(() => '(none)'));
   });
 
-  test('a hex already on an old entry (a hand edit) stays if it’s on the map; anything else there goes', () => {
+  test("a hex already on an old entry (a hand edit) stays if it's on the map; anything else there goes", () => {
     const migrated = migrateCharacter(
       v13([
         entry('Lankshorn', { hex: '0303' }),
@@ -118,7 +119,7 @@ describe('v13 → v14: journal entries get a hex', () => {
   });
 });
 
-describe('on every load: entries’ hexes are repaired, never guessed', () => {
+describe("on every load: entries' hexes are repaired, never guessed", () => {
   const current = (journalEntries: unknown): AnyData => ({ ...v13(journalEntries), schemaVersion: CURRENT_SCHEMA_VERSION });
 
   test('a current save keeps its hexes, and an entry whose hex was cleared stays without one', () => {

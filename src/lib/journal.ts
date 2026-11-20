@@ -61,11 +61,6 @@ function asText(value: unknown): string {
   return '';
 }
 
-/** An entry's text, as its text box shows it. */
-export function getEntryText(entry: JournalEntry): string {
-  return asText(entry.text);
-}
-
 // ── Order: newest first, as the character lived them ─────────────────
 //
 // Entries are listed newest first in the order the character lived them,
@@ -374,7 +369,7 @@ function factsOf(entry: JournalEntry, character: WithVisits): EntryFacts {
       date: formatRecordDate(character, entry.date, entry.fairyDate),
       location: asText(entry.location),
       hex: hex ? `Hex ${hex}` : '',
-      text: getEntryText(entry),
+      text: asText(entry.text),
     };
     facts = { visits, shown };
     entryFacts.set(entry, facts);

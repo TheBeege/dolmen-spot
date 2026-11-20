@@ -52,9 +52,9 @@ const label = (e: JournalEntry) => (e.fairyEvent ? `[${e.fairyEvent.kind}]` : e.
 const listed = (c: Character) => sortJournalNewestFirst(c.journalEntries, c).map(label);
 
 /** An entry as saved before Fairy time was tracked: a date, no Fairy references. */
-const oldEntry = (text: string, on: CalendarDate, extra: Partial<JournalEntry> = {}): JournalEntry => ({
+const oldEntry = (text: string, dated: CalendarDate, extra: Partial<JournalEntry> = {}): JournalEntry => ({
   id: `old-${text}`,
-  date: on,
+  date: dated,
   location: '',
   text,
   ...extra,
@@ -226,14 +226,14 @@ describe('order: newest first, as the character lived them', () => {
 });
 
 describe('the hex an entry is written in', () => {
-  test('a new entry is stamped with the map’s current hex, the location and the date', () => {
+  test("a new entry is stamped with the map's current hex, the location and the date", () => {
     const c = character({ currentDate: date(4, 0, 1), currentLocation: 'Prigwort', currentLocationHex: '1106' });
     const { id, ...entry } = createJournalEntry(c);
     assert.ok(typeof id === 'string' && id.length > 0);
     assert.deepEqual(entry, { date: date(4, 0, 1), location: 'Prigwort', hex: '1106', text: '' });
   });
 
-  test('with no current hex (or one that isn’t on the map), the entry has none', () => {
+  test("with no current hex (or one that isn't on the map), the entry has none", () => {
     for (const currentLocationHex of ['', '9999', 'zz']) {
       const entry = createJournalEntry(character({ currentLocationHex }));
       assert.equal('hex' in entry, false, currentLocationHex);
