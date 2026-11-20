@@ -21,6 +21,8 @@ Approach:
          non-wall pixels.
        - A hex is "open" if at least half of a radius-8 px disk around its
          centre was reached by the flood, else "woods".
+     A detected hex centred within EDGE_MARGIN px of the image's edge is
+     left out (and reported); one listed in EXTRA_DRAWN_HEXES is an error.
 
 Requires Python 3.10+ with numpy and Pillow. Run from the repo root:
     python3 scripts/extract_hex_grid.py
@@ -40,6 +42,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from detect_drawn_hexes import (  # noqa: E402
     COL_PITCH,
+    EXTRA_DRAWN_HEXES,
     HEX_SIZE,
     LABEL_TO_CENTER_DY,
     LABEL_X_COL1,
@@ -49,6 +52,9 @@ from detect_drawn_hexes import (  # noqa: E402
     detect_drawn_hexes,
     hex_center,
 )
+
+# A hex centred closer than this to the image's edge is left out of the grid.
+EDGE_MARGIN = 50
 
 
 def build_outside_mask(arr: np.ndarray, threshold: int = 120, dilate_iters: int = 4) -> np.ndarray:
@@ -88,28 +94,23 @@ def build_outside_mask(arr: np.ndarray, threshold: int = 120, dilate_iters: int 
 
 
 def classify_hex(visited: np.ndarray, cx: float, cy: float, radius: int = 8) -> str:
-    """Sample a small disk around the hex center. Majority vote on visited (outside)."""
+    """Majority vote over a disk around the hex centre: "open" if at least half
+    of it was reached by the flood fill (outside the wood), else "woods". The
+    disk must lie inside the image; main() leaves out hexes near the edge."""
     h, w = visited.shape
     cx_i, cy_i = int(round(cx)), int(round(cy))
-    if cx_i < 0 or cx_i >= w or cy_i < 0 or cy_i >= h:
-        return "edge"
+    if not (radius <= cx_i < w - radius and radius <= cy_i < h - radius):
+        raise ValueError(f"disk around ({cx_i}, {cy_i}) is not inside the {w}x{h} image")
     outside_count = 0
     total = 0
     for dy in range(-radius, radius + 1):
         for dx in range(-radius, radius + 1):
             if dx * dx + dy * dy > radius * radius:
                 continue
-            y, x = cy_i + dy, cx_i + dx
-            if 0 <= y < h and 0 <= x < w:
-                total += 1
-                if visited[y, x]:
-                    outside_count += 1
-    if total == 0:
-        return "edge"
-    frac = outside_count / total
-    if frac >= 0.5:
-        return "open"
-    return "woods"
+            total += 1
+            if visited[cy_i + dy, cx_i + dx]:
+                outside_count += 1
+    return "open" if outside_count / total >= 0.5 else "woods"
 
 
 def main() -> None:
@@ -136,15 +137,21 @@ def main() -> None:
 
     # Step 2: classify TERRAIN for each drawn hex.
     hexes: dict[str, dict] = {}
-    counts = {"woods": 0, "open": 0, "edge": 0}
+    counts = {"woods": 0, "open": 0}
     cols_present: set[int] = set()
     rows_present: set[int] = set()
     for col, row in sorted(drawn):
         cx, cy = hex_center(col, row)
-        if cx < 50 or cx > w - 50 or cy < 50 or cy > h - 50:
+        key = f"{col:02d}{row:02d}"
+        if cx < EDGE_MARGIN or cx > w - EDGE_MARGIN or cy < EDGE_MARGIN or cy > h - EDGE_MARGIN:
+            if (col, row) in EXTRA_DRAWN_HEXES:
+                raise RuntimeError(
+                    f"EXTRA_DRAWN_HEXES lists {key}, but its centre ({cx:.0f}, {cy:.0f}) "
+                    f"is within {EDGE_MARGIN} px of the image's edge"
+                )
+            print(f"Left out {key}: its centre ({cx:.0f}, {cy:.0f}) is within {EDGE_MARGIN} px of the image's edge")
             continue
         terrain = classify_hex(outside, cx, cy)
-        key = f"{col:02d}{row:02d}"
         hexes[key] = {"col": col, "row": row, "terrain": terrain}
         counts[terrain] += 1
         cols_present.add(col)
