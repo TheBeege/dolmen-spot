@@ -314,13 +314,13 @@ export function getMaxFungalSymbiosisUses(level: number): number {
 }
 
 /**
- * Mad Revelry uses per day. Every woodgrue gets it once a day; only the
- * woodgrue kindred-class gets once per day per Level (docs/rules/02-kindreds.md,
- * docs/rules/04-kindred-classes.md).
+ * Mad Revelry uses per day. Every woodgrue gets it once a day (Player's Book
+ * p53); only the woodgrue kindred-class gets once per day per Level (p189).
+ * See docs/rules/02-kindreds.md and docs/rules/04-kindred-classes.md.
  */
 export function getMaxMadRevelryUses(character: Pick<Character, 'kindred' | 'class' | 'level'>): number {
-  const isKindredClass = character.kindred === 'woodgrue' && !character.class;
-  return isKindredClass ? Math.max(1, Math.min(character.level, 15)) : 1;
+  const isWoodgrueKindredClass = character.kindred === 'woodgrue' && !character.class;
+  return isWoodgrueKindredClass ? Math.max(1, Math.min(character.level, 15)) : 1;
 }
 
 /** Max retainers = 4 + CHA modifier (min 1); initial Loyalty = 7 + CHA modifier. */
