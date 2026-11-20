@@ -32,7 +32,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-20',
     title: 'Printable character sheets, calendar fixes, and a site icon',
-    prNumbers: [10, 11, 18],
+    prNumbers: [10, 11, 18, 21],
     sections: [
       {
         heading: 'Printable PDF character sheets',
@@ -53,6 +53,24 @@ const ENTRIES: ChangelogEntry[] = [
           'Before a month\'s new moon, the calendar shows the previous month\'s moon waning (for example, 1 Grimvold shows "Black moon · Waning"). The month summary gives the month\'s own moon and its new- and full-moon days, for example "Moon: Grinning moon (new 4th, full 19th)".',
           'The Day of Virgins and The Day of Doors now carry their full names from the book.',
           'The Reference tab\'s calendar lists each month\'s new- and full-moon days and explains how weeks, Wysendays, and moon phases work. On phones, each month\'s season shows under its name so the moon days fit.',
+        ],
+      },
+      {
+        heading: 'Rules fixes',
+        changes: [
+          'Woodgrues with a standard class (Bard, Enchanter, Thief, and so on) get Mad Revelry once per day, as the rules say. Woodgrue kindred-class characters still get one use per Level.',
+          'Kindred-class characters now get their XP modifier calculated from their Prime Abilities, with a Sync button like other classes. Editing an ability score or changing kindred no longer wipes an XP modifier the sheet can\'t calculate.',
+          'Carrying more than the maximum load (over 1,600 coins of weight, or more than 10 equipped or 16 stowed slots) now gives Speed 0 on the Inventory tab and the PDF, with advice on what to stow or drop. Before, it showed 10.',
+        ],
+      },
+      {
+        heading: 'Sturdier, easier-to-read sheet',
+        changes: [
+          'A character saved with a class the sheet doesn\'t recognise (for example, from a hand-edited file) no longer blanks the whole app. Unrecognised classes and kindreds are shown as stored, such as "warlock (unknown class)", and the sheet doesn\'t guess values or magic it can\'t work out.',
+          'If part of the sheet fails to display, a recovery screen tells you whether your characters are still saved and lets you try again, reload, or download your save data. That save-data file is a backup, not a character file, and importing it says so.',
+          'The header and character list show proper names, such as "Woodgrue Enchanter", instead of lowercase ids or "???".',
+          'Inventory columns line up when you carry bags, sacks, or pouches, and on phones item rows fit the screen with each field labelled.',
+          'Warnings, the header\'s kindred and class, the Inventory\'s × buttons, and the character list\'s Del buttons are easier to read, and screen readers say what each of those buttons removes or deletes.',
         ],
       },
       {
