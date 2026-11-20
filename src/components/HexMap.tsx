@@ -157,6 +157,30 @@ function releasePointer(el: Element | null, id: number) {
 const viewCenter = (v: View): Point => ({ x: v.x + v.w / 2, y: v.y + v.h / 2 });
 const inView = (v: View, p: Point) => p.x >= v.x && p.x <= v.x + v.w && p.y >= v.y && p.y <= v.y + v.h;
 
+const HEX_CENTER_POINTS: readonly Point[] = ALL_HEXES.map((h) => hexCenterOf(h)!);
+
+/**
+ * `v`, moved if needed so that its centre stays over the map: no further than
+ * a hex's size from the nearest hex centre. However far a pan, pinch, scroll
+ * or arrow key goes, the middle of the box still shows a hex.
+ */
+function keepOnMap(v: View): View {
+  const c = viewCenter(v);
+  let nearest = HEX_CENTER_POINTS[0];
+  let nearestDist2 = Infinity;
+  for (const h of HEX_CENTER_POINTS) {
+    const d2 = (h.x - c.x) ** 2 + (h.y - c.y) ** 2;
+    if (d2 < nearestDist2) {
+      nearestDist2 = d2;
+      nearest = h;
+    }
+  }
+  const dist = Math.sqrt(nearestDist2);
+  if (dist <= HEX_SIZE) return v;
+  const k = HEX_SIZE / dist;
+  return { ...v, x: nearest.x + (c.x - nearest.x) * k - v.w / 2, y: nearest.y + (c.y - nearest.y) * k - v.h / 2 };
+}
+
 // --- Static layers: drawn once, never re-rendered by hovering or panning ---
 
 const HexCell = memo(function HexCell({ coord, isCurrent }: { coord: HexCoord; isCurrent: boolean }) {
@@ -445,7 +469,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
         setIsPanning(true);
       }
       const { view: v0, scale } = g;
-      setView({ ...v0, x: v0.x - dx * scale, y: v0.y - dy * scale });
+      setView(keepOnMap({ ...v0, x: v0.x - dx * scale, y: v0.y - dy * scale }));
       return;
     }
     // Pinch: zoom about the image point first under the fingers, keep it
@@ -456,7 +480,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
     const zoomed = zoomView(g.view, g.startDist / dist, g.anchor, baseBounds);
     const s = Math.min(g.rect.width / zoomed.w, g.rect.height / zoomed.h);
-    setView({ ...zoomed, x: zoomed.x - (mid.x - g.startMid.x) / s, y: zoomed.y - (mid.y - g.startMid.y) / s });
+    setView(keepOnMap({ ...zoomed, x: zoomed.x - (mid.x - g.startMid.x) / s, y: zoomed.y - (mid.y - g.startMid.y) / s }));
   };
 
   const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
@@ -496,7 +520,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
       setView((v) => {
         const p = clientToImage(v, rect, clientX, clientY);
         // Over the letterbox padding (outside the map): zoom about the centre.
-        return zoomView(v, factor, inView(v, p) ? p : viewCenter(v), baseBounds);
+        return keepOnMap(zoomView(v, factor, inView(v, p) ? p : viewCenter(v), baseBounds));
       });
     },
     [baseBounds],
@@ -509,7 +533,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     return () => svg.removeEventListener('wheel', handleWheel);
   }, [handleWheel]);
 
-  const zoomBy = (factor: number) => setView((v) => zoomView(v, factor, viewCenter(v), baseBounds));
+  const zoomBy = (factor: number) => setView((v) => keepOnMap(zoomView(v, factor, viewCenter(v), baseBounds)));
   const resetView = () => setView({ x: baseBounds.x, y: baseBounds.y, w: baseBounds.w, h: baseBounds.h });
 
   // One handler for everything clickable on the map, found from the click
@@ -555,7 +579,7 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     const pan = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
     if (pan) {
       e.preventDefault();
-      setView((v) => ({
+      setView((v) => keepOnMap({
         ...v,
         x: v.x + pan[0] * v.w * ARROW_PAN_FRACTION,
         y: v.y + pan[1] * v.h * ARROW_PAN_FRACTION,
