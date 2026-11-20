@@ -1628,8 +1628,9 @@ function InventorySection({ c }: { c: Character }) {
 // ── Document ─────────────────────────────────────────────────
 
 // Fields the sheet leaves out: the Combat, Magic and Other notes, spell
-// study, the journal and the party's location.
-const UNPRINTED_FIELDS = new Set<string>([
+// study, the journal and the party's location. Typed as Character's keys, so
+// that renaming or removing one of them fails the typecheck.
+const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
   'combatTalents',
   'otherNotes',
   'spellNotes',
@@ -1641,7 +1642,9 @@ const UNPRINTED_FIELDS = new Set<string>([
 
 /** All the character's text the sheet may print, for choosing which fonts to load. */
 export function sheetText(c: Character): string {
-  return JSON.stringify(c, (key, value) => (UNPRINTED_FIELDS.has(key) ? undefined : value));
+  // Known spells print without their notes.
+  const printed = { ...c, knownSpells: c.knownSpells.map((spell) => spell.name) };
+  return JSON.stringify(printed, (key, value) => (UNPRINTED_FIELDS.has(key) ? undefined : value));
 }
 
 interface CharacterSheetDocumentProps {
