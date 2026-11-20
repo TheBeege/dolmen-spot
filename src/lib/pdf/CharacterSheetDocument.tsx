@@ -820,7 +820,10 @@ interface BlockSpec {
  * on the same page as its start. A short, fixed-size block is unbreakable,
  * and its headings travel inside it (minPresenceAhead can't keep a heading
  * with a block taller than its look-ahead). A breakable block keeps its
- * headings and title together with the first lines of its body.
+ * headings and title together with the first lines of its body. It is a
+ * fragment, not a View: react-pdf only moves an element to the next page for
+ * minPresenceAhead when it has earlier siblings, and a heading that came
+ * first in the block's own View would stay at the foot of a page.
  */
 function Block({ title, note, lead, breakable, children }: {
   title: string;
@@ -847,12 +850,12 @@ function Block({ title, note, lead, breakable, children }: {
     );
   }
   return (
-    <View style={s.block}>
-      <View wrap={false} minPresenceAhead={30}>
+    <>
+      <View style={s.block} wrap={false} minPresenceAhead={30}>
         {heading}
       </View>
       {children}
-    </View>
+    </>
   );
 }
 
@@ -1508,7 +1511,12 @@ function ItemsTable({ items, group }: { items: InventoryItem[]; group: string })
   );
 }
 
-function ContainerGroup({ c, container }: { c: Character; container: CharacterContainer | null }) {
+function ContainerGroup({ c, container, lead }: {
+  c: Character;
+  container: CharacterContainer | null;
+  /** A heading to keep with the container's name and the start of its list. */
+  lead?: ReactNode;
+}) {
   const items = getContainerItems(c.stowedItems, container?.id);
   const { usedWeight, capacity, isOverCapacity } = getContainerLoad(container, c.stowedItems);
   // Like the Inventory tab, capacity is only shown with weight encumbrance.
@@ -1516,12 +1524,15 @@ function ContainerGroup({ c, container }: { c: Character; container: CharacterCo
   const name = container ? container.name || 'Container' : 'Loose Items';
   return (
     <>
-      <Caption
-        note={container && weightMode ? `(${usedWeight} / ${capacity}w)` : undefined}
-        warn={container && weightMode && isOverCapacity ? 'Over capacity!' : undefined}
-      >
-        {name}
-      </Caption>
+      <KeepWithNext>
+        {lead}
+        <Caption
+          note={container && weightMode ? `(${usedWeight} / ${capacity}w)` : undefined}
+          warn={container && weightMode && isOverCapacity ? 'Over capacity!' : undefined}
+        >
+          {name}
+        </Caption>
+      </KeepWithNext>
       {items.length > 0 ? <ItemsTable items={items} group={name} /> : <Empty>Empty.</Empty>}
     </>
   );
@@ -1550,11 +1561,14 @@ function InventorySection({ c }: { c: Character }) {
         <Empty>No equipped items.</Empty>
       )}
 
-      <Text style={s.subTitle} minPresenceAhead={60}>Stowed Items</Text>
-      {c.containers.map((container) => (
-        <ContainerGroup key={container.id} c={c} container={container} />
+      {[...c.containers, null].map((container, i) => (
+        <ContainerGroup
+          key={container?.id ?? 'loose'}
+          c={c}
+          container={container}
+          lead={i === 0 ? <Text style={s.subTitle}>Stowed Items</Text> : undefined}
+        />
       ))}
-      <ContainerGroup c={c} container={null} />
 
       {/* The list can be any length, so it may continue on the next page. */}
       <Caption>Tiny Items</Caption>
