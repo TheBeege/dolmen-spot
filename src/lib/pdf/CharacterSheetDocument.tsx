@@ -541,12 +541,12 @@ function CharacterSection({ c }: { c: Character }) {
 
   const alignmentWarning = getAlignmentWarning(c.class, c.alignment);
 
-  // The Character tab shows the calculated XP modifier for classed characters
-  // (not for a class id it doesn't know) and offers "Sync" when the stored
-  // value differs; the stored one is in effect.
+  // The Character tab shows the calculated XP modifier (class or kindred-class)
+  // whenever it can be calculated, and offers "Sync" when the stored value
+  // differs; the stored one is in effect.
   const xpCalc = calculateXpModifier(c.class, c.kindred, c.abilityScores);
   let xpNote: string | undefined;
-  if (knownClass) {
+  if (xpCalc) {
     const breakdown = [`Prime ${formatXpPercent(xpCalc.primeBonus)}`];
     if (xpCalc.humanBonus > 0) breakdown.push(`Human ${formatXpPercent(xpCalc.humanBonus)}`);
     xpNote = c.xpModifier === xpCalc.total

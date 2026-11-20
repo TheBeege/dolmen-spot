@@ -43,8 +43,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
   const isUnknownKindred = !!character.kindred && !isKnownKindredId(character.kindred);
   const isUnknownClass = !!character.class && !isKnownClassId(character.class);
 
+  // null when there's nothing to calculate from; the stored modifier then stands.
   const calculated = calculateXpModifier(character.class, character.kindred, character.abilityScores);
-  const xpOutOfSync = character.xpModifier !== calculated.total;
+  const xpOutOfSync = calculated !== null && character.xpModifier !== calculated.total;
 
   const alignmentWarning = getAlignmentWarning(character.class, character.alignment);
   const hasMoonSign = canHaveMoonSign(character.kindred);
@@ -73,7 +74,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
     onChange({
       kindred,
       ...(classStillValid ? {} : { class: '' as const }),
-      xpModifier: newXp.total,
+      ...(newXp ? { xpModifier: newXp.total } : {}),
       ...(fairy ? { moonSign: '', moonPhase: '' as const } : {}),
       languages: newLanguages,
     });
@@ -85,7 +86,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
     onChange({
       class: classId,
-      xpModifier: newXp.total,
+      ...(newXp ? { xpModifier: newXp.total } : {}),
       languages: newLanguages,
     });
   };
@@ -344,7 +345,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
         {/* XP Modifier */}
         <div>
           <label className={labelClasses}>XP Modifier</label>
-          {character.class && !isUnknownClass ? (
+          {calculated ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-[#f5e6c8]">
                 <span className="bg-[#1a1a2e] border border-[#5a3a28] rounded px-2 py-1">

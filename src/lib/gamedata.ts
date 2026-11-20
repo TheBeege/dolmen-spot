@@ -1582,6 +1582,21 @@ export const CLASS_PRIME_ABILITIES: Record<ClassId, (keyof AbilityScoresType)[]>
   thief: ['dexterity'],
 };
 
+// Kindred-class Prime Abilities. Source: docs/rules/04-kindred-classes.md, and
+// "Prime Abilities" in each kindred-class entry of the Player's Book appendix
+// (Breggle p180, Elf p182, Grimalkin p184, Mossling p186, Woodgrue p188). The
+// XP modifier applies to them as to any class (p22: "A character's score in
+// their Prime Ability determines a modifier applied to all Experience Points
+// earned"). Humans have no kindred-class.
+export const KINDRED_CLASS_PRIME_ABILITIES: Record<KindredId, (keyof AbilityScoresType)[] | null> = {
+  breggle: ['intelligence', 'strength'],
+  elf: ['charisma', 'strength'],
+  grimalkin: ['dexterity'],
+  human: null,
+  mossling: ['constitution', 'wisdom'],
+  woodgrue: ['charisma', 'dexterity'],
+};
+
 // 1b. XP Modifier Calculation
 export function getPrimeAbilityXpModifier(score: number): number {
   if (score <= 5) return -20;
@@ -1591,14 +1606,22 @@ export function getPrimeAbilityXpModifier(score: number): number {
   return 10;
 }
 
+/**
+ * XP modifier from the Prime Abilities of the character's class, or of their
+ * kindred-class when they have no class, plus the human bonus. null when there's
+ * nothing to calculate it from (no class or kindred-class, or a kindred or class
+ * id the app doesn't know): callers then keep the stored modifier.
+ */
 export function calculateXpModifier(
   classId: ClassId | '',
   kindredId: KindredId | '',
   abilityScores: AbilityScoresType,
-): { primeBonus: number; humanBonus: number; total: number } {
-  // No class, or a class id the app doesn't know: no modifier.
-  const primeKeys = classId && isKnownClassId(classId) ? CLASS_PRIME_ABILITIES[classId] : undefined;
-  if (!primeKeys) return { primeBonus: 0, humanBonus: 0, total: 0 };
+): { primeBonus: number; humanBonus: number; total: number } | null {
+  if ((classId && !isKnownClassId(classId)) || (kindredId && !isKnownKindredId(kindredId))) return null;
+  const primeKeys = classId
+    ? CLASS_PRIME_ABILITIES[classId]
+    : kindredId ? KINDRED_CLASS_PRIME_ABILITIES[kindredId] : null;
+  if (!primeKeys) return null;
 
   const lowestPrime = Math.min(...primeKeys.map(k => abilityScores[k]));
   const primeBonus = getPrimeAbilityXpModifier(lowestPrime);
