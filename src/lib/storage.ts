@@ -9,18 +9,23 @@ import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
  * rules, each covered by storage.test.ts:
  *
  * 1. Each saved character is migrated on its own, from a copy. A character
- *    this version can't open is *set aside*: it stays in the saved list as
- *    parsed (untouched by migration), every later save appends it again, and
- *    the next load tries it again. That covers a character whose migration
- *    throws (a fixed migration brings it back; it's also copied to a backup,
- *    best-effort) and one saved by a newer version of Dolmen Spot, with a
- *    numeric `schemaVersion` above this version's (it isn't migrated or
- *    "repaired", so it opens again once the newer version is deployed).
- * 2. Saved data that can never become a character (the whole value isn't a
- *    readable list, or an entry isn't an object) is only removed once a
- *    verified copy of it exists under a `dolmenwood-recovery-*` key. Until
- *    then an unreadable entry stays in the list, and an unreadable whole value
- *    pauses saving.
+ *    this version can't open is *set aside*: it stays in the saved list
+ *    unchanged (re-serialized from the parsed value, which is identical for
+ *    anything Dolmen Spot wrote) and untouched by migration, every later save
+ *    appends it again, and the next load tries it again. That covers a
+ *    character whose migration throws (a fixed migration brings it back; it's
+ *    also copied to a backup, best-effort) and one saved by a newer version of
+ *    Dolmen Spot, with a finite numeric `schemaVersion` above this version's
+ *    (it isn't migrated or "repaired", so it opens again once the newer
+ *    version is deployed).
+ * 2. Saved data that can never become a character is only removed once a
+ *    verified copy of it exists under a `dolmenwood-recovery-*` key: the whole
+ *    value when it isn't a readable list, an entry that isn't an object, or an
+ *    entry nested more than MAX_NESTING levels deep. Until then an unreadable
+ *    entry stays in the list, and an unreadable whole value pauses saving.
+ *    Depth is measured from each entry, the same way imports and backups are
+ *    measured, and a too-deep entry is only ever handled as its exact stored
+ *    text: serialising it again could overflow the stack.
  * 3. If no saved character can be opened, a new sheet is started in memory
  *    and only saved once the player changes it, so the set-aside characters
  *    come back exactly as they were.
@@ -40,8 +45,12 @@ export const ACTIVE_CHARACTER_KEY = 'dolmenwood-active-character';
 export const RECOVERY_KEY_PREFIX = 'dolmenwood-recovery-';
 /** Backup keys whose notice the player dismissed, as a JSON array. Deliberately outside RECOVERY_KEY_PREFIX. */
 export const DISMISSED_BACKUPS_KEY = 'dolmenwood-dismissed-backups';
+/** Ids of newer-version characters whose notice the player dismissed, as a JSON array, until each one opens. */
+export const DISMISSED_NEWER_KEY = 'dolmenwood-dismissed-newer-version';
 export const RECOVERY_FORMAT = 'dolmen-spot-recovery';
 export const RECOVERY_DOWNLOAD_FORMAT = 'dolmen-spot-recovery-download';
+/** The save-data file the error screen offers (PR #21): everything in localStorage, not characters. */
+export const ERROR_SCREEN_FILE_FORMAT = 'dolmen-spot-recovery-error-screen';
 /** While saving is paused for want of a backup, try the backup again at most this often. */
 export const BACKUP_RETRY_MS = 5_000;
 
@@ -52,6 +61,11 @@ export type StorageLike = Pick<Storage, 'length' | 'key' | 'getItem' | 'setItem'
 export type RecoveryEntry =
   /** One entry of the saved list, as parsed and untouched by migration. */
   | { kind: 'character'; index: number; error: string; value: unknown }
+  /**
+   * One entry of the saved list as its exact stored text, because it's nested
+   * too deeply to handle as a value. `name` is its name, if it had one.
+   */
+  | { kind: 'character-text'; index: number; error: string; name: string | null; raw: string }
   /** The whole saved value, as the exact stored text, when it isn't a readable list. */
   | { kind: 'all-characters'; error: string; raw: string; activeCharacterId: string | null };
 
@@ -80,18 +94,24 @@ export interface StoredBackup {
  * - `migration-failed`: its migration threw. Backed up, and kept until it loads.
  * - `newer-version`: saved by a newer version of Dolmen Spot. Kept, unmigrated, until that version is back.
  * - `not-a-character`: not an object at all. Kept only until a backup holds it.
+ * - `too-deep`: an object nested more than MAX_NESTING levels deep, which only a
+ *   hostile edit does. Kept, as its exact stored text, only until a backup holds that text.
  */
-export type SetAsideReason = 'migration-failed' | 'newer-version' | 'not-a-character';
+export type SetAsideReason = 'migration-failed' | 'newer-version' | 'not-a-character' | 'too-deep';
 
 /** A saved entry this load couldn't open. It stays in the saved list. */
 export interface SetAsideEntry {
   index: number;
   reason: SetAsideReason;
   error: string;
-  /** As parsed, untouched by migration. */
+  /** As parsed, untouched by migration. Read it, but don't serialise it when `text` is set. */
   value: unknown;
+  /** Its exact stored text, when it's nested too deeply to handle as a value (it's only ever handled as this text). */
+  text: string | null;
   /** The backup that also holds it, or null if none could be made (or none is needed). */
   backupKey: string | null;
+  /** A newer-version entry whose notice the player dismissed: remembered until it opens. */
+  dismissed: boolean;
 }
 
 export interface StorageStatus {
@@ -178,6 +198,11 @@ export interface CharacterStore {
   /** Remember (best-effort) that the player dismissed the notice about these backups. */
   dismissBackups(keys: string[]): void;
   /**
+   * Remember (best-effort, per character id) that the player dismissed the
+   * notice about the characters saved by a newer version, until each one opens.
+   */
+  dismissNewerVersion(): void;
+  /**
    * This tab's characters, in the format Export All Characters writes (so
    * Import Character accepts it), when storage may not have them: while
    * changes aren't being saved, or with unsaved changes. Otherwise null.
@@ -216,6 +241,9 @@ export const IMPORT_MESSAGES = {
   recoveryFile:
     "That's a recovery file from the storage warning, not a character file. It holds saved data Dolmen Spot couldn't read, " +
     "so it can't be imported. Keep it, or attach it to a bug report.",
+  // Word for word PR #21's SAVE_DATA_IMPORT_MESSAGE, so either can be kept when they meet.
+  errorScreenFile:
+    "That's a save-data file from Dolmen Spot's error screen, not a character file, so it can't be imported. Keep it, or attach it to a bug report.",
   newerVersion:
     "That file was saved by a newer version of Dolmen Spot, so this version can't import it yet. Try again once Dolmen Spot has been updated.",
   several: 'That file holds several characters. Use Import Character on the Local File tab to add them.',
@@ -247,7 +275,12 @@ export function parseImportedCharacters(
   if (many && !allowMany) throw new ImportError(IMPORT_MESSAGES.several);
   if (items.length === 0) throw new ImportError(IMPORT_MESSAGES.empty);
   items.forEach((item, i) => {
-    if (isRecoveryFile(item)) throw new ImportError(IMPORT_MESSAGES.recoveryFile);
+    // A character comes first: one with a stray `format` field is still a character.
+    if (!looksLikeCharacter(item)) {
+      if (isPlainObject(item) && item.format === ERROR_SCREEN_FILE_FORMAT) throw new ImportError(IMPORT_MESSAGES.errorScreenFile);
+      if (isRecoveryFile(item)) throw new ImportError(IMPORT_MESSAGES.recoveryFile);
+    }
+    // Depth is measured from the character itself, exactly as load() measures each saved entry.
     if (!looksLikeCharacter(item) || nestsDeeperThan(item, MAX_NESTING)) {
       throw new ImportError(many ? `Entry ${i + 1} in that file isn't a character, so nothing was imported.` : IMPORT_MESSAGES.notCharacter);
     }
@@ -260,6 +293,8 @@ export function parseImportedCharacters(
     } catch {
       throw new ImportError(IMPORT_MESSAGES.notOpened);
     }
+    // What's saved must load again, and load() checks the migrated character too.
+    if (nestsDeeperThan(character, MAX_NESTING)) throw new ImportError(IMPORT_MESSAGES.notOpened);
     character.id = crypto.randomUUID();
     return character;
   });
@@ -268,6 +303,18 @@ export function parseImportedCharacters(
 /** One character from a file (see parseImportedCharacters). */
 export function parseImportedCharacter(json: string, migrate: (data: unknown) => Character = migrateCharacter): Character {
   return parseImportedCharacters(json, { migrate })[0];
+}
+
+/**
+ * The JSON that Export Character, Export All Characters and cloud saves write:
+ * one character, or a list. Import accepts everything this writes, so a `name`
+ * that isn't text (only a hand edit makes one, and it still loads) is written
+ * as text.
+ */
+export function characterFileJson(data: Character | Character[]): string {
+  const nameText = (name: unknown) => (typeof name === 'number' || typeof name === 'boolean' ? String(name) : '');
+  const forFile = (c: Character): Character => (typeof c.name === 'string' ? c : { ...c, name: nameText(c.name) });
+  return JSON.stringify(Array.isArray(data) ? data.map(forFile) : forFile(data), null, 2);
 }
 
 function isRecoveryFile(data: unknown): boolean {
@@ -282,11 +329,14 @@ function looksLikeCharacter(data: unknown): boolean {
 }
 
 /**
- * Saved by a newer version of Dolmen Spot. Only a numeric `schemaVersion` counts:
- * a string one is an old quirk that `migrateCharacter` still handles.
+ * Saved by a newer version of Dolmen Spot. Only a finite numeric
+ * `schemaVersion` counts: a string one is an old quirk that `migrateCharacter`
+ * still handles, and a hand-edited `1e999` (Infinity) would be written back as
+ * `null`, so it couldn't stay unchanged anyway.
  */
 function isFromNewerVersion(data: unknown, currentSchemaVersion: number): boolean {
-  return isPlainObject(data) && typeof data.schemaVersion === 'number' && data.schemaVersion > currentSchemaVersion;
+  const version = isPlainObject(data) ? data.schemaVersion : undefined;
+  return typeof version === 'number' && Number.isFinite(version) && version > currentSchemaVersion;
 }
 
 export function createCharacterStore(storage: StorageLike | null, options: StoreOptions = {}): CharacterStore {
@@ -302,8 +352,11 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   let session: Session | null = null;
   /** The saved list as this tab last read or wrote it (null: the key was empty). Writes check the key still holds it. */
   let lastKnownJson: string | null = null;
-  /** Entries kept in the saved list that couldn't be loaded. Every write appends them. */
-  let carried: unknown[] = [];
+  /**
+   * Entries kept in the saved list that couldn't be loaded, as JSON text made
+   * once by load(). Every write appends them, without serialising them again.
+   */
+  let carried: string[] = [];
   /** The list (with carried entries) as last stored, or as load() returned it. Anything else is unsaved. */
   let baselineJson: string | null = null;
   /** While every saved character is set aside: the new sheet as started, which isn't saved until it changes. */
@@ -313,8 +366,9 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   /** Backup key -> its text when downloaded, and the identities of downloaded entries no backup held. */
   const downloadedTexts = new Map<string, string>();
   const downloadedIds = new Set<string>();
-  /** Dismissals that couldn't be (or weren't) written to storage. */
+  /** Dismissals that couldn't be (or weren't) written to storage: backup keys, and newer-version character ids. */
   const dismissedInMemory = new Set<string>();
+  const dismissedNewerInMemory = new Set<string>();
   let lastBackupAttempt = -Infinity;
 
   function setStatus(patch: Partial<StorageStatus>) {
@@ -325,7 +379,13 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
     if (changesNotSaved(next)) next.savingRecovered = false;
     else if (changesNotSaved(status)) next.savingRecovered = true;
     status = next;
-    listeners.forEach((listener) => listener());
+    listeners.forEach((listener) => {
+      try {
+        listener();
+      } catch (err) {
+        console.error('A storage status listener failed', err);
+      }
+    });
   }
 
   function isoNow(): string {
@@ -334,11 +394,11 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   }
 
   function serialize(characters: Character[]): string {
-    return JSON.stringify(carried.length > 0 ? [...characters, ...carried] : characters);
+    return serializeList(characters, carried);
   }
 
   function readBackups(store: StorageLike): StoredBackup[] {
-    const dismissed = readDismissed(store);
+    const dismissed = readKeyList(store, DISMISSED_BACKUPS_KEY);
     const keys: string[] = [];
     for (let i = 0; i < store.length; i++) {
       const key = store.key(i);
@@ -476,11 +536,37 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
     setStatus({ hasUnsavedChanges: !written && json !== baselineJson });
   }
 
-  function startSession(characters: Character[], activeId: string): Session {
+  /**
+   * Make this the tab's session, with the entries it carries and (while every
+   * saved character is set aside) the new sheet as started. Everything changes
+   * together, so a load that fails before this leaves the tab as it was.
+   */
+  function startSession(characters: Character[], activeId: string, carriedJson: string[] = [], newSheet: string | null = null): Session {
+    const baseline = serializeList(characters, carriedJson);
     session = { characters, activeId };
-    baselineJson = serialize(characters);
+    carried = carriedJson;
+    newSheetJson = newSheet;
+    baselineJson = baseline;
     setStatus({ hasUnsavedChanges: false });
     return { ...session };
+  }
+
+  /** The dismissed newer-version ids that still apply. Forgets (best-effort) any whose character no longer needs one. */
+  function newerDismissals(newerIds: Set<string>): Set<string> {
+    const remembered = new Set([...dismissedNewerInMemory].filter((id) => newerIds.has(id)));
+    if (!storage) return remembered;
+    const stored = readKeyList(storage, DISMISSED_NEWER_KEY);
+    const still = [...stored].filter((id) => newerIds.has(id));
+    if (still.length !== stored.size) {
+      try {
+        if (still.length > 0) storage.setItem(DISMISSED_NEWER_KEY, JSON.stringify(still));
+        else storage.removeItem(DISMISSED_NEWER_KEY);
+      } catch (err) {
+        console.warn('Could not update the dismissed notices', err);
+      }
+    }
+    for (const id of still) remembered.add(id);
+    return remembered;
   }
 
   /** While paused for want of a backup, try it again (throttled). True once it exists. */
@@ -499,12 +585,11 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
 
   function loadFromStorage(): Session {
     // Problems are found again by each load. Backups, downloads and dismissals carry over.
+    // The session and what it carries change only in startSession, once the load has worked.
     setStatus({
       setAside: [], startedNewSheet: false, unsavedRecovery: [], storageUnreadable: false,
       saveError: null, conflict: null, hasUnsavedChanges: false,
     });
-    carried = [];
-    newSheetJson = null;
 
     let raw: string | null;
     let storedActiveId: string | null;
@@ -533,41 +618,48 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       return startSession([fresh], fresh.id);
     }
 
-    // Characters that can't be opened stay in the list until they can.
-    // Entries that aren't characters stay until a backup holds them.
-    const kept = entries.filter((e) => e.reason !== 'not-a-character' || !held.has(entryIdentity(asRecoveryEntry(e))));
-    carried = kept.map((e) => e.value);
+    // Characters that can't be opened stay in the list until they can. Data
+    // that never can (not an object, or nested too deeply) stays until a backup holds it.
+    const kept = entries.filter((e) => !REMOVED_ONCE_BACKED_UP.has(e.reason) || !held.has(entryIdentity(asRecoveryEntry(e))));
+    // Serialised once, here: a too-deep entry keeps its exact stored text.
+    const carriedJson = kept.map((e) => e.text ?? JSON.stringify(e.value));
+    const dismissedNewer = newerDismissals(new Set(kept.filter((e) => e.reason === 'newer-version').map((e) => characterIdOf(e.value)).filter(isString)));
     setStatus({
-      setAside: kept.map((e) => ({ ...e, backupKey: held.get(entryIdentity(asRecoveryEntry(e))) ?? null })),
+      setAside: kept.map((e) => {
+        const id = e.reason === 'newer-version' ? characterIdOf(e.value) : null;
+        return { ...e, backupKey: held.get(entryIdentity(asRecoveryEntry(e))) ?? null, dismissed: id !== null && dismissedNewer.has(id) };
+      }),
     });
 
     if (characters.length === 0) {
       const fresh = createNewAdventurer();
-      if (carried.length > 0) {
+      if (carriedJson.length > 0) {
         // Every saved character is set aside. Start a sheet for now, and save it
         // only once the player changes it, so fixing (or rolling forward) brings
         // back exactly the old list.
-        newSheetJson = JSON.stringify([fresh]);
         setStatus({ startedNewSheet: true });
-        return startSession([fresh], fresh.id);
+        return startSession([fresh], fresh.id, carriedJson, JSON.stringify([fresh]));
       }
       // First visit, or the old value was replaced after a verified backup. A
       // stored active id is left alone.
+      const started = startSession([fresh], fresh.id);
       if (writeList(serialize([fresh])) && storedActiveId === null) writeActiveId(fresh.id);
-      return startSession([fresh], fresh.id);
+      return started;
     }
 
     // Re-save migrated data so migration only runs once. Best-effort: if this
     // fails, the stored list stays as it was and is simply migrated again next load.
+    const started = startSession(characters, pickActiveId(characters, storedActiveId), carriedJson);
     writeList(serialize(characters));
-    return startSession(characters, pickActiveId(characters, storedActiveId));
+    return started;
   }
 
-  /** Storage can't be read, so we can't know what's there: write nothing this visit. */
+  /**
+   * Storage can't be read (or a load failed part-way), so we can't know what's
+   * there: write nothing this visit. A session already open is kept as it was.
+   */
   function runWithoutStorage(err: unknown): Session {
     console.error('Could not read saved characters; saving is off for this visit', err);
-    carried = [];
-    newSheetJson = null;
     setStatus({ storageUnreadable: true });
     if (session) return { ...session };
     const fresh = createNewAdventurer();
@@ -577,6 +669,8 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
   return {
     load() {
       try {
+        // "Saving again" was news for the view that saw it happen, not for the next one.
+        if (status.savingRecovered) setStatus({ savingRecovered: false });
         if (session && (changesNotSaved(status) || status.hasUnsavedChanges)) return { ...session };
         return loadFromStorage();
       } catch (err) {
@@ -685,7 +779,7 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       if (storage && !isSavingPaused(status)) {
         try {
           const existing = new Set(status.backups.map((b) => b.key));
-          const merged = [...new Set([...readDismissed(storage), ...keys])].filter((k) => existing.has(k));
+          const merged = [...new Set([...readKeyList(storage, DISMISSED_BACKUPS_KEY), ...keys])].filter((k) => existing.has(k));
           storage.setItem(DISMISSED_BACKUPS_KEY, JSON.stringify(merged));
         } catch (err) {
           console.warn('Could not remember the dismissed backups', err);
@@ -694,10 +788,25 @@ export function createCharacterStore(storage: StorageLike | null, options: Store
       refreshBackups();
     },
 
+    dismissNewerVersion() {
+      if (!status.setAside.some((e) => e.reason === 'newer-version' && !e.dismissed)) return;
+      // Only characters with an id can be remembered; the rest are dismissed for this visit.
+      const ids = [...new Set(status.setAside.filter((e) => e.reason === 'newer-version').map((e) => characterIdOf(e.value)).filter(isString))];
+      for (const id of ids) dismissedNewerInMemory.add(id);
+      if (storage && ids.length > 0 && !isSavingPaused(status)) {
+        try {
+          storage.setItem(DISMISSED_NEWER_KEY, JSON.stringify(ids));
+        } catch (err) {
+          console.warn('Could not remember the dismissed notice', err);
+        }
+      }
+      setStatus({ setAside: status.setAside.map((e) => (e.reason === 'newer-version' ? { ...e, dismissed: true } : e)) });
+    },
+
     unsavedCharactersJson() {
       try {
         if (!session || (!status.hasUnsavedChanges && !changesNotSaved(status))) return null;
-        return JSON.stringify(session.characters, null, 2);
+        return characterFileJson(session.characters);
       } catch {
         return null;
       }
@@ -711,16 +820,26 @@ interface ReadEntry {
   reason: SetAsideReason;
   error: string;
   value: unknown;
+  /** Its exact stored text, when it's nested too deeply to handle as a value. */
+  text: string | null;
 }
 
-function asRecoveryEntry(entry: { index: number; error: string; value: unknown }): RecoveryEntry {
+/** Set-aside entries that can never load, so they leave the saved list once a backup holds them. */
+const REMOVED_ONCE_BACKED_UP: ReadonlySet<SetAsideReason> = new Set(['not-a-character', 'too-deep']);
+
+function asRecoveryEntry(entry: { index: number; error: string; value: unknown; text: string | null }): RecoveryEntry {
+  if (entry.text !== null) {
+    const name = isPlainObject(entry.value) && typeof entry.value.name === 'string' ? entry.value.name : null;
+    return { kind: 'character-text', index: entry.index, error: entry.error, name, raw: entry.text };
+  }
   return { kind: 'character', index: entry.index, error: entry.error, value: entry.value };
 }
 
 /**
  * Parse and migrate the stored list. Never throws: anything that can't be
- * loaded comes back as `whole` (the exact stored text) or in `entries`
- * (as parsed, untouched by migration).
+ * loaded comes back as `whole` (the exact stored text) or in `entries` (as
+ * parsed, untouched by migration, plus the exact text of any entry too deep
+ * to handle as a value).
  */
 function readCharacters(
   raw: string | null,
@@ -742,15 +861,33 @@ function readCharacters(
   if (!Array.isArray(parsed)) {
     return { characters, entries, whole: unreadableWhole('Saved data is not a list of characters') };
   }
-  if (nestsDeeperThan(parsed, MAX_NESTING)) {
-    // Only a hostile edit nests this deep. Writing such a value back can throw
-    // (when depends on the engine and the stack), so the whole value counts as unreadable.
-    return { characters, entries, whole: unreadableWhole(`Saved data is nested more than ${MAX_NESTING} levels deep`) };
+
+  // Each entry is measured from itself, as imports are. Only a hostile edit
+  // nests deeper than MAX_NESTING, and serialising such an entry again can
+  // throw (when depends on the engine and the stack), so it's only ever
+  // handled as its exact stored text.
+  const tooDeep = parsed.map((item: unknown) => nestsDeeperThan(item, MAX_NESTING));
+  let texts: string[] = [];
+  if (tooDeep.includes(true)) {
+    texts = arrayElementTexts(raw);
+    if (texts.length !== parsed.length) {
+      return { characters, entries, whole: unreadableWhole('Saved data could not be split into entries') };
+    }
   }
 
   parsed.forEach((item: unknown, index) => {
+    if (tooDeep[index]) {
+      entries.push({
+        index,
+        reason: isPlainObject(item) ? 'too-deep' : 'not-a-character',
+        error: `Nested more than ${MAX_NESTING} levels deep`,
+        value: item,
+        text: texts[index],
+      });
+      return;
+    }
     if (!isPlainObject(item)) {
-      entries.push({ index, reason: 'not-a-character', error: 'Not a character object', value: item });
+      entries.push({ index, reason: 'not-a-character', error: 'Not a character object', value: item, text: null });
       return;
     }
     if (isFromNewerVersion(item, currentSchemaVersion)) {
@@ -759,17 +896,58 @@ function readCharacters(
         reason: 'newer-version',
         error: `Saved by a newer version of Dolmen Spot (schema ${String(item.schemaVersion)}; this version reads up to ${currentSchemaVersion})`,
         value: item,
+        text: null,
       });
       return;
     }
     try {
       // Migrations mutate their input, so give them a copy and keep `item` as parsed.
-      characters.push(migrate(JSON.parse(JSON.stringify(item))));
+      const character = migrate(JSON.parse(JSON.stringify(item)));
+      // Saved again as it is, so it must pass this same check on the next load.
+      if (nestsDeeperThan(character, MAX_NESTING)) throw new Error(`Migrated character is nested more than ${MAX_NESTING} levels deep`);
+      characters.push(character);
     } catch (err) {
-      entries.push({ index, reason: 'migration-failed', error: describeError(err), value: item });
+      entries.push({ index, reason: 'migration-failed', error: describeError(err), value: item, text: null });
     }
   });
   return { characters, whole: null, entries };
+}
+
+/** The saved list's JSON: the characters, then the carried entries' text as it is. */
+function serializeList(characters: Character[], carriedJson: string[]): string {
+  if (carriedJson.length === 0) return JSON.stringify(characters);
+  return `[${[...characters.map((c) => JSON.stringify(c) ?? 'null'), ...carriedJson].join(',')}]`;
+}
+
+/**
+ * The exact text of each element of a JSON array, given text that JSON.parse
+ * accepted as one. Iterative, so any nesting depth is fine.
+ */
+function arrayElementTexts(json: string): string[] {
+  const texts: string[] = [];
+  let depth = 0;
+  let start = -1;
+  let end = -1;
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i];
+    if (c === ' ' || c === '\t' || c === '\n' || c === '\r') continue;
+    if (depth === 1 && (c === ',' || c === ']')) {
+      if (start !== -1) texts.push(json.slice(start, end));
+      start = -1;
+      if (c === ']') depth = 0;
+      continue;
+    }
+    if (depth === 1 && start === -1) start = i;
+    if (c === '"') {
+      for (i++; i < json.length && json[i] !== '"'; i++) if (json[i] === '\\') i++;
+    } else if (c === '[' || c === '{') {
+      depth++;
+    } else if (c === ']' || c === '}') {
+      depth--;
+    }
+    end = i + 1;
+  }
+  return texts;
 }
 
 /** The stored active id if it still names a loaded character, else the first character. */
@@ -780,6 +958,7 @@ function pickActiveId(characters: Character[], storedActiveId: string | null): s
 /** Identifies the same unreadable data across loads, so it's only backed up once. Never throws. */
 function entryIdentity(entry: RecoveryEntry): string {
   if (entry.kind === 'all-characters') return `raw:${entry.raw}`;
+  if (entry.kind === 'character-text') return `text:${entry.raw}`;
   try {
     return `value:${JSON.stringify(entry.value) ?? 'undefined'}`;
   } catch {
@@ -787,7 +966,11 @@ function entryIdentity(entry: RecoveryEntry): string {
   }
 }
 
-/** A valid version-1 record, or null for anything else (treated as a damaged backup). */
+/**
+ * A valid version-1 record, or null for anything else (treated as a damaged
+ * backup, which a download still includes as its exact text). Only the known
+ * fields are kept, so nothing else in it is ever serialised again.
+ */
 function parseRecord(raw: string): RecoveryRecord | null {
   let data: unknown;
   try {
@@ -795,43 +978,69 @@ function parseRecord(raw: string): RecoveryRecord | null {
   } catch {
     return null;
   }
-  if (
-    // A hostile, deeply nested record couldn't be written back safely.
-    nestsDeeperThan(data, MAX_NESTING) ||
-    !isPlainObject(data) ||
-    data.format !== RECOVERY_FORMAT ||
-    data.version !== 1 ||
-    typeof data.savedAt !== 'string' ||
-    !Array.isArray(data.entries) ||
-    !data.entries.every(isRecoveryEntry)
-  ) {
+  if (!isPlainObject(data) || data.format !== RECOVERY_FORMAT || data.version !== 1 || typeof data.savedAt !== 'string' || !Array.isArray(data.entries)) {
     return null;
   }
-  return data as unknown as RecoveryRecord;
-}
-
-function isRecoveryEntry(entry: unknown): entry is RecoveryEntry {
-  if (!isPlainObject(entry) || typeof entry.error !== 'string') return false;
-  if (entry.kind === 'all-characters') {
-    return typeof entry.raw === 'string' && (entry.activeCharacterId === null || typeof entry.activeCharacterId === 'string');
+  const entries: RecoveryEntry[] = [];
+  for (const entry of data.entries) {
+    const valid = validRecoveryEntry(entry);
+    if (!valid) return null;
+    entries.push(valid);
   }
-  return entry.kind === 'character' && Number.isInteger(entry.index) && 'value' in entry;
+  return { format: RECOVERY_FORMAT, version: 1, savedAt: data.savedAt, entries };
 }
 
-function readDismissed(store: StorageLike): Set<string> {
+/**
+ * The entry's known fields, or null if it isn't valid. A character's value is
+ * measured from itself, like each saved entry and each import: the store only
+ * ever backs up a value that passes, and anything deeper as its text.
+ */
+function validRecoveryEntry(entry: unknown): RecoveryEntry | null {
+  if (!isPlainObject(entry) || typeof entry.error !== 'string') return null;
+  const { error } = entry;
+  if (entry.kind === 'all-characters') {
+    const { raw, activeCharacterId } = entry;
+    if (typeof raw !== 'string' || !(activeCharacterId === null || typeof activeCharacterId === 'string')) return null;
+    return { kind: 'all-characters', error, raw, activeCharacterId };
+  }
+  const { index } = entry;
+  if (typeof index !== 'number' || !Number.isInteger(index)) return null;
+  if (entry.kind === 'character-text') {
+    const { name, raw } = entry;
+    if (typeof raw !== 'string' || !(name === null || typeof name === 'string')) return null;
+    return { kind: 'character-text', index, error, name, raw };
+  }
+  if (entry.kind !== 'character' || !('value' in entry) || nestsDeeperThan(entry.value, MAX_NESTING)) return null;
+  return { kind: 'character', index, error, value: entry.value };
+}
+
+/** A JSON list of strings kept under `key`, best-effort: empty if it's missing or unreadable. */
+function readKeyList(store: StorageLike, key: string): Set<string> {
   try {
-    const list: unknown = JSON.parse(store.getItem(DISMISSED_BACKUPS_KEY) ?? '[]');
-    return new Set(Array.isArray(list) ? list.filter((k): k is string => typeof k === 'string') : []);
+    const list: unknown = JSON.parse(store.getItem(key) ?? '[]');
+    return new Set(Array.isArray(list) ? list.filter(isString) : []);
   } catch {
     return new Set();
   }
+}
+
+function characterIdOf(value: unknown): string | null {
+  return isPlainObject(value) && typeof value.id === 'string' ? value.id : null;
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
 }
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
-/** Real characters nest a few levels deep. Anything past this is hostile data. */
+/**
+ * Real characters nest a few levels deep. A character nested deeper than this,
+ * measured from the character itself (on load, on import and in a backup), is
+ * hostile data: it can't be opened or imported.
+ */
 const MAX_NESTING = 100;
 
 /**

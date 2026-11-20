@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Character } from '@/lib/types';
 import { downloadFile, localFileStamp } from '@/lib/download';
-import { createNewAdventurer, getCharacterStore, ImportError, parseImportedCharacters } from '@/lib/storage';
+import { characterFileJson, createNewAdventurer, getCharacterStore, ImportError, parseImportedCharacters } from '@/lib/storage';
 
 interface CharacterSession {
   characters: Character[];
@@ -69,12 +69,12 @@ export function useCharacter() {
 
   const exportCharacter = useCallback(() => {
     if (!activeCharacter) return;
-    downloadFile(`${activeCharacter.name || 'character'}.dolmenwood.json`, JSON.stringify(activeCharacter, null, 2));
+    downloadFile(`${activeCharacter.name || 'character'}.dolmenwood.json`, characterFileJson(activeCharacter));
   }, [activeCharacter]);
 
   // One file with every character. Import Character accepts it.
   const exportAllCharacters = useCallback(() => {
-    downloadFile(`dolmen-spot-characters-${localFileStamp()}.dolmenwood.json`, JSON.stringify(characters, null, 2));
+    downloadFile(`dolmen-spot-characters-${localFileStamp()}.dolmenwood.json`, characterFileJson(characters));
   }, [characters]);
 
   /** Add the characters in a file. Resolves to false, with nothing added, if the file was refused. */
@@ -102,7 +102,7 @@ export function useCharacter() {
 
   const getCharacterJson = useCallback((): string | null => {
     if (!activeCharacter) return null;
-    return JSON.stringify(activeCharacter, null, 2);
+    return characterFileJson(activeCharacter);
   }, [activeCharacter]);
 
   const importCharacterFromJson = useCallback((json: string): string => {
