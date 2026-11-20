@@ -1,6 +1,10 @@
 @import "tailwindcss";
 
 @theme {
+  /* Tailwind 4.3.3 swapped `system-ui` in its default sans stack for an explicit
+     font list, which changes the font on some systems (e.g. Linux). This keeps the
+     previous stack so the sheet looks the same; delete it to use Tailwind's default. */
+  --font-sans: ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji';
   --color-parchment: #f5e6c8;
   --color-parchment-dark: #e8d5a8;
   --color-parchment-light: #faf3e6;
