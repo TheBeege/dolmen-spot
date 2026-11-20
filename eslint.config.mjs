@@ -25,8 +25,9 @@ const eslintConfig = defineConfig([
     },
   },
   // eslint-config-next already ignores .next/, out/, build/ and next-env.d.ts
-  // (node_modules/ is ignored by ESLint itself).
-  globalIgnores(["public/**"]),
+  // (node_modules/ is ignored by ESLint itself). .claude/ holds Claude Code's
+  // git worktrees, each a full copy of the repo that would otherwise be linted.
+  globalIgnores(["public/**", ".claude/**"]),
 ]);
 
 export default eslintConfig;

@@ -17,10 +17,10 @@ If the docs are ambiguous or incomplete, cross-reference the source PDF at `sour
 | `docs/rules/03-classes.md` | `src/lib/gamedata.ts` (CLASSES, advancement tables), `src/components/CombatStats.tsx`, `src/components/AbilityScores.tsx` |
 | `docs/rules/04-kindred-classes.md` | `src/lib/gamedata.ts` (kindred-class advancement tables), `src/components/CombatStats.tsx` |
 | `docs/rules/05-magic.md` | `src/lib/gamedata.ts` (spell data), `src/components/SpellsAndMagic.tsx` |
-| `docs/rules/06-equipment.md` | `src/lib/gamedata.ts` (ARMOUR_TABLE, WEAPONS_TABLE, ADVENTURING_GEAR), `src/components/Inventory.tsx` |
+| `docs/rules/06-equipment.md` | `src/lib/gamedata.ts` (ARMOUR_TABLE, WEAPONS_TABLE, ADVENTURING_GEAR, LIGHT_SOURCE_TYPES), `src/components/Inventory.tsx`, `src/components/Adventuring.tsx` (light tracker) |
 | `docs/rules/07-combat.md` | `src/components/CombatStats.tsx`, `src/lib/gamedata.ts` (attack modifiers) |
-| `docs/rules/08-adventuring.md` | `src/components/Inventory.tsx` (encumbrance), `src/components/CombatStats.tsx` (speed), `src/components/Calendar.tsx` |
-| `docs/rules/09-appendices.md` | `src/lib/gamedata.ts` (MONTHS, FESTIVALS, calendar), `src/components/Calendar.tsx`, `src/components/ReferencePanel.tsx` |
+| `docs/rules/08-adventuring.md` | `src/lib/gamedata.ts` (adventuring tables such as TERRAIN_TABLE and SLEEP_MATRIX), `src/components/Inventory.tsx` (encumbrance), `src/components/CombatStats.tsx` (speed), `src/components/Adventuring.tsx` (travel, camping, hunger and condition trackers) |
+| `docs/rules/09-appendices.md` | `src/lib/gamedata.ts` (MONTHS, FESTIVALS, calendar), `src/components/Adventuring.tsx` (calendar UI), `src/components/ReferencePanel.tsx` |
 
 ## Validation Rules
 
@@ -76,6 +76,31 @@ Character data is stored in localStorage and must survive schema changes across 
 - **Theme**: Dark fantasy -- see `MEMORY.md` for exact color values
 - **Types**: All game interfaces live in `src/lib/types.ts`
 - **Game data**: All static game data lives in `src/lib/gamedata.ts`
+
+## Pre-commit Hook & CI
+
+Next.js 16's `next build` no longer lints, so these checks do instead:
+
+- **Pre-commit hook** (husky + lint-staged; the checks are in `lint-staged.config.mjs`, the flags in `.husky/pre-commit`):
+  - ESLint on staged `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` files.
+  - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
+  - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
+- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck` and `npm run check:msal-bridge`.
+  - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
+  - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
+
+How the hook works, and what that means for you:
+
+- **Every worktree runs the main checkout's hook.** `core.hooksPath` lives in the `.git/config` that all worktrees share, and Claude Code pins it to `<main checkout>/.husky/_`. `npm ci` in the main checkout (the `prepare` script, `.husky/install.mjs`) writes that same path; in a worktree it leaves the setting alone.
+- **The hook is active only once the main checkout is on a commit that has `.husky/pre-commit` and has run `npm ci`.** Until then, commits anywhere skip it. Run `npm ci` in the main checkout after pulling.
+- **A worktree's own `npm ci` doesn't install the hook.** It installs the tools the hook runs (lint-staged, ESLint, TypeScript) along with every other dependency. Run it in every new worktree; without it, commits fail with `lint-staged: not found`.
+- **Editing `.husky/pre-commit` has no effect until the change reaches the main checkout.** `lint-staged.config.mjs` is read from the committing worktree, so changes there apply right away.
+- **Moving the repo directory makes the absolute hooks path stale.** Re-run `npm ci` in the main checkout to fix it.
+- **The typecheck sees the working tree, not just what's staged.** Unstaged and untracked `.ts`/`.tsx` changes count; so does a file you `git rm --cached` but leave on disk. Fix or commit them; don't stash them, because the stash is shared by every worktree. CI checks the exact commit.
+- **lint-staged's "Skipping backup because `--no-stash` was used" warning is expected.** Its backup would go on that same shared stash stack.
+- **If the hook fails because a tracked file changed while it ran** (`--fail-on-changes`), nothing was reverted. Ignore lint-staged's advice to restore from a stash (`git apply --index <hash>`); with `--no-stash` there isn't one. Check `git status`, then commit again.
+- **Commits that git makes for you skip the hook.** That covers a conflict-free `git merge` (`--no-ff` too), `git cherry-pick`, `git revert` and `git rebase`. When you finish a conflict yourself, with `git commit` or with `git merge --continue`, `git cherry-pick --continue` or `git revert --continue`, the hook runs. The exception is `git rebase --continue`, which never runs it. CI is the check for everything the hook skips.
+- **Don't bypass the hook with `git commit --no-verify`.** Fix the errors instead, since CI fails on them anyway.
 
 ## Releases & Deployment
 

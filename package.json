@@ -7,7 +7,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "test": "tsx --test src/lib/*.test.ts"
+    "typecheck": "next typegen && tsc --noEmit",
+    "test": "tsx --test src/lib/*.test.ts",
+    "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
+    "prepare": "node .husky/install.mjs"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.30.0",
@@ -25,6 +28,8 @@
     "@types/react-dom": "^19.3.0",
     "eslint": "^10.15.0",
     "eslint-config-next": "^16.4.6",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.1",
     "tailwindcss": "^4.3.5",
     "tsx": "^4.23.15",
     "typescript": "^6.0.3"
