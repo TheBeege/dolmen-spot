@@ -1,0 +1,21 @@
+# core.hooksPath points every worktree at the main checkout's .husky/_ (see
+# .husky/install.mjs), so this script runs from the main checkout in every
+# worktree, including ones whose branch predates the hook. Skip those, as
+# husky would.
+[ -f .husky/pre-commit ] || exit 0
+
+# The checks are configured in lint-staged.config.mjs. Flags:
+#   --diff-filter=ACMRD  include deletions: deleting a module can break the
+#                        files that import it
+#   --no-stash           skip lint-staged's backup stash. The stash stack is
+#                        shared by every worktree, and lint-staged drops its
+#                        entry by index, which can delete another session's.
+#                        Nothing here edits files, and partially staged files
+#                        are still protected by a per-worktree patch file. The
+#                        "Skipping backup" warning this prints is expected.
+#   --fail-on-changes    abort, rather than add to the commit, if a tracked file
+#                        changes while the hook runs (e.g. an editor autosave)
+#   --continue-on-error  let every check finish. Otherwise a lint failure gets
+#                        a clean typecheck reported as failed.
+#   --verbose            also print ESLint warnings, which don't block
+lint-staged --diff-filter=ACMRD --no-stash --fail-on-changes --continue-on-error --verbose
