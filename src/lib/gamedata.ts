@@ -2384,6 +2384,478 @@ export const HOLY_SPELLS: { name: string; rank: number; saint: string }[] = [
   { name: 'Raise Dead', rank: 5, saint: 'St Clewyd' },
 ];
 
+export function findHolySpell(name: string): { name: string; rank: number; saint: string } | undefined {
+  const target = name.trim().toLowerCase();
+  return HOLY_SPELLS.find((s) => s.name.toLowerCase() === target);
+}
+
+// 5B-2: What each arcane and holy spell does, for the Spells & Magic tab.
+// Mechanics only (range, duration, targets, saves, damage and numbers), written
+// in our own words with no flavour text, so players can check a spell without
+// the book. Keyed by the exact names in ARCANE_SPELLS and HOLY_SPELLS.
+// Source: the spell entries in the Player's Book (pp80-91 arcane, pp102-111 holy).
+export type SpellType = 'arcane' | 'holy';
+
+export interface SpellSummary {
+  /** e.g. "30'", 'Touch', 'The caster'. */
+  range: string;
+  /** e.g. '6 Turns', '1 Round/Level', 'Instant'. */
+  duration: string;
+  /** Who or what it affects, any save, damage and numbers, in a sentence or two. */
+  effect: string;
+}
+
+export const ARCANE_SPELL_SUMMARIES: Record<string, SpellSummary> = {
+  // Rank 1
+  'Crystal Resonance': {
+    range: "10'", duration: 'Special',
+    effect: "Imprint: spend 1 Turn storing the area's light, a still image, sounds or temperature in a gem worth 50gp+ (1-in-20 it shatters). Release: replay it as harmless ambience (light or temperature for 1 Turn/Level, image for 1 Turn).",
+  },
+  'Decipher': {
+    range: "5'", duration: '2 Turns',
+    effect: 'Any writing, code or map symbol the caster passes a hand over can be read as Woldish until the spell ends; works on several texts.',
+  },
+  'Fairy Servant': {
+    range: "30'", duration: '6 Turns',
+    effect: "For a gift of a 50gp+ trinket or magical fungus, an invisible flying sprite does simple chores and moves small objects (up to 80 coins of weight). It can't fight (AC 15, HP 1, Fly 20).",
+  },
+  'Firelight': {
+    range: 'The caster', duration: '6 Turns + 1 Turn/Level',
+    effect: "Heatless flame on the caster's hand, shoulder or a held item lights a 15' radius. Flaring it ends the spell: everyone else within 30' who sees it Saves vs Spell or suffers -2 Attack for 1d4 Rounds.",
+  },
+  'Floating Disc': {
+    range: "6'", duration: '6 Turns',
+    effect: "Invisible 3'-wide disc of force follows the caster at waist height, carrying a load of up to 5,000 coins; it drops its load when the spell ends.",
+  },
+  'Glyph of Sealing': {
+    range: "30'", duration: '2d6 Turns',
+    effect: 'Holds one closed portal (door, gate, lid, etc.) magically shut. Knock dispels it; creatures 3+ Levels above the caster can force it open in 1 Round.',
+  },
+  'Ignite/Extinguish': {
+    range: "30'", duration: 'Instant',
+    effect: 'Ignite: 1 stream of sparks per caster Level, split among targets; light sources catch fire and creatures Save vs Ray or take 1 damage per stream. Extinguish: puts out 1 torch-sized or smaller flame per caster Level (a creature holding one may Save vs Spell).',
+  },
+  'Ingratiate': {
+    range: 'Touch (object)', duration: '3 Turns',
+    effect: 'If a mortal, fairy or demi-fey takes the gift willingly, it Saves vs Spell or is charmed: treats the caster as a dear friend, defends them and obeys orders given in a common tongue (refusing harmful or out-of-character ones), saving again each day. Large or sub-Sentient creatures are immune.',
+  },
+  'Ioun Shard': {
+    range: "120'", duration: '2 Turns',
+    effect: "A crystal shard orbits the caster's head; fire it at a visible target in range any time before the spell ends for 1d6+1 damage, with no Attack Roll or save. One extra shard per 3 Levels (2 at Level 4, 3 at Level 7, and so on), fired together or apart.",
+  },
+  'Shield of Force': {
+    range: 'The caster', duration: '2 Turns',
+    effect: 'Invisible barrier gives the caster AC 17 against missiles and AC 15 against other attacks; Ioun Shards never get through.',
+  },
+  'Vapours of Dream': {
+    range: "240'", duration: 'Concentration (up to 1 Round/Level)',
+    effect: "Sleep vapour fills a 10' cube at a chosen point, then one more adjoining 10' cube each Round. Living creatures up to Level 4 in it Save vs Spell or sleep 4d4 Turns (one blade attack kills a sleeper; slapping wakes one). Breaks if the caster takes harm, moves or acts.",
+  },
+  'Ventriloquism': {
+    range: "60'", duration: '2 Turns',
+    effect: "The caster's voice can be made to come from any point or object within range.",
+  },
+  // Rank 2
+  'Arcane Cypher': {
+    range: "5'", duration: 'Permanent',
+    effect: 'Turns one spell in a spell book, or as much as 1 page of plain text per caster Level, into sigils only the caster can read; only magic such as Decipher reveals it. Magical writing is immune.',
+  },
+  'Dweomerlight': {
+    range: "30'", duration: '6 Turns',
+    effect: 'All magic in range glows: magic items, enchanted areas, objects and creatures, spells as they are cast (showing caster and target), and a halo around anyone with arcane spells memorised.',
+  },
+  'Flaming Spirit': {
+    range: "60'", duration: '1 Round/Level',
+    effect: "A streak of flame obeys the caster: each Round it can dart at a target within 30' of where it is (Save vs Ray or 1d6 damage).",
+  },
+  'Glyph of Locking': {
+    range: "30'", duration: 'Permanent',
+    effect: 'Magically locks one closed portal; the glyph turns invisible after 1 Turn (magic can reveal it). The caster, anyone given the password and arcane casters 3+ Levels higher may pass; Knock suppresses it for 1 Turn, and the caster can end it at will.',
+  },
+  'Invisibility': {
+    range: "240'", duration: '1 hour/Level',
+    effect: 'Turns one creature or object (the caster included) invisible, along with any carried gear (light still shines; items put down reappear). Attacking or casting a spell ends it.',
+  },
+  'Knock': {
+    range: 'Touch (portal)', duration: 'Instant',
+    effect: 'Opens one closed portal: locks open, bars lift, Glyph of Sealing is dispelled and other magic seals (e.g. Glyph of Locking) are suppressed for 1 Turn. Opens secret doors only if the caster knows about them.',
+  },
+  'Levitate': {
+    range: 'The caster', duration: '6 Turns + 1 Turn/Level',
+    effect: "The caster can float straight up or down at up to 20' per Round, moving sideways only by pushing off solid objects, while carrying a normal load.",
+  },
+  'Mind Crystal': {
+    range: "60'", duration: '12 Turns',
+    effect: "Holding up a gem worth 250gp+ and staying still, the caster aims it one way for 1 Turn, then hears the thoughts of every creature there within range (a jumble if several; 1 more Turn singles one out). Lead sheeting or 2' of stone blocks it.",
+  },
+  'Mirror Image': {
+    range: 'The caster', duration: '6 Turns',
+    effect: "1d4 illusory copies mimic the caster within 3'; the caster's voice and later spells seem to come from a random copy or the caster. Every attack on the caster, hit or miss, destroys one copy.",
+  },
+  'Perceive the Invisible': {
+    range: "10'/Level", duration: '6 Turns',
+    effect: 'The caster sees invisible creatures and objects within range, outlined in gold.',
+  },
+  'Phantasm': {
+    range: "240'", duration: 'Concentration',
+    effect: "Silent illusion in a 20' cube: a scene (gone if touched), an attack, or a monster whose Level doesn't exceed the caster's (AC 10, gone if hit). Viewers who fail a Save vs Spell (+4 if the caster never saw the real thing) believe it; its damage is unreal and its effects wear off in 1d4 Turns. Breaks if the caster takes harm, moves or acts.",
+  },
+  'Web': {
+    range: "30'", duration: '2 Turns/Level',
+    effect: "Sticky webbing fills a 10' cube, holding creatures inside or blundering in. STR 13+ breaks free in 1d4 Turns (lower never does); Large, stronger-than-human creatures in 1d4 Rounds. Fire burns it away in 2 Rounds, dealing 1d6 to those caught.",
+  },
+  // Rank 3
+  'Circle of Invisibility': {
+    range: "120'", duration: '1 hour/Level',
+    effect: "A chosen creature and all within 10' of it turn invisible with their gear; the circle moves with that creature. Anyone leaving it reappears, newcomers aren't hidden, and attacking or casting reveals that subject.",
+  },
+  'Crystal Vision': {
+    range: "60'", duration: '12 Turns',
+    effect: "Gazing into a gem worth 500gp+ and staying still, the caster aims it one way for 1 Turn, then sees (without sound) through the eyes of the nearest creature there, and may switch to another. Lead sheeting or 2' of stone blocks it.",
+  },
+  'Dark Sight': {
+    range: 'The caster or touch', duration: '1 day',
+    effect: "The subject can see in darkness as if it were lit, out to 60'.",
+  },
+  'Dispel Magic': {
+    range: "120'", duration: 'Instant',
+    effect: "Dispels every spell effect within a 20' cube; magic from a higher-Level caster has a 5% chance per Level of difference to resist. Magic items and curses from items are unaffected, but curses from spells (e.g. Hex Weaving) are lifted.",
+  },
+  'Fireball': {
+    range: "240'", duration: 'Instant',
+    effect: "Explodes at a point in a 20' radius: 1d6 damage per caster Level (Save vs Blast for half).",
+  },
+  'Fly': {
+    range: 'The caster or touch', duration: '1d6 Turns + 1 Turn/Level',
+    effect: 'The subject flies in any direction at Speed 120 and can hover.',
+  },
+  'Haste': {
+    range: "240'", duration: '3 Turns',
+    effect: "Up to 24 chosen creatures in a 30' radius move at double Speed and make twice their normal attacks each Round (spells cast and magic item uses aren't doubled).",
+  },
+  'Lightning Bolt': {
+    range: "180'", duration: 'Instant',
+    effect: "A bolt 60' long and 5' wide from a point in range: 1d6 damage per caster Level (Save vs Ray for half). If it hits a wall short of full length, it bounces back toward the caster for the remaining distance.",
+  },
+  'Missile Ward': {
+    range: "30'", duration: '12 Turns',
+    effect: 'One subject takes no harm from normal-sized, non-magical missiles (arrows, sling stones, spears); no protection from giant missiles such as boulders, or magic ones.',
+  },
+  'Paralysation': {
+    range: "60'", duration: '6 Turns',
+    effect: "Creatures in a 20' cube, lowest Level first and totalling up to double the caster's Level, Save vs Hold or are paralysed (aware but helpless). Mindless creatures are immune; the caster can end it at will.",
+  },
+  'Serpent Glyph': {
+    range: 'Touch', duration: 'Until triggered',
+    effect: "Glyph (needs 100gp of powdered amber) hidden in a page of text and set off by reading it, or glowing on a surface and set off by touch. A serpent attacks the nearest creature (Attack bonus = caster's Level); on a hit the victim is trapped in a bubble of frozen time for 1d4 days (the caster can free them sooner, or it can be dispelled).",
+  },
+  'Water Breathing': {
+    range: "30'", duration: '1 day',
+    effect: 'One subject can breathe water as well as air; swimming is unaffected.',
+  },
+  // Rank 4
+  'Acid Globe': {
+    range: "150'", duration: 'Instant',
+    effect: "Acid hits one target for 1d4 damage per caster Level (Save vs Blast for half; on a failed save it takes that damage again next Round). Everyone within 5' of the target Saves vs Blast or takes 2d4.",
+  },
+  'Arcane Eye': {
+    range: "240'", duration: '6 Turns',
+    effect: "An invisible, eye-sized magical eye the caster can see through and move (up to 120' per Turn) while concentrating; it sees 60', even in darkness, and can't pass through solid barriers.",
+  },
+  'Confusion': {
+    range: "120'", duration: '12 Rounds',
+    effect: "3d6 random creatures in a 30' radius lose control; each Round roll 2d6 for each: 2-5 attacks the caster's group, 6-8 does nothing, 9-12 attacks its own group. Those of Level 3+ may Save vs Spell each Round to act freely; lower Levels get no save.",
+  },
+  'Dimension Door': {
+    range: "10' / 360'", duration: '1 Round',
+    effect: "Opens a one-way door within 10' of the caster, leading to an exit up to 360' away (a place the caster knows, or given as distances); one creature may step through. An unwilling creature within 10' can be forced through (Save vs Hold resists). No effect if the exit is inside a solid object.",
+  },
+  'Dominate': {
+    range: "120'", duration: 'Until broken',
+    effect: 'Charms 3d6 living creatures of Level 3 or less, or a single higher-Level one (Save vs Spell resists; each saves again daily to break free). The charmed befriend and defend the caster and obey orders given in a common tongue (not harmful or out-of-character ones).',
+  },
+  'Hallucinatory Terrain': {
+    range: "240'", duration: 'Until touched',
+    effect: 'Creates an illusory terrain feature (a hill, wood, marsh...) or disguises a real one, fitting within range; ends when an intelligent being touches it.',
+  },
+  'Hex Weaving': {
+    range: 'The caster or touch', duration: 'Instant or permanent',
+    effect: 'Either lifts one curse for good (also freeing the subject from a cursed magic item), or lays a permanent curse (Save vs Spell resists) of up to -2 to saves, -4 to Attack Rolls or one halved Ability Score. Curses with different effects can stack.',
+  },
+  'Plant Growth': {
+    range: "120'", duration: 'Permanent',
+    effect: "Up to 3,000 sq ft of woodland or scrub (e.g. 150' x 20') becomes a thorny thicket. Large creatures can force their way across at half Speed; smaller ones must cut a path, 10' per Turn.",
+  },
+  'Polymorph': {
+    range: "60'", duration: '1d6 Turns + 1 Turn/Level, or permanent',
+    effect: "On the caster (form up to their Level; temporary): gains only the form's physical abilities, keeps HP, saves, Attack and mind, and can't cast spells. On another (form up to double the caster's Level; permanent; Save vs Spell if unwilling): becomes the creature in every way but HP. Can't copy a specific individual; death reverts it.",
+  },
+  'Wall of Fire': {
+    range: "60'", duration: 'Concentration + 1 Round/Level',
+    effect: "Opaque wall of flame 6 inches thick and at most 20' high: a line (max 60' long) or ring (max 20' across), not in occupied space. Level 3 or lower creatures can't pass; Level 4+ can, taking 3d6 (double for undead and cold creatures). Lasts while the caster concentrates without moving, then 1 Round/Level.",
+  },
+  'Wall of Ice': {
+    range: "120'", duration: '12 Turns',
+    effect: "Wall of ice 6 inches thick and at most 20' high: a line (max 60' long) or ring (max 20' across); needs support and can't fill occupied space. Level 3 or lower creatures can't break it; Level 4+ with tools hack a 5' hole in 1d6 Turns, taking 2d6 (double for fire creatures).",
+  },
+  'Woodland Veil': {
+    range: "240'", duration: 'Permanent',
+    effect: "Up to 100 chosen Small or Medium creatures in a 120' radius look like a copse or orchard, fooling even those who walk among them. A subject who leaves the area is revealed; the caster can dismiss it any time.",
+  },
+  // Rank 5
+  'Air Sphere': {
+    range: "10' around the caster", duration: '1 Turn/Level',
+    effect: "Underwater, the caster is wrapped in a bubble of breathable air 10' in radius that moves with them; swimming is unchanged.",
+  },
+  'Animate Dead': {
+    range: "60'", duration: 'Until slain or dispelled',
+    effect: 'Raises 1 Medium humanoid corpse or skeleton per caster Level as mindless Level 1 undead servants that obey the caster (AC 12, HP 1d8, weapon +0, Speed 20), with none of their powers from life.',
+  },
+  'Cloudkill': {
+    range: "30'", duration: '6 Turns',
+    effect: "Poison fog 30' across drifts at Speed 10 (with the wind, or away from the caster) and sinks into low ground. Creatures touching it take 1 damage per Round; those of Level 4 or lower also Save vs Doom each Round or die.",
+  },
+  'Conjure Elemental': {
+    range: "240'", duration: 'Until dismissed or slain',
+    effect: 'Summons a Level 16 air, earth, fire or water elemental from a large mass of that element (AC 21, HP 16d8, blow +11 for 3d8; only magic harms it). Control is lost if the caster takes harm, moves faster than half Speed or acts, and the freed elemental turns on them; while controlled it can be dismissed.',
+  },
+  'Fabricate': {
+    range: "60'", duration: 'Permanent',
+    effect: 'Turns raw materials in range into simple objects normally made from them (e.g. a door from trees, clothes from wool): as much as 1 cubic yard per caster Level, or 1 cubic foot per Level from minerals.',
+  },
+  'Feeblemind': {
+    range: "240'", duration: 'Permanent',
+    effect: 'One arcane spell-caster Saves vs Spell at -4 or has INT reduced to 3, losing clear thought and the ability to cast spells.',
+  },
+  'Mire': {
+    range: "120'", duration: '3d6 days',
+    effect: "Up to 3,000 sq ft of sand, earth or rock becomes mud 10' deep. Creatures in it move at a tenth of their Speed; heavy ones sink 1' per Round unless they can grab something, and drown if fully submerged.",
+  },
+  'Passwall': {
+    range: "30'", duration: '3 Turns',
+    effect: "Opens a temporary hole 5' across and up to 10' deep through solid rock or stone.",
+  },
+  'Sending': {
+    range: 'Unlimited', duration: 'Instant',
+    effect: 'Sends a mental message of up to 25 words to a creature the caster knows by name and sight (Animal intelligence or better); it understands whatever its language.',
+  },
+  'Telekinesis': {
+    range: "120'", duration: 'Concentration (up to 6 Rounds)',
+    effect: "Moves one object or creature weighing up to 200 coins per caster Level, 20' per Round, any direction including up. A creature, or whoever holds a targeted object, may Save vs Hold to resist. Breaks if the caster takes harm, moves or acts.",
+  },
+  'Teleport': {
+    range: "10'", duration: 'Instant',
+    effect: "The caster or one creature (carrying gear up to max load; unwilling: Save vs Spell) vanishes to a known open spot at ground level, any distance away. Roll d100 to arrive on target: 01-50 if the caster knows the place scantly, 01-80 moderately, 01-95 exactly; otherwise it lands 1d10 x 10' too high or too low (fatal inside solid matter).",
+  },
+  'Wall of Stone': {
+    range: "60'", duration: 'Permanent',
+    effect: "Creates a stone wall of any shape up to 1,000 cubic feet (e.g. 2' thick, 50' long, 10' high); it needs support and can't fill occupied space.",
+  },
+  // Rank 6
+  'Anti-Magic Ward': {
+    range: 'The caster', duration: '1 Round/Level',
+    effect: 'A shell around the caster stops every Rank 1-3 spell or spell effect aimed at them, including those from scrolls or wands. Dispel Magic can end it.',
+  },
+  'Control Weather': {
+    range: "720' around the caster", duration: 'Concentration',
+    effect: "Outdoors only, brings weather of the caster's choice, e.g. calm (clears bad weather); extreme heat, fog, high winds or snow (half Speed; fog and snow cut sight to 20', winds stop missiles and flying); rain (-2 to missile Attack Rolls, mud halves Speed after 3 Turns). Breaks if the caster takes harm, moves or acts.",
+  },
+  'Disintegrate': {
+    range: "60'", duration: 'Instant',
+    effect: "Permanently destroys one non-magical creature (Save vs Doom resists) or object (the Referee decides what, e.g. a tree, a ship or 10' of wall).",
+  },
+  'Dweomerfire': {
+    range: "60'", duration: '1 Round',
+    effect: "Magic in a 20' cube bursts into flame: enchanted objects, areas and creatures blaze (1d6 to creatures in contact); anyone casting a spell there Saves vs Spell or takes 3d6 and the spell fails; arcane casters Save vs Spell or take 1 damage per memorised spell.",
+  },
+  'Geas': {
+    range: "30'", duration: 'Permanent',
+    effect: "The target (Save vs Spell resists) must perform or avoid a set action, or suffer growing penalties that are eventually fatal. An impossible or directly deadly geas rebounds on the caster. Dispel Magic fails; Remove Curse or Hex Weaving work only if cast by someone 2+ Levels above the geas's caster.",
+  },
+  'Invisible Stalker': {
+    range: "Caster's presence", duration: 'One mission or until slain',
+    effect: 'Summons an invisible Level 8 creature (AC 16, HP 8d8, crush +7 for 4d4, Speed 40; never loses a trail, surprises 5-in-6) bound to one mission, pursued until done or until it is destroyed. Unless the task is quick and easy, it twists the wording against the caster.',
+  },
+  'Move Terrain': {
+    range: "240'", duration: '6 Turns',
+    effect: "Moves one terrain feature (a hill, ridge, grove, pool...) within a 120' square up to 60' per Turn, carrying any buildings and creatures on it. The caster must concentrate without moving or acting, but can pause and resume.",
+  },
+  'Oracle': {
+    range: 'The caster', duration: '1d6 Turns',
+    effect: 'Burning 1,000gp of Ishwagrande dust, ask 3 questions about an object, place or creature that is present (or an item closely tied to it); brief, cryptic answers, each 1-in-6 false or misleading. Once per week; risks a 1d6-week coma (Save vs Doom at +2).',
+  },
+  'Petrification': {
+    range: "120'", duration: 'Permanent or instant',
+    effect: 'Either turns a living creature and its gear to stone for good (Save vs Hold resists), or restores a creature turned to stone by magic, gear included.',
+  },
+  'Project Image': {
+    range: "240'", duration: '6 Turns',
+    effect: "An illusory double of the caster, told apart only by touch; the caster's spells seem to come from it, though the caster must still see the targets. Spells and missiles appear not to affect it; a touch or melee hit makes it vanish.",
+  },
+  'Wave of Force': {
+    range: "60' ahead of the caster", duration: '1 Round per 2 Levels',
+    effect: "Creatures in a 60'-long, 10'-wide path are pushed 30' per Round directly away from the caster (those faster than 30 trying to advance are pushed back at their own Speed). The caster can aim a new path each Round and must concentrate without moving or acting, but can pause and resume.",
+  },
+  'Word of Doom': {
+    range: "240'", duration: 'Instant',
+    effect: "In a 60' cube, creatures totalling up to 4d8 Levels, lowest Level first, Save vs Doom or die instantly. Undead and creatures above Level 7 are unaffected.",
+  },
+};
+
+export const HOLY_SPELL_SUMMARIES: Record<string, SpellSummary> = {
+  // Rank 1
+  'Detect Evil': {
+    range: "120'", duration: '6 Turns',
+    effect: "The caster sees a malevolent aura around objects with evil enchantments and living beings intending evil, but can't read their thoughts. The Referee rules what is evil (Chaotic beings aren't always; traps and poisons aren't).",
+  },
+  'Detect Magic': {
+    range: "60'", duration: '2 Turns',
+    effect: 'Shows all magic within range with a golden glow: enchanted objects, areas and creatures, whether the magic is lasting or temporary.',
+  },
+  'Frost Ward': {
+    range: "30'", duration: '6 Turns',
+    effect: 'All allies in range are unharmed by natural freezing cold, gain +2 to saves against cold (spells or breath, for instance) and take 1 less cold damage per damage die.',
+  },
+  'Lesser Healing': {
+    range: 'The caster or touch', duration: 'Instant',
+    effect: 'A living subject either regains 1d6+1 HP (not above their maximum) or is cured of paralysis.',
+  },
+  'Light': {
+    range: "120'", duration: '12 Turns',
+    effect: "One of: a 15' radius of holy light (bright enough to read; may be cast on an object to move with it); blind one Chaotic creature for the spell's duration (Save vs Spell resists); or cancel magical darkness in a 15' radius.",
+  },
+  'Mantle of Protection': {
+    range: 'The caster', duration: '12 Turns',
+    effect: "+1 AC and +1 to saves against attacks and powers of Chaotic creatures and of magically created or summoned ones. The latter also can't make melee attacks on the caster (ranged attacks still can) until the caster attacks one in melee; the bonuses remain.",
+  },
+  'Purify Food and Drink': {
+    range: 'Touch', duration: 'Permanent',
+    effect: 'Makes up to 12 portions of spoiled, rotten, poisoned or tainted food and drink wholesome (1 ration or 1 pint = 1 portion).',
+  },
+  'Rally': {
+    range: 'The caster or touch', duration: '2 Turns',
+    effect: 'The subject may Save vs Spell with +1 per caster Level to throw off magical fear, both fear already affecting them and any that strikes during the spell.',
+  },
+  // Rank 2
+  'Bless': {
+    range: "60'", duration: '6 Turns',
+    effect: "Allies in a 20' x 20' area gain +1 Attack and +1 damage; retainers among them also gain +1 Loyalty.",
+  },
+  'Charm Serpents': {
+    range: "60'", duration: '1d4 Rounds or 1d4 Turns',
+    effect: "Chosen snakes whose Levels add up to no more than double the caster's Level sway entranced and won't attack: 1d4 Rounds if they were already attacking, otherwise 1d4 Turns.",
+  },
+  'Find Traps': {
+    range: "30'", duration: '2 Turns',
+    effect: 'Every magical and mechanical trap within range is outlined in ghostly flame; it gives no help with disarming or avoiding them.',
+  },
+  'Flame Ward': {
+    range: "30'", duration: '2 Turns',
+    effect: 'One chosen creature is unharmed by ordinary heat and fire, gains +2 to saves against fire (spells or breath, for instance) and takes 1 less fire damage per damage die.',
+  },
+  'Hold Person': {
+    range: "180'", duration: '9 Turns',
+    effect: 'Mortals, fairies or demi-fey who fail a Save vs Hold are paralysed (aware, and may speak if the caster allows): either one target (saving at -2) or 1d4 chosen members of a group. Large creatures are immune; the caster can free them with a word.',
+  },
+  'Reveal Alignment': {
+    range: "30'", duration: 'Instant',
+    effect: 'Reveals the Alignment of one character, monster, object or area in range (most objects and places have none, but magic items and holy sites may).',
+  },
+  'Silence': {
+    range: "180'", duration: '12 Turns',
+    effect: "A 15' radius area falls silent: no sound, speech or spell-casting inside, though those within still hear sounds from outside. Cast on a creature (Save vs Spell negates), the area moves with it.",
+  },
+  'Speak With Animals': {
+    range: 'The caster', duration: '6 Turns',
+    effect: 'The caster can talk with all animals of one normal or giant species (not intelligent animals or fantastic monsters); friendly ones may perform a service within their understanding and ability.',
+  },
+  // Rank 3
+  'Animal Growth': {
+    range: "120'", duration: '12 Turns',
+    effect: 'One normal or giant animal doubles in size, dealing double melee damage and carrying double its load. No effect on intelligent or magical animals or on fantastic monsters.',
+  },
+  'Bless Weapon': {
+    range: "30'", duration: '1 Turn',
+    effect: 'One weapon deals +1d6 damage and counts as magical, so it can harm monsters that only magic can hurt.',
+  },
+  'Cure Affliction': {
+    range: "30'", duration: 'Instant',
+    effect: 'A living subject is cured of one disease (mundane or magical), or has their sight or hearing restored, overcoming whatever disease, curse or enchantment took it.',
+  },
+  'Holy Light': {
+    range: "120'", duration: 'Permanent or 6 Turns',
+    effect: "One of: permanent true daylight in a 30' radius at a fixed spot; light in a 15' radius around an object for 6 Turns, giving undead in it -2 to Attack Rolls and saves; or cancels magical darkness in a 30' radius.",
+  },
+  'Locate Object': {
+    range: "120'", duration: '6 Turns',
+    effect: "Shows the direction to the nearest object of a named kind (e.g. a stairway or altar) or to a specific object the caster can picture exactly, updating as the caster moves. Can't find creatures.",
+  },
+  'Remove Curse': {
+    range: 'The caster or touch', duration: 'Instant',
+    effect: 'Permanently lifts one curse from the subject, which also lets them get rid of a cursed magic item.',
+  },
+  // Rank 4
+  'Circle of Protection': {
+    range: "10' around the caster", duration: '12 Turns',
+    effect: "A 10' radius ring moving with the caster gives the caster and allies inside it Mantle of Protection: +1 AC and saves against Chaotic and magically created or summoned creatures, and the latter can't melee them (ranged attacks still can) until one of the warded attacks one in melee; the bonuses remain.",
+  },
+  'Create Water': {
+    range: 'Touch', duration: 'Permanent',
+    effect: "A spring bursts from a wall or the ground, giving about 50 gallons of water that tastes of wine: a day's supply for 12 people plus 12 mounts, and for 12 more of each per caster Level above 9.",
+  },
+  'Greater Healing': {
+    range: 'The caster or touch', duration: 'Instant',
+    effect: 'A living subject regains 2d6+2 HP, not above their maximum.',
+  },
+  'Remove Poison': {
+    range: 'The caster or touch', duration: 'Instant',
+    effect: 'Neutralises poison in a living creature, or removes it from an item, food or drink. Someone killed by poison within the last 10 Rounds is revived with 1 HP.',
+  },
+  'Speak With Plants': {
+    range: 'The caster', duration: '3 Turns',
+    effect: 'Ordinary plants tell of creatures that recently passed or do simple favours (e.g. part to let the party through, or tangle to block pursuers); plant monsters can also be spoken with.',
+  },
+  'Serpent Transformation': {
+    range: "120'", duration: '6 Turns',
+    effect: '2d8 sticks become Level 1 adders that obey the caster (AC 13, HP 1d8, bite +0 for 1d3 + poison: Save vs Doom or 1 damage per Round for 1d6 Rounds). Each turns back into a stick when slain or when the spell ends.',
+  },
+  // Rank 5
+  'Communion': {
+    range: 'The caster', duration: '3 Turns',
+    effect: "On a saint's feast day, ask that saint 3 questions, each answered truthfully yes or no, while entranced and unaware of the world. Once per week (the Referee may make it monthly); St Clewyd never answers.",
+  },
+  'Create Food': {
+    range: "Caster's presence", duration: 'Permanent',
+    effect: "Conjures a day's food for 12 people plus 12 mounts, and for 12 more of each per caster Level above 9.",
+  },
+  'Holy Fire': {
+    range: "30', or the caster or touch", duration: 'Instant, or up to 1 Turn of concentration',
+    effect: "One of: while the caster concentrates without moving, undead and magically created or summoned creatures coming within 30' Save vs Spell or are destroyed or banished (those who save flee); one such creature in range Saves vs Spell at -2 or is destroyed or banished (fleeing if it saves); or a touch cures a curse, disease or similar affliction.",
+  },
+  'Holy Quest': {
+    range: "30'", duration: 'Until the quest is done',
+    effect: "Commands one subject to carry out a specific quest that isn't obviously suicidal (Save vs Spell resists). Refusing brings -2 to Attack Rolls and saves; the spell ends when the task is done.",
+  },
+  'Insect Plague': {
+    range: "360'", duration: '1 Turn/Level',
+    effect: "A stationary swarm 60' across: creatures of Level 1-2 caught in it flee until at least 240' away, and inside it sight is cut to 30' and every creature takes 1 damage per Round.",
+  },
+  'Raise Dead': {
+    range: "120'", duration: 'Instant',
+    effect: "Returns a mortal (not a fairy or demi-fey) to life if dead no more than 2 days per caster Level; needs a cathedral ritual with a dozen priests and 2,000gp of incense. Until 2 weeks of bed rest, the subject has 1 HP and half Speed and can't carry heavy loads, attack, cast, make Skill Checks or use Class abilities (magical healing can't shorten this).",
+  },
+};
+
+/** The summary of an arcane or holy spell, matching its name case-insensitively. */
+export function getSpellSummary(spellType: SpellType, name: string): SpellSummary | undefined {
+  if (spellType === 'arcane') {
+    const spell = findArcaneSpell(name);
+    return spell ? ARCANE_SPELL_SUMMARIES[spell.name] : undefined;
+  }
+  const spell = findHolySpell(name);
+  return spell ? HOLY_SPELL_SUMMARIES[spell.name] : undefined;
+}
+
 // 5C: Glamour List (20 glamours)
 export const GLAMOURS: { id: number; name: string; description: string }[] = [
   { id: 1, name: 'Awe', description: 'Unnerve creatures (30\', total levels up to caster\'s level flee, 1d4 Rounds)' },
