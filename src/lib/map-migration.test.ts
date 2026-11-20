@@ -758,4 +758,62 @@ describe('Scenario 24: a v12 save from main, with Fairy time and old map pins', 
   test('a second load changes nothing', () => {
     assert.deepEqual(migrateCharacter(clone(migrated) as never), migrated);
   });
+
+  // The same save with its Fairy time broken by hand, which only #14's
+  // repair on load (sanitizeFairyTime) fixes. The expected values are what
+  // main at 3ef3c04 makes of it.
+  describe('with its Fairy time broken by hand, it is repaired as on main', () => {
+    const broken = clone(mainV12Save) as AnyData;
+    broken.fairyVisits = [
+      { id: 'dup', enteredOn: { day: 3, month: 0, year: 1 }, returnedOn: null, daysInFairy: 2.7 },
+      { id: 'dup', enteredOn: { day: 9, month: 1, year: 1 }, returnedOn: { day: 2, month: 1, year: 1 }, daysInFairy: -4 },
+      'junk',
+      { enteredOn: 'bad', returnedOn: null, daysInFairy: 'x' },
+    ];
+    broken.livedTimeStart = { day: 'one', month: 99 };
+    const entries = broken.journalEntries as AnyData[];
+    entries[0].fairyEvent = { visitId: 'dup', kind: 'teleported' };
+    entries[1].fairyDate = { visitId: 5, day: 'x' };
+    broken.spellStudy = {
+      active: { spellName: 'Web', startedOn: { day: 2, month: 0, year: 1 }, startedInFairy: { visitId: 'dup', day: -3 }, startedLivedDay: 'tampered' },
+      queue: [],
+    };
+    const repaired = migrateCharacter(clone(broken) as never);
+    const [first, second] = repaired.fairyVisits;
+    test('visits that are not objects, or have no entry date, are dropped', () => assert.equal(repaired.fairyVisits.length, 2));
+    test('a duplicate visit id is replaced', () => {
+      assert.equal(first.id, 'dup');
+      assert.ok(typeof second.id === 'string' && second.id !== '' && second.id !== 'dup', second.id);
+    });
+    test('an earlier visit left open is closed on the day it began', () => {
+      assert.deepEqual(first, { id: 'dup', enteredOn: { day: 3, month: 0, year: 1 }, returnedOn: { day: 3, month: 0, year: 1 }, daysInFairy: 2 });
+    });
+    test('a return before its entry moves to the entry day, and negative days in Fairy become 0', () => {
+      assert.deepEqual(second, { id: second.id, enteredOn: { day: 9, month: 1, year: 1 }, returnedOn: { day: 9, month: 1, year: 1 }, daysInFairy: 0 });
+    });
+    test("the calendar moves up to the last return, and the counter's start is repaired", () => {
+      assert.deepEqual(repaired.currentDate, { day: 9, month: 1, year: 1 });
+      assert.deepEqual(repaired.livedTimeStart, { day: 1, month: 11, year: 1, sinceReturnFrom: second.id });
+    });
+    test("a broken journal Fairy date and event are dropped, and the other entries' references are kept", () => {
+      assert.equal('fairyEvent' in repaired.journalEntries[0], false);
+      assert.equal('fairyDate' in repaired.journalEntries[1], false);
+      assert.deepEqual(repaired.journalEntries.slice(2), (saved.journalEntries as unknown[]).slice(2));
+    });
+    test("a tampered study anchor is worked out again, and the study's Fairy day repaired", () => {
+      assert.deepEqual(repaired.spellStudy.active, {
+        spellName: 'Web',
+        startedOn: { day: 2, month: 0, year: 1 },
+        startedInFairy: { visitId: 'dup', day: 1 },
+        startedLivedDay: 1,
+      });
+    });
+    test('the old pins still convert', () => {
+      assert.deepEqual(repaired.mapData.pois.map((p) => [p.name, p.hex]), [['Clearing', '1103'], ['North lobe tip', '1101'], ['Woodland islets', '0203']]);
+      assert.equal(repaired.currentLocationHex, '1103');
+    });
+    test('a second load changes nothing', () => {
+      assert.deepEqual(migrateCharacter(clone(repaired) as never), repaired);
+    });
+  });
 });
