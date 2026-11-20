@@ -169,17 +169,28 @@ function withLostRoad(notes: string, roadName: string): string {
  * made unique, and items that can't stay on the map are described in `lost`
  * (kept in Other Notes) instead of being deleted. Fields this repair doesn't
  * know about are kept as they are, so a field added later isn't deleted on
- * the next load if it was left out here.
+ * the next load if it was left out here. `legacyPois` (converted old-map
+ * pins) are added after the saved POIs.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sanitizeMapData(data: any, lost: string[]): void {
-  if (!isPlainObject(data.mapData)) data.mapData = {};
-  const md = data.mapData as Record<string, unknown>;
+function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown[]): void {
   const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
-  // Non-object entries aren't map items; keep any text they carry.
+  // Values that can't be map items (a mapData that isn't an object, a list
+  // that isn't an array, an entry that isn't an object) are replaced, but
+  // any text they carry is kept.
   const keepText = (v: unknown) => {
     const t = nonItemText(v);
     if (t) lost.push(t);
+  };
+  if (!isPlainObject(data.mapData)) {
+    keepText(data.mapData);
+    data.mapData = {};
+  }
+  const md = data.mapData as Record<string, unknown>;
+  const items = (key: 'pois' | 'fairyDoors' | 'leyLines'): unknown[] => {
+    if (Array.isArray(md[key])) return md[key];
+    keepText(md[key]);
+    return [];
   };
   // Ids must be unique across POIs, doors and ley lines: the UI keys,
   // focuses, edits and deletes items by id.
@@ -192,7 +203,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
   };
 
   const pois: MapPOI[] = [];
-  for (const raw of list(md.pois)) {
+  for (const raw of [...items('pois'), ...legacyPois]) {
     if (!isPlainObject(raw)) { keepText(raw); continue; }
     const p = raw as Record<string, unknown>;
     const name = asText(p.name);
@@ -206,7 +217,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
   md.pois = pois;
 
   const doors: FairyDoor[] = [];
-  for (const raw of list(md.fairyDoors)) {
+  for (const raw of items('fairyDoors')) {
     if (!isPlainObject(raw)) { keepText(raw); continue; }
     const d = raw as Record<string, unknown>;
     const name = asText(d.name);
@@ -241,7 +252,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
   });
 
   const leyLines: LeyLine[] = [];
-  for (const raw of list(md.leyLines)) {
+  for (const raw of items('leyLines')) {
     if (!isPlainObject(raw)) { keepText(raw); continue; }
     const l = raw as Record<string, unknown>;
     const name = asText(l.name);
@@ -253,7 +264,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
     const off = allHexes.filter((h) => !isValidHex(h)).map(asText).filter(Boolean);
     const label = `${type || DEFAULT_LEY_LINE_TYPE} ${name || 'Unnamed'}`;
     if (hexes.length < 2) {
-      const route = allHexes.map(asText).filter(Boolean).join(' → ');
+      const route = Array.isArray(l.hexes) ? allHexes.map(asText).filter(Boolean).join(' → ') : nonItemText(l.hexes);
       lost.push(`${label}${route ? ` (hexes ${route})` : ''}${notes ? `: ${notes}` : ''}`);
       continue;
     }
@@ -274,6 +285,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
       hexes: list(dft.hexes).filter(isValidHex),
     }, dft);
   } else {
+    keepText(md.draftLeyLine);
     delete md.draftLeyLine;
   }
 
@@ -325,10 +337,11 @@ function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
 
 /**
  * Convert pins saved by the pre-v12 map, a <!--MAP_PINS--> marker followed by
- * a JSON array in otherNotes, into POIs. Each pin goes on the hex typed into
- * the old "Hex #" field if that's a hex on the map, otherwise on the hex
- * under its position (keeping the typed text in the POI's notes); pins that
- * fit neither are described in `lost`. Text after the array is kept.
+ * a JSON array in otherNotes, into POIs, which it returns for sanitizeMapData
+ * to add. Each pin goes on the hex typed into the old "Hex #" field if that's
+ * a hex on the map, otherwise on the hex under its position (keeping the
+ * typed text in the POI's notes); pins that fit neither are described in
+ * `lost`. Text after the array is kept.
  *
  * Runs after the migration loop on every load and import, not only in
  * v11 → v12, so a save whose marker had to be repaired by hand still
@@ -336,27 +349,26 @@ function legacyPinPositionToHex(x: unknown, y: unknown): HexCoord | null {
  * left alone so the player can recover it.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function convertLegacyMapPins(data: any, lost: string[]): void {
+function convertLegacyMapPins(data: any, lost: string[]): MapPOI[] {
+  const converted: MapPOI[] = [];
   for (;;) { // a save can hold more than one marker
-    if (typeof data.otherNotes !== 'string') return;
+    if (typeof data.otherNotes !== 'string') return converted;
     const notes: string = data.otherNotes;
     const idx = notes.indexOf(MAP_PINS_MARKER);
-    if (idx === -1) return;
+    if (idx === -1) return converted;
     const rest = notes.slice(idx + MAP_PINS_MARKER.length);
     const end = endOfLeadingJsonArray(rest);
-    if (end === -1) return;
+    if (end === -1) return converted;
     let pins: unknown;
     try {
       pins = JSON.parse(rest.slice(0, end));
     } catch {
-      return;
+      return converted;
     }
-    if (!Array.isArray(pins)) return;
+    if (!Array.isArray(pins)) return converted;
     // Every pin below becomes a POI or a `lost` entry, so stripping the
     // marker and its JSON loses nothing.
     data.otherNotes = [notes.slice(0, idx).trimEnd(), rest.slice(end).trim()].filter(Boolean).join('\n');
-    if (!isPlainObject(data.mapData)) data.mapData = {};
-    if (!Array.isArray(data.mapData.pois)) data.mapData.pois = [];
 
     for (const raw of pins) {
       if (!isPlainObject(raw)) {
@@ -375,7 +387,7 @@ function convertLegacyMapPins(data: any, lost: string[]): void {
         if (label || typedHex) lost.push(typedHex ? `${label || 'Marker'} (Hex ${typedHex})` : label);
         continue;
       }
-      data.mapData.pois.push({
+      converted.push({
         id: asText(pin.id), // made unique by sanitizeMapData
         hex,
         name: label || 'Marker',
@@ -502,9 +514,11 @@ const migrations: Record<number, (data: any) => any> = {
   // Pins from the old map (the <!--MAP_PINS--> marker in otherNotes) are
   // converted after the migration loop, by convertLegacyMapPins, so that a
   // save whose marker was repaired by hand still converts on re-import.
+  // Values of the wrong shape are left for sanitizeMapData, which keeps any
+  // text they hold.
   11: (data) => {
-    if (!isPlainObject(data.mapData)) data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
-    if (typeof data.currentLocationHex !== 'string') data.currentLocationHex = '';
+    if (data.mapData === undefined) data.mapData = { pois: [], fairyDoors: [], leyLines: [] };
+    if (data.currentLocationHex === undefined) data.currentLocationHex = '';
     return data;
   },
 };
@@ -639,8 +653,8 @@ export function migrateCharacter(data: any): Character {
   // won't overwrite them.
   sanitizeCharacterDates(data);
   const lostMapItems: string[] = [];
-  convertLegacyMapPins(data, lostMapItems);
-  sanitizeMapData(data, lostMapItems);
+  const legacyPois = convertLegacyMapPins(data, lostMapItems);
+  sanitizeMapData(data, lostMapItems, legacyPois);
   keepLostMapItems(data, lostMapItems);
 
   return reconcileWithDefaults(data) as Character;

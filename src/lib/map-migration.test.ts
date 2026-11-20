@@ -213,7 +213,7 @@ describe('Scenario 8: pre-existing mapData with garbage entries', () => {
       '- not an object',
       '- Fairy door x (Hex bad)',
       '- Ley line short (hexes 0101)',
-      '- Ley line noarray',
+      '- Ley line noarray (hexes oops)',
     ].join('\n'));
   });
   test('a 3-digit colour is replaced by a 6-digit default', () => assert.equal(migrated.mapData.leyLines[0].color, '#c4a35a'));
@@ -657,5 +657,47 @@ describe('Scenario 22: fields the repair doesn\'t know about are kept', () => {
   });
   test('a second load changes nothing', () => {
     assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m));
+  });
+});
+
+describe('Scenario 23: text in map values of the wrong shape is kept in otherNotes', () => {
+  const textMap = migrateCharacter(baseV12('Remember the ford at 0606') as never);
+  test('a mapData that is text, not an object', () => {
+    assert.equal(textMap.otherNotes, `${UNPLACED_HEADING}\n- Remember the ford at 0606`);
+    assert.deepEqual(textMap.mapData, { pois: [], fairyDoors: [], leyLines: [] });
+  });
+  const old = baseV10();
+  old.mapData = 'Remember the ford at 0606';
+  test('…also in a save from before v12, which the v11 → v12 migration used to overwrite', () => {
+    assert.equal(migrateCharacter(old as never).otherNotes, `${UNPLACED_HEADING}\n- Remember the ford at 0606`);
+  });
+  const lists = migrateCharacter(baseV12({
+    pois: 'Shrine at 0303',
+    fairyDoors: 42,
+    leyLines: { route: '0303 to 0404' },
+    draftLeyLine: 'half a line',
+  }) as never);
+  test('lists that are not arrays, and a draft that is not an object', () => {
+    assert.equal(lists.otherNotes, [
+      UNPLACED_HEADING,
+      '- Shrine at 0303',
+      '- 42',
+      '- {"route":"0303 to 0404"}',
+      '- half a line',
+    ].join('\n'));
+    assert.deepEqual(lists.mapData, { pois: [], fairyDoors: [], leyLines: [] });
+  });
+  const empty = migrateCharacter(baseV12({ pois: null, fairyDoors: '', leyLines: '  ', draftLeyLine: null }) as never);
+  test('values with no text add nothing', () => assert.equal(empty.otherNotes, ''));
+  const pins = baseV10();
+  pins.mapData = 'Remember the ford at 0606';
+  pins.otherNotes = 'Prose.\n<!--MAP_PINS-->[{"id":"a","label":"Inn","hex":"0507"}]';
+  const converted = migrateCharacter(pins as never);
+  test('old-map pins still convert when mapData holds text', () => {
+    assert.deepEqual(converted.mapData.pois.map((p) => [p.name, p.hex]), [['Inn', '0507']]);
+    assert.equal(converted.otherNotes, `Prose.\n\n${UNPLACED_HEADING}\n- Remember the ford at 0606`);
+  });
+  test('a second load changes nothing', () => {
+    for (const m of [textMap, lists, converted]) assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m));
   });
 });
