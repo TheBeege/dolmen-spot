@@ -2,7 +2,7 @@
 
 A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collections/dolmenwood) tabletop RPG. Track characters, auto-calculate stats, manage inventory, and reference game data — all in the browser.
 
-**Live app:** [dolmen.stop](https://www.dolmen.spot/)
+**Live app:** [dolmen.spot](https://www.dolmen.spot/)
 
 ![Screenshot](docs/images/screenshot.png)
 
@@ -12,6 +12,7 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 - Support for all 6 kindreds (Breggle, Elf, Grimalkin, Human, Mossling, Woodgrue) and 9 classes (Bard, Cleric, Enchanter, Fighter, Friar, Hunter, Knight, Magician, Thief)
 - Kindred-class combinations with dedicated advancement tables
 - Multi-character support with import/export (JSON)
+- Optional cloud save to Google Drive or OneDrive
 
 ### Auto-Calculated Stats
 - Armor class, attack bonus, saves, and skills
@@ -48,7 +49,7 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 - [TypeScript](https://www.typescriptlang.org/)
 - [Tailwind CSS](https://tailwindcss.com/) v4
 - [Lucide React](https://lucide.dev/) icons
-- localStorage for persistence (no backend required)
+- localStorage for persistence (no backend required), with optional Google Drive / OneDrive cloud save
 
 ## Getting Started
 
@@ -61,16 +62,19 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+Cloud save is optional. To enable it locally, copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and/or `NEXT_PUBLIC_MICROSOFT_CLIENT_ID`. Without them the app runs on localStorage alone.
+
 ## Project Structure
 
 ```
 src/
-  app/          # Next.js app router (page, layout, global styles)
+  app/          # Next.js app router (sheet, /about, /changelog, layout, global styles)
   components/   # Tab components (CharacterInfo, CombatStats, Inventory, etc.)
-  hooks/        # useCharacter hook (state management + localStorage)
-  lib/          # Types, game data, and utilities
+  hooks/        # useCharacter (state + localStorage) and useCloudStorage
+  lib/          # Types, game data, save migrations, and cloud providers
 docs/
-  rules/        # Extracted rule reference documents
+  DEPLOYMENT-PHASES.md  # Feature roadmap
+  rules/                # Extracted rule reference (gitignored — copyrighted, local only)
 ```
 
 ## Disclaimer
