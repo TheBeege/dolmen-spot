@@ -375,12 +375,13 @@ export function addDays(date: CalendarDate, days: number): CalendarDate {
 // ──────────────────────────────────────────────────────────
 
 // Day of the year of each month's new and full moon.
-const LUNATIONS = MONTHS.map((m, i) => {
-  const monthStart = MONTHS.slice(0, i).reduce((sum, prev) => sum + prev.days, 0);
-  return { moonName: m.moonName, newMoon: monthStart + m.newMoon, fullMoon: monthStart + m.fullMoon };
-});
+const LUNATIONS = MONTHS.map((m, month) => ({
+  moonName: m.moonName,
+  newMoon: getDayOfYear({ day: m.newMoon, month, year: 1 }),
+  fullMoon: getDayOfYear({ day: m.fullMoon, month, year: 1 }),
+}));
 
-export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; dayInCycle: number; moonName: string } {
+export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | 'waning'; moonName: string } {
   const doy = getDayOfYear(date);
   // The moon in the sky is the one whose new moon came most recently.
   // Until Grimvold's new moon, that is still last year's Black moon.
@@ -389,9 +390,8 @@ export function getMoonPhase(date: CalendarDate): { phase: 'waxing' | 'full' | '
   for (const lunation of LUNATIONS) {
     if (lunation.newMoon <= doy) moon = lunation;
   }
-  const dayInCycle = doy - moon.newMoon + 1; // 1 = new moon
   const phase = Math.abs(doy - moon.fullMoon) <= 1 ? 'full' : doy < moon.fullMoon ? 'waxing' : 'waning';
-  return { phase, dayInCycle, moonName: moon.moonName };
+  return { phase, moonName: moon.moonName };
 }
 
 // Name of the moon in the sky on this date. Usually the month's own moon,
