@@ -208,12 +208,14 @@ export function cjkFontsFor(text: string): CjkFamilyKey[] {
 
 /**
  * Downloads (the first time) and registers the fonts for a sheet whose
- * printable text is `text`. Rejects with a PDF load error (errors.ts) if a
- * font can't be fetched or its download stalls; calling it again then retries
- * the fonts that failed.
+ * printable text is `text`, calling `onDownload` first if any must be
+ * downloaded. Rejects with a PDF load error (errors.ts) if a font can't be
+ * fetched or its download stalls; calling it again then retries the fonts
+ * that failed.
  */
-export async function loadSheetFonts(text: string): Promise<SheetFonts> {
+export async function loadSheetFonts(text: string, onDownload?: () => void): Promise<SheetFonts> {
   const keys: FamilyKey[] = ['sans', 'italic', 'serif', ...cjkFontsFor(text)];
+  if (keys.some((key) => !families.has(key))) onDownload?.();
   const controller = new AbortController();
   let loaded: Family[];
   try {

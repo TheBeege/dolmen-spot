@@ -43,12 +43,22 @@ function saveBlob(blob: Blob, fileName: string) {
   }
 }
 
-/** Renders the character sheet and saves it as `<name>-dolmen-spot.pdf`. */
-export async function downloadCharacterPdf(character: Character): Promise<void> {
+/** What an export is busy with: downloading fonts (only the first time), then laying out the sheet. */
+export type ExportPhase = 'fonts' | 'layout';
+
+/**
+ * Renders the character sheet and saves it as `<name>-dolmen-spot.pdf`,
+ * telling `onPhase` what it's doing.
+ */
+export async function downloadCharacterPdf(
+  character: Character,
+  onPhase?: (phase: ExportPhase) => void,
+): Promise<void> {
   if (typeof window === 'undefined' || typeof document === 'undefined') {
     throw new Error('PDF export only runs in the browser.');
   }
-  const fonts = await loadSheetFonts(sheetText(character));
+  const fonts = await loadSheetFonts(sheetText(character), () => onPhase?.('fonts'));
+  onPhase?.('layout');
   const exportedOn = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const blob = await pdf(
     <CharacterSheetDocument
