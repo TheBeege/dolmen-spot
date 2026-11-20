@@ -1,16 +1,10 @@
-import { dirname } from "path";
-import { fileURLToPath } from "url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextVitals from "eslint-config-next/core-web-vitals";
+import nextTs from "eslint-config-next/typescript";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-const compat = new FlatCompat({ baseDirectory: __dirname });
-
-const eslintConfig = [
-  {
-    ignores: ["node_modules/**", ".next/**", "out/**", "next-env.d.ts", "public/**"],
-  },
-  ...compat.extends("next/core-web-vitals", "next/typescript"),
+const eslintConfig = defineConfig([
+  ...nextVitals,
+  ...nextTs,
   {
     rules: {
       // Allow `_`-prefixed names for intentionally discarded values,
@@ -21,6 +15,18 @@ const eslintConfig = [
       ],
     },
   },
-];
+  {
+    // `react-hooks/set-state-in-effect` arrived with eslint-plugin-react-hooks v7
+    // (bundled by eslint-config-next 16). These files predate it, so it's a warning
+    // here until they're refactored; everywhere else it stays an error.
+    files: ["src/hooks/useCharacter.ts", "src/components/CloudStorageModal.tsx"],
+    rules: {
+      "react-hooks/set-state-in-effect": "warn",
+    },
+  },
+  // eslint-config-next already ignores .next/, out/, build/ and next-env.d.ts
+  // (node_modules/ is ignored by ESLint itself).
+  globalIgnores(["public/**"]),
+]);
 
 export default eslintConfig;
