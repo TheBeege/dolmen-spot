@@ -12,7 +12,7 @@ type ChangelogSection = {
   changes: string[];
 };
 
-// One entry per release (a fast-forward of `release` to `main`), written when the release is cut.
+// One entry per release, covering every player-facing PR in it, written when the release is cut.
 type ChangelogEntry = {
   /** The day the release went live on dolmen.spot (YYYY-MM-DD). */
   date: string;
@@ -31,15 +31,36 @@ type ChangelogEntry = {
 const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-20',
-    title: 'Printable PDF character sheets',
-    prNumbers: [11],
-    changes: [
-      'New "Download PDF" button next to Save / Load saves a printable character sheet of your current character, named after them. On phones it shows as a download icon.',
-      'The sheet covers your character details, ability scores and modifiers, all five saving throws, combat stats (HP, AC, attack, melee, missile, speed and magic resistance), skills, class and kindred features, languages, retainers, your spells, glamours, runes or knacks, and your inventory by container with encumbrance and coins.',
-      'The map, free-form notes, the journal and the calendar stay in the app and aren\'t printed.',
-      'Pages are printer-friendly with selectable text. Long inventories continue onto extra pages with their table headings repeated, and every page shows your character\'s name and a page number.',
-      'Paper size follows your browser\'s language: Letter in the US, Canada and other Letter-paper regions, A4 elsewhere.',
-      'On phones, the header now shortens long character names and hides the kindred and class, so its buttons always fit on screen.',
+    title: 'Printable character sheets, calendar fixes, and a site icon',
+    prNumbers: [10, 11, 18],
+    sections: [
+      {
+        heading: 'Printable PDF character sheets',
+        changes: [
+          'New "Download PDF" button next to "Save / Load" saves a printable character sheet of your current character, named after them. On phones it shows as a download icon.',
+          'The sheet covers your character details, ability scores and modifiers, all five saving throws, combat stats (HP, AC, attack, melee, missile, speed, and magic resistance), skills, class and kindred features, languages, retainers, your spells, glamours, runes, or knacks, and your inventory by container with encumbrance and coins.',
+          'The Adventuring tab (calendar, conditions, rations, travel, light sources, spell study, and journal), the map, and free-form notes stay in the app and aren\'t printed.',
+          'Pages are printer-friendly with selectable text. Long inventories continue onto extra pages with their table headings repeated, and every page shows your character\'s name and a page number.',
+          'Paper size follows your browser\'s language: Letter in the US, Canada, and other Letter-paper regions, A4 elsewhere.',
+          'On phones, the header now hides the kindred and class and shortens long character names further, so its buttons always fit on screen.',
+        ],
+      },
+      {
+        heading: 'Calendar',
+        changes: [
+          'Days of the week are named correctly again: every month starts on Colly, and the Wysendays at the end of a month (such as Hanglemas and Dolmenday) show their own names instead of a weekday. Journal entries and spell-study start dates show the corrected names too.',
+          'Moon phases now match the official Dolmenwood calendar, with full moons on the marked days (for example, 19 Grimvold) every year instead of drifting further off each year.',
+          'Before a month\'s new moon, the calendar shows the previous month\'s moon waning (for example, 1 Grimvold shows "Black moon · Waning"). The month summary gives the month\'s own moon and its new- and full-moon days, for example "Moon: Grinning moon (new 4th, full 19th)".',
+          'The Day of Virgins and The Day of Doors now carry their full names from the book.',
+          'The Reference tab\'s calendar lists each month\'s new- and full-moon days and explains how weeks, Wysendays, and moon phases work. On phones, each month\'s season shows under its name so the moon days fit.',
+        ],
+      },
+      {
+        heading: 'Site icon',
+        changes: [
+          'Dolmen Spot has its own icon in browser tabs, bookmarks, and history: a gold dolmen on a dark tile. Adding the site to a phone\'s home screen uses the same icon.',
+        ],
+      },
     ],
   },
   {
