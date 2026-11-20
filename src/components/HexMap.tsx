@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type {
   Character,
   CharacterMapData,
@@ -676,6 +676,38 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     }
   };
 
+  // Zooming, or the map box changing size, can swap a hex's separate markers
+  // for one combined marker or back. If one of them had focus, focus would
+  // fall to the page, and the keys that pan and zoom would stop working until
+  // the player tabbed back in. Instead it moves to whatever now marks that
+  // hex: its combined marker, or the first of its separate ones (or failing
+  // both, the map).
+  const focusedMarkerRef = useRef<{ el: Element; hex: HexCoord } | null>(null);
+  const handleMapFocus = (e: React.FocusEvent<SVGSVGElement>) => {
+    const el = e.target as Element;
+    const hex = el.getAttribute('data-marker-hex') ?? (el.getAttribute('role') === 'button' ? el.getAttribute('data-hex') : null);
+    focusedMarkerRef.current = hex ? { el, hex } : null;
+  };
+  const handleMapBlur = (e: React.FocusEvent<SVGSVGElement>) => {
+    const el = e.target as Element;
+    // Forget the marker if the player moved focus away from it. If it lost
+    // focus by being removed, it's gone by now; the effect below handles that.
+    queueMicrotask(() => {
+      if (focusedMarkerRef.current?.el === el && el.isConnected) focusedMarkerRef.current = null;
+    });
+  };
+  useLayoutEffect(() => {
+    const focused = focusedMarkerRef.current;
+    if (!focused || focused.el.isConnected) return;
+    focusedMarkerRef.current = null;
+    const svg = svgRef.current;
+    const active = document.activeElement;
+    if (!svg || (active && active !== document.body && active !== document.documentElement)) return;
+    const hex = CSS.escape(focused.hex);
+    const next = svg.querySelector<SVGElement>(`[role="button"][data-hex="${hex}"], [data-marker-hex="${hex}"]`) ?? svg;
+    next.focus({ preventScroll: true });
+  });
+
   const finishLeyLine = useCallback(() => {
     // Mint the id outside the updater: StrictMode runs updaters twice, and
     // both runs must produce the same line.
@@ -1127,6 +1159,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
           onPointerLeave={handlePointerLeave}
           onClick={handleMapClick}
           onKeyDown={handleMapKeyDown}
+          onFocus={handleMapFocus}
+          onBlur={handleMapBlur}
         >
           <rect x={baseBounds.x} y={baseBounds.y} width={baseBounds.w} height={baseBounds.h} fill={NIGHT} />
           <g style={{ cursor: draft ? 'crosshair' : 'pointer' }}>
