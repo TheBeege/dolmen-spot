@@ -1502,7 +1502,9 @@ function itemName(item: InventoryItem): string {
     const spell = item.scrollSpell;
     return spell?.name ? `Scroll: ${spell.name} (R${spell.rank})` : 'Scroll (no spell chosen)';
   }
-  return item.name;
+  // The Inventory tab shows an item's (or spell book's) name on one line, even
+  // one saved with a line break, so the sheet does too.
+  return oneLine(item.name ?? '');
 }
 
 function ItemCell({ item }: { item: InventoryItem }) {
