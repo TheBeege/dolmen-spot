@@ -63,7 +63,8 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
   const handleKindredChange = (kindred: Character['kindred']) => {
     const newAvailable = getAvailableClasses(kindred);
-    const classStillValid = !character.class || newAvailable.some(c => c.class.id === character.class);
+    // A class id the app doesn't know is kept: it's never renamed or dropped.
+    const classStillValid = !character.class || isUnknownClass || newAvailable.some(c => c.class.id === character.class);
     const effectiveClass = classStillValid ? character.class : '';
 
     const newXp = calculateXpModifier(effectiveClass, kindred, character.abilityScores);
