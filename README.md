@@ -36,6 +36,11 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 - Condition and status tracking
 - Travel, light source, and camping calculators
 
+### Journal
+- Entries stamped with the date (a Fairy day while in Fairy) and the map hex the party is in
+- Listed newest first, in the order your character lived them
+- Search by text, place, hex or date, filter by hex, and open a hex's entries from the map
+
 ### Interactive Hex Map
 - Dolmenwood hex map for tracking exploration
 

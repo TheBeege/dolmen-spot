@@ -1,7 +1,8 @@
-// Tests for the map's pan and zoom limits (hex.ts). Run with `npm test`.
+// Tests for the map's pan and zoom limits, and reading a typed hex (hex.ts).
+// Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { CENTRE_HULL, MIN_VIEW_FRACTION, PAN_MARGIN as MARGIN, gridBounds, hexCenterOf, hexVertices, nearestPointOnMap } from './hex';
+import { CENTRE_HULL, MIN_VIEW_FRACTION, PAN_MARGIN as MARGIN, gridBounds, hexCenterOf, hexVertices, nearestPointOnMap, parseTypedHex } from './hex';
 import { ALL_HEXES, HEX_CELLS } from './hex-grid';
 
 type Point = { x: number; y: number };
@@ -126,5 +127,18 @@ describe('MIN_VIEW_FRACTION', () => {
   });
   test('(the old limit, 5%, left some of those views blank)', () => {
     assert.ok(centres.some((c) => !showsAHex(c, 0.05 * b.w, 0.05 * b.h)));
+  });
+});
+
+describe('parseTypedHex', () => {
+  test('a hex on the map, as typed or without its leading zero, and with spaces around it', () => {
+    assert.equal(parseTypedHex('0606'), '0606');
+    assert.equal(parseTypedHex(' 1303 '), '1303');
+    assert.equal(parseTypedHex('303'), '0303');
+  });
+  test('anything else is not a hex', () => {
+    for (const typed of ['', '   ', '9999', '7', '06 06', '0606a', 'Hex 0606', '00606', '-606', '6.06']) {
+      assert.equal(parseTypedHex(typed), null, typed);
+    }
   });
 });
