@@ -82,6 +82,7 @@ const COORD_LABEL_OPACITY = 0.7;
 
 // --- Navigation ---
 const PAN_THRESHOLD_PX = 4; // movement before a press becomes a pan, so taps still select
+const CLICK_AFTER_GESTURE_MS = 250; // a pointer's click this soon after a pan or pinch ends belongs to it
 const MIN_VIEW_FRACTION = 0.05; // most zoomed in: 5% of the map's width
 const MAX_VIEW_FRACTION = 1.5; // most zoomed out
 const WHEEL_ZOOM_PER_PX = 0.0015; // a 100 px mouse-wheel notch zooms ~16%
@@ -430,11 +431,12 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     | { kind: 'pinch'; startDist: number; startMid: Point; anchor: Point; view: View; rect: DOMRect }
     | null
   >(null);
-  // Set when a mouse or pen pan or pinch ends, so the click the browser fires
-  // right after it doesn't select anything. It's cleared once that event is
-  // over: a touch drag fires no click, and a flag left set would swallow the
-  // next click that comes without a press (from assistive technology).
-  const suppressClickRef = useRef(false);
+  // Until when a click belongs to the pan or pinch that just ended and
+  // mustn't select anything. Browsers fire one right after a mouse drag, and
+  // after a touch drag that stayed within their tap slop (about 15 px, more
+  // than our 4 px pan threshold). A new press resets it, it runs out soon,
+  // and it never applies to a click no pointer made (a TalkBack double-tap).
+  const suppressClickUntilRef = useRef(0);
   // The pointer type of the last press, for clicks that don't report one.
   const lastPointerTypeRef = useRef('');
 
@@ -451,8 +453,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
 
   const handlePointerDown = (e: React.PointerEvent<SVGSVGElement>) => {
     lastPointerTypeRef.current = e.pointerType;
-    // A new interaction: forget a suppression left by an earlier drag.
-    suppressClickRef.current = false;
+    // A new interaction: forget a suppression left by an earlier gesture.
+    suppressClickUntilRef.current = 0;
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     pointersRef.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     const pts = [...pointersRef.current.values()];
@@ -535,12 +537,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   const handlePointerEnd = (e: React.PointerEvent<SVGSVGElement>) => {
     if (!pointersRef.current.has(e.pointerId)) return;
     const g = gestureRef.current;
-    if (g !== null && (g.kind === 'pinch' || g.moved) && e.pointerType !== 'touch') {
-      suppressClickRef.current = true;
-      // The click, if any, is dispatched with the pointerup, before this runs.
-      setTimeout(() => {
-        suppressClickRef.current = false;
-      }, 0);
+    if (g !== null && (g.kind === 'pinch' || g.moved)) {
+      suppressClickUntilRef.current = performance.now() + CLICK_AFTER_GESTURE_MS;
     }
     removePointer(e.pointerId);
   };
@@ -609,15 +607,19 @@ export default function HexMap({ character, onChange }: HexMapProps) {
   };
 
   const handleMapClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    // Current browsers make the click a PointerEvent. Its pointerType is ''
+    // when no pointer made it (assistive technology, the keyboard), and such
+    // a click is never the end of a gesture. In other browsers the last
+    // press's pointer type stands in.
+    const clickType = (e.nativeEvent as Partial<PointerEvent>).pointerType;
     // The click that ends a pan or pinch isn't a selection.
-    if (suppressClickRef.current) {
-      suppressClickRef.current = false;
+    if (clickType !== '' && performance.now() < suppressClickUntilRef.current) {
+      suppressClickUntilRef.current = 0;
       return;
     }
+    const pointerType = clickType ?? lastPointerTypeRef.current;
     // A tap on a marker focuses its editor, not the name field, so that a
-    // phone or tablet doesn't raise its keyboard. Current browsers make the
-    // click a PointerEvent; for others, the last press's type stands in.
-    const pointerType = (e.nativeEvent as Partial<PointerEvent>).pointerType ?? lastPointerTypeRef.current;
+    // phone or tablet doesn't raise its keyboard.
     activateMapItem(e.target as Element, pointerType === 'touch' || pointerType === 'pen' ? 'item' : 'name');
   };
 
