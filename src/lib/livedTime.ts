@@ -51,8 +51,8 @@ import {
   formatShortDate,
   fromAbsoluteDay,
   getAbsoluteDay,
-  plural,
 } from './gamedata';
+import { pluralize } from './grammar';
 
 /** Year 1, day 1: where the lived-time clock starts (lived day 0), and the default start of the days-lived counter. */
 export const LIVED_TIME_EPOCH: CalendarDate = { day: 1, month: 0, year: 1 };
@@ -445,7 +445,7 @@ export function isWithinCalendar(date: CalendarDate): boolean {
 
 // The sentence for a return's automatic journal entry.
 function describeReturn(visitNumber: number, daysInFairy: number, enteredOn: CalendarDate, returnedOn: CalendarDate): string {
-  const stay = daysInFairy > 0 ? `after ${plural(daysInFairy, 'day')}` : 'without spending a day there';
+  const stay = daysInFairy > 0 ? `after ${pluralize(daysInFairy, 'day', { grouping: true })}` : 'without spending a day there';
   const passed = daysBetween(enteredOn, returnedOn) > 0
     ? `${describeDolmenwoodSpan(enteredOn, returnedOn)} passed in Dolmenwood`
     : 'no time passed in Dolmenwood';

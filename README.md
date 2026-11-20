@@ -81,11 +81,47 @@ src/
 docs/
   DEPLOYMENT-PHASES.md  # Feature roadmap
   rules/                # Extracted rule reference (gitignored — copyrighted, local only)
+public/fonts/pdf/       # Fonts the PDF export embeds (see below)
 scripts/
+  build-pdf-fonts.py    # Rebuilds the PDF fonts in public/fonts/pdf/ (see below)
   generate-icons.mjs    # Rebuilds the raster app icons from src/app/icon.svg
 ```
 
 The app icon is drawn in `src/app/icon.svg`. After changing it, run `node scripts/generate-icons.mjs` to rebuild `src/app/favicon.ico` (16, 32 and 48 px) and `src/app/apple-icon.png` (180 px, for iOS home screens) from it, and commit all three. Next.js adds the `<link>` tags for them automatically.
+
+## PDF Fonts
+
+The "Download PDF" export draws the sheet with fonts from `public/fonts/pdf/`, which the browser fetches only when a sheet is exported:
+
+| File | Covers | Size | Fetched |
+|------|--------|------|---------|
+| `NotoSans-Regular`, `NotoSans-Bold`, `NotoSans-Italic`, `NotoSerif-Bold` | Latin (incl. Latin Extended and Vietnamese), Greek (incl. polytonic), Cyrillic | 0.78 MB together | on every export |
+| `NotoSansSymbols` | Symbols players write in notes: check boxes, check and cross marks, stars, card suits, dice, music, sun and moon, arrows... | 38 KB | on every export |
+| `NotoSansCJK-Hangul` | Korean Hangul | 1.2 MB | only for sheets with Korean text |
+| `NotoSansCJK-HanKana` | Japanese kana and the Han characters of JIS X 0208, GB 2312, Big5 level 1 and KS X 1001, plus variant kanji common in Japanese names | 2.5 MB | only for sheets with Japanese or Chinese text |
+
+Each file is named after its content (`NotoSans-Regular.<hash>.ttf`), and `next.config.ts` lets browsers cache these files for a year, so each one is downloaded once. The script writes the current names to `src/lib/pdf/font-files.ts`, which the app imports.
+
+They are subsets of [Noto Sans, Noto Serif](https://github.com/notofonts/latin-greek-cyrillic) 2.015, [Noto Sans Symbols and Symbols 2](https://github.com/notofonts/symbols) 2.003 and 2.008 (merged into one font, with Noto Sans's "…") and [Noto Sans CJK](https://github.com/notofonts/noto-cjk) 2.004, licensed under the SIL Open Font License 1.1 (`public/fonts/pdf/LICENSE-*.txt`). Emoji such as 🔥 are left out (a symbol such as ❤ prints, even when written as the emoji ❤️), and letters from scripts the fonts don't cover (Arabic, Hebrew, Devanagari, Thai...) print as `?`.
+
+To rebuild them (for example to cover more characters), edit and run the script. It downloads the pinned releases, checks their SHA-256 and writes the subsets; with the same fontTools version the output is byte-identical:
+
+```bash
+pip install 'fonttools==4.63.0'
+python3 scripts/build-pdf-fonts.py          # rebuild public/fonts/pdf/ and src/lib/pdf/font-files.ts
+python3 scripts/build-pdf-fonts.py --check  # verify the committed files are up to date
+```
+
+## Patched Dependencies
+
+`patches/` holds fixes to react-pdf's PDF export, which [patch-package](https://github.com/ds300/patch-package) applies after every `npm install` and `npm ci` (the `postinstall` script):
+
+- `@react-pdf/textkit`: text cut off at its line limit (`maxLines`) ends in "…", also when the cut falls at a line break, which used to drop the rest of the text silently.
+- `@react-pdf/textkit` and `@react-pdf/render`: accents that the font moves over their letter (a letter followed by a combining mark, as in n + U+0308) are drawn over it, raised over a capital, instead of after it.
+
+After upgrading `@react-pdf/renderer`, check whether the new versions still need them. A patch that no longer applies fails the install, locally as well as in CI and on Vercel (`--error-on-fail`), and patch-package warns when a package's version has changed. To change a patch, edit the package in `node_modules/` and run `npx patch-package <package name>`.
+
+A changed patch only applies to a fresh copy of its package, so reinstall with `npm ci`, which starts from an empty `node_modules`, rather than `npm install`. Vercel does the same (`installCommand` in `vercel.json`): its build cache keeps `node_modules`, with the old patches applied, from one build to the next.
 
 ## Disclaimer
 
