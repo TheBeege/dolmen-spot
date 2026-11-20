@@ -15,7 +15,7 @@ import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
 import ExportPdfButton from '@/components/ExportPdfButton';
-import StorageBanner from '@/components/StorageBanner';
+import StorageBanner, { StorageAnnouncer, StorageReminder } from '@/components/StorageBanner';
 import { ImportError } from '@/lib/storage';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
@@ -44,6 +44,7 @@ export default function Home() {
     deleteCharacter,
     switchCharacter,
     exportCharacter,
+    exportAllCharacters,
     importCharacter,
     getCharacterJson,
     importCharacterFromJson,
@@ -78,6 +79,8 @@ export default function Home() {
   if (!loaded || !activeCharacter) {
     return (
       <div className="min-h-screen flex items-center justify-center">
+        {/* First in both layouts, so React keeps the same live region once loaded */}
+        <StorageAnnouncer />
         <div className="text-center">
           <h1 className="text-2xl font-bold text-[#c4a35a] mb-2">Dolmen Spot</h1>
           <p className="text-[#f5e6c8]/60">Loading character sheet...</p>
@@ -90,6 +93,7 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <StorageAnnouncer />
       {/* Header */}
       <header className="bg-[#1a1a2e] border-b border-[#5a3a28] sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 py-2">
@@ -214,9 +218,16 @@ export default function Home() {
           </nav>
         </div>
 
-        {/* Only shown when saved data couldn't be read or saving is failing */}
-        <StorageBanner onExportCharacter={exportCharacter} />
+        {/* One line, only while changes aren't being saved */}
+        <StorageReminder />
       </header>
+
+      {/* Only when saved data couldn't be read or saving fails; scrolls away with the page */}
+      <StorageBanner
+        characterCount={characters.length}
+        onExportCharacter={exportCharacter}
+        onExportAll={exportAllCharacters}
+      />
 
       {/* Main Content */}
       <main className="flex-1 max-w-6xl mx-auto w-full px-3 py-4">

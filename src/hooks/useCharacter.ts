@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { Character } from '@/lib/types';
+import { downloadFile, localFileStamp } from '@/lib/download';
 import { createNewAdventurer, getCharacterStore, ImportError, parseImportedCharacters } from '@/lib/storage';
 
 interface CharacterSession {
@@ -68,14 +69,13 @@ export function useCharacter() {
 
   const exportCharacter = useCallback(() => {
     if (!activeCharacter) return;
-    const blob = new Blob([JSON.stringify(activeCharacter, null, 2)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${activeCharacter.name || 'character'}.dolmenwood.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadFile(`${activeCharacter.name || 'character'}.dolmenwood.json`, JSON.stringify(activeCharacter, null, 2));
   }, [activeCharacter]);
+
+  // One file with every character. Import Character accepts it.
+  const exportAllCharacters = useCallback(() => {
+    downloadFile(`dolmen-spot-characters-${localFileStamp()}.dolmenwood.json`, JSON.stringify(characters, null, 2));
+  }, [characters]);
 
   const importCharacter = useCallback((file: File) => {
     const reader = new FileReader();
@@ -115,6 +115,7 @@ export function useCharacter() {
     deleteCharacter,
     switchCharacter,
     exportCharacter,
+    exportAllCharacters,
     importCharacter,
     getCharacterJson,
     importCharacterFromJson,
