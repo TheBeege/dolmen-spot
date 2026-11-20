@@ -125,6 +125,22 @@ function asText(v: unknown): string {
   return '';
 }
 
+/**
+ * Text to keep for a non-object entry found where map items or pins were
+ * expected: strings (trimmed), numbers and booleans as written, arrays as
+ * JSON; '' for null or an empty string, which hold nothing to keep.
+ */
+function nonItemText(v: unknown): string {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'string') return v.trim();
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  try {
+    return JSON.stringify(v) ?? '';
+  } catch {
+    return '';
+  }
+}
+
 /** "Label (Hex 1313): notes" for the couldn't-be-placed list. */
 function lostItem(label: string, hex: string, notes: string): string {
   return `${label}${hex ? ` (Hex ${hex})` : ''}${notes ? `: ${notes}` : ''}`;
@@ -152,7 +168,7 @@ function sanitizeMapData(data: any, lost: string[]): void {
   const list = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
   // Non-object entries aren't map items; keep any text they carry.
   const keepText = (v: unknown) => {
-    const t = asText(v).trim();
+    const t = nonItemText(v);
     if (t) lost.push(t);
   };
   // Ids must be unique across POIs, doors and ley lines: the UI keys,
@@ -333,7 +349,7 @@ function convertLegacyMapPins(data: any, lost: string[]): void {
 
     for (const raw of pins) {
       if (!isPlainObject(raw)) {
-        const t = asText(raw).trim();
+        const t = nonItemText(raw);
         if (t) lost.push(t);
         continue;
       }

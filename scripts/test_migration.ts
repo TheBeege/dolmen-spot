@@ -404,12 +404,12 @@ section('Scenario 11c: asymmetric door pair gets repaired to wild');
 section("Scenario 11: pins that can't be placed are kept in otherNotes");
 {
   const data = baseV10();
-  data.otherNotes = 'Prose.\n<!--MAP_PINS-->[{},{"label":"no-hex"},{"hex":"abcd"},{"hex":"0303","label":"good"},null,"str"]';
+  data.otherNotes = 'Prose.\n<!--MAP_PINS-->[{},{"label":"no-hex"},{"hex":"abcd"},{"hex":"0303","label":"good"},null,"str",true,[1,"a"]]';
   const migrated = migrateCharacter(data as never);
   check('only the good pin becomes a POI', migrated.mapData.pois.length === 1);
   check('good pin label', migrated.mapData.pois[0].name === 'good');
   check('marker stripped, unplaced pins (and text-only entries) listed after the prose; empty ones ignored',
-    migrated.otherNotes === `Prose.\n\n${UNPLACED_HEADING}\n- no-hex\n- Marker (Hex abcd)\n- str`, JSON.stringify(migrated.otherNotes));
+    migrated.otherNotes === `Prose.\n\n${UNPLACED_HEADING}\n- no-hex\n- Marker (Hex abcd)\n- str\n- true\n- [1,"a"]`, JSON.stringify(migrated.otherNotes));
 }
 
 // ----- Scenario 12: pins placed by their position on the old map -----
