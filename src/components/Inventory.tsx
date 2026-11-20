@@ -47,6 +47,15 @@ const NAME_HEADER = 'w-1/4 min-w-44';
 // than an item row's to keep their fields on the same columns.
 const BORDERED_ROW_PADDING = 'py-2 px-[calc(0.5rem-1px)]';
 
+// On phones a name shares its line with the move select and × until that would
+// make it narrower than this; then they wrap below it. In rem, so it grows with
+// the default font size (6rem is 96px at 16px, 144px at 24px), but never wider
+// than the row. A spell book's title cell adds room for its toggle and icon
+// (3rem), a scroll's spell cell for its icon (1.5rem).
+const NAME_MIN_WIDTH = 'min-w-[min(6rem,100%)]';
+const SPELL_BOOK_TITLE_MIN_WIDTH = 'min-w-[min(9rem,100%)]';
+const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
+
 type CatalogTarget = { section: 'equipped' } | { section: 'stowed'; containerId?: string };
 
 export default function Inventory({ character, onChange }: InventoryProps) {
@@ -388,10 +397,11 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const focusSlots = (itemId: string) => () => document.getElementById(slotsFieldId(itemId))?.focus();
 
   // A row's move select (stowed items, when there are containers) and its ×.
-  // Every row renders each twice: one copy next to the name on phones, one at
-  // the end of the row from sm up, with the other copy hidden (display: none),
-  // so the keyboard order always matches what's on screen. Each is one field
-  // line tall, so it sits centred on the first line of a field that has grown.
+  // Every row renders each twice: on phones together after the name
+  // (phoneControlsFor), and from sm up at the end of the row, with the other
+  // copy hidden (display: none), so the keyboard order always matches what's on
+  // screen. Each is one field line tall, so it sits centred on the first line of
+  // a field that has grown.
   const moveSelectFor = (item: InventoryItem, equipped: boolean, label: string, layoutClass: string) =>
     !equipped && containers.length > 0 ? (
       <div className={`${ONE_LINE_FIELD_HEIGHT} shrink-0 items-center ${layoutClass}`}>
@@ -422,6 +432,14 @@ export default function Inventory({ character, onChange }: InventoryProps) {
       &times;
     </button>
   );
+  // The phone copies of both, as one group: when there's no room beside the
+  // name they wrap below it together, rather than the × on its own.
+  const phoneControlsFor = (item: InventoryItem, equipped: boolean, label: string) => (
+    <div className="flex shrink-0 items-start gap-2 sm:hidden">
+      {moveSelectFor(item, equipped, label, 'flex')}
+      {removeButtonFor(item, equipped, label, '')}
+    </div>
+  );
 
   const renderSpellbookItem = (item: InventoryItem, equipped: boolean, position: string) => {
     const contents = item.spellbookContents ?? [];
@@ -436,7 +454,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             Weight on the second. A long title wraps, so everything lines up
             along the top, with the smaller controls centred on its first line. */}
         <div className={`flex flex-wrap items-start gap-2 ${BORDERED_ROW_PADDING}`}>
-          <span className={`flex flex-1 min-w-[120px] items-start gap-2 ${NAME_COLUMN}`}>
+          <span className={`flex flex-1 ${SPELL_BOOK_TITLE_MIN_WIDTH} items-start gap-2 ${NAME_COLUMN}`}>
             <button
               type="button"
               onClick={() => toggleSpellbookCollapse(item.id)}
@@ -460,8 +478,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               fieldClassName={inputClasses}
             />
           </span>
-          {moveSelectFor(item, equipped, bookName, 'flex sm:hidden')}
-          {removeButtonFor(item, equipped, bookName, 'sm:hidden')}
+          {phoneControlsFor(item, equipped, bookName)}
           <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
             <label className="flex flex-col gap-0.5">
               {phoneLabel('Slots')}
@@ -583,7 +600,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     const scrollName = scroll.name ? `scroll of ${scroll.name}` : 'scroll';
     return (
       <div key={item.id} className={`flex flex-wrap items-start gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1 ${BORDERED_ROW_PADDING}`}>
-        <span className={`flex flex-1 min-w-[120px] items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
+        <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
           <span className="text-[#c4a35a] text-sm shrink-0" title="Scroll">📜</span>
           <select
             value={scroll.name}
@@ -608,8 +625,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             ))}
           </select>
         </span>
-        {moveSelectFor(item, equipped, scrollName, 'flex sm:hidden')}
-        {removeButtonFor(item, equipped, scrollName, 'sm:hidden')}
+        {phoneControlsFor(item, equipped, scrollName)}
         <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
           <span className="hidden sm:block w-16 shrink-0" />
           <label className="flex flex-col gap-0.5">
@@ -713,11 +729,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           enterKeyHint="next"
           placeholder="Item name"
           aria-label={`Name of ${position}`}
-          className={`flex-1 min-w-[120px] ${NAME_COLUMN}`}
+          className={`flex-1 ${NAME_MIN_WIDTH} ${NAME_COLUMN}`}
           fieldClassName={inputClasses}
         />
-        {moveSelectFor(item, equipped, itemName, 'flex sm:hidden')}
-        {removeButtonFor(item, equipped, itemName, 'sm:hidden')}
+        {phoneControlsFor(item, equipped, itemName)}
         <div className="flex flex-wrap items-start gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap">
           <label className="flex flex-col gap-0.5">
             {phoneLabel('Slots')}
