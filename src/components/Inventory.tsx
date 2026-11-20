@@ -605,6 +605,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
+  // One line per item from sm up, under the column headers (which leave room for
+  // the move select when there are containers). On phones the × sits beside the
+  // name and the other fields take a full-width second line.
   const renderItemRow = (item: InventoryItem, equipped: boolean) => (
     <div key={item.id} className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
       <input
@@ -614,7 +617,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         placeholder="Item name"
         className={`${inputClasses} flex-1 min-w-[120px]`}
       />
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 order-last w-full sm:order-none sm:w-auto">
         <input
           type="number"
           value={item.slots}
@@ -642,7 +645,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           value={item.notes}
           onChange={(e) => handleUpdateItem(equipped, item.id, 'notes', e.target.value)}
           placeholder="Notes"
-          className={`${inputClasses} w-32 min-w-0`}
+          className={`${inputClasses} flex-1 min-w-0 sm:flex-none sm:w-32`}
         />
         {!equipped && containers.length > 0 && (
           <select
@@ -650,7 +653,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             onChange={(e) =>
               handleMoveToContainer(item.id, e.target.value || undefined)
             }
-            className={`${inputClasses} w-10 text-xs p-0.5`}
+            className={`${inputClasses} w-10 shrink-0 text-xs p-0.5`}
             title="Move to container"
           >
             <option value="">Loose</option>
@@ -661,15 +664,15 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             ))}
           </select>
         )}
-        <button
-          type="button"
-          onClick={() => handleDeleteItem(equipped, item.id)}
-          className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 px-1"
-          title="Delete item"
-        >
-          &times;
-        </button>
       </div>
+      <button
+        type="button"
+        onClick={() => handleDeleteItem(equipped, item.id)}
+        className="text-[#8b2500] hover:text-[#b33a1a] font-bold text-lg shrink-0 w-6"
+        title="Delete item"
+      >
+        &times;
+      </button>
     </div>
   );
 
@@ -743,6 +746,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   <span className="w-16 text-center">Slots</span>
                   <span className="w-20 text-center">Weight</span>
                   <span className="w-32">Notes</span>
+                  {/* Stowed rows have a move-to-container select when there are containers */}
+                  {containers.length > 0 && <span className="w-10" />}
                   <span className="w-6" />
                 </div>
                 {containerItems.map((item) => renderInventoryItem(item, false))}
