@@ -849,7 +849,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               type="button"
               onClick={() => setCatalogOpen(false)}
               className="text-[#ff6b4a] hover:text-[#f5e6c8] font-bold text-lg px-2"
-              title="Close"
+              title="Close equipment catalog"
               aria-label="Close equipment catalog"
             >
               &times;
