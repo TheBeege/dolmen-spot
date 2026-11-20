@@ -7,8 +7,8 @@
  * Every number here comes from the same stored fields and shared helpers the
  * tabs use (gamedata.ts, character-sheet.ts). Where a tab shows a stored value
  * next to a "Sync to X" button, the sheet prints the stored value and notes
- * "calc. X". Free-form notes, the map, the journal and the calendar are left
- * out on purpose.
+ * "calc. X". The Combat, Magic and Other notes, the map, the journal and the
+ * calendar are left out on purpose.
  *
  * All text goes through this file's `Text`, which makes its strings
  * printable with the sheet's fonts (see text.ts and fonts.ts).
@@ -1074,6 +1074,14 @@ function kindredFeatureBlocks(c: Character): BlockSpec[] {
   return blocks;
 }
 
+/**
+ * The player's own Class Notes or Kindred Notes, like the official sheet's
+ * "Kindred & Class Traits" box. `notes` is already printable text; none, no block.
+ */
+function notesBlock(key: string, title: string, notes: string): BlockSpec[] {
+  return notes ? [{ key, title, breakable: true, body: <Text style={s.body}>{notes}</Text> }] : [];
+}
+
 function languagesBlock(c: Character): BlockSpec {
   const { langInfo, bonusLangs } = getLanguageBreakdown(c);
   return {
@@ -1123,6 +1131,7 @@ function RetainersTable({ c, maxRetainers }: { c: Character; maxRetainers: numbe
 }
 
 function TraitsSection({ c }: { c: Character }) {
+  const { text } = useSheet();
   const { maxRetainers } = getRetainerLimits(c.abilityScores.charisma);
   const profile = getCharacterFeatureProfile(c.kindred, c.class, c.level);
   const cls = className(c);
@@ -1130,11 +1139,17 @@ function TraitsSection({ c }: { c: Character }) {
   const groups: { heading?: string; blocks: BlockSpec[] }[] = [
     {
       heading: `Class features${cls ? ` · ${cls}` : ''}`,
-      blocks: hasAnyClassFeature(profile) ? classFeatureBlocks(c) : [],
+      blocks: [
+        ...(hasAnyClassFeature(profile) ? classFeatureBlocks(c) : []),
+        ...notesBlock('class-notes', 'Class Notes', text(c.classTraits ?? '').trim()),
+      ],
     },
     {
       heading: `Kindred features${kindred ? ` · ${kindred}` : ''}`,
-      blocks: hasAnyKindredFeature(profile) ? kindredFeatureBlocks(c) : [],
+      blocks: [
+        ...(hasAnyKindredFeature(profile) ? kindredFeatureBlocks(c) : []),
+        ...notesBlock('kindred-notes', 'Kindred Notes', text(c.kindredTraits ?? '').trim()),
+      ],
     },
     { blocks: [languagesBlock(c)] },
   ];
@@ -1577,11 +1592,9 @@ function InventorySection({ c }: { c: Character }) {
 
 // ── Document ─────────────────────────────────────────────────
 
-// Fields the sheet leaves out: the free-form notes, spell study, the
-// journal and the party's location.
+// Fields the sheet leaves out: the Combat, Magic and Other notes, spell
+// study, the journal and the party's location.
 const UNPRINTED_FIELDS = new Set<string>([
-  'classTraits',
-  'kindredTraits',
   'combatTalents',
   'otherNotes',
   'spellNotes',
