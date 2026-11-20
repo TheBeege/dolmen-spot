@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Character } from '@/lib/types';
 import { createDefaultCharacter } from '@/lib/gamedata';
 import { migrateCharacter } from '@/lib/migrations';
+import { isSaveDataFile, SAVE_DATA_IMPORT_MESSAGE } from '@/lib/save-data-file';
 
 const STORAGE_KEY = 'dolmenwood-characters';
 const ACTIVE_KEY = 'dolmenwood-active-character';
@@ -122,7 +123,14 @@ export function useCharacter() {
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
-        const data = migrateCharacter(JSON.parse(e.target?.result as string));
+        const parsed: unknown = JSON.parse(e.target?.result as string);
+        // The error screen's save-data file isn't a character: refuse it
+        // rather than adding a blank character.
+        if (isSaveDataFile(parsed)) {
+          alert(SAVE_DATA_IMPORT_MESSAGE);
+          return;
+        }
+        const data = migrateCharacter(parsed);
         data.id = crypto.randomUUID();
         setCharacters(prev => {
           const next = [...prev, data];
@@ -144,7 +152,9 @@ export function useCharacter() {
   }, [activeCharacter]);
 
   const importCharacterFromJson = useCallback((json: string): string => {
-    const data = migrateCharacter(JSON.parse(json));
+    const parsed: unknown = JSON.parse(json);
+    if (isSaveDataFile(parsed)) throw new Error(SAVE_DATA_IMPORT_MESSAGE);
+    const data = migrateCharacter(parsed);
     data.id = crypto.randomUUID();
     setCharacters(prev => {
       const next = [...prev, data];
