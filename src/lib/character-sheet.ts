@@ -21,6 +21,7 @@ import type {
 import {
   BREGGLE_GAZE_PER_DAY,
   EQUIPPED_SLOT_LIMIT,
+  KINDREDS,
   MAX_LOAD_WEIGHT,
   STOWED_SLOT_LIMIT,
   calculateAttackBonus,
@@ -70,9 +71,13 @@ export const KNOWN_SPELL_SOURCE_LABELS: Record<KnownSpellSource, string> = {
 
 // ── Character ────────────────────────────────────────────────
 
-/** True for a non-human kindred with no class: the character plays its kindred-class. */
+/**
+ * True for a non-human kindred the app knows, with no class: the character
+ * plays its kindred-class. A kindred id the app doesn't know (from a newer
+ * version, or an edited file) has no kindred-class to play.
+ */
 export function isKindredClass(character: Pick<Character, 'kindred' | 'class'>): boolean {
-  return !!character.kindred && character.kindred !== 'human' && !character.class;
+  return !character.class && character.kindred !== 'human' && KINDREDS.some((k) => k.id === character.kindred);
 }
 
 /** True when the sheet has a class, or a non-human kindred playing its kindred-class. */
