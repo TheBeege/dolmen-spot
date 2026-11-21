@@ -31,26 +31,19 @@ const ALL_TABS: TabId[] = TABS.map((tab) => tab.id);
 export const KNOWN_ISSUES: KnownIssue[] = [
   // ── Layout ───────────────────────────────────────────────────────────
   {
-    issue: 'Header at a 24px font on phones (320 and 375px): the "Dolmen Spot" title takes the character switcher\'s room, so the switcher shrinks to nothing and the list of characters (and + New) can\'t be opened; the title runs under the PDF and Save / Load buttons.',
-    checks: ['squeezed-control'],
-    tabs: ALL_TABS,
-    match: /^Header › button /,
-    maxWidth: 375,
-    fontSizes: [24],
-  },
-  {
     issue: "Adventuring doesn't fit phones: the light tracker's rows stick out of their card at 320 and 375px, and at a 24px font so do its add buttons, the rations and travel points cards, the season strip and the In Fairy card.",
     checks: ['page-overflow', 'spills-card'],
     tabs: ['calendar'],
-    match: /^(Rations|Travel Points|Light Sources|Season|In Fairy)/,
+    match: /^(Rations › button "\+"|Light Sources › (button "(Remove|\+10|\+1|-1|\+ Candle)"|span "\d+ min")|Travel Points › button "Reset"|Season[^›]* › div "(Spring|Summer|Autumn|Winter)"|In Fairy — day \d+ › (button\[type=button\] "Return to Dolmenwood…"|span "entered ))/,
     maxWidth: 375,
   },
   {
-    issue: "Spells & Magic doesn't fit phones: the rows of prepared spells (Available Spells) and of Fairy runes stick out of their cards at 320 and 375px, and at a 24px font so do the study queue and the rune usage table.",
-    checks: ['page-overflow', 'spills-card'],
+    issue: 'Spells & Magic: at a 24px font and 320px, the study picker and its "What … does" button stick out of the Spell Study card.',
+    checks: ['spills-card'],
     tabs: ['spells'],
-    match: /^(Available Spells|Spell Study|Fairy Runes|Magic Notes)/,
-    maxWidth: 375,
+    match: /^Spell Study › /,
+    maxWidth: 320,
+    fontSizes: [24],
   },
   {
     issue: 'Combat: at a 24px font and 320px, the hit point − and + buttons stick out of their card.',
@@ -110,10 +103,10 @@ export const KNOWN_ISSUES: KnownIssue[] = [
     match: /^(Character Info|Hit Points|Armour Class|Retainers|Languages|Kindred Features) › .*\(label "/,
   },
   {
-    issue: 'Pickers with no label but their first option ("+ Add Rune...", "-- No unknown spells in your books --").',
+    issue: 'The "+ Add Rune..." picker has no label but its first option.',
     checks: ['select-name'],
     tabs: ['spells'],
-    match: /^(Fairy Runes|Spell Study) › select /,
+    match: /^Fairy Runes › select /,
   },
   {
     issue: "Reference: at 320px the armour table scrolls sideways, but its scrolling box can't be reached with the keyboard.",

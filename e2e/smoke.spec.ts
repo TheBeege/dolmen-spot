@@ -31,7 +31,7 @@ test('the matrix settings are in force', async ({ page, browserName, defaultFont
     scrollbarWidth: window.innerWidth - document.documentElement.clientWidth,
   }));
   expect(rootFontSize, "the browser's default font size").toBe(`${defaultFontSize}px`);
-  // WebKit's scrollbars overlay the page, as on a Mac or a phone.
+  // Only Chromium's is checked: whether WebKit's scrollbars take room depends on the platform.
   if (browserName === 'chromium') expect(scrollbarWidth, 'room the scrollbar takes').toBeGreaterThan(0);
 });
 

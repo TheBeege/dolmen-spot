@@ -88,14 +88,14 @@ export async function openApp(page: Page, fixture?: FixtureName): Promise<Charac
 }
 
 export function tabBar(page: Page) {
-  return page.locator('header nav');
+  return page.getByRole('tablist', { name: 'Character sheet sections' });
 }
 
 /** Open a tab by clicking it, and wait until it's showing. */
 export async function openTab(page: Page, tab: Tab): Promise<void> {
   const index = TABS.findIndex((t) => t.id === tab.id);
-  // The bar shows a short label on narrow screens, so find the button by position.
-  await tabBar(page).getByRole('button').nth(index).click();
+  // The bar shows a short label on narrow screens, so find the tab by position.
+  await tabBar(page).getByRole('tab').nth(index).click();
   await expect(page.locator('main h1')).toHaveText(tab.label);
   await settle(page);
 }

@@ -97,7 +97,7 @@ jobs:
         run: npm run test:e2e
 
       - name: Upload the report and traces
-        if: failure()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
