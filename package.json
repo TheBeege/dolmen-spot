@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts",
+    "test:e2e": "playwright test",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
     "postinstall": "patch-package --error-on-fail",
     "prepare": "node .husky/install.mjs"
@@ -22,6 +23,8 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.1",
     "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^24.19.2",
     "@types/react": "^19.3.0",
