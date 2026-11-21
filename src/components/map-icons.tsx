@@ -1,0 +1,90 @@
+// The map's marker icons: a round marker for each point of interest and fairy
+// door, with a hand-drawn glyph for its kind (src/lib/map-glyphs.ts). The map
+// draws them as markers (MarkerShape); the hex inspector beside its items and
+// in its kind picker (PoiIcon, DoorIcon). They're decorative: the marker or
+// control that shows one carries the name.
+import type { SVGProps } from 'react';
+import type { PoiKind } from '@/lib/types';
+import { DOOR_GLYPH, GLYPH_CENTER, GLYPH_EXTENT, POI_GLYPHS, type Glyph } from '@/lib/map-glyphs';
+
+export const PARCHMENT = '#f5e6c8';
+export const NIGHT = '#1a1a2e';
+export const GOLD = '#c4a35a';
+/** A point of interest without a kind ('other'): a plain red marker, as before kinds. */
+export const POI_FILL = '#8b2500';
+export const DOOR_FILL = '#a774d6';
+
+/** What a marker looks like: its disc, its rim and, unless it's a plain one, its glyph. */
+export interface MarkerLook {
+  fill: string;
+  rim: string;
+  glyph: Glyph | null;
+  /** The glyph's colour. Its cut-out details take the disc's colour. */
+  ink: string;
+}
+
+const PLAIN_POI: MarkerLook = { fill: POI_FILL, rim: PARCHMENT, glyph: null, ink: PARCHMENT };
+const DOOR: MarkerLook = { fill: DOOR_FILL, rim: PARCHMENT, glyph: DOOR_GLYPH, ink: NIGHT };
+
+/**
+ * The marker of a point of interest of kind `kind`, or of a fairy door. A
+ * kind's marker is a dark disc with a gold rim and a parchment glyph; 'other'
+ * keeps the plain red marker.
+ */
+export function markerLook(kind: PoiKind | 'door'): MarkerLook {
+  if (kind === 'door') return DOOR;
+  if (kind === 'other') return PLAIN_POI;
+  return { fill: NIGHT, rim: GOLD, glyph: POI_GLYPHS[kind], ink: PARCHMENT };
+}
+
+// How much of the disc inside its rim the glyph's extent takes up.
+const GLYPH_FILL = 0.9;
+
+/**
+ * A marker centred on (cx, cy): a disc of radius `r` with a rim `rim` wide
+ * (half of it outside `r`), and its glyph. Drawn in the units of the
+ * surrounding SVG.
+ */
+export function MarkerShape({ look, cx, cy, r, rim }: { look: MarkerLook; cx: number; cy: number; r: number; rim: number }) {
+  const scale = ((r - rim / 2) * GLYPH_FILL) / GLYPH_EXTENT;
+  return (
+    <>
+      <circle cx={cx} cy={cy} r={r} fill={look.fill} stroke={look.rim} strokeWidth={rim} />
+      {look.glyph && (
+        <g
+          transform={`translate(${cx} ${cy}) scale(${scale}) translate(${-GLYPH_CENTER} ${-GLYPH_CENTER})`}
+          pointerEvents="none"
+          aria-hidden="true"
+        >
+          {look.glyph.body.map((d, i) => (
+            <path key={`body-${i}`} d={d} fill={look.ink} />
+          ))}
+          {look.glyph.cut.map((d, i) => (
+            <path key={`cut-${i}`} d={d} fill={look.fill} />
+          ))}
+        </g>
+      )}
+    </>
+  );
+}
+
+type IconProps = Omit<SVGProps<SVGSVGElement>, 'children' | 'viewBox'>;
+
+/** A marker as a small inline image, for HTML: decorative, hidden from assistive technology. */
+function MarkerIcon({ look, ...props }: IconProps & { look: MarkerLook }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false" {...props}>
+      <MarkerShape look={look} cx={12} cy={12} r={11} rim={1.5} />
+    </svg>
+  );
+}
+
+/** The marker of a point of interest of kind `kind`, as a small inline image. */
+export function PoiIcon({ kind, ...props }: IconProps & { kind: PoiKind }) {
+  return <MarkerIcon look={markerLook(kind)} {...props} />;
+}
+
+/** A fairy door's marker, as a small inline image. */
+export function DoorIcon(props: IconProps) {
+  return <MarkerIcon look={DOOR} {...props} />;
+}

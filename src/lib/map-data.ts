@@ -1,4 +1,4 @@
-import type { CharacterMapData, FairyDoor, FairyDoorDestination, HexCoord, PathKind, PoiKind } from './types';
+import type { CharacterMapData, FairyDoor, FairyDoorDestination, HexCoord, MapPOI, PathKind, PoiKind } from './types';
 
 /**
  * `md` with all three lists, an empty one in place of any that's missing.
@@ -48,6 +48,44 @@ export const POI_KIND_LABELS: Readonly<Record<PoiKind, string>> = {
 /** True if `value` is a kind of point of interest. */
 export function isPoiKind(value: unknown): value is PoiKind {
   return typeof value === 'string' && Object.hasOwn(POI_KIND_LABELS, value);
+}
+
+/** The kinds of point of interest, in the order they're offered. */
+export const POI_KINDS = Object.keys(POI_KIND_LABELS) as readonly PoiKind[];
+
+/** Each kind's name in a marker's label, as in "Tower: Hoarblight Keep". */
+export const POI_KIND_NAMES: Readonly<Record<PoiKind, string>> = {
+  town: 'Town',
+  village: 'Village',
+  keep: 'Keep',
+  tower: 'Tower',
+  ruin: 'Ruin',
+  shrine: 'Shrine',
+  stones: 'Standing stones',
+  cave: 'Cave',
+  inn: 'Inn',
+  camp: 'Camp',
+  barrow: 'Barrow',
+  grove: 'Grove',
+  fairy: 'Fairy ring',
+  lair: 'Lair',
+  other: 'Point of interest',
+};
+
+/** A point of interest's kind: 'other' if it has none (or, defensively, one that isn't a kind). */
+export function poiKindOf(poi: Pick<MapPOI, 'kind'>): PoiKind {
+  return isPoiKind(poi.kind) ? poi.kind : 'other';
+}
+
+/** A point of interest's name with its kind, for its marker: "Tower: Hoarblight Keep". */
+export function poiLabel(poi: Pick<MapPOI, 'kind' | 'name'>): string {
+  return `${POI_KIND_NAMES[poiKindOf(poi)]}: ${poi.name || 'Unnamed'}`;
+}
+
+/** `poi` as kind `kind`. 'other' is saved as no kind at all, so it removes the field. */
+export function withPoiKind(poi: MapPOI, kind: PoiKind): MapPOI {
+  const { kind: _previous, ...rest } = poi;
+  return kind === 'other' ? rest : { ...rest, kind };
 }
 
 /** True if `value` is a kind of path. */
