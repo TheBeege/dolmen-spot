@@ -29,11 +29,20 @@ export interface SkillTargets {
   [key: string]: number;
 }
 
-export type InventoryItemKind = 'spellbook' | 'scroll';
+export type InventoryItemKind = 'spellbook' | 'scroll' | 'shard';
 
 export interface SpellbookEntry {
   name: string;
   rank: number;
+}
+
+// A Dwemer shard (an item of kind 'shard'): it holds one spell, and is
+// recharged on a hex of a ley line. Loading repairs it (sanitizeInventoryItems).
+export interface ShardState {
+  spell?: SpellbookEntry;  // the spell it holds, or last held; absent until the player learns which
+  castsLeft: number;       // casts left on the current charge; 0 = spent
+  castsPerCharge: number;  // casts one charge gives: 1 = one cast per charge
+  leyLineId?: string;      // the ley line (LeyLine.id) it was last charged on; that line may since have been deleted
 }
 
 export interface InventoryItem {
@@ -47,6 +56,7 @@ export interface InventoryItem {
   kind?: InventoryItemKind;
   spellbookContents?: SpellbookEntry[];  // present when kind === 'spellbook'; max 3 (Player's Book p78)
   scrollSpell?: SpellbookEntry;           // present when kind === 'scroll'
+  shard?: ShardState;                     // present when kind === 'shard'
   isStartingBook?: boolean;               // stamped by ApplyStartingBookButton so a rename doesn't reopen the dropdown
 }
 
@@ -186,11 +196,32 @@ export interface HexGridMeta {
   cellCount: number;
 }
 
+// What a point of interest is, which sets its icon on the map. What each kind
+// covers is in POI_KIND_LABELS (src/lib/map-data.ts). Fairy doors aren't
+// points of interest: they have their own marker.
+export type PoiKind =
+  | 'town'
+  | 'village'
+  | 'keep'
+  | 'tower'
+  | 'ruin'
+  | 'shrine'
+  | 'stones'
+  | 'cave'
+  | 'inn'
+  | 'camp'
+  | 'barrow'
+  | 'grove'
+  | 'fairy'
+  | 'lair'
+  | 'other';
+
 export interface MapPOI {
   id: string;
   hex: HexCoord;
   name: string;
   notes: string;
+  kind?: PoiKind;  // absent: 'other', the plain marker
 }
 
 export type FairyDoorDestination =
@@ -205,13 +236,22 @@ export interface FairyDoor {
   destination: FairyDoorDestination;
 }
 
+// A path drawn on the map. 'leyLine': a ley line, which can recharge a Dwemer
+// shard; ley lines are recorded as they're found, so one can be known at a
+// single hex, or at none yet. 'other': any other path (a road, a ward, a fairy
+// road), which needs at least 2 hexes.
+export type PathKind = 'leyLine' | 'other';
+
+// A path on the map: a ley line or another kind of path (see PathKind).
 export interface LeyLine {
   id: string;
+  kind: PathKind;
   type: string;      // free-text label, e.g. "Ley line", "Ancient Road", "Ward"
   name: string;
   color: string;     // CSS hex color, e.g. "#c4a35a"
-  hexes: HexCoord[]; // ordered sequence of hex coords the line passes through
-  notes: string;
+  hexes: HexCoord[]; // ordered sequence of hex coords the line passes through: any number for a ley line, at least 2 for other paths
+  notes: string;     // for a ley line, its description or feeling
+  spell?: SpellbookEntry; // a ley line's spell, once learned by charging a Dwemer shard on it; absent until then
 }
 
 export interface LeyLineDraft {
@@ -220,6 +260,7 @@ export interface LeyLineDraft {
   color: string;
   notes: string;
   hexes: HexCoord[];
+  kind: PathKind;
 }
 
 export interface CharacterMapData {
@@ -304,6 +345,7 @@ export interface Character {
   currentLocationHex: HexCoord | '';
   mapData: CharacterMapData;
   journalEntries: JournalEntry[];
+  npcs: Npc[];
 
   exhaustionLevel: number;
   hungerDays: number;
@@ -348,6 +390,7 @@ export interface JournalEntry {
   location: string;
   hex?: HexCoord;          // the map hex it was written in; absent for none (an entry written in Fairy has none unless set)
   text: string;
+  npcIds?: string[];       // the NPCs (Npc.id) the entry is about: it's one of each one's notes. Absent for none
 }
 
 // Marks a journal entry as the automatic record of entering or leaving a
@@ -388,6 +431,26 @@ export interface Retainer {
   hp: number;
   loyalty: number;
   notes: string;
+}
+
+// Someone the character has met. Their notes are journal entries that name
+// them (JournalEntry.npcIds), so the notes are dated, and one entry can be
+// about several NPCs.
+export interface Npc {
+  id: string;
+  name: string;
+  affiliation: string;
+  location: string;   // where they're found, in the player's words
+  hex?: HexCoord;     // that place on the map; absent if it isn't known
+  goals: string;      // their desires and goals
+  quests: NpcQuest[];
+}
+
+// A quest an NPC gave or is part of, as a checklist item.
+export interface NpcQuest {
+  id: string;
+  text: string;
+  done: boolean;
 }
 
 export interface Trophy {
