@@ -2893,7 +2893,7 @@ export const GLAMOURS: { id: number; name: string; description: string }[] = [
   { id: 2, name: 'Beguilement', description: "1 mortal who understands the caster believes what they say unless it Saves vs Spell; afterwards the magical trickery is obvious (30', 1d4 Rounds, 1x/day/subject)" },
   { id: 3, name: 'Breath of the Wind', description: "Move silently (30', 1d4 Rounds, 1x/Turn)" },
   { id: 4, name: 'Cloak of Darkness', description: 'Conjured gloom hides the caster from mundane sight while they stay still and do nothing else, and for 1 Round after they move or act (1x/Turn)' },
-  { id: 5, name: 'Conjure Treats', description: "Produces the favourite treat of a mortal or animal in the caster's hand; offering it improves their attitude to the caster. Real, but not nourishing (1x/day/subject)" },
+  { id: 5, name: 'Conjure Treats', description: "Produces, in the caster's hand, the favourite treat of a mortal or animal; offering it improves their attitude to the caster. Real, but not nourishing (1x/day/subject)" },
   { id: 6, name: 'Dancing Flame', description: "A small flame within 60' leaves its source and floats where the caster directs, 10' per Round, going out when the glamour ends (concentration up to 2d6 Rounds; the caster can move but not act)" },
   { id: 7, name: 'Disguise Object', description: 'A touched object looks like something else of about the same size until another being touches it; 1 object at a time' },
   { id: 8, name: 'Fairy Dust', description: "Briefly reveals invisible creatures and objects within 30'; attacks on revealed creatures take only -1 next Round (1x/day)" },
@@ -2921,7 +2921,7 @@ export const FAIRY_RUNES: { id: number; name: string; magnitude: RuneMagnitude; 
   { id: 3, name: 'Gust of Wind', magnitude: 'lesser', description: "A blast of wind 10' wide and 60' long: Small and Medium creatures can't move into it and Save vs Hold or are pushed back 1d3 x 10'; it puts out candles and torches (lanterns 3-in-6), knocks over light objects and scatters fog (1 Round)" },
   { id: 4, name: 'Proof Against Deadly Harm', magnitude: 'lesser', description: "The caster takes no damage from 1 chosen kind of weapon (e.g. swords, bows or claws), except magic or cold iron weapons and magical creatures' attacks (2d6 Rounds)" },
   { id: 5, name: 'Rune of Vanishing', magnitude: 'lesser', description: 'The caster and their gear turn invisible to mortals and animals for 1 Turn; attacking makes them visible for a moment, and foes may strike back that Round or the next at -2' },
-  { id: 6, name: 'Sway the Mortal Mind', magnitude: 'lesser', description: "1 Small or Medium mortal within 30' of Sentient intelligence or more Saves vs Spell or is charmed for 1 day: it befriends and defends the caster and obeys orders in a shared language, but not harmful or out-of-character ones" },
+  { id: 6, name: 'Sway the Mortal Mind', magnitude: 'lesser', description: "1 Small or Medium mortal of Sentient intelligence or more, within 30', Saves vs Spell or is charmed for 1 day: it befriends and defends the caster and obeys orders in a shared language, but not harmful or out-of-character ones" },
   // Greater (6)
   { id: 7, name: 'Arcane Unbinding', magnitude: 'greater', description: "Ends all arcane and fairy magic in a 20' cube made by casters of the caster's Level or lower (not higher), and stops magic items working for 1 Turn; holy magic is unaffected (120')" },
   { id: 8, name: 'Fairy Gold', magnitude: 'greater', description: 'Conjure 2d100gp (1d6 hours, then coins vanish)' },
@@ -3000,7 +3000,7 @@ export const MOSSLING_KNACKS: { id: number; name: string; tiers: { level: number
   {
     id: 5, name: 'Wood Kenning', tiers: [
       { level: 1, description: 'A wooden item touched for 1 Turn tells the mossling who made it or who last handled it' },
-      { level: 3, description: 'Sense most recent strong emotion from wood (touch)' },
+      { level: 3, description: 'Wood touched for 1 Turn reveals the latest strong feeling a sentient being left in it' },
       { level: 5, description: 'After touching a wooden barrier, such as a door or wall, for 1 Turn, the mossling glimpses what is beyond it' },
       { level: 7, description: "A tree touched for 1 Turn reveals its true name; 1x/day, the mossling can call on any tree they know by its true name to glimpse that tree's surroundings" },
     ],
@@ -3009,7 +3009,7 @@ export const MOSSLING_KNACKS: { id: number; name: string; tiers: { level: number
     id: 6, name: 'Yeast Master', tiers: [
       { level: 1, description: 'Ferment sweet liquids, 1 pint/Turn (2-in-6 palatable to others)' },
       { level: 3, description: "Sipping a drink someone else has partly drunk reveals that person's name" },
-      { level: 5, description: "1x/day, a heady belch at 1 creature within 10', which faints for 1d6 Rounds unless it Saves vs Blast" },
+      { level: 5, description: "1x/day, a belch at 1 creature within 10', which faints for 1d6 Rounds unless it Saves vs Blast" },
       { level: 7, description: 'Conjure 1d6 fresh rations of yeast feast 1x/day' },
     ],
   },
