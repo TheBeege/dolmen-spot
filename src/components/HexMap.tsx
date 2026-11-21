@@ -1062,8 +1062,9 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
   const toolButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 transition-colors';
 
   return (
-    // scroll-mt keeps an element that focus moves to clear of the sticky header.
-    <div ref={rootRef} className="space-y-4 [&_[data-focus-key]]:scroll-mt-24">
+    // The page's scroll padding keeps an element that focus moves to clear of
+    // the sticky header (globals.css); scroll-mt leaves a little room under it.
+    <div ref={rootRef} className="space-y-4 [&_[data-focus-key]]:scroll-mt-5">
       <div className="bg-[#2a2a3e] rounded-lg p-4">
         <div className="flex items-center justify-between mb-3 border-b border-[#5a3a28] pb-2 flex-wrap gap-2">
           <h2 className="text-lg font-bold text-[#c4a35a]">Dolmenwood Map</h2>
@@ -1151,12 +1152,13 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
 
       {/* On phones the box follows the grid's shape so the inspector below
           stays close; from md up it's a fixed 60vh. It's never taller than
-          the screen below the sticky header, with room to spare, so the page
-          can still be scrolled past it (dragging on the map pans the map):
-          on a phone in landscape the map is letterboxed instead. */}
+          the screen below the sticky header (its height comes from page.tsx),
+          with room to spare, so the page can still be scrolled past it
+          (dragging on the map pans the map): on a phone in landscape the map
+          is letterboxed instead. */}
       <div
         ref={boxRef}
-        className="bg-[#1a1a2e] rounded-lg overflow-hidden relative w-full aspect-(--map-aspect) md:aspect-auto md:h-[60vh] max-h-[calc(100svh-8rem)]"
+        className="bg-[#1a1a2e] rounded-lg overflow-hidden relative w-full aspect-(--map-aspect) md:aspect-auto md:h-[60vh] max-h-[calc(100svh-var(--sticky-header-height,4.75rem)-3.25rem)]"
         style={{ '--map-aspect': `${baseBounds.w} / ${baseBounds.h}` } as React.CSSProperties}
       >
         <svg
