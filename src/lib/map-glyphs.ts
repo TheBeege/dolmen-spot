@@ -139,8 +139,8 @@ export const POI_GLYPHS: Readonly<Record<Exclude<PoiKind, 'other'>, Glyph>> = {
     ],
     cut: [arch(6.9, 10.5, 16.75, 13)],
   },
-  // The Chapes, the Pluritine Church's holy symbol: a circle with five rays
-  // descending from it, for God and the five prophets.
+  // The Chapes, holy symbol of the Pluritine Church (Player's Book p. 178): a
+  // disc with five rays fanning down from it.
   shrine: {
     body: [circle(12, 7, 3.5), ...[-60, -30, 0, 30, 60].map((deg) => ray(12, 7, deg, 4.75, 12, 1.5, 2.3))],
     cut: [],
