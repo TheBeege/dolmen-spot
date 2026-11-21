@@ -32,7 +32,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-21',
     title: 'Hex map, Journal, time in Fairy, printable sheets, and safer saves',
-    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24],
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 27],
     sections: [
       {
         heading: 'Printable PDF character sheets',
@@ -116,6 +116,7 @@ const ENTRIES: ChangelogEntry[] = [
           'Woodgrues with a standard class (Bard, Enchanter, Thief, and so on) get Mad Revelry once per day, as the rules say. Woodgrue kindred-class characters still get one use per Level.',
           'Kindred-class characters now get their XP modifier calculated from their Prime Abilities, with a Sync button like other classes. Editing an ability score or changing kindred no longer wipes an XP modifier the sheet can\'t calculate.',
           'Carrying more than the maximum load (over 1,600 coins of weight, or more than 10 equipped or 16 stowed slots) now gives Speed 0 on the Inventory tab and the PDF, with advice on what to stow or drop. Before, it showed 10.',
+          'Clerics, friars, magicians, and breggles get the number of spells per day the rules give at every Level. Several higher-Level rows were wrong: a Level 10 cleric had a Rank 5 spell slot, for example, and a Level 8 breggle was missing its Rank 3 slot. Spells already prepared beyond a corrected limit are kept, and that rank shows in red.',
           'The Divine Resistance note on the Spells & Magic tab now gives the actual rule, Resistance to Divine Aid: a 2-in-6 chance that a beneficial holy spell has no effect on you. It used to say "immune to holy magic".',
         ],
       },
