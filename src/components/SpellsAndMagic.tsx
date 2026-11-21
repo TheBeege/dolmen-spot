@@ -543,7 +543,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   const fade = spell.cast ? 'opacity-50' : '';
   const name = spell.name.trim();
   return (
-    <div className="bg-[#1a1a2e] p-2 rounded mb-1">
+    <div data-spell-row="" className="bg-[#1a1a2e] p-2 rounded mb-1">
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex grow basis-full sm:basis-0 min-w-0 items-center gap-2">
           {spellType === 'arcane' ? (
@@ -672,6 +672,7 @@ function InventoryScrollsList({
         return (
           <div
             key={s.id}
+            data-spell-row=""
             className="flex flex-wrap items-center gap-2 bg-[#1a1a2e] border border-[#5a3a28]/40 p-2 rounded mb-1"
           >
             <span className={rowNameClasses}>
@@ -1058,7 +1059,7 @@ const KnownSpellRow = memo(function KnownSpellRow({
   onDelete: (id: string) => void;
 } & SpellDisclosure) {
   return (
-    <div className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm">
+    <div data-spell-row="" className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm">
       <span className={rowNameClasses}>
         <span
           className="shrink-0 text-xs"
@@ -1464,7 +1465,7 @@ function SpellStudyBlock({
               const info = spellInfo(q.id);
               const context = queueContexts[i];
               return (
-                <div key={q.id} className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
+                <div key={q.id} data-spell-row="" className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={rowNameClasses}>
                       <span className="text-[#c4a35a] text-xs">{i + 1}.</span>

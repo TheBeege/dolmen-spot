@@ -91,7 +91,9 @@ let dismissShownCard: (() => void) | null = null;
  * ("known", "reference"), so screen readers can tell apart the buttons for the
  * same spell in different lists. Mark the element around a list of these with
  * `data-spell-list`, and the card keeps off the list's spells where it can;
- * `data-spell-list="whole"` keeps it off the whole element, for a menu.
+ * `data-spell-list="whole"` keeps it off the whole element, for a menu. Mark
+ * a row with `data-spell-row`, and the card keeps clear of the row's
+ * controls whenever it has anywhere else to go.
  */
 export const SpellInfo = memo(function SpellInfo({
   spellType,
@@ -379,7 +381,7 @@ function HoverCard({
       const area = { left: 0, top: stickyHeaderBottom(), right: root.clientWidth, bottom: root.clientHeight };
       card.style.maxHeight = `${Math.max(0, area.bottom - area.top - 2 * HOVER_CARD_MARGIN)}px`;
       const size = { width: card.offsetWidth, height: card.offsetHeight };
-      const { left, top } = placeHoverCard(box, size, area, spellListObstacles(anchor));
+      const { left, top } = placeHoverCard(box, size, area, { avoid: spellListObstacles(anchor), keepClear: rowControls(anchor) });
       card.style.left = `${left}px`;
       card.style.top = `${top}px`;
       card.style.visibility = 'visible';
@@ -423,15 +425,30 @@ function stickyHeaderBottom(): number {
   return Math.max(0, header.getBoundingClientRect().bottom);
 }
 
-// What the card should keep off: every spell (name and button) in the
-// anchor's list, or the whole list when it's marked data-spell-list="whole".
+// What the card should keep off where it can: every spell (name and button)
+// in the anchor's list, or the whole list when it's marked
+// data-spell-list="whole".
 function spellListObstacles(anchor: Element): Box[] {
   const list = anchor.closest<HTMLElement>('[data-spell-list]');
   if (!list) return [];
   if (list.dataset.spellList === 'whole') return [list.getBoundingClientRect()];
-  return [...list.querySelectorAll('[data-spell-info]')]
-    .map((el) => el.getBoundingClientRect())
-    .filter((r) => r.width > 0 && r.height > 0);
+  return visibleBoxes(list.querySelectorAll('[data-spell-info]'));
+}
+
+// What the card must keep clear of whenever it can go anywhere else: the
+// controls in the anchor's row (marked data-spell-row), such as a prepared
+// spell's Rank, Prep, Cast, Notes and delete, since reading the summary and
+// then ticking Cast is the usual next step.
+function rowControls(anchor: Element): Box[] {
+  const row = anchor.closest('[data-spell-row]');
+  if (!row) return [];
+  const own = anchor.closest('[data-spell-info]');
+  const controls = [...row.querySelectorAll('input, select, textarea, button, label, a[href]')];
+  return visibleBoxes(controls.filter((el) => !own?.contains(el)));
+}
+
+function visibleBoxes(elements: Iterable<Element>): DOMRect[] {
+  return [...elements].map((el) => el.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
 }
 
 // A circled "i", drawn as one shape (ring, dot and stem) to keep the page

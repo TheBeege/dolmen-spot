@@ -19,6 +19,18 @@ export interface Point {
   top: number;
 }
 
+export interface Surroundings {
+  /** What the card should stay off where it can: the other spells in the anchor's list. */
+  avoid?: readonly Box[];
+  /**
+   * What the card must not cover whenever it has anywhere else to go, just
+   * like the anchor: the controls in the anchor's own row, which the pointer
+   * often goes to next. Above or below the anchor then means above or below
+   * these as well.
+   */
+  keepClear?: readonly Box[];
+}
+
 /** Space between the card and its anchor, or anything it steps past. */
 export const HOVER_CARD_GAP = 4;
 /** The least space kept between the card and the edges of the area it may use. */
@@ -30,25 +42,28 @@ export const intersects = (a: Box, b: Box) =>
 /**
  * Viewport coordinates for a card of `card` size next to `anchor`. The card
  * stays at least HOVER_CARD_MARGIN inside `area` (the part of the viewport it
- * may use, such as the part below a sticky header) and off the anchor, unless
- * `area` is too small for that.
+ * may use, such as the part below a sticky header) and off the anchor and
+ * everything in `keepClear`, unless `area` is too small for that.
  *
  * The places it can go, in order of preference: to the right of the anchor
  * (level with its top, then with its bottom), above it and below it (lined up
  * with its left edge), then to its left and above or below it lined up with
- * its right edge. It takes the first of those that covers none of `obstacles`
- * (the other spells in the anchor's list); failing that, the first that can
- * slide sideways clear of them, rightwards for the first four and leftwards
- * for the rest; failing that, the one that covers the fewest.
+ * its right edge. It takes the first of those that covers nothing in `avoid`;
+ * failing that, the first that can slide sideways clear of it, rightwards
+ * for the first four and leftwards for the rest; failing that, the one that
+ * covers the least of it.
  */
-export function placeHoverCard(anchor: Box, card: Size, area: Box, obstacles: readonly Box[] = []): Point {
+export function placeHoverCard(anchor: Box, card: Size, area: Box, { avoid = [], keepClear = [] }: Surroundings = {}): Point {
   const minLeft = area.left + HOVER_CARD_MARGIN;
   const minTop = area.top + HOVER_CARD_MARGIN;
   const maxLeft = area.right - HOVER_CARD_MARGIN - card.width;
   const maxTop = area.bottom - HOVER_CARD_MARGIN - card.height;
   const boxAt = (p: Point): Box => ({ left: p.left, top: p.top, right: p.left + card.width, bottom: p.top + card.height });
   const inArea = (p: Point) => p.left >= minLeft && p.left <= maxLeft && p.top >= minTop && p.top <= maxTop;
-  const covered = (p: Point) => obstacles.filter((o) => intersects(boxAt(p), o));
+  const fits = (p: Point) => inArea(p) && ![anchor, ...keepClear].some((b) => intersects(boxAt(p), b));
+  const covered = (p: Point) => avoid.filter((o) => intersects(boxAt(p), o));
+  // The rows the anchor and the controls it keeps clear of take up.
+  const band = keepClear.reduce(union, anchor);
 
   // Beside the anchor, the card may move up or down to stay in the area;
   // above or below it, left or right.
@@ -58,8 +73,8 @@ export function placeHoverCard(anchor: Box, card: Size, area: Box, obstacles: re
   const fromRightEdge = clamp(anchor.right - card.width, minLeft, maxLeft);
   const toRight = anchor.right + HOVER_CARD_GAP;
   const toLeft = anchor.left - HOVER_CARD_GAP - card.width;
-  const above = anchor.top - HOVER_CARD_GAP - card.height;
-  const below = anchor.bottom + HOVER_CARD_GAP;
+  const above = band.top - HOVER_CARD_GAP - card.height;
+  const below = band.bottom + HOVER_CARD_GAP;
   const places = ([
     [{ left: toRight, top: levelWithTop }, 1],
     [{ left: toRight, top: levelWithBottom }, 1],
@@ -69,12 +84,15 @@ export function placeHoverCard(anchor: Box, card: Size, area: Box, obstacles: re
     [{ left: toLeft, top: levelWithBottom }, -1],
     [{ left: fromRightEdge, top: above }, -1],
     [{ left: fromRightEdge, top: below }, -1],
-  ] as const).filter(([p]) => inArea(p) && !intersects(boxAt(p), anchor));
+  ] as const).filter(([p]) => fits(p));
+
+  // Nowhere clear of the anchor's row: place it as if the row had no controls.
+  if (places.length === 0 && keepClear.length > 0) return placeHoverCard(anchor, card, area, { avoid });
 
   const clear = places.find(([p]) => covered(p).length === 0);
   if (clear) return clear[0];
 
-  // Slide past whatever is in the way, as long as the card stays in the area.
+  // Slide past whatever is in the way, as long as the card still fits.
   const slide = (start: Point, direction: 1 | -1): Point | null => {
     let p = start;
     for (let hit = covered(p); hit.length > 0; hit = covered(p)) {
@@ -82,7 +100,7 @@ export function placeHoverCard(anchor: Box, card: Size, area: Box, obstacles: re
         ? Math.max(...hit.map((o) => o.right)) + HOVER_CARD_GAP
         : Math.min(...hit.map((o) => o.left)) - HOVER_CARD_GAP - card.width;
       p = { left, top: p.top };
-      if (!inArea(p)) return null;
+      if (!fits(p)) return null;
     }
     return p;
   };
