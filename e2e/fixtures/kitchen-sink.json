@@ -1,0 +1,1114 @@
+{
+  "schemaVersion": 15,
+  "id": "fixture-kitchen-sink",
+  "name": "Wendeline Ashgrove-Thistlecombe",
+  "kindred": "human",
+  "class": "magician",
+  "background": "Apothecary",
+  "alignment": "Neutral",
+  "affiliation": "The Lantern Society of Lankshorn",
+  "moonSign": "Witch's moon",
+  "moonPhase": "waxing",
+  "level": 12,
+  "xp": 812500,
+  "xpNextLevel": 920000,
+  "xpModifier": 10,
+  "abilityScores": {
+    "strength": 8,
+    "intelligence": 17,
+    "wisdom": 12,
+    "dexterity": 14,
+    "constitution": 11,
+    "charisma": 13
+  },
+  "maxHp": 31,
+  "currentHp": 22,
+  "armorClass": 11,
+  "attackBonus": 3,
+  "speed": 40,
+  "travelPointsPerDay": 8,
+  "magicResistance": 0,
+  "saveTargets": {
+    "doom": 11,
+    "ray": 11,
+    "hold": 10,
+    "blast": 13,
+    "spell": 11
+  },
+  "skillTargets": {
+    "listen": 6,
+    "search": 5,
+    "survival": 6
+  },
+  "equippedItems": [
+    {
+      "id": "ks-eq-01",
+      "name": "Dagger",
+      "slots": 1,
+      "weight": 10,
+      "notes": "",
+      "equipped": true
+    },
+    {
+      "id": "ks-eq-02",
+      "name": "Staff",
+      "slots": 1,
+      "weight": 40,
+      "notes": "Carved with owls",
+      "equipped": true
+    },
+    {
+      "id": "ks-eq-03",
+      "name": "Lantern",
+      "slots": 1,
+      "weight": 30,
+      "notes": "Hooded",
+      "equipped": true
+    },
+    {
+      "id": "ks-eq-04",
+      "name": "Oliphan's Folio",
+      "slots": 1,
+      "weight": 50,
+      "notes": "Starting spell book",
+      "equipped": true,
+      "kind": "spellbook",
+      "isStartingBook": true,
+      "spellbookContents": [
+        {
+          "name": "Crystal Resonance",
+          "rank": 1
+        },
+        {
+          "name": "Ioun Shard",
+          "rank": 1
+        },
+        {
+          "name": "Shield of Force",
+          "rank": 1
+        }
+      ]
+    },
+    {
+      "id": "ks-eq-05",
+      "name": "Scroll of Fireball",
+      "slots": 0,
+      "weight": 1,
+      "notes": "Found in the barrow",
+      "equipped": true,
+      "kind": "scroll",
+      "scrollSpell": {
+        "name": "Fireball",
+        "rank": 3
+      }
+    },
+    {
+      "id": "ks-eq-06",
+      "name": "Dwemer shard",
+      "slots": 0,
+      "weight": 1,
+      "notes": "Hums near the Antler Line",
+      "equipped": true,
+      "kind": "shard",
+      "shard": {
+        "spell": {
+          "name": "Dweomerlight",
+          "rank": 2
+        },
+        "castsLeft": 1,
+        "castsPerCharge": 2,
+        "leyLineId": "ks-ley-01"
+      }
+    }
+  ],
+  "stowedItems": [
+    {
+      "id": "ks-st-01",
+      "name": "The Grimoire of Hidden Doors",
+      "slots": 1,
+      "weight": 50,
+      "notes": "Bound in green leather",
+      "equipped": false,
+      "containerId": "ks-backpack",
+      "kind": "spellbook",
+      "spellbookContents": [
+        {
+          "name": "Knock",
+          "rank": 2
+        },
+        {
+          "name": "Glyph of Locking",
+          "rank": 2
+        },
+        {
+          "name": "Mirror Image",
+          "rank": 2
+        }
+      ]
+    },
+    {
+      "id": "ks-st-11",
+      "name": "The Antler King's Codex",
+      "slots": 1,
+      "weight": 50,
+      "notes": "Taken from the barrow",
+      "equipped": false,
+      "containerId": "ks-backpack",
+      "kind": "spellbook",
+      "spellbookContents": [
+        {
+          "name": "Dimension Door",
+          "rank": 4
+        },
+        {
+          "name": "Arcane Eye",
+          "rank": 4
+        },
+        {
+          "name": "Wall of Fire",
+          "rank": 4
+        }
+      ]
+    },
+    {
+      "id": "ks-st-12",
+      "name": "A Treatise on Unmaking",
+      "slots": 1,
+      "weight": 50,
+      "notes": "One page left blank",
+      "equipped": false,
+      "containerId": "ks-sack",
+      "kind": "spellbook",
+      "spellbookContents": [
+        {
+          "name": "Disintegrate",
+          "rank": 6
+        },
+        {
+          "name": "Project Image",
+          "rank": 6
+        }
+      ]
+    },
+    {
+      "id": "ks-st-02",
+      "name": "Scroll of Web",
+      "slots": 0,
+      "weight": 1,
+      "notes": "",
+      "equipped": false,
+      "containerId": "ks-backpack",
+      "kind": "scroll",
+      "scrollSpell": {
+        "name": "Web",
+        "rank": 2
+      }
+    },
+    {
+      "id": "ks-st-03",
+      "name": "Rations (preserved, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "Eat the oldest first",
+      "equipped": false,
+      "containerId": "ks-backpack"
+    },
+    {
+      "id": "ks-st-04",
+      "name": "Bedroll",
+      "slots": 1,
+      "weight": 70,
+      "notes": "",
+      "equipped": false,
+      "containerId": "ks-backpack"
+    },
+    {
+      "id": "ks-st-05",
+      "name": "Waterskin",
+      "slots": 1,
+      "weight": 50,
+      "notes": "Refilled at the lake",
+      "equipped": false,
+      "containerId": "ks-backpack"
+    },
+    {
+      "id": "ks-st-06",
+      "name": "Ink and quills",
+      "slots": 1,
+      "weight": 5,
+      "notes": "",
+      "equipped": false,
+      "containerId": "ks-pouch"
+    },
+    {
+      "id": "ks-st-07",
+      "name": "Holy water (vial)",
+      "slots": 1,
+      "weight": 10,
+      "notes": "From Sister Ysolde",
+      "equipped": false,
+      "containerId": "ks-pouch"
+    },
+    {
+      "id": "ks-st-08",
+      "name": "Rope, 50'",
+      "slots": 1,
+      "weight": 100,
+      "notes": "",
+      "equipped": false,
+      "containerId": "ks-sack"
+    },
+    {
+      "id": "ks-st-09",
+      "name": "Iron spikes (12)",
+      "slots": 1,
+      "weight": 60,
+      "notes": "Bent",
+      "equipped": false,
+      "containerId": "ks-sack"
+    },
+    {
+      "id": "ks-st-10",
+      "name": "Torches (6)",
+      "slots": 1,
+      "weight": 120,
+      "notes": "",
+      "equipped": false
+    }
+  ],
+  "containers": [
+    {
+      "id": "ks-backpack",
+      "name": "Backpack",
+      "capacity": 400
+    },
+    {
+      "id": "ks-pouch",
+      "name": "Belt pouch",
+      "capacity": 50
+    },
+    {
+      "id": "ks-sack",
+      "name": "Sack",
+      "capacity": 600
+    }
+  ],
+  "tinyItems": "Chalk, a silver thimble, three acorns, a lock of hair in a locket",
+  "coins": {
+    "copper": 37,
+    "silver": 112,
+    "gold": 54,
+    "pellucidium": 2
+  },
+  "encumbranceMethod": "slots",
+  "equippedArmourName": "",
+  "hasShield": false,
+  "spells": [
+    {
+      "id": "ks-sp-01",
+      "name": "Shield of Force",
+      "rank": 1,
+      "prepared": true,
+      "cast": true,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-02",
+      "name": "Ioun Shard",
+      "rank": 1,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-03",
+      "name": "Crystal Resonance",
+      "rank": 1,
+      "prepared": true,
+      "cast": false,
+      "notes": "For the reliquary"
+    },
+    {
+      "id": "ks-sp-04",
+      "name": "Decipher",
+      "rank": 1,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-05",
+      "name": "Knock",
+      "rank": 2,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-06",
+      "name": "Glyph of Locking",
+      "rank": 2,
+      "prepared": true,
+      "cast": true,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-07",
+      "name": "Invisibility",
+      "rank": 2,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-08",
+      "name": "Mirror Image",
+      "rank": 2,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-09",
+      "name": "Fireball",
+      "rank": 3,
+      "prepared": true,
+      "cast": false,
+      "notes": "Learned in Fairy"
+    },
+    {
+      "id": "ks-sp-10",
+      "name": "Haste",
+      "rank": 3,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-11",
+      "name": "Fly",
+      "rank": 3,
+      "prepared": true,
+      "cast": true,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-12",
+      "name": "Dimension Door",
+      "rank": 4,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-13",
+      "name": "Arcane Eye",
+      "rank": 4,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-14",
+      "name": "Wall of Fire",
+      "rank": 4,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-15",
+      "name": "Telekinesis",
+      "rank": 5,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-16",
+      "name": "Passwall",
+      "rank": 5,
+      "prepared": true,
+      "cast": true,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-17",
+      "name": "Disintegrate",
+      "rank": 6,
+      "prepared": true,
+      "cast": false,
+      "notes": ""
+    },
+    {
+      "id": "ks-sp-18",
+      "name": "Project Image",
+      "rank": 6,
+      "prepared": true,
+      "cast": false,
+      "notes": "Only in dire need"
+    }
+  ],
+  "spellNotes": "Prepare Knock whenever the party goes underground.",
+  "glamours": [],
+  "runes": [],
+  "knack": null,
+  "startingSpellBook": "Oliphan's Folio",
+  "knownSpells": [
+    {
+      "id": "ks-ks-01",
+      "name": "Crystal Resonance",
+      "rank": 1,
+      "source": "starting",
+      "learnedAt": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      }
+    },
+    {
+      "id": "ks-ks-02",
+      "name": "Ioun Shard",
+      "rank": 1,
+      "source": "starting",
+      "learnedAt": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      }
+    },
+    {
+      "id": "ks-ks-03",
+      "name": "Shield of Force",
+      "rank": 1,
+      "source": "starting",
+      "learnedAt": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      }
+    },
+    {
+      "id": "ks-ks-04",
+      "name": "Knock",
+      "rank": 2,
+      "source": "studied",
+      "learnedAt": {
+        "day": 20,
+        "month": 0,
+        "year": 1
+      },
+      "notes": "From the Grimoire of Hidden Doors"
+    },
+    {
+      "id": "ks-ks-05",
+      "name": "Glyph of Locking",
+      "rank": 2,
+      "source": "mentor",
+      "learnedAt": {
+        "day": 26,
+        "month": 0,
+        "year": 1
+      }
+    },
+    {
+      "id": "ks-ks-07",
+      "name": "Decipher",
+      "rank": 1,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-08",
+      "name": "Invisibility",
+      "rank": 2,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-09",
+      "name": "Mirror Image",
+      "rank": 2,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-10",
+      "name": "Haste",
+      "rank": 3,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-11",
+      "name": "Fly",
+      "rank": 3,
+      "source": "mentor"
+    },
+    {
+      "id": "ks-ks-12",
+      "name": "Dimension Door",
+      "rank": 4,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-13",
+      "name": "Arcane Eye",
+      "rank": 4,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-14",
+      "name": "Wall of Fire",
+      "rank": 4,
+      "source": "research"
+    },
+    {
+      "id": "ks-ks-15",
+      "name": "Telekinesis",
+      "rank": 5,
+      "source": "studied"
+    },
+    {
+      "id": "ks-ks-16",
+      "name": "Passwall",
+      "rank": 5,
+      "source": "manual"
+    },
+    {
+      "id": "ks-ks-17",
+      "name": "Disintegrate",
+      "rank": 6,
+      "source": "research"
+    },
+    {
+      "id": "ks-ks-18",
+      "name": "Project Image",
+      "rank": 6,
+      "source": "rewrite"
+    },
+    {
+      "id": "ks-ks-06",
+      "name": "Fireball",
+      "rank": 3,
+      "source": "mentor",
+      "learnedAt": {
+        "day": 5,
+        "month": 1,
+        "year": 1
+      },
+      "learnedInFairy": {
+        "visitId": "kitchen-sink-visit-1",
+        "day": 3
+      },
+      "notes": "The Queen's librarian"
+    }
+  ],
+  "spellStudy": {
+    "active": {
+      "id": "ks-study-01",
+      "spellName": "Paralysation",
+      "rank": 3,
+      "source": "book",
+      "weeksRequired": 3,
+      "goldCost": 0,
+      "notes": "Borrowed from the Lantern Society",
+      "startedOn": {
+        "day": 22,
+        "month": 1,
+        "year": 1
+      },
+      "startedLivedDay": 44,
+      "sinceReturnFrom": "kitchen-sink-visit-1"
+    },
+    "queue": [
+      {
+        "id": "ks-study-02",
+        "spellName": "Dark Sight",
+        "rank": 3,
+        "source": "mentor",
+        "weeksRequired": 1,
+        "goldCost": 0
+      },
+      {
+        "id": "ks-study-03",
+        "spellName": "Levitate",
+        "rank": 2,
+        "source": "research",
+        "weeksRequired": 4,
+        "goldCost": 2000,
+        "targetSpellbookId": "ks-st-01",
+        "notes": "Needs a feather from a sky-whale"
+      }
+    ]
+  },
+  "failedStudies": [
+    {
+      "spellName": "Dispel Magic",
+      "failedAtLevel": 4
+    }
+  ],
+  "classTraits": "Arcane magic: memorises spells from her spell books each morning.\nDetect magic by touch.",
+  "kindredTraits": "Human: +1 to any one skill target (Search).",
+  "languages": "Woldish, Liturgic, Sylvan",
+  "combatTalents": "",
+  "otherNotes": "Owes 40gp to the apothecary in Prigwort.\nThe Drune have noticed her.\nSister Ysolde asked her to find the lost reliquary.",
+  "retainers": [
+    {
+      "id": "ks-rt-01",
+      "name": "Hob Tallowmere",
+      "class": "Torchbearer",
+      "level": 1,
+      "hp": 4,
+      "loyalty": 7,
+      "notes": "Afraid of the dark, oddly"
+    },
+    {
+      "id": "ks-rt-02",
+      "name": "Agnes of the Ford",
+      "class": "Fighter",
+      "level": 2,
+      "hp": 11,
+      "loyalty": 8,
+      "notes": "Wants a share of any silver"
+    }
+  ],
+  "gazeUsesRemaining": 0,
+  "currentForm": "estray",
+  "wilderUsedToday": false,
+  "madRevelryUsesRemaining": 0,
+  "trophies": [],
+  "animalCompanion": null,
+  "liegeHouse": "",
+  "selectedCombatTalents": [],
+  "holyOrder": "",
+  "symbioticFleshTraits": [],
+  "fungalSymbiosisUsesRemaining": 0,
+  "currentDate": {
+    "day": 3,
+    "month": 2,
+    "year": 1
+  },
+  "currentLocation": "Prigwort",
+  "currentLocationHex": "1309",
+  "mapData": {
+    "pois": [
+      {
+        "id": "ks-poi-01",
+        "hex": "1106",
+        "name": "Lankshorn",
+        "notes": "Home. The Lantern Society meets at the Blue Heron.",
+        "kind": "town"
+      },
+      {
+        "id": "ks-poi-02",
+        "hex": "1107",
+        "name": "The Weeping Stones",
+        "notes": "A ring of standing stones; one weeps in rain.",
+        "kind": "stones"
+      },
+      {
+        "id": "ks-poi-03",
+        "hex": "0909",
+        "name": "Barrow of the Antler King",
+        "notes": "Fireball scroll found here.",
+        "kind": "barrow"
+      },
+      {
+        "id": "ks-poi-04",
+        "hex": "1309",
+        "name": "Prigwort",
+        "notes": "Owes 40gp to the apothecary.",
+        "kind": "town"
+      },
+      {
+        "id": "ks-poi-05",
+        "hex": "0606",
+        "name": "Abandoned mill",
+        "notes": ""
+      },
+      {
+        "id": "ks-poi-06",
+        "hex": "1106",
+        "name": "The Blue Heron",
+        "notes": "Where the Lantern Society meets.",
+        "kind": "inn"
+      }
+    ],
+    "fairyDoors": [
+      {
+        "id": "ks-door-01",
+        "hex": "1007",
+        "name": "The Thornhole",
+        "notes": "Opens at moonrise.",
+        "destination": {
+          "kind": "roaded",
+          "pairedDoorId": "ks-door-02",
+          "roadName": "The Silver Way"
+        }
+      },
+      {
+        "id": "ks-door-02",
+        "hex": "1404",
+        "name": "Hollow Oak",
+        "notes": "",
+        "destination": {
+          "kind": "roaded",
+          "pairedDoorId": "ks-door-01",
+          "roadName": "The Silver Way"
+        }
+      },
+      {
+        "id": "ks-door-03",
+        "hex": "0703",
+        "name": "Mushroom ring",
+        "notes": "Leads somewhere wild.",
+        "destination": {
+          "kind": "wild"
+        }
+      }
+    ],
+    "leyLines": [
+      {
+        "id": "ks-ley-01",
+        "kind": "leyLine",
+        "type": "Ley line",
+        "name": "The Antler Line",
+        "color": "#c4a35a",
+        "hexes": [
+          "0909",
+          "1008",
+          "1107",
+          "1206",
+          "1306"
+        ],
+        "notes": "Hums at dusk.",
+        "spell": {
+          "name": "Dweomerlight",
+          "rank": 2
+        }
+      },
+      {
+        "id": "ks-ley-02",
+        "kind": "other",
+        "type": "Ancient road",
+        "name": "Old Drune Road",
+        "color": "#7a5fc4",
+        "hexes": [
+          "0606",
+          "0706",
+          "0806",
+          "0906",
+          "1006",
+          "1106"
+        ],
+        "notes": ""
+      },
+      {
+        "id": "ks-ley-03",
+        "kind": "leyLine",
+        "type": "Ley line",
+        "name": "The Whispering Ley",
+        "color": "#5fa3c4",
+        "hexes": [
+          "1309"
+        ],
+        "notes": "Felt it under Prigwort; no idea where it runs."
+      }
+    ]
+  },
+  "journalEntries": [
+    {
+      "id": "kitchen-sink-entry-01",
+      "date": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Lankshorn",
+      "hex": "1106",
+      "text": "Set out from Lankshorn with Hob and Agnes."
+    },
+    {
+      "id": "kitchen-sink-entry-02",
+      "date": {
+        "day": 3,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Abandoned mill",
+      "hex": "0606",
+      "text": "Camped at the abandoned mill. Something scratched at the door all night."
+    },
+    {
+      "id": "kitchen-sink-entry-03",
+      "date": {
+        "day": 6,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Old Drune Road",
+      "hex": "0806",
+      "text": "Followed the Old Drune Road east. Agnes found a silver penny in the ruts."
+    },
+    {
+      "id": "kitchen-sink-entry-04",
+      "date": {
+        "day": 9,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Barrow of the Antler King",
+      "hex": "0909",
+      "text": "The barrow of the Antler King. Took the Fireball scroll from the bier; left the crown."
+    },
+    {
+      "id": "kitchen-sink-entry-05",
+      "date": {
+        "day": 12,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Lankshorn",
+      "hex": "1106",
+      "text": "Back in Lankshorn. Sold the antler for 30gp."
+    },
+    {
+      "id": "kitchen-sink-entry-06",
+      "date": {
+        "day": 20,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Lankshorn",
+      "hex": "1106",
+      "text": "Finished studying Knock from the green grimoire."
+    },
+    {
+      "id": "kitchen-sink-entry-07",
+      "date": {
+        "day": 26,
+        "month": 0,
+        "year": 1
+      },
+      "location": "Lankshorn",
+      "hex": "1106",
+      "text": "Old Mother Brindle taught me Glyph of Locking in exchange for a lock of my hair.",
+      "npcIds": [
+        "ks-npc-02"
+      ]
+    },
+    {
+      "id": "kitchen-sink-entry-08",
+      "date": {
+        "day": 4,
+        "month": 1,
+        "year": 1
+      },
+      "location": "The Thornhole",
+      "hex": "1007",
+      "text": "Rode out to the Thornhole at moonrise."
+    },
+    {
+      "id": "kitchen-sink-entry-09",
+      "date": {
+        "day": 5,
+        "month": 1,
+        "year": 1
+      },
+      "fairyEvent": {
+        "visitId": "kitchen-sink-visit-1",
+        "kind": "entered"
+      },
+      "location": "The Thornhole",
+      "hex": "1007",
+      "text": "Entered Fairy (visit 1)."
+    },
+    {
+      "id": "kitchen-sink-entry-10",
+      "date": {
+        "day": 5,
+        "month": 1,
+        "year": 1
+      },
+      "fairyDate": {
+        "visitId": "kitchen-sink-visit-1",
+        "day": 2
+      },
+      "location": "The Court of the Hidden Moon",
+      "text": "A feast that lasted a single night, or a year. The Queen asked my true name; I gave her my sister's."
+    },
+    {
+      "id": "kitchen-sink-entry-11",
+      "date": {
+        "day": 5,
+        "month": 1,
+        "year": 1
+      },
+      "fairyDate": {
+        "visitId": "kitchen-sink-visit-1",
+        "day": 3
+      },
+      "location": "The Court of the Hidden Moon",
+      "text": "The librarian taught me Fireball. The ink on my hands will not wash off.",
+      "npcIds": [
+        "ks-npc-03"
+      ]
+    },
+    {
+      "id": "kitchen-sink-entry-12",
+      "date": {
+        "day": 15,
+        "month": 1,
+        "year": 1
+      },
+      "fairyEvent": {
+        "visitId": "kitchen-sink-visit-1",
+        "kind": "returned"
+      },
+      "location": "The Weeping Stones",
+      "hex": "1107",
+      "text": "Returned from Fairy (visit 1) after 3 days; 10 days passed in Dolmenwood."
+    },
+    {
+      "id": "kitchen-sink-entry-13",
+      "date": {
+        "day": 16,
+        "month": 1,
+        "year": 1
+      },
+      "sinceReturnFrom": "kitchen-sink-visit-1",
+      "location": "The Weeping Stones",
+      "hex": "1107",
+      "text": "Ten days had passed in the Wood. Hob had given us up for lost and spent the silver."
+    },
+    {
+      "id": "kitchen-sink-entry-14",
+      "date": {
+        "day": 18,
+        "month": 1,
+        "year": 1
+      },
+      "sinceReturnFrom": "kitchen-sink-visit-1",
+      "location": "Prigwort",
+      "hex": "1309",
+      "text": "Prigwort. The apothecary wants her 40gp by the new moon."
+    },
+    {
+      "id": "kitchen-sink-entry-15",
+      "date": {
+        "day": 1,
+        "month": 2,
+        "year": 1
+      },
+      "sinceReturnFrom": "kitchen-sink-visit-1",
+      "location": "Prigwort",
+      "hex": "1309",
+      "text": "A week of study. The words of Paralysation keep slipping away."
+    },
+    {
+      "id": "kitchen-sink-entry-16",
+      "date": {
+        "day": 3,
+        "month": 2,
+        "year": 1
+      },
+      "sinceReturnFrom": "kitchen-sink-visit-1",
+      "location": "Prigwort",
+      "hex": "1309",
+      "text": "Wrote to Sister Ysolde about the reliquary, and asked whether Mother Brindle might know where it went.",
+      "npcIds": [
+        "ks-npc-01",
+        "ks-npc-02"
+      ]
+    }
+  ],
+  "npcs": [
+    {
+      "id": "ks-npc-01",
+      "name": "Sister Ysolde",
+      "affiliation": "The Church of Lankshorn",
+      "location": "Lankshorn",
+      "hex": "1106",
+      "goals": "Find the lost reliquary before the Drune do.",
+      "quests": [
+        {
+          "id": "ks-quest-01",
+          "text": "Find the lost reliquary",
+          "done": false
+        },
+        {
+          "id": "ks-quest-02",
+          "text": "Bring her holy water to the barrow",
+          "done": true
+        }
+      ]
+    },
+    {
+      "id": "ks-npc-02",
+      "name": "Old Mother Brindle",
+      "affiliation": "",
+      "location": "A hut past the mill",
+      "goals": "Collects locks of hair. Nobody knows why.",
+      "quests": []
+    },
+    {
+      "id": "ks-npc-03",
+      "name": "The Queen's librarian",
+      "affiliation": "The Court of the Hidden Moon",
+      "location": "In Fairy",
+      "goals": "Wants every book in the mortal world, once.",
+      "quests": [
+        {
+          "id": "ks-quest-03",
+          "text": "Bring back a book from Lankshorn",
+          "done": false
+        }
+      ]
+    }
+  ],
+  "exhaustionLevel": 1,
+  "hungerDays": 1,
+  "thirstDays": 0,
+  "rations": {
+    "fresh": 2,
+    "preserved": 5
+  },
+  "activeLightSources": [
+    {
+      "id": "ks-ls-01",
+      "type": "lantern",
+      "minutesRemaining": 180
+    },
+    {
+      "id": "ks-ls-02",
+      "type": "torch",
+      "minutesRemaining": 20
+    },
+    {
+      "id": "ks-ls-03",
+      "type": "candle",
+      "minutesRemaining": 45
+    }
+  ],
+  "travelDaysWithoutRest": 2,
+  "forcedMarchActive": false,
+  "travelPointsRemaining": 3,
+  "fairyVisits": [
+    {
+      "id": "kitchen-sink-visit-1",
+      "enteredOn": {
+        "day": 5,
+        "month": 1,
+        "year": 1
+      },
+      "returnedOn": {
+        "day": 15,
+        "month": 1,
+        "year": 1
+      },
+      "daysInFairy": 3
+    }
+  ],
+  "livedTimeStart": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  }
+}
