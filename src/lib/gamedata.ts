@@ -3138,6 +3138,23 @@ export function getCharacterMagicProfile(kindred: KindredId | '', classId: Class
   return result;
 }
 
+/**
+ * The Ranks of arcane spell a character can learn at their current Level,
+ * from a mentor, a spell book or research: "It is only possible to learn
+ * spells of a Rank the character can memorise, according to their Class and
+ * Level" (Player's Book p78). Those are the Ranks with at least one slot in
+ * their Spells Per Day table, so always Ranks 1 to n, or none (a breggle below
+ * Level 4). Rewriting a lost spell book (p78) isn't learning: it copies spells
+ * already learned, so this doesn't limit it.
+ *
+ * Empty for holy spell-casters, who don't learn spells but pray for any holy
+ * spell of a Rank they can cast (p100), and for characters without spells.
+ */
+export function getLearnableSpellRanks(profile: Pick<MagicProfile, 'spellType' | 'spellsPerDay'>): number[] {
+  if (profile.spellType !== 'arcane' || !profile.spellsPerDay) return [];
+  return profile.spellsPerDay.flatMap((slots, i) => (slots > 0 ? [i + 1] : []));
+}
+
 // ── Adventuring Data ─────────────────────────────────────────────────
 
 export const TERRAIN_TABLE: { terrain: string; tpCost: number; lostChance: string; mountsVehicles: string }[] = [
