@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Character, CharacterUpdater, JournalEntry, ActiveLightSource, CalendarDate } from '@/lib/types';
+import { Character, CharacterUpdater, ActiveLightSource, CalendarDate } from '@/lib/types';
 import {
   LATEST_DATE,
   MAX_YEAR,
@@ -28,13 +28,12 @@ import {
   isWysenday,
 } from '@/lib/gamedata';
 import {
-  formatRecordDate,
-  getCurrentTimelinePoint,
   getEarliestDolmenwoodDate,
   getFairyVisits,
   getOpenFairyVisit,
   getStudyProgress,
 } from '@/lib/livedTime';
+import { getJournalEntries } from '@/lib/journal';
 import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
 import { errorClasses, formatYearNumber, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
@@ -42,6 +41,7 @@ import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 interface AdventuringProps {
   character: Character;
   onChange: (updates: CharacterUpdater) => void;
+  onOpenJournal: () => void; // switches to the Journal tab
 }
 
 const inputClasses =
@@ -155,8 +155,8 @@ function CalendarNumberInput({
   );
 }
 
-export default function Adventuring({ character, onChange }: AdventuringProps) {
-  const { currentDate, currentLocation, journalEntries } = character;
+export default function Adventuring({ character, onChange, onOpenJournal }: AdventuringProps) {
+  const { currentDate, currentLocation } = character;
   const currentMonth = MONTHS[currentDate.month];
   const seasonColor = SEASON_COLORS[currentMonth.season] || '#f5e6c8';
   const season = currentMonth.season as 'Winter' | 'Spring' | 'Summer' | 'Autumn';
@@ -238,35 +238,6 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
   const dayProblem = (day: number) => beforeEarliest({ ...currentDate, day });
   const yearProblem = (year: number) => beforeEarliest({ ...currentDate, year });
 
-  // ── Journal Handlers ───────────────────────────────────────────────
-
-  const handleAddJournalEntry = () => {
-    const now = getCurrentTimelinePoint(character);
-    const newEntry: JournalEntry = {
-      id: crypto.randomUUID(),
-      date: now.date,
-      fairyDate: now.fairyDate,
-      sinceReturnFrom: now.sinceReturnFrom,
-      location: currentLocation,
-      text: '',
-    };
-    onChange({ journalEntries: [...journalEntries, newEntry] });
-  };
-
-  const handleUpdateJournalEntry = (id: string, text: string) => {
-    onChange({
-      journalEntries: journalEntries.map((entry) =>
-        entry.id === id ? { ...entry, text } : entry
-      ),
-    });
-  };
-
-  const handleDeleteJournalEntry = (id: string) => {
-    onChange({
-      journalEntries: journalEntries.filter((entry) => entry.id !== id),
-    });
-  };
-
   // ── Light Source Handlers ──────────────────────────────────────────
 
   const handleAddLightSource = (type: 'torch' | 'lantern' | 'candle') => {
@@ -320,6 +291,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
     : 'None';
 
   const forcedMarchTp = Math.floor(character.travelPointsPerDay * 1.5);
+  const journalCount = getJournalEntries(character).length;
 
   return (
     <div className="space-y-4">
@@ -1070,7 +1042,7 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         )}
       </div>
 
-      {/* ── 5i. Calendar Info + Season + Journal (existing) ──────── */}
+      {/* ── 5i. Calendar Info + Season ──────────────────────────── */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
         <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
           {currentMonth.name} — {currentMonth.season}
@@ -1169,52 +1141,20 @@ export default function Adventuring({ character, onChange }: AdventuringProps) {
         </div>
       </div>
 
-      {/* Journal */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4 border-b border-[#5a3a28] pb-2">
+      {/* The journal has its own tab; this points the way there. */}
+      <div className="bg-[#2a2a3e] rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h3 className="text-[#c4a35a] text-lg font-bold">Journal</h3>
-          <button onClick={handleAddJournalEntry} className={buttonClasses}>
-            Add Entry
-          </button>
+          <p className="text-[#f5e6c8]/80 text-sm">
+            {journalCount === 0
+              ? 'No entries yet. '
+              : `${journalCount.toLocaleString('en-US')} ${journalCount === 1 ? 'entry' : 'entries'}. `}
+            The journal has its own tab, where you can search it and filter it by hex.
+          </p>
         </div>
-
-        {journalEntries.length === 0 && (
-          <div className="text-[#f5e6c8]/40 text-sm italic">
-            No journal entries yet. Add one to start recording your adventures.
-          </div>
-        )}
-
-        <div className="space-y-2">
-          {journalEntries.map((entry) => (
-            <div key={entry.id} className="bg-[#1a1a2e] rounded p-3">
-              <div className="flex items-start justify-between mb-2">
-                <div>
-                  <div className={`${entry.fairyDate ? 'text-[#c9b3f0]' : 'text-[#c4a35a]'} text-sm font-semibold`}>
-                    {formatRecordDate(character, entry.date, entry.fairyDate)}
-                  </div>
-                  {entry.location && (
-                    <div className="text-[#f5e6c8]/60 text-xs">
-                      {entry.location}
-                    </div>
-                  )}
-                </div>
-                <button
-                  onClick={() => handleDeleteJournalEntry(entry.id)}
-                  className="text-red-400 hover:text-red-300 text-sm px-2 py-0.5 rounded hover:bg-red-400/10 transition-colors"
-                >
-                  Delete
-                </button>
-              </div>
-              <textarea
-                value={entry.text}
-                onChange={(e) => handleUpdateJournalEntry(entry.id, e.target.value)}
-                placeholder="What happened today?"
-                rows={3}
-                className={`${inputClasses} w-full resize-y`}
-              />
-            </div>
-          ))}
-        </div>
+        <button type="button" onClick={onOpenJournal} className={buttonClasses}>
+          Open Journal
+        </button>
       </div>
     </div>
   );

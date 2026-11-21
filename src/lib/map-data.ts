@@ -1,4 +1,4 @@
-import type { CharacterMapData, FairyDoor, FairyDoorDestination } from './types';
+import type { CharacterMapData, FairyDoor, FairyDoorDestination, HexCoord } from './types';
 
 /**
  * `md` with all three lists, an empty one in place of any that's missing.
@@ -7,6 +7,17 @@ import type { CharacterMapData, FairyDoor, FairyDoorDestination } from './types'
  */
 export function withMapLists(md: Partial<CharacterMapData> | null | undefined): CharacterMapData {
   return { ...md, pois: md?.pois ?? [], fairyDoors: md?.fairyDoors ?? [], leyLines: md?.leyLines ?? [] };
+}
+
+/**
+ * The name of a place marked on `hex`: its first named point of interest, or
+ * else its first named fairy door; '' if there's none (or no hex).
+ */
+export function getPlaceNameOn(md: Partial<CharacterMapData> | null | undefined, hex: HexCoord | ''): string {
+  if (!hex) return '';
+  const { pois, fairyDoors } = withMapLists(md);
+  const named = (item: { hex: HexCoord; name: string }) => item.hex === hex && typeof item.name === 'string' && item.name.trim() !== '';
+  return (pois.find(named) ?? fairyDoors.find(named))?.name.trim() ?? '';
 }
 
 /** Colors given to new ley lines, in turn. */

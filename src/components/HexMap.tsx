@@ -1,6 +1,6 @@
 'use client';
 
-import React, { memo, useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type {
   Character,
   CharacterMapData,
@@ -22,6 +22,7 @@ import {
   hexVertices,
   isValidHex,
   nearestPointOnMap,
+  parseTypedHex,
   pixelToHex,
 } from '@/lib/hex';
 import {
@@ -44,10 +45,12 @@ import {
   upsertFairyDoor,
   withMapLists,
 } from '@/lib/map-data';
+import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
 
 interface HexMapProps {
   character: Character;
   onChange: (updates: CharacterUpdater) => void;
+  onOpenJournal: (hex: HexCoord) => void; // opens the Journal tab, filtered to that hex
 }
 
 // --- Colours ---
@@ -281,7 +284,7 @@ function useFocusOnRequest(
   }, [seq, target, rootRef, inputRef]);
 }
 
-export default function HexMap({ character, onChange }: HexMapProps) {
+export default function HexMap({ character, onChange, onOpenJournal }: HexMapProps) {
   // Migration + sanitizer guarantee a well-formed mapData, but stay defensive.
   const mapData = withMapLists(character.mapData);
   const pois = mapData.pois;
@@ -742,6 +745,11 @@ export default function HexMap({ character, onChange }: HexMapProps) {
     clearSelection();
   };
 
+  // Journal entries written in each hex, for the inspector's link to them.
+  // Kept between renders, which come at every step of a pan or zoom.
+  const journalEntries = character.journalEntries;
+  const journalCounts = useMemo(() => countEntriesByHex(getJournalEntries({ journalEntries })).byHex, [journalEntries]);
+
   // Items on each hex, in order: POIs first, then doors.
   const itemsByHex = new Map<HexCoord, { pois: MapPOI[]; doors: FairyDoor[] }>();
   for (const p of pois) {
@@ -1192,6 +1200,8 @@ export default function HexMap({ character, onChange }: HexMapProps) {
             setPendingForm={setPendingForm}
             currentLocationHex={currentHex}
             setCurrentLocation={setCurrentLocation}
+            journalCount={selectedHex ? journalCounts.get(selectedHex) ?? 0 : 0}
+            onOpenJournal={onOpenJournal}
             focus={focus}
             onClose={() => {
               clearSelection();
@@ -1224,8 +1234,8 @@ function JumpToHexInput({ drafting, onJump }: { drafting: boolean; onJump: (hex:
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const raw = value.trim();
-    const hex = /^\d{1,4}$/.test(raw) ? raw.padStart(4, '0') : '';
-    if (!isValidHex(hex)) {
+    const hex = parseTypedHex(raw);
+    if (!hex) {
       setError(raw ? `No hex "${raw}" on the map` : 'Type a hex number, like 0303');
       return;
     }
@@ -1254,7 +1264,7 @@ function JumpToHexInput({ drafting, onJump }: { drafting: boolean; onJump: (hex:
       <button type="submit" className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 text-xs transition-colors">
         Go
       </button>
-      <span id={statusId} role="status" className="text-xs text-[#ff8a70]">
+      <span id={statusId} role="status" className="text-xs text-[#ff8a70] min-w-0 [overflow-wrap:anywhere]">
         {error ?? ''}
       </span>
     </form>
@@ -1293,6 +1303,8 @@ function HexInspectorPanel({
   setPendingForm,
   currentLocationHex,
   setCurrentLocation,
+  journalCount,
+  onOpenJournal,
   focus,
   onClose,
   moveFocusTo,
@@ -1305,6 +1317,8 @@ function HexInspectorPanel({
   setPendingForm: (f: { type: 'poi' | 'door'; hex: HexCoord } | null) => void;
   currentLocationHex: HexCoord | '';
   setCurrentLocation: (h: HexCoord) => void;
+  journalCount: number; // journal entries written in the selected hex
+  onOpenJournal: (hex: HexCoord) => void;
   focus: ({ id: string } & FocusRequest) | null;
   onClose: () => void;
   moveFocusTo: (key: string) => void;
@@ -1359,6 +1373,16 @@ function HexInspectorPanel({
           ✕
         </button>
       </div>
+
+      {journalCount > 0 && (
+        <button
+          type="button"
+          onClick={() => onOpenJournal(selectedHex)}
+          className={`text-[#c4a35a] hover:underline text-sm rounded px-1 py-1 -mx-1 ${FOCUS_RING}`}
+        >
+          Journal entries here ({journalCount.toLocaleString('en-US')}) <span aria-hidden="true">→</span>
+        </button>
+      )}
 
       {activeForm === 'poi' && (
         <POIForm
