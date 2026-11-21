@@ -1,8 +1,20 @@
-// Tests for the fairy-door pairing rules in map-data.ts, and naming the
-// place on a hex. Run with `npm test`.
+// Tests for the fairy-door pairing rules in map-data.ts, naming the place on
+// a hex, and the kinds of POIs and paths. Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deleteFairyDoor, getPlaceNameOn, isValidDestination, pairableDoors, partnerUpdates, upsertFairyDoor, withMapLists } from './map-data';
+import {
+  POI_KIND_LABELS,
+  deleteFairyDoor,
+  getPlaceNameOn,
+  isPathKind,
+  isPoiKind,
+  isValidDestination,
+  pairableDoors,
+  partnerUpdates,
+  pathKindFromType,
+  upsertFairyDoor,
+  withMapLists,
+} from './map-data';
 import type { FairyDoor, FairyDoorDestination } from './types';
 
 const wild: FairyDoorDestination = { kind: 'wild' };
@@ -98,7 +110,7 @@ describe('deleteFairyDoor and isValidDestination', () => {
 describe('withMapLists', () => {
   test('fills in missing lists and keeps everything else', () => {
     const pois = [{ id: 'p', hex: '0303', name: 'P', notes: '' }];
-    const draft = { name: '', type: '', color: '#c4a35a', notes: '', hexes: [] };
+    const draft = { name: '', type: '', color: '#c4a35a', notes: '', hexes: [], kind: 'leyLine' as const };
     const md = withMapLists({ pois, draftLeyLine: draft });
     assert.deepEqual(md, { pois, fairyDoors: [], leyLines: [], draftLeyLine: draft });
     assert.equal(md.pois, pois, 'an existing list is kept as it is');
@@ -122,5 +134,30 @@ describe('getPlaceNameOn', () => {
     assert.equal(getPlaceNameOn(md, '1106'), '');
     assert.equal(getPlaceNameOn(md, ''), '');
     assert.equal(getPlaceNameOn(undefined, '0606'), '');
+  });
+});
+
+describe('kinds of points of interest and paths', () => {
+  test('there are 15 POI kinds, "other" among them; nothing else is one', () => {
+    assert.equal(Object.keys(POI_KIND_LABELS).length, 15);
+    assert.ok(Object.keys(POI_KIND_LABELS).every(isPoiKind) && isPoiKind('other'));
+    for (const v of ['castle', 'Town', '', 'constructor', '__proto__', 'toString', 3, null, undefined, {}]) {
+      assert.equal(isPoiKind(v), false, String(v));
+    }
+  });
+
+  test('a path is a ley line or another path, nothing else', () => {
+    assert.ok(isPathKind('leyLine') && isPathKind('other'));
+    for (const v of ['ley line', 'LeyLine', 'road', '', null, 1]) assert.equal(isPathKind(v), false, String(v));
+  });
+
+  test('a type that names a ley line, or a blank one (shown as "Ley line"), makes a ley line', () => {
+    const leyLines = ['Ley line', 'Leyline', 'ley-line', 'LEY LINES', 'Ley', 'The Leys', 'Drune ley line (dormant)', '', '   '];
+    assert.deepEqual(leyLines.map(pathKindFromType), leyLines.map(() => 'leyLine'));
+  });
+
+  test('any other type makes another path, even with "ley" inside a word', () => {
+    const others = ['Ancient Road', 'Ward', 'Fairy road', 'Valley road', 'Leyton road', 'Parsley path', 'Old road', '3'];
+    assert.deepEqual(others.map(pathKindFromType), others.map(() => 'other'));
   });
 });
