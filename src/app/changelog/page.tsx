@@ -31,15 +31,15 @@ type ChangelogEntry = {
 const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-21',
-    title: 'Hex map, time in Fairy, printable sheets, and safer saves',
-    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23],
+    title: 'Hex map, Journal, time in Fairy, printable sheets, and safer saves',
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24],
     sections: [
       {
         heading: 'Printable PDF character sheets',
         changes: [
           'New "Download PDF" button next to "Save / Load" saves a printable character sheet of your current character, named after them. On phones it shows as a download icon.',
           'The sheet covers your character details, ability scores and modifiers, all five save targets, combat stats (HP, AC, attack, melee, missile, speed, and magic resistance), skills, class and kindred features with your Class Notes and Kindred Notes, languages, retainers, your spells, glamours, runes, or knacks, and your inventory by container with encumbrance and coins.',
-          'The Adventuring tab (calendar, conditions, rations, travel, light sources, spell study, and journal), the map, Other Notes, and spell notes stay in the app and aren\'t printed.',
+          'The Adventuring tab (calendar, conditions, rations, travel, light sources, and spell study), the Journal, the map, Other Notes, and spell notes stay in the app and aren\'t printed.',
           'Pages are printer-friendly with selectable text. Long inventories, Tiny Items lists, backgrounds, and notes continue onto extra pages, with table headings repeated, and every page shows your character\'s name and a page number. A note inside a table, such as an item\'s or a spell\'s, stops after 60 lines with "…".',
           'Names and notes print in Greek, Cyrillic, Korean, Japanese, and Chinese as well as every Latin letter and accent (for example "Łaszewski", "Dvořák", "김민준", and "山田太郎"). Common symbols such as ☐ ✓ ★ ♠ and dice print too, while emoji are left out. Arabic, Hebrew, Devanagari, and Thai text isn\'t covered yet and prints as "?".',
           'The first PDF downloads about 0.4 MB of fonts, or more if your sheet has Korean, Japanese, or Chinese text, and your browser keeps them for later PDFs. While it waits, a note at the bottom of the screen says what for, and a stalled download stops with a message instead of hanging.',
@@ -55,6 +55,16 @@ const ENTRIES: ChangelogEntry[] = [
           'Trace ley lines, wards, old roads, or any other path hex by hex, with a name, colour, and notes.',
           'Drag, pinch, scroll, or use the +/− buttons to move and zoom, or type a hex like "0303" into Go to hex. The map works on phones in portrait and landscape, and from the keyboard.',
           'Pins from the old map move over automatically, onto the hex number you gave them or where you placed them. Any that can\'t be placed are listed in Other Notes.',
+        ],
+      },
+      {
+        heading: 'Journal',
+        changes: [
+          'The journal has its own Journal tab, right after Adventuring, listed newest first in the order your character lived it, so entries written in Fairy and after coming back stay in order even when Dolmenwood\'s calendar jumped. Adventuring keeps an Open Journal button.',
+          'Search the journal by text, place, hex, or date. Search ignores capitals and accents, finds "exact phrases" in quotes, matches numbers whole (1 doesn\'t find 11, and 606 finds hex 0606), and marks what it found.',
+          'Each entry records the map hex you were in when it was written, which you can change or clear, and you can filter the journal by hex. On the map, a hex with entries shows Journal entries here, which opens the journal filtered to that hex.',
+          'Coming back from Fairy asks which hex you came back in and sets your current location to match, and the dialog shows where you\'ll be before you confirm. Entries written in Fairy have no hex.',
+          'Long journals show 50 entries at a time, with Show 50 more. Older entries whose location was just a hex number, such as "0606", now count as written in that hex.',
         ],
       },
       {
