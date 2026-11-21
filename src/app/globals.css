@@ -32,6 +32,12 @@
 }
 
 @layer base {
+  /* The sheet's sticky header sets --sticky-header-height (src/app/page.tsx),
+     so that whatever is scrolled into view or focused stops below it. */
+  html {
+    scroll-padding-top: var(--sticky-header-height, 0px);
+  }
+
   body {
     background-color: var(--color-shadow);
     color: var(--color-parchment);
