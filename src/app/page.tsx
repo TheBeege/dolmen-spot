@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useCallback, lazy, Suspense } from 'react';
+import { useState, useCallback, useRef, lazy, Suspense } from 'react';
 import Link from 'next/link';
 import { useCharacter } from '@/hooks/useCharacter';
 import { useCloudStorage } from '@/hooks/useCloudStorage';
+import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 import { getKindredClassLabel } from '@/lib/gamedata';
 import CharacterInfo from '@/components/CharacterInfo';
 import AbilityScores from '@/components/AbilityScores';
@@ -15,6 +16,7 @@ import Adventuring from '@/components/Adventuring';
 import Journal, { type JournalOpening } from '@/components/Journal';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
+import TabBar, { panelElementId, tabElementId, type TabBarTab } from '@/components/TabBar';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
 import ExportPdfButton from '@/components/ExportPdfButton';
 import StorageBanner, { StorageAnnouncer, StorageReminder } from '@/components/StorageBanner';
@@ -26,7 +28,7 @@ const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
 type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'journal' | 'map' | 'reference';
 
-const TABS: { id: Tab; label: string; shortLabel: string }[] = [
+const TABS: TabBarTab<Tab>[] = [
   { id: 'character', label: 'Character', shortLabel: 'Char' },
   { id: 'abilities', label: 'Abilities & Saves', shortLabel: 'Stats' },
   { id: 'combat', label: 'Combat', shortLabel: 'Combat' },
@@ -62,6 +64,29 @@ export default function Home() {
   const [showCloudModal, setShowCloudModal] = useState(false);
   // Set while another tab's button opens the Journal (see JournalOpening).
   const [journalOpening, setJournalOpening] = useState<JournalOpening | null>(null);
+
+  // Picking a character, or adding one, closes the list it was picked from,
+  // so focus goes back to the button that opened it. Deleting one moves focus
+  // to the row that takes its place. Either way it doesn't drop to the page.
+  const switcherRef = useRef<HTMLButtonElement>(null);
+  const characterListRef = useRef<HTMLDivElement>(null);
+  const focusAfterRender = useFocusAfterRender();
+
+  // The header's height, as --sticky-header-height on the page, sets the
+  // page's scroll padding (globals.css): whatever is scrolled to or focused
+  // stops below the header, however many rows its tabs take.
+  const trackHeaderHeight = useCallback((header: HTMLElement | null) => {
+    if (!header) return;
+    const root = document.documentElement;
+    const observer = new ResizeObserver(() => {
+      root.style.setProperty('--sticky-header-height', `${header.offsetHeight}px`);
+    });
+    observer.observe(header, { box: 'border-box' });
+    return () => {
+      observer.disconnect();
+      root.style.removeProperty('--sticky-header-height');
+    };
+  }, []);
 
   const selectTab = (tab: Tab) => {
     setJournalOpening(null);
@@ -112,17 +137,24 @@ export default function Home() {
     <div className="min-h-screen flex flex-col">
       <StorageAnnouncer />
       {/* Header */}
-      <header className="bg-[#1a1a2e] border-b border-[#5a3a28] sticky top-0 z-50">
+      <header ref={trackHeaderHeight} className="bg-[#1a1a2e] border-b border-[#5a3a28] sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-3 py-2">
-          <div className="flex items-center justify-between gap-2">
-            {/* min-w-0 + flex-1 + truncate let the name shrink on phones so the badge and buttons stay on screen */}
-            <div className="flex items-center gap-3 min-w-0 flex-1">
-              <span className="text-lg font-bold text-[#c4a35a] tracking-wide whitespace-nowrap shrink-0">
-                Dolmen Spot
-              </span>
-              <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
+          {/* The character and the buttons share the title's line while the
+              character gets at least 10rem (basis-40); otherwise they wrap onto
+              a line of their own below it. In rem, so it holds at any text size.
+              There the name shrinks (min-w-0, truncate) to leave the buttons
+              room; the title truncates only if it can't fit on a line alone. */}
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="text-lg font-bold text-[#c4a35a] tracking-wide whitespace-nowrap min-w-0 truncate">
+              Dolmen Spot
+            </span>
+            <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
+            <div className="flex items-center gap-2 min-w-0 flex-1 basis-40">
               <button
+                ref={switcherRef}
+                type="button"
                 onClick={() => setShowCharList(!showCharList)}
+                aria-expanded={showCharList}
                 className="text-sm text-[#f5e6c8] hover:text-[#c4a35a] transition-colors flex items-center gap-1 min-w-0"
               >
                 {/* Below md the In Fairy badge sits under the name, so the name keeps
@@ -159,20 +191,20 @@ export default function Home() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                 </svg>
               </button>
-            </div>
 
-            <div className="flex items-center gap-2 shrink-0">
-              <ExportPdfButton character={activeCharacter} />
-              <button
-                onClick={() => setShowCloudModal(true)}
-                className="text-xs px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
-                title="Save / Load character"
-              >
-                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
-                </svg>
-                <span className="hidden sm:inline">Save / Load</span>
-              </button>
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
+                <ExportPdfButton character={activeCharacter} />
+                <button
+                  onClick={() => setShowCloudModal(true)}
+                  className="text-xs px-2 py-1 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
+                  title="Save / Load character"
+                >
+                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 15a4 4 0 004 4h9a5 5 0 10-.1-9.999 5.002 5.002 0 10-9.78 2.096A4.001 4.001 0 003 15z" />
+                  </svg>
+                  <span className="hidden sm:inline">Save / Load</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -185,14 +217,15 @@ export default function Home() {
                   onClick={() => {
                     createCharacter();
                     setShowCharList(false);
+                    focusAfterRender(switcherRef);
                   }}
                   className="text-xs px-2 py-0.5 bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded transition-colors"
                 >
                   + New
                 </button>
               </div>
-              <div className="space-y-1 max-h-48 overflow-y-auto">
-                {characters.map(c => (
+              <div ref={characterListRef} className="space-y-1 max-h-48 overflow-y-auto">
+                {characters.map((c, i) => (
                   <div
                     key={c.id}
                     className={`flex items-center justify-between p-1.5 rounded cursor-pointer transition-colors ${
@@ -202,9 +235,11 @@ export default function Home() {
                     }`}
                   >
                     <button
+                      data-character-id={c.id}
                       onClick={() => {
                         switchCharacter(c.id);
                         setShowCharList(false);
+                        focusAfterRender(switcherRef);
                       }}
                       className="text-left flex-1 min-w-0"
                     >
@@ -221,7 +256,15 @@ export default function Home() {
                         onClick={(e) => {
                           e.stopPropagation();
                           if (confirm(`Delete ${c.name || 'this character'}?`)) {
+                            // This row goes, so focus the one that moves up into
+                            // its place (or, for the last, the one before it).
+                            const next = characters[i + 1] ?? characters[i - 1];
                             deleteCharacter(c.id);
+                            if (next) {
+                              characterListRef.current
+                                ?.querySelector<HTMLElement>(`[data-character-id="${CSS.escape(next.id)}"]`)
+                                ?.focus();
+                            }
                           }
                         }}
                         className="text-[#ff9a85] hover:text-[#ffd0c4] text-xs ml-2 shrink-0"
@@ -240,22 +283,7 @@ export default function Home() {
 
         {/* Tab Navigation */}
         <div className="max-w-6xl mx-auto px-3">
-          <nav className="flex gap-0.5 overflow-x-auto scrollbar-hide pb-0.5 -mb-px">
-            {TABS.map(tab => (
-              <button
-                key={tab.id}
-                onClick={() => selectTab(tab.id)}
-                className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap rounded-t transition-colors border-b-2 ${
-                  activeTab === tab.id
-                    ? 'text-[#c4a35a] border-[#c4a35a] bg-[#2a2a3e]/50'
-                    : 'text-[#f5e6c8]/60 border-transparent hover:text-[#f5e6c8] hover:border-[#5a3a28]'
-                }`}
-              >
-                <span className="hidden sm:inline">{tab.label}</span>
-                <span className="sm:hidden">{tab.shortLabel}</span>
-              </button>
-            ))}
-          </nav>
+          <TabBar tabs={TABS} activeTab={activeTab} onSelect={selectTab} label="Character sheet sections" />
         </div>
 
         {/* One line, only while changes aren't being saved */}
@@ -274,46 +302,65 @@ export default function Home() {
         <h1 className="sr-only">
           {TABS.find(t => t.id === activeTab)?.label ?? 'Dolmen Spot'}
         </h1>
-        {activeTab === 'character' && (
-          <CharacterInfo character={activeCharacter} onChange={updateCharacter} />
-        )}
-        {activeTab === 'abilities' && (
-          <AbilityScores character={activeCharacter} onChange={updateCharacter} />
-        )}
-        {activeTab === 'combat' && (
-          <CombatStats character={activeCharacter} onChange={updateCharacter} />
-        )}
-        {activeTab === 'inventory' && (
-          <Inventory character={activeCharacter} onChange={updateCharacter} />
-        )}
-        {activeTab === 'spells' && (
-          <SpellsAndMagic character={activeCharacter} onChange={updateCharacter} />
-        )}
-        {activeTab === 'traits' && (
-          <TraitsAndNotes character={activeCharacter} onChange={updateCharacter} />
-        )}
-        {activeTab === 'calendar' && (
-          <Adventuring character={activeCharacter} onChange={updateCharacter} onOpenJournal={() => openJournal(null)} />
-        )}
-        {activeTab === 'journal' && (
-          // Keyed by character so the search, filter and open editors reset
-          // when switching characters instead of carrying over.
-          <Journal
-            key={activeCharacter.id}
-            character={activeCharacter}
-            onChange={updateCharacter}
-            opening={journalOpening}
-            onOpened={handleJournalOpened}
-          />
-        )}
-        {activeTab === 'map' && (
-          // Keyed by character so selections, open forms and the view reset
-          // when switching characters instead of carrying over.
-          <HexMap key={activeCharacter.id} character={activeCharacter} onChange={updateCharacter} onOpenJournal={openJournal} />
-        )}
-        {activeTab === 'reference' && (
-          <ReferencePanel />
-        )}
+        {/* A panel for every tab, so that each tab's aria-controls points at
+            one; only the active tab's is drawn. tabIndex lets the keyboard
+            reach a panel that starts with text rather than a control. */}
+        {TABS.map(({ id }) => (
+          <div
+            key={id}
+            role="tabpanel"
+            id={panelElementId(id)}
+            aria-labelledby={tabElementId(id)}
+            hidden={id !== activeTab}
+            tabIndex={0}
+            className="rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c4a35a]"
+          >
+            {id === activeTab && (
+              <>
+                {activeTab === 'character' && (
+                  <CharacterInfo character={activeCharacter} onChange={updateCharacter} />
+                )}
+                {activeTab === 'abilities' && (
+                  <AbilityScores character={activeCharacter} onChange={updateCharacter} />
+                )}
+                {activeTab === 'combat' && (
+                  <CombatStats character={activeCharacter} onChange={updateCharacter} />
+                )}
+                {activeTab === 'inventory' && (
+                  <Inventory character={activeCharacter} onChange={updateCharacter} />
+                )}
+                {activeTab === 'spells' && (
+                  <SpellsAndMagic character={activeCharacter} onChange={updateCharacter} />
+                )}
+                {activeTab === 'traits' && (
+                  <TraitsAndNotes character={activeCharacter} onChange={updateCharacter} />
+                )}
+                {activeTab === 'calendar' && (
+                  <Adventuring character={activeCharacter} onChange={updateCharacter} onOpenJournal={() => openJournal(null)} />
+                )}
+                {activeTab === 'journal' && (
+                  // Keyed by character so the search, filter and open editors reset
+                  // when switching characters instead of carrying over.
+                  <Journal
+                    key={activeCharacter.id}
+                    character={activeCharacter}
+                    onChange={updateCharacter}
+                    opening={journalOpening}
+                    onOpened={handleJournalOpened}
+                  />
+                )}
+                {activeTab === 'map' && (
+                  // Keyed by character so selections, open forms and the view reset
+                  // when switching characters instead of carrying over.
+                  <HexMap key={activeCharacter.id} character={activeCharacter} onChange={updateCharacter} onOpenJournal={openJournal} />
+                )}
+                {activeTab === 'reference' && (
+                  <ReferencePanel />
+                )}
+              </>
+            )}
+          </div>
+        ))}
       </main>
 
       {/* Cloud Storage Modal */}
