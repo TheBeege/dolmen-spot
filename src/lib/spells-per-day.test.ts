@@ -1,7 +1,7 @@
 // Spells per day must match the Player's Book exactly. These are the book's
 // tables, typed out row by row (Level 1 first; '-' in the book is 0), so a
 // slip in gamedata.ts can't go unnoticed again: before this test, the cleric,
-// friar, magician and breggle tables were wrong from Level 7 or 8 up.
+// friar, magician and breggle tables each had wrong rows above Level 6.
 // Run with `npm test`.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -97,9 +97,10 @@ for (const [classId, rows] of Object.entries(BOOK)) {
   });
 
   test(`${classId}: no rank's count goes down as Level rises`, () => {
+    const table = SPELLS_PER_DAY[classId];
     for (let level = 2; level <= 15; level++) {
-      rows[level - 1].forEach((count, rank) =>
-        assert.ok(count >= rows[level - 2][rank], `${classId} Level ${level} rank ${rank + 1}`),
+      table[level].forEach((count, rank) =>
+        assert.ok(count >= table[level - 1][rank], `${classId} Level ${level} rank ${rank + 1}`),
       );
     }
   });
