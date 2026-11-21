@@ -2814,6 +2814,7 @@ export function createDefaultCharacter(): Character {
     currentLocationHex: '',
     mapData: { pois: [], fairyDoors: [], leyLines: [] },
     journalEntries: [],
+    npcs: [],
 
     exhaustionLevel: 0,
     hungerDays: 0,

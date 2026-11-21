@@ -41,7 +41,9 @@ import {
   DEFAULT_LEY_LINE_TYPE,
   LEY_LINE_COLORS,
   deleteFairyDoor,
+  isPathKind,
   pairableDoors,
+  pathKindFromType,
   upsertFairyDoor,
   withMapLists,
 } from '@/lib/map-data';
@@ -722,9 +724,11 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
       const { draftLeyLine: _drop, ...rest } = md;
       // Fewer than 2 hexes: Finish acts like Cancel.
       if (fresh.hexes.length < 2) return rest;
+      const type = fresh.type || DEFAULT_LEY_LINE_TYPE;
       const newLine: LeyLine = {
         id: newLineId,
-        type: fresh.type || DEFAULT_LEY_LINE_TYPE,
+        kind: isPathKind(fresh.kind) ? fresh.kind : pathKindFromType(type),
+        type,
         name: fresh.name || 'Unnamed Ley Line',
         color: fresh.color,
         hexes: fresh.hexes,
@@ -741,6 +745,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
       color: LEY_LINE_COLORS[leyLines.length % LEY_LINE_COLORS.length],
       notes: '',
       hexes: [],
+      kind: pathKindFromType(DEFAULT_LEY_LINE_TYPE),
     });
     clearSelection();
   };
@@ -1283,7 +1288,8 @@ function LeyLineDraftForm({
   return (
     <div className="mt-3 pt-3 border-t border-[#5a3a28] grid grid-cols-2 md:grid-cols-4 gap-2 text-sm">
       <input value={draft.name} onChange={(e) => edit({ name: e.target.value })} placeholder="Name" aria-label="Ley line name" className={INPUT_ON_CARD} />
-      <input value={draft.type} onChange={(e) => edit({ type: e.target.value })} placeholder="Type (Ley line, Ward…)" aria-label="Ley line type" className={INPUT_ON_CARD} />
+      {/* Until the kind can be chosen, the type says what the path is. */}
+      <input value={draft.type} onChange={(e) => edit({ type: e.target.value, kind: pathKindFromType(e.target.value) })} placeholder="Type (Ley line, Ward…)" aria-label="Ley line type" className={INPUT_ON_CARD} />
       <input type="color" value={draft.color} onChange={(e) => edit({ color: e.target.value })} aria-label="Ley line colour" className="bg-[#1a1a2e] border border-[#5a3a28] rounded h-8 w-full" />
       <input value={draft.notes} onChange={(e) => edit({ notes: e.target.value })} placeholder="Notes" aria-label="Ley line notes" className={INPUT_ON_CARD} />
       <div className="col-span-full text-xs text-[#f5e6c8]/60">
@@ -1887,7 +1893,18 @@ function LeyLineEditor({
         </button>
       </div>
       <div className="grid grid-cols-3 gap-1">
-        <input value={leyLine.type} onChange={(e) => onSave({ type: e.target.value })} placeholder="Type" aria-label={`Type of ${label}`} className={INPUT_ON_ITEM} />
+        {/* Until the kind can be chosen, the type says what the path is. A
+            line with fewer than 2 hexes stays a ley line: any other path
+            needs 2, and loading would move it to Other Notes. */}
+        <input
+          value={leyLine.type}
+          onChange={(e) =>
+            onSave({ type: e.target.value, kind: leyLine.hexes.length < 2 ? leyLine.kind : pathKindFromType(e.target.value) })
+          }
+          placeholder="Type"
+          aria-label={`Type of ${label}`}
+          className={INPUT_ON_ITEM}
+        />
         <input type="color" value={leyLine.color} onChange={(e) => onSave({ color: e.target.value })} aria-label={`Colour of ${label}`} className="bg-[#2a2a3e] border border-[#5a3a28] rounded h-8 md:h-6 w-full" />
         <input value={leyLine.notes} onChange={(e) => onSave({ notes: e.target.value })} placeholder="Notes" aria-label={`Notes for ${label}`} className={INPUT_ON_ITEM} />
       </div>

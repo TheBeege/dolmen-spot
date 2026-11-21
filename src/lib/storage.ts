@@ -1,6 +1,6 @@
 import type { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
-import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
+import { CURRENT_SCHEMA_VERSION, migrateCharacter, readSchemaVersion } from './migrations';
 import { setCurrentStore } from './current-store';
 import { SAVE_DATA_FORMAT, SAVE_DATA_IMPORT_MESSAGE } from './save-data-file';
 
@@ -17,9 +17,9 @@ import { SAVE_DATA_FORMAT, SAVE_DATA_IMPORT_MESSAGE } from './save-data-file';
  *    appends it again, and the next load tries it again. That covers a
  *    character whose migration throws (a fixed migration brings it back; it's
  *    also copied to a backup, best-effort) and one saved by a newer version of
- *    Dolmen Spot, with a finite numeric `schemaVersion` above this version's
- *    (it isn't migrated or "repaired", so it opens again once the newer
- *    version is deployed).
+ *    Dolmen Spot, with a finite numeric `schemaVersion` (or a string of digits
+ *    spelling one) above this version's (it isn't migrated or "repaired", so
+ *    it opens again once the newer version is deployed).
  * 2. Saved data that can never become a character is only removed once a
  *    verified copy of it exists under a `dolmenwood-recovery-*` key: the whole
  *    value when it isn't a readable list, an entry that isn't an object, or an
@@ -334,12 +334,14 @@ function looksLikeCharacter(data: unknown): boolean {
 
 /**
  * Saved by a newer version of Dolmen Spot. Only a finite numeric
- * `schemaVersion` counts: a string one is an old quirk that `migrateCharacter`
- * still handles, and a hand-edited `1e999` (Infinity) would be written back as
+ * `schemaVersion` counts. A string of digits, an old quirk, is read as its
+ * number (readSchemaVersion), just as `migrateCharacter` reads it, so "99" is
+ * newer while "10" is migrated from version 10. Any other string isn't a
+ * version, and a hand-edited `1e999` (Infinity) would be written back as
  * `null`, so it couldn't stay unchanged anyway.
  */
 function isFromNewerVersion(data: unknown, currentSchemaVersion: number): boolean {
-  const version = isPlainObject(data) ? data.schemaVersion : undefined;
+  const version = isPlainObject(data) ? readSchemaVersion(data.schemaVersion) : undefined;
   return typeof version === 'number' && Number.isFinite(version) && version > currentSchemaVersion;
 }
 
