@@ -45,3 +45,63 @@ jobs:
 
       - name: Check the MSAL redirect bridge copy
         run: npm run check:msal-bridge
+
+  browser-tests:
+    name: Browser tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Skip installing the git hooks; CI never commits.
+          HUSKY: 0
+
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # The browsers are cached per Playwright version, and saved as soon as
+      # they're installed, so a failing test run still keeps them.
+      - name: Restore the browsers
+        id: browsers
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install the browsers and their system libraries
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Save the browsers
+        if: steps.browsers.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browsers.outputs.cache-primary-key }}
+
+      - name: Install the browsers' system libraries
+        if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit
+
+      # Builds the app and serves it (webServer in playwright.config.ts).
+      - name: Run the browser tests
+        run: npm run test:e2e
+
+      - name: Upload the report and traces
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

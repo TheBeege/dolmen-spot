@@ -1,0 +1,181 @@
+{
+  "schemaVersion": 14,
+  "id": "fixture-mossling",
+  "name": "Puddock Underbough",
+  "kindred": "mossling",
+  "class": "",
+  "background": "Mushroom farmer",
+  "alignment": "Neutral",
+  "affiliation": "",
+  "moonSign": "",
+  "moonPhase": "",
+  "level": 5,
+  "xp": 24000,
+  "xpNextLevel": 35200,
+  "xpModifier": 0,
+  "abilityScores": {
+    "strength": 13,
+    "intelligence": 9,
+    "wisdom": 14,
+    "dexterity": 10,
+    "constitution": 16,
+    "charisma": 7
+  },
+  "maxHp": 24,
+  "currentHp": 17,
+  "armorClass": 12,
+  "attackBonus": 2,
+  "speed": 40,
+  "travelPointsPerDay": 8,
+  "magicResistance": 0,
+  "saveTargets": {
+    "doom": 6,
+    "ray": 7,
+    "hold": 8,
+    "blast": 11,
+    "spell": 10
+  },
+  "skillTargets": {
+    "listen": 6,
+    "search": 6,
+    "survival": 6
+  },
+  "equippedItems": [
+    {
+      "id": "mo-eq-01",
+      "name": "Leather",
+      "slots": 1,
+      "weight": 200,
+      "notes": "",
+      "equipped": true
+    },
+    {
+      "id": "mo-eq-02",
+      "name": "Mace",
+      "slots": 1,
+      "weight": 30,
+      "notes": "",
+      "equipped": true
+    },
+    {
+      "id": "mo-eq-03",
+      "name": "Sling",
+      "slots": 1,
+      "weight": 5,
+      "notes": "",
+      "equipped": true
+    }
+  ],
+  "stowedItems": [
+    {
+      "id": "mo-st-01",
+      "name": "Jar of pickled toadstools",
+      "slots": 1,
+      "weight": 20,
+      "notes": "For emergencies",
+      "equipped": false,
+      "containerId": "mo-backpack"
+    },
+    {
+      "id": "mo-st-02",
+      "name": "Spade",
+      "slots": 1,
+      "weight": 60,
+      "notes": "",
+      "equipped": false,
+      "containerId": "mo-backpack"
+    },
+    {
+      "id": "mo-st-03",
+      "name": "Lock picks (bent)",
+      "slots": 1,
+      "weight": 5,
+      "notes": "Mostly decorative",
+      "equipped": false
+    }
+  ],
+  "containers": [
+    {
+      "id": "mo-backpack",
+      "name": "Backpack",
+      "capacity": 400
+    }
+  ],
+  "tinyItems": "",
+  "coins": {
+    "copper": 210,
+    "silver": 14,
+    "gold": 3,
+    "pellucidium": 0
+  },
+  "encumbranceMethod": "weight",
+  "equippedArmourName": "Leather",
+  "hasShield": false,
+  "spells": [],
+  "spellNotes": "",
+  "glamours": [],
+  "runes": [],
+  "knack": {
+    "knackId": 2,
+    "name": "Lock Singer",
+    "notes": "Hums sea shanties to locks"
+  },
+  "startingSpellBook": "",
+  "knownSpells": [],
+  "spellStudy": {
+    "active": null,
+    "queue": []
+  },
+  "failedStudies": [],
+  "classTraits": "",
+  "kindredTraits": "",
+  "languages": "Woldish, Mulch",
+  "combatTalents": "",
+  "otherNotes": "",
+  "retainers": [],
+  "gazeUsesRemaining": 0,
+  "currentForm": "estray",
+  "wilderUsedToday": false,
+  "madRevelryUsesRemaining": 0,
+  "trophies": [],
+  "animalCompanion": null,
+  "liegeHouse": "",
+  "selectedCombatTalents": [],
+  "holyOrder": "",
+  "symbioticFleshTraits": [
+    2,
+    12,
+    19
+  ],
+  "fungalSymbiosisUsesRemaining": 1,
+  "currentDate": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  },
+  "currentLocation": "",
+  "currentLocationHex": "",
+  "mapData": {
+    "pois": [],
+    "fairyDoors": [],
+    "leyLines": []
+  },
+  "journalEntries": [],
+  "exhaustionLevel": 0,
+  "hungerDays": 0,
+  "thirstDays": 0,
+  "rations": {
+    "fresh": 4,
+    "preserved": 0
+  },
+  "activeLightSources": [],
+  "travelDaysWithoutRest": 0,
+  "forcedMarchActive": false,
+  "travelPointsRemaining": 0,
+  "fairyVisits": [],
+  "livedTimeStart": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  }
+}
