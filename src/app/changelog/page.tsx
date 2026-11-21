@@ -32,7 +32,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-21',
     title: 'Hex map, Journal, time in Fairy, printable sheets, and safer saves',
-    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 27],
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 25, 27],
     sections: [
       {
         heading: 'Printable PDF character sheets',
@@ -77,6 +77,14 @@ const ENTRIES: ChangelogEntry[] = [
           'A days-lived counter shows how long your character has lived, how much of it in Fairy, and how much Dolmenwood time passed while they were away.',
           'An "In Fairy" badge appears by your character\'s name, and Dolmenwood\'s date, moon, and season are shown as you left them.',
           'The calendar\'s Month, Day, and Year fields explain what\'s wrong instead of quietly changing what you typed.',
+        ],
+      },
+      {
+        heading: 'Spells and magic',
+        changes: [
+          'Every arcane and holy spell on the Spells & Magic tab has an ⓘ button showing what it does: range, duration, and effect, with targets, saves, damage, and how it scales with Level. Tap or click it to open the summary under the spell, or, with a mouse, rest the pointer on the spell\'s name. It works for prepared spells, scrolls, known spells, spell study and its queue, the Memorise menu, starting spell books, and the spell reference, and a spell picked in the Add known spell or spell study dropdown shows its summary too.',
+          'Several glamour, rune, and knack descriptions now match the rules. Rune of Vanishing and Rune of Invisibility no longer end when you attack: you\'re only revealed for a moment, and foes can strike back at -2, and you can end the Rune of Invisibility whenever you like. Thread Whistling, Wood Kenning, and Yeast Master lose limits and effects the rules don\'t have, and many others gain the saves, ranges, and conditions they were missing.',
+          'On phones, spell and rune rows wrap instead of running off the screen, and the Memorise menu fits with large text; on a computer its spell names no longer wrap, and Escape closes it. A cast spell still fades, but its summary and button stay readable, faint grey text in the spell and rune sections is easier to read, and a breggle\'s spell reference lists only Ranks 1-5, the ranks breggles can cast.',
         ],
       },
       {
