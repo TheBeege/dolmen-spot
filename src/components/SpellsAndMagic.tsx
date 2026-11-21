@@ -1705,7 +1705,7 @@ function MemorisePicker({
   };
 
   const noOptions = knownAvailable.length === 0;
-  const menuContexts = spellRowContexts('arcane', knownAvailable.map((k) => k.name), 'to memorise');
+  const menuContexts = spellRowContexts('arcane', knownAvailable.map((k) => k.name), 'menu');
 
   return (
     <div className="relative" ref={containerRef}>

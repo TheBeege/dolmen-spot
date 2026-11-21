@@ -116,12 +116,14 @@ export const SpellInfo = memo(function SpellInfo({
   const summary = spell ? getSpellSummary(spellType, spell.name) : undefined;
 
   const buttonRef = useRef<HTMLButtonElement>(null);
-  // Whether the pointer is on the name (or button), and whether it's on the
-  // card or the space between them (see setBridge). They're tracked apart
-  // because the card isn't inside the name's element.
+  // Whether the pointer is on the name (or button), and whether it's in the
+  // bridge: the box around the name and the card (see checkBridge). They're
+  // tracked apart because the card isn't inside the name's element.
   const overAnchor = useRef(false);
   const overBridge = useRef(false);
   const bridge = useRef<Box | null>(null);
+  // Where the pointer was last seen, while it matters.
+  const pointerAt = useRef<{ x: number; y: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [hover, setHover] = useState({ pointer: false, focus: false, dismissed: false });
 
@@ -141,11 +143,27 @@ export const SpellInfo = memo(function SpellInfo({
     timer.current = setTimeout(() => update({ pointer: overAnchor.current || overBridge.current }), delay);
   }, [update]);
 
-  // The box around the name and the card, from HoverCard each time it places
-  // the card (null while the card is hidden).
+  // Anywhere in the bridge counts as on the card, so the pointer can cross the
+  // space between the name and the card (wider when the card has moved past
+  // other spells) without the card hiding. It's checked whenever the pointer
+  // moves and whenever the bridge changes, so a card that appears under the
+  // pointer (in a window too small for it to go anywhere else) or vanishes
+  // from under it (dismissed with Escape) counts at once.
+  const checkBridge = useCallback(() => {
+    const box = bridge.current;
+    const at = pointerAt.current;
+    const inBridge = box !== null && at !== null
+      && at.x >= box.left && at.x <= box.right && at.y >= box.top && at.y <= box.bottom;
+    if (inBridge === overBridge.current) return;
+    overBridge.current = inBridge;
+    settle(inBridge ? 0 : HIDE_DELAY_MS);
+  }, [settle]);
+
+  // From HoverCard each time it places the card; null while it's hidden.
   const setBridge = useCallback((box: Box | null) => {
     bridge.current = box;
-  }, []);
+    checkBridge();
+  }, [checkBridge]);
 
   useEffect(() => () => clearTimeout(timer.current), []);
 
@@ -162,37 +180,53 @@ export const SpellInfo = memo(function SpellInfo({
       e.stopPropagation();
       dismiss();
     };
-    // Anywhere in the box around the name and the card counts as on the card,
-    // so the pointer can cross the space between them (wider when the card has
-    // moved past other spells) without the card hiding.
-    const onPointerMove = (e: globalThis.PointerEvent) => {
-      if (e.pointerType === 'touch') return;
-      const box = bridge.current;
-      const inBridge = box !== null
-        && e.clientX >= box.left && e.clientX <= box.right && e.clientY >= box.top && e.clientY <= box.bottom;
-      if (inBridge === overBridge.current) return;
-      overBridge.current = inBridge;
-      settle(inBridge ? 0 : HIDE_DELAY_MS);
-    };
     document.addEventListener('keydown', onKeyDown, true);
-    document.addEventListener('pointermove', onPointerMove);
     return () => {
       document.removeEventListener('keydown', onKeyDown, true);
-      document.removeEventListener('pointermove', onPointerMove);
-      overBridge.current = false;
       if (dismissShownCard === dismiss) dismissShownCard = null;
     };
-  }, [shown, dismiss, settle]);
+  }, [shown, dismiss]);
+
+  // The pointer is followed while the card shows, and after it's dismissed
+  // for as long as the pointer still counts as on the spell, so that moving
+  // away ends the dismissal and a later hover shows the card again.
+  const tracking = shown || hover.pointer;
+  useEffect(() => {
+    if (!tracking) return;
+    const onPointerMove = (e: globalThis.PointerEvent) => {
+      if (e.pointerType === 'touch') return;
+      pointerAt.current = { x: e.clientX, y: e.clientY };
+      checkBridge();
+    };
+    // Leaving the window sends no move to say where the pointer went.
+    const onPointerOut = (e: globalThis.PointerEvent) => {
+      if (e.pointerType === 'touch' || e.relatedTarget !== null) return;
+      pointerAt.current = null;
+      checkBridge();
+    };
+    document.addEventListener('pointermove', onPointerMove);
+    document.addEventListener('pointerout', onPointerOut);
+    return () => {
+      document.removeEventListener('pointermove', onPointerMove);
+      document.removeEventListener('pointerout', onPointerOut);
+      overBridge.current = false;
+      // Unfollowed, it could move anywhere.
+      pointerAt.current = null;
+    };
+  }, [tracking, checkBridge]);
 
   // Touch has no hover: a tap on the button opens the panel instead.
   const onAnchorEnter = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
+    pointerAt.current = { x: e.clientX, y: e.clientY };
     overAnchor.current = true;
     settle(hover.pointer ? 0 : SHOW_DELAY_MS);
   };
   const onAnchorLeave = (e: PointerEvent) => {
     if (e.pointerType === 'touch') return;
+    pointerAt.current = { x: e.clientX, y: e.clientY };
     overAnchor.current = false;
+    checkBridge();
     settle(HIDE_DELAY_MS);
   };
 
@@ -208,15 +242,15 @@ export const SpellInfo = memo(function SpellInfo({
   };
 
   return (
-    <span
-      data-spell-info=""
-      className={`inline-flex max-w-full items-center gap-1 ${className}`}
-      onPointerEnter={onAnchorEnter}
-      onPointerLeave={onAnchorLeave}
-    >
-      {children !== undefined && <span className={`min-w-0 break-words ${labelClassName}`}>{children}</span>}
-      {spell && summary && (
-        <>
+    <>
+      <span
+        data-spell-info=""
+        className={`inline-flex max-w-full items-center gap-1 ${className}`}
+        onPointerEnter={onAnchorEnter}
+        onPointerLeave={onAnchorLeave}
+      >
+        {children !== undefined && <span className={`min-w-0 break-words ${labelClassName}`}>{children}</span>}
+        {spell && summary && (
           <button
             ref={buttonRef}
             type="button"
@@ -234,10 +268,13 @@ export const SpellInfo = memo(function SpellInfo({
           >
             <InfoIcon />
           </button>
-          {shown && <HoverCard anchorRef={buttonRef} title={spell.name} summary={summary} onPlace={setBridge} />}
-        </>
-      )}
-    </span>
+        )}
+      </span>
+      {/* Outside the span: React's pointer enter and leave follow the
+          component tree, portals included, so a card inside it would count as
+          part of the name and moving onto the card wouldn't leave the name. */}
+      {shown && spell && <HoverCard anchorRef={buttonRef} title={spell.name} summary={summary} onPlace={setBridge} />}
+    </>
   );
 });
 
