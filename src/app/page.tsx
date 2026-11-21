@@ -12,6 +12,7 @@ import Inventory from '@/components/Inventory';
 import SpellsAndMagic from '@/components/SpellsAndMagic';
 import TraitsAndNotes from '@/components/TraitsAndNotes';
 import Adventuring from '@/components/Adventuring';
+import Journal, { type JournalOpening } from '@/components/Journal';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import CloudStatusBadge from '@/components/CloudStatusBadge';
@@ -19,10 +20,11 @@ import ExportPdfButton from '@/components/ExportPdfButton';
 import StorageBanner, { StorageAnnouncer, StorageReminder } from '@/components/StorageBanner';
 import { ImportError } from '@/lib/storage';
 import { isInFairy } from '@/lib/livedTime';
+import type { HexCoord } from '@/lib/types';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
-type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'map' | 'reference';
+type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'journal' | 'map' | 'reference';
 
 const TABS: { id: Tab; label: string; shortLabel: string }[] = [
   { id: 'character', label: 'Character', shortLabel: 'Char' },
@@ -32,6 +34,7 @@ const TABS: { id: Tab; label: string; shortLabel: string }[] = [
   { id: 'spells', label: 'Spells & Magic', shortLabel: 'Magic' },
   { id: 'traits', label: 'Traits & Notes', shortLabel: 'Traits' },
   { id: 'calendar', label: 'Adventuring', shortLabel: 'Adv' },
+  { id: 'journal', label: 'Journal', shortLabel: 'Journal' },
   { id: 'map', label: 'Map', shortLabel: 'Map' },
   { id: 'reference', label: 'Reference', shortLabel: 'Ref' },
 ];
@@ -57,6 +60,18 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<Tab>('character');
   const [showCharList, setShowCharList] = useState(false);
   const [showCloudModal, setShowCloudModal] = useState(false);
+  // Set while another tab's button opens the Journal (see JournalOpening).
+  const [journalOpening, setJournalOpening] = useState<JournalOpening | null>(null);
+
+  const selectTab = (tab: Tab) => {
+    setJournalOpening(null);
+    setActiveTab(tab);
+  };
+  const openJournal = useCallback((hex: HexCoord | null) => {
+    setJournalOpening({ hex });
+    setActiveTab('journal');
+  }, []);
+  const handleJournalOpened = useCallback(() => setJournalOpening(null), []);
 
   const handleCloudSave = useCallback(async (providerId: 'google-drive' | 'onedrive') => {
     if (!activeCharacter) return;
@@ -229,7 +244,7 @@ export default function Home() {
             {TABS.map(tab => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => selectTab(tab.id)}
                 className={`px-3 py-1.5 text-xs font-semibold whitespace-nowrap rounded-t transition-colors border-b-2 ${
                   activeTab === tab.id
                     ? 'text-[#c4a35a] border-[#c4a35a] bg-[#2a2a3e]/50'
@@ -278,12 +293,23 @@ export default function Home() {
           <TraitsAndNotes character={activeCharacter} onChange={updateCharacter} />
         )}
         {activeTab === 'calendar' && (
-          <Adventuring character={activeCharacter} onChange={updateCharacter} />
+          <Adventuring character={activeCharacter} onChange={updateCharacter} onOpenJournal={() => openJournal(null)} />
+        )}
+        {activeTab === 'journal' && (
+          // Keyed by character so the search, filter and open editors reset
+          // when switching characters instead of carrying over.
+          <Journal
+            key={activeCharacter.id}
+            character={activeCharacter}
+            onChange={updateCharacter}
+            opening={journalOpening}
+            onOpened={handleJournalOpened}
+          />
         )}
         {activeTab === 'map' && (
           // Keyed by character so selections, open forms and the view reset
           // when switching characters instead of carrying over.
-          <HexMap key={activeCharacter.id} character={activeCharacter} onChange={updateCharacter} />
+          <HexMap key={activeCharacter.id} character={activeCharacter} onChange={updateCharacter} onOpenJournal={openJournal} />
         )}
         {activeTab === 'reference' && (
           <ReferencePanel />

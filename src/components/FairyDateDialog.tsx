@@ -2,10 +2,12 @@
 
 // The modal for setting the Dolmenwood date a character comes back on from
 // Fairy: "return" closes the open visit, "edit" corrects the last visit's
-// return date (see planReturnEdit in src/lib/livedTime.ts).
+// return date (see planReturnEdit in src/lib/livedTime.ts). A return also
+// asks which map hex they came back in.
 
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import type { CalendarDate, Character, FairyVisit } from '@/lib/types';
+import { isValidHex, readHexInput } from '@/lib/hex';
 import {
   LATEST_DATE,
   addElapsedTime,
@@ -20,6 +22,8 @@ import {
 import { pluralize } from '@/lib/grammar';
 import {
   canReturnOn,
+  describeReturnPlace,
+  getReturnPlace,
   isWithinCalendar,
   planReturnEdit,
   returnFromFairy,
@@ -41,6 +45,7 @@ import {
   type NumberField,
   type Reading,
 } from '@/components/FairyFields';
+import HexField from '@/components/HexField';
 
 export type DialogOutcome = 'cancelled' | 'saved';
 type DateMode = 'elapsed' | 'exact';
@@ -57,6 +62,10 @@ const ELAPSED_FIELDS: { key: keyof ElapsedTime; label: string }[] = [
 ];
 
 const BLANK_ELAPSED: Record<keyof ElapsedTime, NumberField> = { years: BLANK, months: BLANK, weeks: BLANK, days: BLANK };
+
+// Screen readers hear the preview this long after it last changed, so not at
+// every letter typed.
+const PREVIEW_READ_OUT_DELAY_MS = 800;
 
 // "a", "a and b", "a, b and c".
 function listOf(parts: string[]): string {
@@ -109,6 +118,10 @@ export default function FairyDateDialog({
   const [elapsed, setElapsed] = useState(BLANK_ELAPSED);
   const [exact, setExact] = useState(() => draftFrom(visit.returnedOn ?? visit.enteredOn));
   const [roll, setRoll] = useState<{ dice: [number, number]; total: number } | null>(null);
+  // Where they came back, on a return: the map's current hex unless changed.
+  const [hexText, setHexText] = useState(() => (isValidHex(character.currentLocationHex) ? character.currentLocationHex : ''));
+  const [hexError, setHexError] = useState<string | null>(null);
+  const hexRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -154,6 +167,32 @@ export default function FairyDateDialog({
   const editMoves = plan && target && visit.returnedOn && daysBetween(visit.returnedOn, target) !== 0
     ? describeEditMoves(plan, daysSinceReturn)
     : [];
+  // On a return, where the party will be, worked out as the return will:
+  // said once the hex typed is one on the map, or blank.
+  const hexReading = editing ? null : readHexInput(hexText);
+  const placeText =
+    hexReading && hexReading.error === undefined
+      ? describeReturnPlace(getReturnPlace(character, hexReading.hex), character.currentLocation)
+      : '';
+  const problem =
+    beforeEntry && target
+      ? `${formatShortDate(target)} is before you entered Fairy (${formatShortDate(visit.enteredOn)}). Pick that day or later.`
+      : pastCalendar
+        ? `That's after ${formatShortDate(LATEST_DATE)}, the calendar's last day.`
+        : movesPastCalendar
+          ? `${todayPastCalendar ? "Today's date" : 'Something dated after today'} would move past ${formatShortDate(LATEST_DATE)}, the calendar's last day. Pick an earlier date.`
+          : null;
+  // The preview in words, read out once it has settled; not on opening, when
+  // the dialog itself is read out.
+  const previewText =
+    valid && target
+      ? [`Back in Dolmenwood on ${formatCalendarDate(target)}.`, `${passedText}.`, ...editMoves, placeText].filter(Boolean).join(' ')
+      : problem ?? 'Fix the fields marked above to see the date.';
+  const [readOut, setReadOut] = useState(previewText);
+  useEffect(() => {
+    const timer = setTimeout(() => setReadOut(previewText), PREVIEW_READ_OUT_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [previewText]);
 
   // ── Actions ──
   const close = (outcome: DialogOutcome) => {
@@ -163,7 +202,18 @@ export default function FairyDateDialog({
 
   const confirm = () => {
     if (!valid || !target) return;
-    const patch = editing ? plan?.patch : returnFromFairy(character, target);
+    let patch: Partial<Character> | null | undefined;
+    if (editing) {
+      patch = plan?.patch;
+    } else {
+      const cameBackIn = readHexInput(hexText);
+      if (cameBackIn.error !== undefined) {
+        setHexError(cameBackIn.error);
+        hexRef.current?.focus();
+        return;
+      }
+      patch = returnFromFairy(character, target, cameBackIn.hex);
+    }
     if (!patch) return;
     close('saved');
     onChange(patch);
@@ -253,21 +303,28 @@ export default function FairyDateDialog({
         }}
         className="bg-[#2a2a3e] rounded-lg border border-[#8a6fb0]/60 flex flex-col max-h-[85dvh]"
       >
-        <div className="flex items-center justify-between gap-2 p-4 border-b border-[#5a3a28] shrink-0">
-          <h2 id={titleId} className="text-[#c4a35a] text-lg font-bold">
+        {/* The title and the close button share a line when the title's
+            longest word leaves room; otherwise (a large font on a narrow
+            screen) the button goes on a line above it, rather than past the
+            dialog's edge. */}
+        <div className="flex flex-wrap-reverse items-center justify-between gap-2 p-4 border-b border-[#5a3a28] shrink-0">
+          <h2 id={titleId} className="flex-1 text-[#c4a35a] text-lg font-bold">
             {editing ? 'Edit return date' : 'Return to Dolmenwood'}
           </h2>
           <button
             type="button"
             onClick={() => close('cancelled')}
             aria-label="Close"
-            className="text-[#f5e6c8]/80 hover:text-[#f5e6c8] text-2xl leading-none px-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9b3f0]"
+            className="ml-auto text-[#f5e6c8]/80 hover:text-[#f5e6c8] text-2xl leading-none px-2 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c9b3f0]"
           >
             &times;
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
+        {/* relative: the sr-only live region at the end is absolutely positioned,
+            so without it the region would hang off the dialog itself and make
+            the whole dialog scroll. */}
+        <div className="relative flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
           <p id={introId} className="text-sm text-[#f5e6c8]/90">
             Fairy visit {visitNumber}: you entered on{' '}
             <span className="text-[#c4a35a]">{formatCalendarDate(visit.enteredOn)}</span>
@@ -329,9 +386,26 @@ export default function FairyDateDialog({
             </p>
           </div>
 
+          {!editing && (
+            <div className="border-t border-[#5a3a28]/60 pt-3">
+              <HexField
+                label="Came back in hex"
+                labelClassName="text-[#c4a35a] text-sm font-semibold"
+                value={hexText}
+                onChange={(next) => {
+                  setHexText(next);
+                  setHexError(null);
+                }}
+                error={hexError}
+                hint="Its number on the map, like 1105. It starts as the map's current hex. Leave it blank if you don't know: that clears the map's current hex."
+                inputRef={hexRef}
+              />
+            </div>
+          )}
+
+          {/* The outcome, updated as the fields change. Screen readers get it
+              from the region after it, once it settles. */}
           <div
-            aria-live="polite"
-            aria-atomic="true"
             className={`rounded p-3 text-center ${valid || target === undefined ? 'bg-[#1a1a2e]' : 'bg-[#8b2500]/20 border border-[#8b2500]/40'}`}
           >
             {valid && target ? (
@@ -344,25 +418,17 @@ export default function FairyDateDialog({
                     {line}
                   </div>
                 ))}
+                {placeText && <div className="text-[#f5e6c8] text-sm mt-1 [overflow-wrap:anywhere]">{placeText}</div>}
               </>
-            ) : beforeEntry && target ? (
-              <div className="text-[#ff8a6a] text-sm">
-                {formatShortDate(target)} is before you entered Fairy ({formatShortDate(visit.enteredOn)}). Pick that
-                day or later.
-              </div>
-            ) : pastCalendar ? (
-              <div className="text-[#ff8a6a] text-sm">
-                That&apos;s after {formatShortDate(LATEST_DATE)}, the calendar&apos;s last day.
-              </div>
-            ) : movesPastCalendar ? (
-              <div className="text-[#ff8a6a] text-sm">
-                {todayPastCalendar ? "Today's date" : 'Something dated after today'} would move past{' '}
-                {formatShortDate(LATEST_DATE)}, the calendar&apos;s last day. Pick an earlier date.
-              </div>
+            ) : problem ? (
+              <div className="text-[#ff8a6a] text-sm">{problem}</div>
             ) : (
               <div className="text-[#f5e6c8]/80 text-sm">Fix the fields marked above to see the date.</div>
             )}
           </div>
+          <p aria-live="polite" aria-atomic="true" className="sr-only">
+            {readOut}
+          </p>
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 p-4 border-t border-[#5a3a28] shrink-0">
