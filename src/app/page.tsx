@@ -79,7 +79,8 @@ export default function Home() {
     if (!header) return;
     const root = document.documentElement;
     const observer = new ResizeObserver(() => {
-      root.style.setProperty('--sticky-header-height', `${header.offsetHeight}px`);
+      // Rounded up, so a fraction of a pixel of the header never overlaps.
+      root.style.setProperty('--sticky-header-height', `${Math.ceil(header.getBoundingClientRect().height)}px`);
     });
     observer.observe(header, { box: 'border-box' });
     return () => {
@@ -145,7 +146,7 @@ export default function Home() {
               There the name shrinks (min-w-0, truncate) to leave the buttons
               room; the title truncates only if it can't fit on a line alone. */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="text-lg font-bold text-[#c4a35a] tracking-wide whitespace-nowrap min-w-0 truncate">
+            <span className="text-lg font-bold text-[#c4a35a] tracking-wide min-w-0 truncate">
               Dolmen Spot
             </span>
             <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
