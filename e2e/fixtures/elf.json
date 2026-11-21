@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "id": "fixture-elf",
   "name": "Ilvarel of the Gloaming",
   "kindred": "elf",
@@ -164,7 +164,8 @@
         "id": "elf-poi-01",
         "hex": "0805",
         "name": "Hag's Addle",
-        "notes": ""
+        "notes": "",
+        "kind": "village"
       }
     ],
     "fairyDoors": [
@@ -222,6 +223,7 @@
       "text": "The Hall of Antlers. My cousin Sorrel is to be married to a fox."
     }
   ],
+  "npcs": [],
   "exhaustionLevel": 0,
   "hungerDays": 0,
   "thirstDays": 0,

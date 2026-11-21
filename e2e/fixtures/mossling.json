@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "id": "fixture-mossling",
   "name": "Puddock Underbough",
   "kindred": "mossling",
@@ -92,6 +92,20 @@
       "weight": 5,
       "notes": "Mostly decorative",
       "equipped": false
+    },
+    {
+      "id": "mo-st-04",
+      "name": "Dull grey shard",
+      "slots": 1,
+      "weight": 1,
+      "notes": "Found in a badger sett",
+      "equipped": false,
+      "containerId": "mo-backpack",
+      "kind": "shard",
+      "shard": {
+        "castsLeft": 0,
+        "castsPerCharge": 1
+      }
     }
   ],
   "containers": [
@@ -161,6 +175,7 @@
     "leyLines": []
   },
   "journalEntries": [],
+  "npcs": [],
   "exhaustionLevel": 0,
   "hungerDays": 0,
   "thirstDays": 0,

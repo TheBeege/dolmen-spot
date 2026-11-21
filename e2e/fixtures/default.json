@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "id": "fixture-default",
   "name": "New Adventurer",
   "kindred": "",
@@ -95,6 +95,7 @@
     "leyLines": []
   },
   "journalEntries": [],
+  "npcs": [],
   "exhaustionLevel": 0,
   "hungerDays": 0,
   "thirstDays": 0,

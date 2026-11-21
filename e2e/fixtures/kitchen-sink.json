@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 14,
+  "schemaVersion": 15,
   "id": "fixture-kitchen-sink",
   "name": "Wendeline Ashgrove-Thistlecombe",
   "kindred": "human",
@@ -100,6 +100,24 @@
       "scrollSpell": {
         "name": "Fireball",
         "rank": 3
+      }
+    },
+    {
+      "id": "ks-eq-06",
+      "name": "Dwemer shard",
+      "slots": 0,
+      "weight": 1,
+      "notes": "Hums near the Antler Line",
+      "equipped": true,
+      "kind": "shard",
+      "shard": {
+        "spell": {
+          "name": "Dweomerlight",
+          "rank": 2
+        },
+        "castsLeft": 1,
+        "castsPerCharge": 2,
+        "leyLineId": "ks-ley-01"
       }
     }
   ],
@@ -675,31 +693,42 @@
         "id": "ks-poi-01",
         "hex": "1106",
         "name": "Lankshorn",
-        "notes": "Home. The Lantern Society meets at the Blue Heron."
+        "notes": "Home. The Lantern Society meets at the Blue Heron.",
+        "kind": "town"
       },
       {
         "id": "ks-poi-02",
         "hex": "1107",
         "name": "The Weeping Stones",
-        "notes": "A ring of standing stones; one weeps in rain."
+        "notes": "A ring of standing stones; one weeps in rain.",
+        "kind": "stones"
       },
       {
         "id": "ks-poi-03",
         "hex": "0909",
         "name": "Barrow of the Antler King",
-        "notes": "Fireball scroll found here."
+        "notes": "Fireball scroll found here.",
+        "kind": "barrow"
       },
       {
         "id": "ks-poi-04",
         "hex": "1309",
         "name": "Prigwort",
-        "notes": "Owes 40gp to the apothecary."
+        "notes": "Owes 40gp to the apothecary.",
+        "kind": "town"
       },
       {
         "id": "ks-poi-05",
         "hex": "0606",
         "name": "Abandoned mill",
         "notes": ""
+      },
+      {
+        "id": "ks-poi-06",
+        "hex": "1106",
+        "name": "The Blue Heron",
+        "notes": "Where the Lantern Society meets.",
+        "kind": "inn"
       }
     ],
     "fairyDoors": [
@@ -738,6 +767,7 @@
     "leyLines": [
       {
         "id": "ks-ley-01",
+        "kind": "leyLine",
         "type": "Ley line",
         "name": "The Antler Line",
         "color": "#c4a35a",
@@ -748,10 +778,15 @@
           "1206",
           "1306"
         ],
-        "notes": "Hums at dusk."
+        "notes": "Hums at dusk.",
+        "spell": {
+          "name": "Dweomerlight",
+          "rank": 2
+        }
       },
       {
         "id": "ks-ley-02",
+        "kind": "other",
         "type": "Ancient road",
         "name": "Old Drune Road",
         "color": "#7a5fc4",
@@ -764,6 +799,17 @@
           "1106"
         ],
         "notes": ""
+      },
+      {
+        "id": "ks-ley-03",
+        "kind": "leyLine",
+        "type": "Ley line",
+        "name": "The Whispering Ley",
+        "color": "#5fa3c4",
+        "hexes": [
+          "1309"
+        ],
+        "notes": "Felt it under Prigwort; no idea where it runs."
       }
     ]
   },
@@ -843,7 +889,10 @@
       },
       "location": "Lankshorn",
       "hex": "1106",
-      "text": "Old Mother Brindle taught me Glyph of Locking in exchange for a lock of my hair."
+      "text": "Old Mother Brindle taught me Glyph of Locking in exchange for a lock of my hair.",
+      "npcIds": [
+        "ks-npc-02"
+      ]
     },
     {
       "id": "kitchen-sink-entry-08",
@@ -897,7 +946,10 @@
         "day": 3
       },
       "location": "The Court of the Hidden Moon",
-      "text": "The librarian taught me Fireball. The ink on my hands will not wash off."
+      "text": "The librarian taught me Fireball. The ink on my hands will not wash off.",
+      "npcIds": [
+        "ks-npc-03"
+      ]
     },
     {
       "id": "kitchen-sink-entry-12",
@@ -960,7 +1012,55 @@
       "sinceReturnFrom": "kitchen-sink-visit-1",
       "location": "Prigwort",
       "hex": "1309",
-      "text": "Wrote to Sister Ysolde about the reliquary."
+      "text": "Wrote to Sister Ysolde about the reliquary, and asked whether Mother Brindle might know where it went.",
+      "npcIds": [
+        "ks-npc-01",
+        "ks-npc-02"
+      ]
+    }
+  ],
+  "npcs": [
+    {
+      "id": "ks-npc-01",
+      "name": "Sister Ysolde",
+      "affiliation": "The Church of Lankshorn",
+      "location": "Lankshorn",
+      "hex": "1106",
+      "goals": "Find the lost reliquary before the Drune do.",
+      "quests": [
+        {
+          "id": "ks-quest-01",
+          "text": "Find the lost reliquary",
+          "done": false
+        },
+        {
+          "id": "ks-quest-02",
+          "text": "Bring her holy water to the barrow",
+          "done": true
+        }
+      ]
+    },
+    {
+      "id": "ks-npc-02",
+      "name": "Old Mother Brindle",
+      "affiliation": "",
+      "location": "A hut past the mill",
+      "goals": "Collects locks of hair. Nobody knows why.",
+      "quests": []
+    },
+    {
+      "id": "ks-npc-03",
+      "name": "The Queen's librarian",
+      "affiliation": "The Court of the Hidden Moon",
+      "location": "In Fairy",
+      "goals": "Wants every book in the mortal world, once.",
+      "quests": [
+        {
+          "id": "ks-quest-03",
+          "text": "Bring back a book from Lankshorn",
+          "done": false
+        }
+      ]
     }
   ],
   "exhaustionLevel": 1,
