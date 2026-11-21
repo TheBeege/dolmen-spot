@@ -12,7 +12,7 @@ type ChangelogSection = {
   changes: string[];
 };
 
-// One entry per release (a fast-forward of `release` to `main`), written when the release is cut.
+// One entry per release, covering every player-facing PR in it, written when the release is cut.
 type ChangelogEntry = {
   /** The day the release went live on dolmen.spot (YYYY-MM-DD). */
   date: string;
@@ -29,6 +29,129 @@ type ChangelogEntry = {
 // See "Releases & Deployment" and "Changelog" in AGENTS.md.
 // Write each bullet from the player's point of view — what changed for them, not what changed in code.
 const ENTRIES: ChangelogEntry[] = [
+  {
+    date: '2026-11-21',
+    title: 'Hex map, Journal, time in Fairy, spell descriptions, and printable sheets',
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 25, 27, 29],
+    sections: [
+      {
+        heading: 'Printable PDF character sheets',
+        changes: [
+          'New "Download PDF" button next to "Save / Load" saves a printable character sheet of your current character, named after them. On phones it shows as a download icon.',
+          'The sheet covers your character details, ability scores and modifiers, all five save targets, combat stats (HP, AC, attack, melee, missile, speed, and magic resistance), skills, class and kindred features with your Class Notes and Kindred Notes, languages, retainers, your spells, glamours, runes, or knacks, and your inventory by container with encumbrance and coins.',
+          'The Adventuring tab (calendar, conditions, rations, travel, light sources, and spell study), the Journal, the map, Other Notes, and spell notes stay in the app and aren\'t printed.',
+          'Pages are printer-friendly with selectable text. Long inventories, Tiny Items lists, backgrounds, and notes continue onto extra pages, with table headings repeated, and every page shows your character\'s name and a page number. A note inside a table, such as an item\'s or a spell\'s, stops after 60 lines with "…".',
+          'Names and notes print in Greek, Cyrillic, Korean, Japanese, and Chinese as well as every Latin letter and accent (for example "Łaszewski", "Dvořák", "김민준", and "山田太郎"). Common symbols such as ☐ ✓ ★ ♠ and dice print too, while emoji are left out. Arabic, Hebrew, Devanagari, and Thai text isn\'t covered yet and prints as "?".',
+          'The first PDF downloads about 0.4 MB of fonts, or more if your sheet has Korean, Japanese, or Chinese text, and your browser keeps them for later PDFs. While it waits, a note at the bottom of the screen says what for, and a stalled download stops with a message instead of hanging.',
+          'Paper size follows your browser\'s language: Letter in the US, Canada, and other Letter-paper regions, A4 elsewhere.',
+          'On phones, the header now hides the kindred and class and shortens long character names further, so its buttons always fit on screen.',
+        ],
+      },
+      {
+        heading: 'Hex map',
+        changes: [
+          'The Map tab is rebuilt as a hex grid of the printed Dolmenwood map, each hex 6 miles across. Tap a hex to see what\'s there, make it your current hex (marked with a gold star), and add Points of Interest or Fairy Doors. Changes save as you type.',
+          'Fairy Doors can be wild, leading into Fairy, or linked by a named fairy road to another door. Linked pairs are drawn on the map and stay paired as you edit them.',
+          'Trace ley lines, wards, old roads, or any other path hex by hex, with a name, colour, and notes.',
+          'Drag, pinch, scroll, or use the +/− buttons to move and zoom, or type a hex like "0303" into Go to hex. The map works on phones in portrait and landscape, and from the keyboard.',
+          'Pins from the old map move over automatically, onto the hex number you gave them or where you placed them. Any that can\'t be placed are listed in Other Notes.',
+        ],
+      },
+      {
+        heading: 'Journal',
+        changes: [
+          'The journal has its own Journal tab, right after Adventuring, listed newest first in the order your character lived it, so entries written in Fairy and after coming back stay in order even when Dolmenwood\'s calendar jumped. Adventuring keeps an Open Journal button.',
+          'Search the journal by text, place, hex, or date. Search ignores capitals and accents, finds "exact phrases" in quotes, matches numbers whole (1 doesn\'t find 11, and 606 finds hex 0606), and marks what it found.',
+          'Each entry records the map hex you were in when it was written, which you can change or clear, and you can filter the journal by hex. On the map, a hex with entries shows Journal entries here, which opens the journal filtered to that hex.',
+          'Coming back from Fairy asks which hex you came back in and sets your current location to match, and the dialog shows where you\'ll be before you confirm. Entries written in Fairy have no hex.',
+          'Long journals show 50 entries at a time, with Show 50 more. Older entries whose location was just a hex number, such as "0606", now count as written in that hex.',
+        ],
+      },
+      {
+        heading: 'Time in Fairy',
+        changes: [
+          'Your character can enter Fairy from the Adventuring tab. Dolmenwood\'s date waits while you count days in Fairy, and when you return you pick the new date or say how much time passed, with an optional roll of 2d20 days.',
+          'Spell study counts the days your character actually lives: studying in Fairy makes progress, and coming back to find years have passed no longer finishes a study.',
+          'Got the return date wrong? Edit return date fixes it, and moves your journal entries, learned spells, and study since the return along with it.',
+          'Entering and leaving Fairy add journal entries, and anything learned or begun in Fairy is dated by visit and day.',
+          'A days-lived counter shows how long your character has lived, how much of it in Fairy, and how much Dolmenwood time passed while they were away.',
+          'An "In Fairy" badge appears by your character\'s name, and Dolmenwood\'s date, moon, and season are shown as you left them.',
+          'The calendar\'s Month, Day, and Year fields explain what\'s wrong instead of quietly changing what you typed.',
+        ],
+      },
+      {
+        heading: 'Spells and magic',
+        changes: [
+          'Every arcane and holy spell on the Spells & Magic tab has an ⓘ button showing what it does: range, duration, and effect, with targets, saves, damage, and how it scales with Level. Tap or click it to open the summary under the spell, or, with a mouse, rest the pointer on the spell\'s name. It works for prepared spells, scrolls, known spells, spell study and its queue, the Memorise menu, starting spell books, and the spell reference, and a spell picked in the Add known spell or spell study dropdown shows its summary too.',
+          'Several glamour, rune, and knack descriptions now match the rules. Rune of Vanishing and Rune of Invisibility no longer end when you attack: you\'re only revealed for a moment, and foes can strike back at -2, and you can end the Rune of Invisibility whenever you like. Thread Whistling, Wood Kenning, and Yeast Master lose limits and effects the rules don\'t have, and many others gain the saves, ranges, and conditions they were missing.',
+          'On phones, spell and rune rows wrap instead of running off the screen, and the Memorise menu fits with large text; on a computer its spell names no longer wrap, and Escape closes it. A cast spell still fades, but its summary and button stay readable, faint grey text in the spell and rune sections is easier to read, and a breggle\'s spell reference lists only Ranks 1-5, the ranks breggles can cast.',
+        ],
+      },
+      {
+        heading: 'Safer saves',
+        changes: [
+          'If your saved characters can\'t be read, Dolmen Spot keeps a copy of the old data and lets you download it, instead of overwriting it with a new sheet.',
+          'If one character can\'t be opened (for example, because a newer version of Dolmen Spot saved it), your others still open, and it\'s kept unchanged in your browser until it can be.',
+          'If your browser\'s storage is full or blocked, the sheet keeps working, says your changes aren\'t being saved, and offers to export your characters. It also asks before you close a tab with unsaved changes.',
+          'Editing in two tabs no longer silently overwrites one with the other: the out-of-date tab stops saving and asks you to reload.',
+          'If part of the sheet fails to display, a recovery screen tells you whether your characters are still saved and lets you try again, reload, or download your save data and any unsaved changes.',
+          'Import Character accepts files with several characters, and explains when a file isn\'t a character file.',
+        ],
+      },
+      {
+        heading: 'Inventory and ability scores',
+        changes: [
+          'Ability scores of 10 and above show both digits: the up/down arrows no longer cover the second one. On phones, save targets wrap onto more rows instead of overlapping, even with a large default font.',
+          'Item notes can run over several lines: press Enter for a new line. The box grows as you type, up to about nine lines, then scrolls. Spell book notes work the same way, notes that already had line breaks now show them, and they print line by line in the PDF.',
+          'On tablets and computers, item notes get most of the row and the name a quarter of it, and spell books and scrolls line up with the other items. Long names wrap instead of being cut off, pressing Enter in a name moves on to its Slots, and pasting several lines into a name joins them with spaces.',
+          'On phones, an item\'s notes get a full-width line of their own, every field is labelled, and spell books and scrolls are laid out like the other items. Inventory columns line up when you carry bags, sacks, or pouches.',
+          'Clicking a coin\'s or a save target\'s name puts the cursor in its field, and screen readers hear a distinct name for each item\'s name field and for each list\'s and spell book\'s add buttons.',
+        ],
+      },
+      {
+        heading: 'Tabs and header',
+        changes: [
+          'On tablets and computers every tab is always visible at any text size, wrapping onto a second line when they don\'t fit. On phones the tabs still scroll sideways, with a fade and an arrow button showing which way there are more, and the tab you\'re on is always scrolled into view.',
+          'With large text, the header no longer hides your character\'s name behind its buttons: they move to their own line when there isn\'t room, and on the smallest phones they always do.',
+          'Screen readers announce the tabs as tabs and say which one is open; the arrow keys, Home, and End move between them, and Enter or Space opens one. After you pick, add, or delete a character from the header\'s list, keyboard focus stays there, and in Chrome, Tab no longer leaves the field you\'re on hidden under the header.',
+        ],
+      },
+      {
+        heading: 'Calendar',
+        changes: [
+          'Days of the week are named correctly again: every month starts on Colly, and the Wysendays at the end of a month (such as Hanglemas and Dolmenday) show their own names instead of a weekday. Journal entries and spell-study start dates show the corrected names too.',
+          'Moon phases now match the official Dolmenwood calendar, with full moons on the marked days (for example, 19 Grimvold) every year instead of drifting further off each year.',
+          'Before a month\'s new moon, the calendar shows the previous month\'s moon waning (for example, 1 Grimvold shows "Black moon · Waning"). The month summary gives the month\'s own moon and its new- and full-moon days, for example "Moon: Grinning moon (new 4th, full 19th)".',
+          'The Day of Virgins and The Day of Doors now carry their full names from the book.',
+          'The Reference tab\'s calendar lists each month\'s new- and full-moon days and explains how weeks, Wysendays, and moon phases work. On phones, each month\'s season shows under its name so the moon days fit.',
+        ],
+      },
+      {
+        heading: 'Rules fixes',
+        changes: [
+          'Woodgrues with a standard class (Bard, Enchanter, Thief, and so on) get Mad Revelry once per day, as the rules say. Woodgrue kindred-class characters still get one use per Level.',
+          'Kindred-class characters now get their XP modifier calculated from their Prime Abilities, with a Sync button like other classes. Editing an ability score or changing kindred no longer wipes an XP modifier the sheet can\'t calculate.',
+          'Carrying more than the maximum load (over 1,600 coins of weight, or more than 10 equipped or 16 stowed slots) now gives Speed 0 on the Inventory tab and the PDF, with advice on what to stow or drop. Before, it showed 10.',
+          'Clerics, friars, magicians, and breggles get the number of spells per day the rules give at every Level. Several higher-Level rows were wrong: a Level 10 cleric had a Rank 5 spell slot, for example, and a Level 8 breggle was missing its Rank 3 slot. Spells already prepared beyond a corrected limit are kept, and that rank shows in red.',
+          'The Divine Resistance note on the Spells & Magic tab now gives the actual rule, Resistance to Divine Aid: a 2-in-6 chance that a beneficial holy spell has no effect on you. It used to say "immune to holy magic".',
+        ],
+      },
+      {
+        heading: 'Sturdier, easier-to-read sheet',
+        changes: [
+          'A character saved with a class the sheet doesn\'t recognise (for example, from a hand-edited file) no longer blanks the whole app. Unrecognised classes and kindreds are shown as stored, and the sheet doesn\'t guess values or magic it can\'t work out.',
+          'The header and character list show proper names, such as "Woodgrue Enchanter", instead of lowercase ids or "???", and the sheet no longer says "a Elf" or "1 slots".',
+          'Warnings, the header\'s kindred and class, the Inventory\'s × buttons, the character list\'s Del buttons, and the Save / Load close button are easier to read, and screen readers say what each of those buttons does.',
+        ],
+      },
+      {
+        heading: 'Site icon',
+        changes: [
+          'Dolmen Spot has its own icon in browser tabs, bookmarks, and history: a gold dolmen on a dark tile. Adding the site to a phone\'s home screen uses the same icon.',
+        ],
+      },
+    ],
+  },
   {
     date: '2026-05-16',
     title: 'Dolmen Spot branding, About, and Changelog pages',
