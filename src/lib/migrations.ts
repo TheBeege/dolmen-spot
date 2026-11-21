@@ -8,14 +8,35 @@ import type {
   HexCoord,
   LeyLine,
   MapPOI,
+  Npc,
+  NpcQuest,
+  PathKind,
+  ShardState,
+  SpellbookEntry,
 } from './types';
 import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, daysBetween } from './gamedata';
 import { fitCountingStart, getLivedDayAtDolmenwoodDate } from './livedTime';
 import { HEX_GRID_META } from './hex-grid';
 import { isValidHex, pixelToHex } from './hex';
-import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS } from './map-data';
+import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS, isPathKind, isPoiKind, pathKindFromType } from './map-data';
 
-export const CURRENT_SCHEMA_VERSION = 14;
+export const CURRENT_SCHEMA_VERSION = 15;
+
+/**
+ * A saved `schemaVersion` as a number. Some old saves have it as a string of
+ * digits, such as "10", which counts as the number it spells, up to this
+ * version; any other value is returned as it is. No release has saved a
+ * string, so digits above this version aren't from a newer release: they're
+ * what the old migration loop left ("10" became "101"), and such a character
+ * opened as it was, so it still does. migrateCharacter reads the version
+ * through this, and so does the store's check for a save from a newer
+ * version, so the two agree.
+ */
+export function readSchemaVersion(value: unknown): unknown {
+  if (typeof value !== 'string' || !/^\s*\d+\s*$/.test(value)) return value;
+  const version = Number(value);
+  return version <= CURRENT_SCHEMA_VERSION ? version : value;
+}
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };
 
@@ -378,16 +399,44 @@ function withLostRoad(notes: string, roadName: string): string {
   return notes ? `${notes}\n${line}` : line;
 }
 
+/** `value` as a whole number no less than `min`, or `fallback` if it isn't a finite number. */
+function wholeAtLeast(value: unknown, min: number, fallback: number): number {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.max(min, Math.floor(value)) : fallback;
+}
+
+/** `raw` as an id that isn't in `used` (a new one if it's empty or taken), now added to `used`. */
+function uniqueIn(used: Set<string>, raw: unknown): string {
+  let id = asText(raw);
+  while (!id || used.has(id)) id = newId();
+  used.add(id);
+  return id;
+}
+
+/**
+ * A spell recorded on a ley line or a Dwemer shard: `{ name, rank }` with text
+ * in its name, and a rank that's a whole number of at least 1 (1 if it isn't
+ * a number). Undefined for anything else, which means the spell isn't known.
+ */
+function sanitizeSpellRef(value: unknown): SpellbookEntry | undefined {
+  if (!isPlainObject(value)) return undefined;
+  const v = value as Record<string, unknown>;
+  const name = asText(v.name);
+  if (name.trim() === '') return undefined;
+  return withExtraFields({ name, rank: wholeAtLeast(v.rank, 1, 1) }, v);
+}
+
 /**
  * Repair `mapData` and `currentLocationHex` on a partially-trusted save
  * (hand-edited imports, saves made on an older grid). Runs after the
  * migration loop on every load and import, so it must be idempotent.
  * Every element is normalized to the shape the map UI relies on, ids are
  * made unique, and items that can't stay on the map are described in `lost`
- * (kept in Other Notes) instead of being deleted. Fields this repair doesn't
- * know about are kept as they are, so a field added later isn't deleted on
- * the next load if it was left out here. `legacyPois` (converted old-map
- * pins) are added after the saved POIs.
+ * (kept in Other Notes) instead of being deleted: a POI or door off the map,
+ * and a path other than a ley line with fewer than 2 hexes on it. A ley line
+ * keeps the hexes it has, even one or none, since it's recorded as it's found.
+ * Fields this repair doesn't know about are kept as they are, so a field
+ * added later isn't deleted on the next load if it was left out here.
+ * `legacyPois` (converted old-map pins) are added after the saved POIs.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown[]): void {
@@ -429,7 +478,12 @@ function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown
       lost.push(lostItem(name || 'Unnamed point of interest', asText(p.hex), notes));
       continue;
     }
-    pois.push(withExtraFields({ id: uniqueId(p.id), hex: p.hex, name, notes }, p));
+    // A kind that isn't one of the POI kinds is removed, so the POI gets the
+    // plain marker. withExtraFields would copy it back, hence the delete.
+    const kind = isPoiKind(p.kind) ? p.kind : undefined;
+    const poi: MapPOI = withExtraFields({ id: uniqueId(p.id), hex: p.hex, name, notes, ...(kind ? { kind } : {}) }, p);
+    if (!kind) delete poi.kind;
+    pois.push(poi);
   }
   md.pois = pois;
 
@@ -475,18 +529,28 @@ function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown
     const name = asText(l.name);
     const type = asText(l.type);
     const notes = asText(l.notes);
+    // A kind that isn't valid comes from the type, as in the v14 → v15 migration.
+    const kind: PathKind = isPathKind(l.kind) ? l.kind : pathKindFromType(type);
     const color = typeof l.color === 'string' && HEX_COLOR_RE.test(l.color) ? l.color : LEY_LINE_COLORS[0];
     const allHexes = list(l.hexes);
     const hexes = allHexes.filter(isValidHex);
     const off = allHexes.filter((h) => !isValidHex(h)).map(asText).filter(Boolean);
     const label = `${type || DEFAULT_LEY_LINE_TYPE} ${name || 'Unnamed'}`;
-    if (hexes.length < 2) {
+    // Any other path needs 2 hexes to be drawn. A ley line is recorded as
+    // it's found, so it keeps the hexes it has, however few.
+    if (kind !== 'leyLine' && hexes.length < 2) {
       const route = Array.isArray(l.hexes) ? allHexes.map(asText).filter(Boolean).join(' → ') : nonItemText(l.hexes);
       lost.push(`${label}${route ? ` (hexes ${route})` : ''}${notes ? `: ${notes}` : ''}`);
       continue;
     }
     if (off.length > 0) lost.push(`${label}: hexes ${off.join(', ')} left out (not on the map)`);
-    leyLines.push(withExtraFields({ id: uniqueId(l.id), type, name, color, hexes, notes }, l));
+    const notAList = Array.isArray(l.hexes) ? '' : nonItemText(l.hexes);
+    if (notAList) lost.push(`${label}: hexes ${notAList} left out (not a list of hexes)`);
+    // A spell that isn't well formed is removed: the line's spell isn't known.
+    const spell = sanitizeSpellRef(l.spell);
+    const line: LeyLine = withExtraFields({ id: uniqueId(l.id), kind, type, name, color, hexes, notes, ...(spell ? { spell } : {}) }, l);
+    if (!spell) delete line.spell;
+    leyLines.push(line);
   }
   md.leyLines = leyLines;
 
@@ -494,12 +558,14 @@ function sanitizeMapData(data: any, lost: string[], legacyPois: readonly unknown
   // is normal (the player clicked Draw Ley Line and hasn't picked any).
   if (isPlainObject(md.draftLeyLine)) {
     const dft = md.draftLeyLine as Record<string, unknown>;
+    const type = asText(dft.type);
     md.draftLeyLine = withExtraFields({
       name: asText(dft.name),
-      type: asText(dft.type),
+      type,
       color: typeof dft.color === 'string' && HEX_COLOR_RE.test(dft.color) ? dft.color : LEY_LINE_COLORS[0],
       notes: asText(dft.notes),
       hexes: list(dft.hexes).filter(isValidHex),
+      kind: isPathKind(dft.kind) ? dft.kind : pathKindFromType(type),
     }, dft);
   } else {
     keepText(md.draftLeyLine);
@@ -642,6 +708,44 @@ function migrateAddJournalHexes(data: any): any {
 }
 
 /**
+ * Give every path on the map, and the one being drawn, a kind (PathKind).
+ * Until this version a path had only its free-text type, so the kind comes
+ * from that (pathKindFromType): a type that names a ley line, or a blank one,
+ * which the map shows as "Ley line", makes a ley line; anything else (a road,
+ * a ward) makes another path. A valid kind already there could only be there
+ * by a hand edit, and stays. Values of the wrong shape are left for
+ * sanitizeMapData, which gives the paths it keeps a kind the same way.
+ *
+ * Kept self-contained (no version numbers inside) so it can be renumbered
+ * if another schema bump lands first.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateAddPathKinds(data: any): any {
+  if (!isPlainObject(data.mapData)) return data;
+  const { leyLines, draftLeyLine } = data.mapData;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const addKind = (path: any) => {
+    if (isPlainObject(path) && !isPathKind(path.kind)) path.kind = pathKindFromType(asText(path.type));
+  };
+  if (Array.isArray(leyLines)) leyLines.forEach(addKind);
+  addKind(draftLeyLine);
+  return data;
+}
+
+/**
+ * Start the character's list of NPCs, empty. A list already there could only
+ * be there by a hand edit; sanitizeNpcs repairs it.
+ *
+ * Kept self-contained (no version numbers inside) so it can be renumbered
+ * if another schema bump lands first.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateAddNpcs(data: any): any {
+  if (data.npcs === undefined) data.npcs = [];
+  return data;
+}
+
+/**
  * Repair journal entries on a partially-trusted save (hand-edited imports
  * skip the migration loop). Runs after the migrations on every load and
  * import, and after sanitizeCharacterDates has made the journal a list of
@@ -654,7 +758,11 @@ function migrateAddJournalHexes(data: any): any {
  *     holds, as nonItemText writes it: a number as written, a list or object
  *     as JSON, and nothing for null;
  *   - its hex is a hex on the map, or it has none. No hex is ever guessed
- *     here, so an entry whose hex the player cleared stays without one.
+ *     here, so an entry whose hex the player cleared stays without one;
+ *   - the NPCs it's about (npcIds) are a list of ids, each once. An id is
+ *     text, as NPC ids are (sanitizeNpcs), so a number counts as its digits;
+ *     anything else is dropped, and a list left empty is removed. An id whose
+ *     NPC is gone is kept: it names no one.
  * Nothing else about an entry changes.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -670,7 +778,104 @@ function sanitizeJournalEntries(data: any): void {
     if (typeof entry.text !== 'string') entry.text = nonItemText(entry.text);
     if (typeof entry.location !== 'string') entry.location = nonItemText(entry.location);
     if (entry.hex !== undefined && !isValidHex(entry.hex)) delete entry.hex;
+    if (Object.hasOwn(entry, 'npcIds')) {
+      const npcIds = Array.isArray(entry.npcIds) ? [...new Set(entry.npcIds.map(asText).filter(Boolean))] : [];
+      if (npcIds.length > 0) entry.npcIds = npcIds;
+      else delete entry.npcIds;
+    }
   }
+}
+
+/**
+ * Repair what loading checks on inventory items, equipped and stowed: for
+ * now, a Dwemer shard's state (InventoryItem.shard), which every item of kind
+ * 'shard' gets, so the shard's UI can rely on it. Every other item, and every
+ * other field, is left as it is. Runs after the migrations on every load and
+ * import.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeInventoryItems(data: any): void {
+  for (const items of [data.equippedItems, data.stowedItems]) {
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (isPlainObject(item) && item.kind === 'shard') item.shard = sanitizeShard(item.shard);
+    }
+  }
+}
+
+/**
+ * A Dwemer shard's state, repaired: whole numbers of casts (at least 1 a
+ * charge; none or more left, which may be more than a charge gives), and a
+ * spell and a ley line only if they're well formed. A ley line that has since
+ * been deleted keeps its id. A state that isn't an object becomes an
+ * uncharged shard that holds no known spell.
+ */
+function sanitizeShard(value: unknown): ShardState {
+  const s = (isPlainObject(value) ? value : {}) as Record<string, unknown>;
+  const spell = sanitizeSpellRef(s.spell);
+  const leyLineId = asText(s.leyLineId);
+  const shard: ShardState = withExtraFields({
+    ...(spell ? { spell } : {}),
+    castsLeft: wholeAtLeast(s.castsLeft, 0, 0),
+    castsPerCharge: wholeAtLeast(s.castsPerCharge, 1, 1),
+    ...(leyLineId ? { leyLineId } : {}),
+  }, s);
+  if (!spell) delete shard.spell;
+  if (!leyLineId) delete shard.leyLineId;
+  return shard;
+}
+
+/**
+ * Repair the character's NPCs on a partially-trusted save. Runs after the
+ * migrations on every load and import:
+ *   - the NPCs are a list. A value that isn't one becomes a list holding just
+ *     that value if it holds any text (one NPC saved without its list, say),
+ *     or an empty list if it doesn't;
+ *   - every NPC is an object. An entry that isn't one, but holds text,
+ *     becomes an NPC named with that text; one with no text is dropped;
+ *   - every NPC has an id of its own, as text (journal entries name NPCs by
+ *     id); its name, affiliation, location and goals are text, and anything
+ *     else keeps the text it holds, as nonItemText writes it, like a journal
+ *     entry's text; its hex is a hex on the map, or it has none;
+ *   - its quests are repaired the same way: a list of { id, text, done }, each
+ *     with an id of its own among that NPC's quests, done only if it's true.
+ * Fields this doesn't know about are kept.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function sanitizeNpcs(data: any): void {
+  if (data.npcs === undefined) return; // reconcileWithDefaults adds an empty list
+  const asList = (v: unknown): unknown[] => (Array.isArray(v) ? v : holdsText(v) ? [v] : []);
+  const text = (v: unknown): string => (typeof v === 'string' ? v : nonItemText(v));
+  // An entry with text but no object around it: an object holding that text in `key`.
+  const asObject = (v: unknown, key: string): Record<string, unknown> | null => {
+    if (isPlainObject(v)) return v as Record<string, unknown>;
+    return holdsText(v) ? { [key]: v } : null;
+  };
+  const npcIds = new Set<string>();
+  const npcs: Npc[] = [];
+  for (const raw of asList(data.npcs)) {
+    const n = asObject(raw, 'name');
+    if (!n) continue;
+    const questIds = new Set<string>();
+    const quests: NpcQuest[] = [];
+    for (const rawQuest of asList(n.quests)) {
+      const q = asObject(rawQuest, 'text');
+      if (q) quests.push(withExtraFields({ id: uniqueIn(questIds, q.id), text: text(q.text), done: q.done === true }, q));
+    }
+    const hex = isValidHex(n.hex) ? n.hex : undefined;
+    const npc: Npc = withExtraFields({
+      id: uniqueIn(npcIds, n.id),
+      name: text(n.name),
+      affiliation: text(n.affiliation),
+      location: text(n.location),
+      ...(hex ? { hex } : {}),
+      goals: text(n.goals),
+      quests,
+    }, n);
+    if (!hex) delete npc.hex;
+    npcs.push(npc);
+  }
+  data.npcs = npcs;
 }
 
 /** Append `lost` to otherNotes under LOST_ITEMS_HEADING. */
@@ -802,6 +1007,13 @@ const migrations: Record<number, (data: any) => any> = {
   // v13 -> v14: Journal entries record the hex they were written in. Old
   // entries get none, unless their location is exactly a hex id on the map.
   13: migrateAddJournalHexes,
+  // v14 -> v15: Fields for the next features. Paths on the map get a kind (a
+  // ley line or another path), worked out from their type, and characters a
+  // list of NPCs. The other new fields are optional, so old saves need
+  // nothing: a POI's kind (absent: the plain marker), a ley line's spell
+  // (absent: not learned yet), a Dwemer shard's state, and the NPCs a
+  // journal entry is about.
+  14: (data) => migrateAddNpcs(migrateAddPathKinds(data)),
 };
 
 /**
@@ -903,10 +1115,11 @@ function reconcileWithDefaults(data: any): any {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function migrateCharacter(data: any): Character {
-  // Characters saved before versioning have no schemaVersion field
-  if (data.schemaVersion === undefined) {
-    data.schemaVersion = 1;
-  }
+  // Characters saved before versioning have no schemaVersion field. Some old
+  // saves have it as a string of digits ("10"): that's version 10. Left as a
+  // string, "10" + 1 would be "101" after the first migration, ending the
+  // loop with the rest of the migrations skipped.
+  data.schemaVersion = data.schemaVersion === undefined ? 1 : readSchemaVersion(data.schemaVersion);
 
   // Run each migration in sequence
   while (data.schemaVersion < CURRENT_SCHEMA_VERSION) {
@@ -921,9 +1134,10 @@ export function migrateCharacter(data: any): Character {
 
   // Defensive: also runs for already-current saves, so a hand-edited
   // JSON import that smuggles in non-numeric date fields, a malformed
-  // mapData shape, or journal entries with a repeated id, text that isn't
-  // a string or a hex that isn't on the map gets cleaned before downstream
-  // code tries to use it.
+  // mapData shape, journal entries with a repeated id, text that isn't
+  // a string or a hex that isn't on the map, a malformed Dwemer shard, or
+  // NPCs of the wrong shape gets cleaned before downstream code tries to
+  // use it.
   // reconcileWithDefaults only fills MISSING top-level keys; deeper
   // shape repair has to happen here. Old-map pins are converted first so
   // the map sanitizer also normalizes (and de-duplicates) the new POIs;
@@ -941,6 +1155,8 @@ export function migrateCharacter(data: any): Character {
   sanitizeMapData(data, lostMapItems, legacyPois);
   keepLostMapItems(data, lostMapItems);
   sanitizeJournalEntries(data);
+  sanitizeInventoryItems(data);
+  sanitizeNpcs(data);
 
   return reconcileWithDefaults(data) as Character;
 }

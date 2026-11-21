@@ -1,4 +1,4 @@
-import type { CharacterMapData, FairyDoor, FairyDoorDestination, HexCoord } from './types';
+import type { CharacterMapData, FairyDoor, FairyDoorDestination, HexCoord, PathKind, PoiKind } from './types';
 
 /**
  * `md` with all three lists, an empty one in place of any that's missing.
@@ -25,6 +25,48 @@ export const LEY_LINE_COLORS = ['#c4a35a', '#7a5fc4', '#5fa3c4', '#c45f7a', '#7a
 
 /** Type given to a new ley line. */
 export const DEFAULT_LEY_LINE_TYPE = 'Ley line';
+
+/** Each kind of point of interest, and what it covers. 'other' is the plain marker. */
+export const POI_KIND_LABELS: Readonly<Record<PoiKind, string>> = {
+  town: 'Town or city',
+  village: 'Village, hamlet or farmstead',
+  keep: 'Castle, keep, fort or manor',
+  tower: 'Tower',
+  ruin: 'Ruin',
+  shrine: 'Church, abbey, chapel or shrine',
+  stones: 'Standing stones, dolmen or stone circle',
+  cave: 'Cave, mine or dungeon entrance',
+  inn: 'Inn or tavern',
+  camp: 'Camp or hideout',
+  barrow: 'Barrow, tomb or graveyard',
+  grove: 'Grove or notable tree',
+  fairy: 'Fairy ring or mound',
+  lair: 'Lair or danger',
+  other: 'Other',
+};
+
+/** True if `value` is a kind of point of interest. */
+export function isPoiKind(value: unknown): value is PoiKind {
+  return typeof value === 'string' && Object.hasOwn(POI_KIND_LABELS, value);
+}
+
+/** True if `value` is a kind of path. */
+export function isPathKind(value: unknown): value is PathKind {
+  return value === 'leyLine' || value === 'other';
+}
+
+// A type naming a ley line: "Ley line", "Leyline", "ley-line", "Ley lines",
+// "Drune ley line (dormant)", "The Leys". Not "Valley road" or "Leyton road".
+const LEY_LINE_TYPE = /\bley(?:\s*-?\s*lines?|s)?\b/i;
+
+/**
+ * The kind of path a type describes: a ley line if it names one, or if it's
+ * blank (a blank type is shown as DEFAULT_LEY_LINE_TYPE); any other path
+ * otherwise.
+ */
+export function pathKindFromType(type: string): PathKind {
+  return type.trim() === '' || LEY_LINE_TYPE.test(type) ? 'leyLine' : 'other';
+}
 
 /**
  * Doors that `selfId` can pair with without breaking another door's link:
