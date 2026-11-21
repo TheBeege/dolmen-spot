@@ -263,11 +263,12 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   const showControls = entries.length > 0 || query !== '' || hexFilter !== 'all';
 
   return (
-    // scroll-mt keeps an element focus moves to clear of the sticky header.
+    // The page's scroll padding keeps an element focus moves to clear of the
+    // sticky header (globals.css); scroll-mt leaves a little room under it.
     <section
       ref={rootRef}
       aria-labelledby={headingId}
-      className="bg-[#2a2a3e] rounded-lg p-4 [&_[data-journal-focus]]:scroll-mt-28"
+      className="bg-[#2a2a3e] rounded-lg p-4 [&_[data-journal-focus]]:scroll-mt-9"
     >
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3 border-b border-[#5a3a28] pb-2">
         <h2
