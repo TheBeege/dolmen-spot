@@ -7,8 +7,8 @@
  * Every number here comes from the same stored fields and shared helpers the
  * tabs use (gamedata.ts, character-sheet.ts). Where a tab shows a stored value
  * next to a "Sync to X" button, the sheet prints the stored value and notes
- * "calc. X". The Combat, Magic and Other notes, the map, the journal and the
- * calendar are left out on purpose.
+ * "calc. X". The Combat, Magic and Other notes, the map, the journal, the
+ * NPCs and the calendar are left out on purpose.
  *
  * All text goes through this file's `Text`, which makes its strings
  * printable with the sheet's fonts (see text.ts and fonts.ts).
@@ -1662,8 +1662,9 @@ function InventorySection({ c }: { c: Character }) {
 // ── Document ─────────────────────────────────────────────────
 
 // Fields the sheet leaves out: the Combat, Magic and Other notes, spell
-// study, the journal, the party's location and the map. Typed as Character's
-// keys, so that renaming or removing one of them fails the typecheck.
+// study, the journal, the NPCs, the party's location and the map. Typed as
+// Character's keys, so that renaming or removing one of them fails the
+// typecheck.
 const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
   'combatTalents',
   'otherNotes',
@@ -1671,6 +1672,7 @@ const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
   'spellStudy',
   'failedStudies',
   'journalEntries',
+  'npcs',
   'currentLocation',
   'currentLocationHex',
   'mapData',

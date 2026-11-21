@@ -197,8 +197,9 @@ describe('Scenario 8: pre-existing mapData with garbage entries', () => {
     ],
     leyLines: [
       { id: 'l1', name: 'L', type: 'Ley line', color: '#fff', hexes: ['0101', '0102'], notes: '' },
-      { id: 'l2', name: 'short', hexes: ['0101'], notes: '' }, // < 2 hexes
-      { id: 'l3', name: 'noarray', hexes: 'oops', notes: '' }, // hexes not an array
+      // Paths other than ley lines (which keep any number of hexes: Scenario 25).
+      { id: 'l2', name: 'short', type: 'Old road', hexes: ['0101'], notes: '' }, // < 2 hexes
+      { id: 'l3', name: 'noarray', type: 'Old road', hexes: 'oops', notes: '' }, // hexes not an array
     ],
   };
   const migrated = migrateCharacter(data as never);
@@ -213,8 +214,8 @@ describe('Scenario 8: pre-existing mapData with garbage entries', () => {
       '- bad (Hex bad!): x',
       '- not an object',
       '- Fairy door x (Hex bad)',
-      '- Ley line short (hexes 0101)',
-      '- Ley line noarray (hexes oops)',
+      '- Old road short (hexes 0101)',
+      '- Old road noarray (hexes oops)',
     ].join('\n'));
   });
   test('a 3-digit colour is replaced by a 6-digit default', () => assert.equal(migrated.mapData.leyLines[0].color, '#c4a35a'));
@@ -272,8 +273,10 @@ describe('Scenario 11e: hex refs pointing at non-manifest hexes get cleared', ()
     leyLines: [
       // Survives after pruning orphans (2 live hexes left).
       { id: 'll1', name: 'Mixed', type: 'Ley line', color: '#fff', hexes: ['0303', '1313', '0404'], notes: '' },
-      // Disappears (no live hex left after pruning).
+      // A ley line with no live hex left: kept, with none (it's recorded as found).
       { id: 'll2', name: 'AllOrphan', type: 'Ley line', color: '#fff', hexes: ['1313', '1414'], notes: 'hums' },
+      // Any other path with no live hex left disappears.
+      { id: 'll3', name: 'Lost Lane', type: 'Old road', color: '#fff', hexes: ['1313', '1414'], notes: 'muddy' },
     ],
   };
   const migrated = migrateCharacter(data as never);
@@ -283,8 +286,8 @@ describe('Scenario 11e: hex refs pointing at non-manifest hexes get cleared', ()
   test('orphan door dropped', () => {
     assert.ok(migrated.mapData.fairyDoors.length === 1 && migrated.mapData.fairyDoors[0].name === 'Live door');
   });
-  test('orphan-only ley line dropped', () => {
-    assert.ok(migrated.mapData.leyLines.length === 1 && migrated.mapData.leyLines[0].name === 'Mixed');
+  test('an orphan-only ley line is kept with no hexes, and an orphan-only road dropped', () => {
+    assert.deepEqual(migrated.mapData.leyLines.map((l) => [l.name, l.hexes, l.notes]), [['Mixed', ['0303', '0404'], ''], ['AllOrphan', [], 'hums']]);
   });
   test('mixed ley line pruned to live hexes', () => assert.deepEqual(migrated.mapData.leyLines[0].hexes, ['0303', '0404']));
   test('orphan currentLocationHex cleared', () => assert.equal(migrated.currentLocationHex, ''));
@@ -294,7 +297,8 @@ describe('Scenario 11e: hex refs pointing at non-manifest hexes get cleared', ()
       '- Orphan POI (Hex 1313)',
       '- Fairy door Orphan door (Hex 1313)',
       '- Ley line Mixed: hexes 1313 left out (not on the map)',
-      '- Ley line AllOrphan (hexes 1313 → 1414): hums',
+      '- Ley line AllOrphan: hexes 1313, 1414 left out (not on the map)',
+      '- Old road Lost Lane (hexes 1313 → 1414): muddy',
     ].join('\n'));
   });
 });
@@ -484,10 +488,13 @@ describe('Scenario 14: malformed map elements are normalized to the shape the ma
   test('ley line fields are coerced', () => {
     assert.ok(md.leyLines[1].id === '7' && md.leyLines[1].type === '3' && md.leyLines[1].name === '');
   });
+  test('a path with no kind gets one from its type as coerced: none is a ley line, "3" another path', () => {
+    assert.deepEqual(md.leyLines.map((l) => l.kind), ['leyLine', 'other']);
+  });
   test('the draft is normalized and keeps only hexes on the map', () => {
     assert.equal(
       JSON.stringify(md.draftLeyLine),
-      JSON.stringify({ name: '5', type: '', color: '#ABCDEF', notes: '', hexes: ['0101'] }),
+      JSON.stringify({ name: '5', type: '', color: '#ABCDEF', notes: '', hexes: ['0101'], kind: 'leyLine' }),
     );
   });
 });
@@ -625,25 +632,35 @@ describe('Scenario 21: printed hex 0111 is on the grid', () => {
 
 describe('Scenario 22: fields the repair doesn\'t know about are kept', () => {
   const data = baseV13({
-    pois: [{ id: 'p', hex: '0303', name: { bad: 1 }, notes: 5, visited: true, icon: 'skull' }],
+    pois: [
+      { id: 'p', hex: '0303', name: { bad: 1 }, notes: 5, visited: true, icon: 'skull' },
+      { id: 'q', hex: '0404', name: 'Tower', notes: '', kind: 'tower', ruinedBy: 'fire' },
+    ],
     fairyDoors: [
       { id: 'a', hex: '0404', name: 'Oak', notes: '', discoveredOn: { day: 3, month: 1, year: 1 },
         destination: { kind: 'roaded', pairedDoorId: 'b', roadName: 'Silver', roadNotes: 'Moonlit' } },
       { id: 'b', hex: '0505', name: 'Stone', notes: '', destination: { kind: 'roaded', pairedDoorId: 'a', roadName: 'Silver' } },
       { id: 'w', hex: '0606', name: 'Well', notes: '', destination: { kind: 'wild', realm: 'Fairy' } },
     ],
-    leyLines: [{ id: 'l', name: 'L', type: 'Ley line', color: '#c4a35a', hexes: ['0303', '0404'], notes: '', strength: 3 }],
+    leyLines: [{
+      id: 'l', name: 'L', type: 'Ley line', color: '#c4a35a', hexes: ['0303', '0404'], notes: '', strength: 3,
+      spell: { name: 'Web', rank: 2, learnedAt: 'the Old Stones' },
+    }],
     draftLeyLine: { name: 'D', type: '', color: '#c4a35a', notes: '', hexes: [], startedOn: 'today' },
     futureLayer: ['kept'],
   });
   const m = migrateCharacter(clone(data) as never);
-  const [poi] = m.mapData.pois as unknown as AnyData[];
+  const [poi, tower] = m.mapData.pois as unknown as AnyData[];
   const doors = Object.fromEntries((m.mapData.fairyDoors as unknown as AnyData[]).map((d) => [d.id, d]));
   test('a POI keeps its extra fields, and the repaired ones still win', () => {
     assert.deepEqual(poi, { id: 'p', hex: '0303', name: '', notes: '5', visited: true, icon: 'skull' });
   });
-  test('the known fields come first, in their usual order', () => {
+  test('the known fields come first, in their usual order, a kind among them', () => {
     assert.deepEqual(Object.keys(poi), ['id', 'hex', 'name', 'notes', 'visited', 'icon']);
+    assert.deepEqual(Object.keys(tower), ['id', 'hex', 'name', 'notes', 'kind', 'ruinedBy']);
+  });
+  test("a ley line's spell keeps its extra fields too", () => {
+    assert.deepEqual(m.mapData.leyLines[0].spell, { name: 'Web', rank: 2, learnedAt: 'the Old Stones' });
   });
   test('a door and its roaded destination keep their extra fields', () => {
     assert.deepEqual(doors.a.discoveredOn, { day: 3, month: 1, year: 1 });
@@ -696,11 +713,13 @@ describe('Scenario 23: text in map values of the wrong shape is kept in otherNot
       [],
       [[], {}],
       { pois: {}, fairyDoors: [[]], leyLines: { a: [] }, draftLeyLine: [] },
-      { pois: [[], [{ a: [null, ' '] }]], fairyDoors: [], leyLines: [{ name: 'L', type: 'Ley line', hexes: {} }] },
+      { pois: [[], [{ a: [null, ' '] }]], fairyDoors: [], leyLines: [{ name: 'L', type: 'Old road', hexes: {} }] },
+      { pois: [], fairyDoors: [], leyLines: [{ name: 'M', type: 'Ley line', hexes: {} }] },
     ];
     const notes = noText.map((mapData) => migrateCharacter(baseV13(mapData) as never).otherNotes);
-    // The ley line with no hexes is itself listed, but without "(hexes {})".
-    assert.deepEqual(notes, ['', '', '', `${UNPLACED_HEADING}\n- Ley line L`]);
+    // The road with no hexes is itself listed, but without "(hexes {})". A
+    // ley line is kept with no hexes, and nothing is said about the {}.
+    assert.deepEqual(notes, ['', '', '', `${UNPLACED_HEADING}\n- Old road L`, '']);
     const pinsOnly = baseV10();
     pinsOnly.otherNotes = 'Prose.\n<!--MAP_PINS-->[[],{},{"a":[[]]},"text"]';
     assert.equal(migrateCharacter(pinsOnly as never).otherNotes, `Prose.\n\n${UNPLACED_HEADING}\n- text`);
@@ -751,10 +770,11 @@ describe('Scenario 24: a v12 save from main, with Fairy time and old map pins', 
     assert.deepEqual(migrated.currentDate, saved.currentDate);
     assert.deepEqual(migrated.journalEntries, saved.journalEntries);
   });
-  test('nothing else changes', () => {
-    const { schemaVersion: _version, otherNotes: _notes, mapData: _map, currentLocationHex: _hex, ...rest } = migrated;
+  test('nothing else changes, besides an empty list of NPCs (v15)', () => {
+    const { schemaVersion: _version, otherNotes: _notes, mapData: _map, currentLocationHex: _hex, npcs, ...rest } = migrated;
     const { schemaVersion: _savedVersion, otherNotes: _savedNotes, ...savedRest } = saved;
     assert.deepEqual(rest, savedRest);
+    assert.deepEqual(npcs, []);
   });
   test('a second load changes nothing', () => {
     assert.deepEqual(migrateCharacter(clone(migrated) as never), migrated);
@@ -816,5 +836,135 @@ describe('Scenario 24: a v12 save from main, with Fairy time and old map pins', 
     test('a second load changes nothing', () => {
       assert.deepEqual(migrateCharacter(clone(repaired) as never), repaired);
     });
+  });
+});
+
+// ── v15: kinds of paths and POIs, ley lines recorded as found, their spells ──
+
+/** A save from schema 14, the last version before paths had a kind. */
+function baseV14(mapData: unknown): AnyData {
+  const data = baseV13(mapData);
+  data.schemaVersion = 14;
+  return data;
+}
+
+const path = (id: string, type: unknown, hexes: unknown, extra: AnyData = {}): AnyData =>
+  ({ id, name: id, type, color: '#c4a35a', hexes, notes: '', ...extra });
+
+describe('Scenario 25: v14 → v15 gives every path a kind, from its type', () => {
+  const m = migrateCharacter(baseV14({
+    pois: [],
+    fairyDoors: [],
+    leyLines: [
+      path('a', 'Ley line', ['0303', '0404']),
+      path('b', '', ['0303', '0404']),
+      path('c', 'Leyline (dormant)', ['0303', '0404']),
+      path('d', 'Ancient Road', ['0303', '0404']),
+      path('e', 'Valley road', ['0303', '0404']),
+      path('f', 'Ward', ['0303', '0404'], { kind: 'leyLine' }), // a hand edit: a valid kind stays
+      path('g', 7, ['0303', '0404']), // a type that isn't text is read as its text, "7"
+    ],
+    draftLeyLine: { name: 'D', type: 'Old road', color: '#c4a35a', notes: '', hexes: [] },
+  }) as never);
+  test('a type naming a ley line, or a blank one, makes a ley line; anything else another path', () => {
+    assert.deepEqual(m.mapData.leyLines.map((l) => [l.id, l.kind]), [
+      ['a', 'leyLine'], ['b', 'leyLine'], ['c', 'leyLine'], ['d', 'other'], ['e', 'other'], ['f', 'leyLine'], ['g', 'other'],
+    ]);
+  });
+  test('the line being drawn gets one too', () => assert.equal(m.mapData.draftLeyLine?.kind, 'other'));
+  test('types and everything else stay as they were', () => {
+    assert.deepEqual(m.mapData.leyLines.map((l) => l.type), ['Ley line', '', 'Leyline (dormant)', 'Ancient Road', 'Valley road', 'Ward', '7']);
+    assert.equal(m.otherNotes, '');
+  });
+  test('on a current save a kind is kept, whatever the type says', () => {
+    const current = migrateCharacter(baseV13({ pois: [], fairyDoors: [], leyLines: [path('r', 'Old road', ['0303', '0404'], { kind: 'leyLine' })] }) as never);
+    assert.equal(current.mapData.leyLines[0].kind, 'leyLine');
+  });
+  test('a kind that is not one is worked out again from the type', () => {
+    const kinds = ['road', 'LeyLine', '', null, 3, { a: 1 }].map((kind) =>
+      migrateCharacter(baseV13({ pois: [], fairyDoors: [], leyLines: [path('x', 'Old road', ['0303', '0404'], { kind })] }) as never).mapData.leyLines[0].kind,
+    );
+    assert.deepEqual(kinds, ['other', 'other', 'other', 'other', 'other', 'other']);
+  });
+  test('a second load changes nothing', () => assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m)));
+});
+
+describe('Scenario 26: a ley line keeps the hexes it has, even one or none; other paths still need 2', () => {
+  const m = migrateCharacter(baseV13({
+    pois: [],
+    fairyDoors: [],
+    leyLines: [
+      path('one', 'Ley line', ['0606']),
+      path('none', 'Ley line', []),
+      path('missing', 'Ley line', undefined),
+      path('text', 'Ley line', 'ran past the Old Stones'),
+      path('off', 'Ley line', ['9999', '0606', 'zz']),
+      path('road', 'Old road', ['0606']),
+    ],
+  }) as never);
+  test('ley lines with one hex, none, or hexes that are not a list are kept', () => {
+    assert.deepEqual(m.mapData.leyLines.map((l) => [l.id, l.hexes]), [
+      ['one', ['0606']], ['none', []], ['missing', []], ['text', []], ['off', ['0606']],
+    ]);
+  });
+  test('what was left out of them, and the road with one hex, are listed in otherNotes', () => {
+    assert.equal(m.otherNotes, [
+      UNPLACED_HEADING,
+      '- Ley line text: hexes ran past the Old Stones left out (not a list of hexes)',
+      '- Ley line off: hexes 9999, zz left out (not on the map)',
+      '- Old road road (hexes 0606)',
+    ].join('\n'));
+  });
+  test('the map still has every kept line, each with a kind and a list of hexes', () => {
+    assert.ok(m.mapData.leyLines.every((l) => l.kind === 'leyLine' && Array.isArray(l.hexes)));
+  });
+  test('a second load changes nothing', () => assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m)));
+});
+
+describe("Scenario 27: a POI's kind is kept if it's one of the kinds, and never guessed", () => {
+  const poi = (id: string, extra: AnyData = {}): AnyData => ({ id, hex: '0303', name: id, notes: '', ...extra });
+  const m = migrateCharacter(baseV13({
+    pois: [
+      poi('tower', { kind: 'tower' }),
+      poi('other', { kind: 'other' }),
+      poi('none'),
+      poi('castle', { kind: 'castle' }),
+      poi('caps', { kind: 'Tower' }),
+      poi('number', { kind: 3 }),
+      poi('proto', { kind: '__proto__' }),
+      poi('ctor', { kind: 'constructor' }),
+      poi('null', { kind: null }),
+    ],
+    fairyDoors: [],
+    leyLines: [],
+  }) as never);
+  test('the kinds are kept; anything else is removed, so the POI gets the plain marker', () => {
+    assert.deepEqual(m.mapData.pois.map((p) => [p.id, 'kind' in p ? p.kind : '(none)']), [
+      ['tower', 'tower'], ['other', 'other'], ['none', '(none)'], ['castle', '(none)'], ['caps', '(none)'],
+      ['number', '(none)'], ['proto', '(none)'], ['ctor', '(none)'], ['null', '(none)'],
+    ]);
+  });
+  test('POIs from before v15 get no kind, even names that suggest one', () => {
+    const old = migrateCharacter(baseV14({ pois: [poi('Old Tower'), poi('Hoarblight Keep'), poi('Lankshorn')], fairyDoors: [], leyLines: [] }) as never);
+    assert.ok(old.mapData.pois.every((p) => !('kind' in p)), JSON.stringify(old.mapData.pois));
+  });
+  test('a second load changes nothing', () => assert.equal(JSON.stringify(migrateCharacter(clone(m) as never)), JSON.stringify(m)));
+});
+
+describe("Scenario 28: a ley line's spell, once learned, is kept if it's well formed", () => {
+  const spellOf = (spell: unknown) =>
+    migrateCharacter(baseV13({ pois: [], fairyDoors: [], leyLines: [path('l', 'Ley line', ['0303'], { spell })] }) as never).mapData.leyLines[0].spell;
+  test('a spell with a name is kept; its rank becomes a whole number of at least 1', () => {
+    assert.deepEqual(spellOf({ name: 'Web', rank: 2 }), { name: 'Web', rank: 2 });
+    assert.deepEqual(
+      [2.7, 0, -3, 'x', null, undefined, 1e400].map((rank) => spellOf({ name: 'Web', rank })?.rank),
+      [2, 1, 1, 1, 1, 1, 1],
+    );
+    assert.deepEqual(spellOf({ name: 7, rank: 1 }), { name: '7', rank: 1 });
+  });
+  test("a spell without a name, or that isn't an object, is removed: the line's spell isn't known", () => {
+    for (const spell of [undefined, null, 'Web', 5, [], {}, { name: '' }, { name: '  ', rank: 2 }, { name: { a: 1 } }]) {
+      assert.equal(spellOf(spell), undefined, JSON.stringify(spell));
+    }
   });
 });
