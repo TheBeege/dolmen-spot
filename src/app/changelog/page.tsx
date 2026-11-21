@@ -32,7 +32,7 @@ const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-21',
     title: 'Hex map, Journal, time in Fairy, printable sheets, and safer saves',
-    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 25, 27],
+    prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 25, 27, 29],
     sections: [
       {
         heading: 'Printable PDF character sheets',
@@ -106,6 +106,14 @@ const ENTRIES: ChangelogEntry[] = [
           'On tablets and computers, item notes get most of the row and the name a quarter of it, and spell books and scrolls line up with the other items. Long names wrap instead of being cut off, pressing Enter in a name moves on to its Slots, and pasting several lines into a name joins them with spaces.',
           'On phones, an item\'s notes get a full-width line of their own, every field is labelled, and spell books and scrolls are laid out like the other items. Inventory columns line up when you carry bags, sacks, or pouches.',
           'Clicking a coin\'s or a save target\'s name puts the cursor in its field, and screen readers hear a distinct name for each item\'s name field and for each list\'s and spell book\'s add buttons.',
+        ],
+      },
+      {
+        heading: 'Tabs and header',
+        changes: [
+          'On tablets and computers every tab is always visible at any text size, wrapping onto a second line when they don\'t fit. On phones the tabs still scroll sideways, with a fade and an arrow button showing which way there are more, and the tab you\'re on is always scrolled into view.',
+          'With large text, the header no longer hides your character\'s name behind its buttons: they move to their own line when there isn\'t room, and on the smallest phones they always do.',
+          'Screen readers announce the tabs as tabs and say which one is open; the arrow keys, Home, and End move between them, and Enter or Space opens one. After you pick, add, or delete a character from the header\'s list, keyboard focus stays there, and in Chrome, Tab no longer leaves the field you\'re on hidden under the header.',
         ],
       },
       {
