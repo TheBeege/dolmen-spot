@@ -574,29 +574,22 @@ test('importing a file from a newer version is refused, alone or in a list', () 
     CURRENT_SCHEMA_VERSION,
     'a schemaVersion of digits is read as its number, and migrated from it',
   );
-  assert.throws(
+  assert.doesNotThrow(
     () => parseImportedCharacter(JSON.stringify({ ...fromNewerVersion('Future'), schemaVersion: String(CURRENT_SCHEMA_VERSION + 1) })),
-    isImportError(IMPORT_MESSAGES.newerVersion),
-    'so digits above this version are from a newer version',
+    'no release saves a string, so digits above this version are not from a newer one',
   );
 });
 
-test('a schemaVersion of digits above this version\'s ("99") is from a newer version: set aside unchanged on every visit', () => {
+test('a schemaVersion of digits above this version\'s ("101", what the old loop made of "10") opens as it did, on every visit', () => {
   const today = makeChar('Today');
-  const later = { ...fromNewerVersion('Later'), schemaVersion: '99' };
-  const ls = new FakeStorage({ [CHARS]: JSON.stringify([today, later]), [ACTIVE]: today.id });
+  const quirk = { ...makeChar('Quirk'), schemaVersion: '101' };
+  const ls = new FakeStorage({ [CHARS]: JSON.stringify([today, quirk]), [ACTIVE]: today.id });
   for (let visit = 1; visit <= 3; visit++) {
     const s = createCharacterStore(ls);
-    const { characters } = s.load();
-    assert.deepEqual(names(characters), ['Today'], `visit ${visit}`);
-    const [entry] = s.getStatus().setAside;
-    assert.equal(entry.reason, 'newer-version');
-    assert.deepEqual(entry.value, later, 'not migrated or repaired');
-    s.saveCharacters([{ ...characters[0], otherNotes: `visit ${visit}` }]);
-    assert.equal(JSON.stringify(stored(ls)[1]), JSON.stringify(later), 'carried byte for byte, its version still the string "99"');
+    assert.deepEqual(names(s.load().characters), ['Today', 'Quirk'], `visit ${visit}`);
+    assert.deepEqual(s.getStatus().setAside, []);
   }
-  assert.deepEqual(ls.recoveryKeys(), []);
-  assert.throws(() => parseImportedCharacter(JSON.stringify(later)), isImportError(IMPORT_MESSAGES.newerVersion));
+  assert.equal(parseImportedCharacter(JSON.stringify(quirk)).name, 'Quirk');
 });
 
 test('a schemaVersion that is not a finite number is not "newer": the character loads, the same on every visit', () => {

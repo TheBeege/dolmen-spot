@@ -235,7 +235,10 @@ describe('Dwemer shards', () => {
 
 describe('a schemaVersion saved as a string of digits', () => {
   test('is read as the number it spells; anything else is left as it is', () => {
-    assert.deepEqual(['10', ' 12 ', '014', '99'].map(readSchemaVersion), [10, 12, 14, 99]);
+    assert.deepEqual(['10', ' 12 ', '014'].map(readSchemaVersion), [10, 12, 14]);
+    assert.equal(readSchemaVersion(String(CURRENT_SCHEMA_VERSION)), CURRENT_SCHEMA_VERSION);
+    // No release saved a string, so digits above this version aren't a newer version.
+    for (const v of [String(CURRENT_SCHEMA_VERSION + 1), '101', '99']) assert.equal(readSchemaVersion(v), v, v);
     for (const v of ['', ' ', 'abc', '1e1', '10.5', '-3', '0x10', 12, null, undefined]) assert.equal(readSchemaVersion(v), v, String(v));
   });
 

@@ -24,13 +24,18 @@ export const CURRENT_SCHEMA_VERSION = 15;
 
 /**
  * A saved `schemaVersion` as a number. Some old saves have it as a string of
- * digits, such as "10", which counts as the number it spells; any other value
- * is returned as it is. migrateCharacter reads the version through this, and
- * so does the store's check for a save from a newer version, so the two agree:
- * "10" is migrated from version 10, and "99" is from a newer version.
+ * digits, such as "10", which counts as the number it spells, up to this
+ * version; any other value is returned as it is. No release has saved a
+ * string, so digits above this version aren't from a newer release: they're
+ * what the old migration loop left ("10" became "101"), and such a character
+ * opened as it was, so it still does. migrateCharacter reads the version
+ * through this, and so does the store's check for a save from a newer
+ * version, so the two agree.
  */
 export function readSchemaVersion(value: unknown): unknown {
-  return typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value) : value;
+  if (typeof value !== 'string' || !/^\s*\d+\s*$/.test(value)) return value;
+  const version = Number(value);
+  return version <= CURRENT_SCHEMA_VERSION ? version : value;
 }
 
 const DEFAULT_CALENDAR_DATE = { day: 1, month: 0, year: 1 };

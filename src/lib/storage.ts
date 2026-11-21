@@ -17,8 +17,8 @@ import { SAVE_DATA_FORMAT, SAVE_DATA_IMPORT_MESSAGE } from './save-data-file';
  *    appends it again, and the next load tries it again. That covers a
  *    character whose migration throws (a fixed migration brings it back; it's
  *    also copied to a backup, best-effort) and one saved by a newer version of
- *    Dolmen Spot, with a finite numeric `schemaVersion` (or a string of digits
- *    spelling one) above this version's (it isn't migrated or "repaired", so
+ *    Dolmen Spot, with a finite numeric `schemaVersion` above this version's
+ *    (it isn't migrated or "repaired", so
  *    it opens again once the newer version is deployed).
  * 2. Saved data that can never become a character is only removed once a
  *    verified copy of it exists under a `dolmenwood-recovery-*` key: the whole
@@ -335,8 +335,9 @@ function looksLikeCharacter(data: unknown): boolean {
 /**
  * Saved by a newer version of Dolmen Spot. Only a finite numeric
  * `schemaVersion` counts. A string of digits, an old quirk, is read as its
- * number (readSchemaVersion), just as `migrateCharacter` reads it, so "99" is
- * newer while "10" is migrated from version 10. Any other string isn't a
+ * number only up to this version (readSchemaVersion), just as
+ * `migrateCharacter` reads it, so "10" is migrated from version 10 and a
+ * string is never newer. Any other string isn't a
  * version, and a hand-edited `1e999` (Infinity) would be written back as
  * `null`, so it couldn't stay unchanged anyway.
  */
