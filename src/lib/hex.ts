@@ -30,6 +30,28 @@ export function isValidHex(coord: unknown): coord is HexCoord {
 }
 
 /**
+ * The hex a player typed, or null if it isn't a hex on the map. Spaces
+ * around it are ignored, and a short number is left-padded ("303" → "0303"),
+ * since players often leave off the leading zero.
+ */
+export function parseTypedHex(text: string): HexCoord | null {
+  const typed = text.trim();
+  const hex = /^\d{1,4}$/.test(typed) ? typed.padStart(4, '0') : '';
+  return isValidHex(hex) ? hex : null;
+}
+
+/**
+ * A field for an optional hex, read: blank is no hex (''); anything else is
+ * the hex typed (parseTypedHex), or why it isn't one.
+ */
+export function readHexInput(text: string): { hex: HexCoord | ''; error?: undefined } | { hex?: undefined; error: string } {
+  const typed = text.trim();
+  if (typed === '') return { hex: '' };
+  const hex = parseTypedHex(typed);
+  return hex ? { hex } : { error: `No hex "${typed}" on the map.` };
+}
+
+/**
  * Pixel coordinates (in the source image's frame) for the center of a hex.
  * Useful for rendering an SVG that scales with viewBox = (0, 0, imageWidth, imageHeight).
  */

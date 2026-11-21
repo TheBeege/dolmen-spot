@@ -40,8 +40,11 @@ import type {
   CountingStart,
   FairyDate,
   FairyVisit,
+  HexCoord,
   JournalEntry,
 } from './types';
+import { isValidHex } from './hex';
+import { getPlaceNameOn } from './map-data';
 import {
   MAX_YEAR,
   daysBetween,
@@ -188,6 +191,21 @@ export function getCurrentTimelinePoint(character: WithClock): TimelinePoint & {
     sinceReturnFrom: last && !open ? last.id : undefined,
     livedDay: getLivedDays(character),
   };
+}
+
+/**
+ * Where the character is now, to stamp on a new journal entry alongside
+ * getCurrentTimelinePoint: the location typed on the Adventuring tab, and the
+ * map's current hex. In Fairy that hex is where the party left Dolmenwood,
+ * not where they are, so there's none. An entry stamped without one has no
+ * `hex`; the player can set it in the journal.
+ */
+export function getCurrentPlace(
+  character: Pick<Character, 'currentLocation' | 'currentLocationHex' | 'fairyVisits'>,
+): Pick<JournalEntry, 'location' | 'hex'> {
+  const location = character.currentLocation ?? '';
+  const hex = character.currentLocationHex;
+  return isValidHex(hex) && !isInFairy(character) ? { location, hex } : { location };
 }
 
 /**
@@ -471,7 +489,7 @@ export function enterFairy(character: Character): Partial<Character> | null {
     id: crypto.randomUUID(),
     date: { ...enteredOn },
     fairyEvent: { visitId: visit.id, kind: 'entered' },
-    location: character.currentLocation ?? '',
+    ...getCurrentPlace(character),
     text: `Entered Fairy (visit ${visits.length + 1}).`,
   };
   const fairyVisits = [...visits, visit];
@@ -514,17 +532,29 @@ export function setDaysInFairy(character: Character, days: number): Partial<Char
  * counts the same days; a study start the timeline no longer reaches (the
  * calendar was moved back past it, or days in Fairy were taken back) moves to
  * wherever its lived day now falls.
+ *
+ * `cameBackIn` is the map hex the party came back in ('' for none), by
+ * default the map's current hex: where they left from, as the map still
+ * shows it. The return's journal entry is stamped with it, and with where
+ * they're back at (getReturnPlace), which becomes the party's current
+ * location; the map's current hex moves to the hex, if it's another.
  */
-export function returnFromFairy(character: Character, returnedOn: CalendarDate): Partial<Character> | null {
+export function returnFromFairy(
+  character: Character,
+  returnedOn: CalendarDate,
+  cameBackIn?: HexCoord | '',
+): Partial<Character> | null {
   const open = getOpenFairyVisit(character);
   if (!open || !canReturnOn(open, returnedOn) || !isWithinCalendar(returnedOn)) return null;
   const visits = getFairyVisits(character);
   const date = { day: returnedOn.day, month: returnedOn.month, year: returnedOn.year };
+  const { hex, location, sameHex } = getReturnPlace(character, cameBackIn);
   const entry: JournalEntry = {
     id: crypto.randomUUID(),
     date: { ...date },
     fairyEvent: { visitId: open.id, kind: 'returned' },
-    location: character.currentLocation ?? '',
+    location,
+    ...(hex ? { hex } : {}),
     text: describeReturn(visits.length, open.daysInFairy, open.enteredOn, date),
   };
   const fairyVisits = visits.map((v) => (v.id === open.id ? { ...v, returnedOn: { ...date } } : v));
@@ -532,9 +562,67 @@ export function returnFromFairy(character: Character, returnedOn: CalendarDate):
     fairyVisits,
     currentDate: { ...date },
     journalEntries: [...(character.journalEntries ?? []), entry],
+    currentLocation: location,
+    ...(sameHex ? {} : { currentLocationHex: hex }),
     ...refitCountingStart(character, fairyVisits, open.enteredOn),
     ...refitOvertakenStudy(character, fairyVisits, open),
   };
+}
+
+/** Where the party is back at after coming back from Fairy (getReturnPlace). */
+export interface ReturnPlace {
+  hex: HexCoord | ''; // the map hex they came back in, or '' for none
+  location: string; // where they're back at, which becomes the current location ('' for nowhere known)
+  sameHex: boolean; // back in the hex they left from (or, having left from no hex, in none)
+}
+
+type PlaceFacts = Pick<Character, 'currentLocation' | 'currentLocationHex' | 'fairyVisits' | 'journalEntries' | 'mapData'>;
+
+/**
+ * Where the party is back at if they come back from Fairy now, in
+ * `cameBackIn` (see returnFromFairy, which uses this, so the return dialog's
+ * preview and the return agree):
+ *   - back in the hex they left from (or, having left from no hex, back in
+ *     none): the location they left from, as this visit's "Entered Fairy"
+ *     entry recorded it, or the current location if that entry is gone.
+ *     What was typed there while away was a place in Fairy;
+ *   - back in another hex: the name of a place marked on that hex, if there
+ *     is one;
+ *   - back in no hex, having left from one: nowhere known.
+ */
+export function getReturnPlace(character: PlaceFacts, cameBackIn?: HexCoord | ''): ReturnPlace {
+  const leftFrom = isValidHex(character.currentLocationHex) ? character.currentLocationHex : '';
+  const hex = cameBackIn === undefined ? leftFrom : isValidHex(cameBackIn) ? cameBackIn : '';
+  const sameHex = hex === leftFrom;
+  const location = sameHex ? locationLeftFrom(character) : getPlaceNameOn(character.mapData, hex);
+  return { hex, location, sameHex };
+}
+
+// Where the party left from on the open visit: the location its "Entered
+// Fairy" entry recorded, or the current location if that entry is gone.
+function locationLeftFrom(character: PlaceFacts): string {
+  const open = getOpenFairyVisit(character);
+  const entries = Array.isArray(character.journalEntries) ? character.journalEntries : [];
+  const entered = open ? entries.find((e) => e?.fairyEvent?.kind === 'entered' && e.fairyEvent.visitId === open.id) : undefined;
+  if (typeof entered?.location === 'string') return entered.location;
+  return typeof character.currentLocation === 'string' ? character.currentLocation : '';
+}
+
+/**
+ * What coming back to `place` does to where the party is, in words, for the
+ * return dialog: where they're back at, or what's cleared. '' when there's
+ * nothing to say (no location before or after, and no hex either way).
+ */
+export function describeReturnPlace(place: ReturnPlace, currentLocation: unknown): string {
+  const location = place.location.trim();
+  if (location) return `${place.sameHex ? 'Back at' : 'At'} ${location}${place.hex ? `, hex ${place.hex}` : ''}.`;
+  const hadLocation = typeof currentLocation === 'string' && currentLocation.trim() !== '';
+  const cleared = hadLocation ? 'Your location will be cleared.' : '';
+  if (place.hex) return [`${place.sameHex ? 'Back in' : 'In'} hex ${place.hex}.`, cleared].filter(Boolean).join(' ');
+  if (!place.sameHex) {
+    return hadLocation ? "Your location and the map's current hex will be cleared." : "The map's current hex will be cleared.";
+  }
+  return cleared;
 }
 
 // The study with its start moved to a point on the timeline.
