@@ -31,7 +31,7 @@ type ChangelogEntry = {
 const ENTRIES: ChangelogEntry[] = [
   {
     date: '2026-11-21',
-    title: 'Hex map, Journal, time in Fairy, printable sheets, and safer saves',
+    title: 'Hex map, Journal, time in Fairy, spell descriptions, and printable sheets',
     prNumbers: [4, 10, 11, 14, 16, 18, 20, 21, 22, 23, 24, 25, 27, 29],
     sections: [
       {
