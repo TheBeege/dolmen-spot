@@ -3,15 +3,18 @@
 // draws them as markers (MarkerShape); the hex inspector beside its items and
 // in its kind picker (PoiIcon, DoorIcon). They're decorative: the marker or
 // control that shows one carries the name.
-import type { SVGProps } from 'react';
+import { memo, type SVGProps } from 'react';
 import type { PoiKind } from '@/lib/types';
+import { POI_KINDS } from '@/lib/map-data';
 import { DOOR_GLYPH, GLYPH_CENTER, GLYPH_EXTENT, POI_GLYPHS, type Glyph } from '@/lib/map-glyphs';
 
+// The theme's colours, which the rest of the map uses too.
 export const PARCHMENT = '#f5e6c8';
 export const NIGHT = '#1a1a2e';
 export const GOLD = '#c4a35a';
-/** A point of interest without a kind ('other'): a plain red marker, as before kinds. */
-export const POI_FILL = '#8b2500';
+// The markers' own: a point of interest without a kind ('other') keeps the
+// plain red marker it had before kinds; fairy doors are lavender.
+const POI_FILL = '#8b2500';
 export const DOOR_FILL = '#a774d6';
 
 /** What a marker looks like: its disc, its rim and, unless it's a plain one, its glyph. */
@@ -23,6 +26,13 @@ export interface MarkerLook {
   ink: string;
 }
 
+type GlyphKind = Exclude<PoiKind, 'other'>;
+
+// Each look is made once, so that a marker gets the same object on every
+// render and MarkerShape (memoised) can skip it while the map pans.
+const KIND_LOOKS = Object.fromEntries(
+  POI_KINDS.filter((k): k is GlyphKind => k !== 'other').map((k) => [k, { fill: NIGHT, rim: GOLD, glyph: POI_GLYPHS[k], ink: PARCHMENT }]),
+) as Record<GlyphKind, MarkerLook>;
 const PLAIN_POI: MarkerLook = { fill: POI_FILL, rim: PARCHMENT, glyph: null, ink: PARCHMENT };
 const DOOR: MarkerLook = { fill: DOOR_FILL, rim: PARCHMENT, glyph: DOOR_GLYPH, ink: NIGHT };
 
@@ -34,7 +44,7 @@ const DOOR: MarkerLook = { fill: DOOR_FILL, rim: PARCHMENT, glyph: DOOR_GLYPH, i
 export function markerLook(kind: PoiKind | 'door'): MarkerLook {
   if (kind === 'door') return DOOR;
   if (kind === 'other') return PLAIN_POI;
-  return { fill: NIGHT, rim: GOLD, glyph: POI_GLYPHS[kind], ink: PARCHMENT };
+  return KIND_LOOKS[kind];
 }
 
 // How much of the disc inside its rim the glyph's extent takes up.
@@ -45,7 +55,13 @@ const GLYPH_FILL = 0.9;
  * (half of it outside `r`), and its glyph. Drawn in the units of the
  * surrounding SVG.
  */
-export function MarkerShape({ look, cx, cy, r, rim }: { look: MarkerLook; cx: number; cy: number; r: number; rim: number }) {
+export const MarkerShape = memo(function MarkerShape({ look, cx, cy, r, rim }: {
+  look: MarkerLook;
+  cx: number;
+  cy: number;
+  r: number;
+  rim: number;
+}) {
   const scale = ((r - rim / 2) * GLYPH_FILL) / GLYPH_EXTENT;
   return (
     <>
@@ -66,7 +82,7 @@ export function MarkerShape({ look, cx, cy, r, rim }: { look: MarkerLook; cx: nu
       )}
     </>
   );
-}
+});
 
 type IconProps = Omit<SVGProps<SVGSVGElement>, 'children' | 'viewBox'>;
 

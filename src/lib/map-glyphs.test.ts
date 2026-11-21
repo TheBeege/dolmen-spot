@@ -5,11 +5,12 @@ import { DOOR_GLYPH, GLYPH_CENTER, GLYPH_EXTENT, POI_GLYPHS, type Glyph } from '
 import { POI_KINDS } from './map-data';
 
 /**
- * Every point a path names, curve control points included, for paths made of
- * absolute M, L, H, V, C and Z commands. A Bézier curve lies inside the hull
- * of its control points, so if they're all inside a circle, so is the curve.
+ * Every point a path names, for paths made of absolute M, L, H, V, C and Z
+ * commands: with `controls`, curve control points too. A Bézier curve lies
+ * inside the hull of its control points, so if they're all inside a circle,
+ * so is the curve. Without them, only points the path passes through.
  */
-function pathPoints(d: string): { x: number; y: number }[] {
+function pathPoints(d: string, { controls = true } = {}): { x: number; y: number }[] {
   const tokens = d.match(/[A-Za-z]|-?(?:\d+\.?\d*|\.\d+)(?:e-?\d+)?/g) ?? [];
   assert.equal(tokens.join(''), d.replace(/[\s,]+/g, ''), `only commands and numbers in ${d}`);
   const points: { x: number; y: number }[] = [];
@@ -30,7 +31,10 @@ function pathPoints(d: string): { x: number; y: number }[] {
     if (cmd === 'H') x = next();
     else if (cmd === 'V') y = next();
     else if (cmd === 'C') {
-      for (let k = 0; k < 2; k++) points.push({ x: next(), y: next() });
+      for (let k = 0; k < 2; k++) {
+        const control = { x: next(), y: next() };
+        if (controls) points.push(control);
+      }
       x = next();
       y = next();
     } else {
@@ -62,8 +66,10 @@ describe('marker glyphs', () => {
   });
 
   test('glyphs fill their extent about as much as each other, so none looks small', () => {
+    // Measured at points the outline passes through: control points lie outside it.
     for (const [name, glyph] of glyphs) {
-      const far = Math.max(...glyph.body.flatMap(pathPoints).map((p) => Math.hypot(p.x - GLYPH_CENTER, p.y - GLYPH_CENTER)));
+      const onCurve = glyph.body.flatMap((d) => pathPoints(d, { controls: false }));
+      const far = Math.max(...onCurve.map((p) => Math.hypot(p.x - GLYPH_CENTER, p.y - GLYPH_CENTER)));
       assert.ok(far >= GLYPH_EXTENT * 0.75, `${name} reaches only ${far.toFixed(2)}`);
     }
   });
@@ -72,6 +78,7 @@ describe('marker glyphs', () => {
     assert.deepEqual(pathPoints('M1 2 L3 4 H5 V6 C7 8 9 10 11 12 Z'), [
       { x: 1, y: 2 }, { x: 3, y: 4 }, { x: 5, y: 4 }, { x: 5, y: 6 }, { x: 7, y: 8 }, { x: 9, y: 10 }, { x: 11, y: 12 },
     ]);
+    assert.deepEqual(pathPoints('M1 2 C7 8 9 10 11 12 Z', { controls: false }), [{ x: 1, y: 2 }, { x: 11, y: 12 }]);
     assert.throws(() => pathPoints('M1 2 l3 4 Z'), /absolute/);
     assert.throws(() => pathPoints('M1 2 A1 1 0 0 1 3 4 Z'), /absolute/);
   });

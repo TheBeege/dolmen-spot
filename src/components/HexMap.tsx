@@ -63,7 +63,8 @@ interface HexMapProps {
   onOpenJournal: (hex: HexCoord) => void; // opens the Journal tab, filtered to that hex
 }
 
-// --- Colours (the markers' are in map-icons.tsx) ---
+// --- Colours: the terrain's. The theme's parchment, night and gold, and the
+// markers' own colours, are in map-icons.tsx. ---
 const TERRAIN_FILL = { woods: '#2d4a2e', open: '#4a3a26' } as const;
 const GRID_STROKE = '#5a3a28';
 
@@ -144,19 +145,19 @@ function notesPreview(notes: string): string {
 }
 
 /** One of a hex's items: a point of interest or a fairy door. */
-type HexItem = { kind: 'poi'; item: MapPOI } | { kind: 'door'; item: FairyDoor };
+type HexItem = { type: 'poi'; item: MapPOI } | { type: 'door'; item: FairyDoor };
 
 /** The marker an item gets: a fairy door, a point of interest's kind icon, or the plain dot. */
 function markerKindOf(e: HexItem): MarkerKind {
-  if (e.kind === 'door') return 'door';
+  if (e.type === 'door') return 'door';
   return poiKindOf(e.item) === 'other' ? 'poi' : 'icon';
 }
 
-const lookOf = (e: HexItem) => markerLook(e.kind === 'door' ? 'door' : poiKindOf(e.item));
+const lookOf = (e: HexItem) => markerLook(e.type === 'door' ? 'door' : poiKindOf(e.item));
 
 /** An item in a combined marker's list: "Lankshorn (town)". */
 function itemSummary(e: HexItem): string {
-  const what = e.kind === 'door' ? 'fairy door' : POI_KIND_NAMES[poiKindOf(e.item)].toLowerCase();
+  const what = e.type === 'door' ? 'fairy door' : POI_KIND_NAMES[poiKindOf(e.item)].toLowerCase();
   return `${e.item.name || 'Unnamed'} (${what})`;
 }
 
@@ -937,8 +938,8 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
       const c = hexCenterOf(hex);
       if (!c) return;
       const items: HexItem[] = [
-        ...bucket.pois.map((poi) => ({ kind: 'poi' as const, item: poi })),
-        ...bucket.doors.map((door) => ({ kind: 'door' as const, item: door })),
+        ...bucket.pois.map((poi) => ({ type: 'poi' as const, item: poi })),
+        ...bucket.doors.map((door) => ({ type: 'door' as const, item: door })),
       ];
       const visible = items.slice(0, MAX_VISIBLE_MARKERS);
       const overflow = items.length - visible.length;
@@ -958,7 +959,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
         const m = slotAt(i);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
         let label: string;
-        if (entry.kind === 'poi') {
+        if (entry.type === 'poi') {
           label = `${poiLabel(entry.item)}${notesPreview(entry.item.notes)}`;
         } else {
           const door = entry.item;
@@ -968,7 +969,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
         }
         // The icon is decorative: the marker's label names the item and its kind.
         els.push(
-          <g key={`${entry.kind}-${entry.item.id}`} {...markerProps} aria-label={label}>
+          <g key={`${entry.type}-${entry.item.id}`} {...markerProps} aria-label={label}>
             <title>{label}</title>
             <MarkerShape
               look={lookOf(entry)}
@@ -1016,7 +1017,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
           y={c.y + o.y + r * 0.5}
           textAnchor="middle"
           fontSize={r * 1.4}
-          // Dark on the pale door fill, like a door's ✦; pale on the others.
+          // Dark on the pale door fill, like a door's glyph; pale on the others.
           fill={fill === DOOR_FILL ? NIGHT : PARCHMENT}
           fontWeight="bold"
           pointerEvents="none"
@@ -1596,7 +1597,8 @@ function POIEditor({
     <div
       ref={rootRef}
       role="group"
-      aria-label={`Point of interest ${label}`}
+      // Names the kind, which the row shows only as its (decorative) icon.
+      aria-label={`${POI_KIND_NAMES[kind]}: ${label}`}
       tabIndex={-1}
       data-focus-key={`item:${poi.id}`}
       className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
