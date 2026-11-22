@@ -53,9 +53,9 @@ export default defineConfig<MatrixOptions>({
       testIgnore: [
         ...(fontSize === A11Y_FONT_SIZE ? [] : [a11yTests]),
         // The audit sets the browser's font size through Chromium's settings,
-        // so exactly one project runs it — the first Chromium one, and only
-        // under its own script.
-        ...(browser.options.browserName === 'chromium' && fontSize === FONT_SIZES[0] && withAudit ? [] : [auditTests]),
+        // so exactly one project runs it — the smallest-font-size Chromium
+        // project, and only under its own script.
+        ...(browser.options.browserName === 'chromium' && fontSize === A11Y_FONT_SIZE && withAudit ? [] : [auditTests]),
       ],
     })),
   ),

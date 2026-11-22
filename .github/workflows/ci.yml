@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # The key the browser cache is stored under, shared by the jobs that install
+  # the browsers: the browser tests save it, and the audit reads it.
+  PLAYWRIGHT_CACHE_PREFIX: playwright-browsers
+
 concurrency:
   # One group per PR, so a new push cancels the PR's older run. Each push to
   # main gets its own group: in a shared group, a newer run would cancel a
@@ -64,6 +69,8 @@ jobs:
           # Skip installing the git hooks; CI never commits.
           HUSKY: 0
 
+      # Keep in step with the known-issues-audit job below: both key the browser
+      # cache by this version.
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -75,7 +82,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: ${{ env.PLAYWRIGHT_CACHE_PREFIX }}-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install the browsers and their system libraries
         if: steps.browsers.outputs.cache-hit != 'true'
@@ -111,11 +118,12 @@ jobs:
   known-issues-audit:
     name: Known issues audit
     runs-on: ubuntu-latest
-    # Longer than the test's own 20-minute timeout, so a slow walk is reported by
-    # Playwright — with the entries that matched nothing — rather than killed by
-    # the runner with no output at all. It also has npm ci, a cold browser
-    # install and a build to fit.
-    timeout-minutes: 30
+    # 20 (the test's own timeout) + 1 (npm ci) + 3 (a cold browser install with
+    # its system libraries) + 5 (the build's own cap) + 1 (the upload) ≈ 30, so
+    # 40 leaves room for a slow day. Above the test's timeout on purpose: a slow
+    # walk is then reported by Playwright — with the entries that matched
+    # nothing — rather than killed by the runner with no output at all.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
 
@@ -130,6 +138,8 @@ jobs:
           # Skip installing the git hooks; CI never commits.
           HUSKY: 0
 
+      # Keep in step with the known-issues-audit job below: both key the browser
+      # cache by this version.
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -142,7 +152,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: ${{ env.PLAYWRIGHT_CACHE_PREFIX }}-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install the browser and its system libraries
         if: steps.browsers.outputs.cache-hit != 'true'

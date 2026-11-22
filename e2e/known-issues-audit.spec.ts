@@ -24,7 +24,7 @@
 // project's settings are in force, before the app loads and again after the
 // walk, and it watches each page for page and console errors.
 import { expect, test } from '@playwright/test';
-import { describeKnownIssue, KNOWN_ISSUES, knownIssuesFor, type KnownIssue, type Problem, type Where } from './known-issues';
+import { describeKnownIssue, KNOWN_ISSUES, knownIssuesFor, type BrowserName, type KnownIssue, type Problem, type Where } from './known-issues';
 import { findA11yProblems } from './support/a11y';
 import { ALL_FIXTURES, openApp, openTab, TABS } from './support/app';
 import { installInPageHelpers } from './support/in-page';
@@ -39,6 +39,10 @@ test('every known issue still matches a problem', async ({ browser, browserName,
   // its own timeout rather than the suite's 30s, and the CI job's timeout is
   // longer still, so this one reports first.
   test.setTimeout(20 * 60_000);
+  // It sets the browser's font size through CDP, which only Chromium has, and
+  // the entries it can require are the ones Chromium shows. Playwright.config.ts
+  // keeps the file in the Chromium project at A11Y_FONT_SIZE.
+  expect(browserName, 'this audit runs in Chromium, whose settings it sets through CDP').toBe('chromium');
 
   /** The known issues a problem matched, by identity: an entry in KNOWN_ISSUES. */
   const matched = new Set<KnownIssue>();
@@ -76,15 +80,16 @@ test('every known issue still matches a problem', async ({ browser, browserName,
             // The accessibility tests run at A11Y_WIDTHS and A11Y_FONT_SIZE
             // (playwright.config.ts), so these are the states whose problems
             // they can leave to an entry.
-            if (fontSize !== A11Y_FONT_SIZE || !A11Y_STATES.has(width)) continue;
-            await visit(where, () => findA11yProblems(page));
-            visited.a11y++;
+            if (fontSize === A11Y_FONT_SIZE && A11Y_STATES.has(width)) {
+              await visit(where, () => findA11yProblems(page));
+              visited.a11y++;
+            }
+            // Again on the sheet, as the fixture does — on every tab, so a page
+            // style that pinned the root font size on any one of them is caught,
+            // rather than only the tab the walk happens to end on.
+            await expectMatrixSettings(page, browserName, fontSize);
           }
 
-          // Again on the sheet, as the fixture does — after the walk, so a page
-          // style that pinned the root font size on a tab is caught rather than
-          // hidden behind a check made before those tabs were open.
-          await expectMatrixSettings(page, browserName, fontSize);
           expect(errors, `page and console errors with ${at}`).toEqual([]);
         } finally {
           await context.close();
@@ -93,18 +98,32 @@ test('every known issue still matches a problem', async ({ browser, browserName,
     }
   }
 
-  // An entry that leaves out Chromium can't be required to match here; one that
-  // names no browser at all is every browser's, so it can.
-  const required = KNOWN_ISSUES.filter((issue) => issue.browsers === undefined || issue.browsers.includes('chromium'));
+  // The walk is only worth what it covered: a layout check per tab, fixture,
+  // width and font size, and an accessibility check per tab, fixture and
+  // accessibility width at its font size. A refactor that skips a width would
+  // otherwise leave this green with half the matrix unwalked.
+  expect(visited, `${TABS.length} tabs × ${ALL_FIXTURES.length} fixtures, walked in full`).toEqual({
+    layout: TABS.length * ALL_FIXTURES.length * WIDTHS.length * FONT_SIZES.length,
+    a11y: TABS.length * ALL_FIXTURES.length * A11Y_WIDTHS.length,
+  });
+
+  // An entry that leaves out this browser can't be required to match here; one
+  // that names no browser at all is every browser's, so it can.
+  const required = KNOWN_ISSUES.filter((issue) => issue.browsers === undefined || issue.browsers.includes(browserName as BrowserName));
   const requiredMatched = required.filter((issue) => matched.has(issue));
   const unused = required.filter((issue) => !matched.has(issue));
-  const webkitOnly = KNOWN_ISSUES.length - required.length;
+  // And an entry that leaves Chromium out must not match here either, or its
+  // declaration is wrong: the problem does show in this browser.
+  const misdeclared = KNOWN_ISSUES.filter((issue) => !required.includes(issue) && matched.has(issue));
+  const otherBrowserOnly = KNOWN_ISSUES.length - required.length;
   testInfo.annotations.push({ type: 'known issues', description: `${requiredMatched.length} of ${required.length} matched` });
+  const shared = `${TABS.length} tabs × ${ALL_FIXTURES.length} fixtures`;
   console.log(
-    `known-issues audit: layout ${visited.layout} checks (${WIDTHS.length} widths × ${FONT_SIZES.length} font sizes), ` +
-      `accessibility ${visited.a11y} checks (${A11Y_WIDTHS.length} widths × ${A11Y_FONT_SIZE}px); ` +
+    `known-issues audit: layout ${visited.layout} checks (${shared} × ${WIDTHS.length} widths × ${FONT_SIZES.length} font sizes), ` +
+      `accessibility ${visited.a11y} checks (${shared} × ${A11Y_WIDTHS.length} widths × ${A11Y_FONT_SIZE}px); ` +
       `${requiredMatched.length} of ${required.length} known issues matched a problem, ${unused.length} matched nothing` +
-      (webkitOnly ? ` (${webkitOnly} WebKit-only left out)` : ''),
+      (otherBrowserOnly ? ` (${otherBrowserOnly} left out, as this browser is not one of theirs)` : ''),
   );
+  expect(misdeclared.map(describeKnownIssue), 'these entries leave this browser out, but a problem in it matches them: widen them').toEqual([]);
   expect(unused.map(describeKnownIssue), 'known issues no problem matches any more: delete the entry (or fix the audit, if it misses the state)').toEqual([]);
 });
