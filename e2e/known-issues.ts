@@ -99,27 +99,6 @@ export const KNOWN_ISSUES: KnownIssue[] = [
     tabs: ['map'],
     match: /^(Ley Lines & Crossings|Points of Interest) › button\[type=button\] "Delete (ley line|POI) /,
   },
-
-  // ── Labels ───────────────────────────────────────────────────────────
-  {
-    issue: "Fields with a visible <label> that isn't tied to them (no htmlFor/id), so screen readers announce them without a name: character info, hit points, armour, retainers, bonus languages and symbiotic flesh.",
-    checks: ['label', 'select-name'],
-    tabs: ['character', 'combat', 'traits'],
-    match: /^(Character Info|Hit Points|Armour Class|Retainers|Languages|Kindred Features) › .*\(label "/,
-  },
-  {
-    issue: 'The "+ Add Rune..." picker has no label but its first option.',
-    checks: ['select-name'],
-    tabs: ['spells'],
-    match: /^Fairy Runes › select /,
-  },
-  {
-    issue: "Reference: at 320px the armour table scrolls sideways, but its scrolling box can't be reached with the keyboard.",
-    checks: ['scrollable-region-focusable'],
-    tabs: ['reference'],
-    match: /^Quick Reference › div /,
-    maxWidth: 320,
-  },
 ];
 
 export interface Problem {

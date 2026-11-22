@@ -37,6 +37,7 @@ import {
   getStudyProgress,
 } from '@/lib/livedTime';
 import { getJournalEntries } from '@/lib/journal';
+import { newId } from '@/lib/ids';
 import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
 import { errorClasses, formatYearNumber, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
@@ -245,7 +246,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
 
   const handleAddLightSource = (type: 'torch' | 'lantern' | 'candle') => {
     const source: ActiveLightSource = {
-      id: crypto.randomUUID(),
+      id: newId(),
       type,
       minutesRemaining: LIGHT_SOURCE_TYPES[type].minutes,
     };
@@ -496,8 +497,9 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
 
       {/* ── 5b. Current Location (existing) ──────────────────────── */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <label className={labelClasses}>Current Location</label>
+        <label htmlFor="current-location" className={labelClasses}>Current Location</label>
         <input
+          id="current-location"
           type="text"
           value={currentLocation}
           onChange={(e) => onChange({ currentLocation: e.target.value })}

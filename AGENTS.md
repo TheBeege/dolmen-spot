@@ -92,7 +92,7 @@ Next.js 16's `next build` no longer lints, so these checks do instead:
   - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
   - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
 - **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`, in two jobs:
-  - **Lint and typecheck**: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`. The release process looks this job up by name, so don't rename it.
+  - **Lint and typecheck**: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`. The release process looks up this job and **Browser tests** by name, so don't rename either.
     - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
     - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
   - **Browser tests**: `npm run test:e2e` (see Browser Tests). When it fails, the HTML report and traces are uploaded as the `playwright-report` artifact.
@@ -163,7 +163,7 @@ Production is https://www.dolmen.spot (the bare `dolmen.spot` redirects there): 
    git fetch origin
    sha=$(gh pr view <n> --json mergeCommit -q .mergeCommit.oid) && test -n "$sha" &&
      git log --first-parent --oneline "origin/release..$sha" &&
-     gh api "repos/TheBeege/dolmen-spot/commits/$sha/check-runs" --jq '.check_runs[] | select(.name == "Lint and typecheck") | "CI: \(.name): \(.status) \(.conclusion)"'
+     gh api "repos/TheBeege/dolmen-spot/commits/$sha/check-runs" --jq '.check_runs[] | select(.name == "Lint and typecheck" or .name == "Browser tests") | "CI: \(.name): \(.status) \(.conclusion)"'
    ```
 
    Check what it prints:
@@ -171,7 +171,7 @@ Production is https://www.dolmen.spot (the bare `dolmen.spot` redirects there): 
    - **First line:** it must be the merge commit of your release PR (or of its latest follow-up). If its subject doesn't name a PR (a custom merge subject, or a rebase merge), look the PR up as in step 1. If it's another PR, stop: `<n>` is wrong.
    - **No commits listed:** stop. `<n>` is wrong, the PR hasn't merged (the guard then stops before `git log`), or that commit is already on `release`.
    - **Other commits:** you must already have read each one, in step 2, step 3's re-run, or an earlier run of this check (this release's own changelog PRs excepted). If one is new, stop and read it as in step 2. If it's player-facing and not yet in the entry, or the entry's `date` is now wrong, amend this release's existing entry in a follow-up PR into `main` (never add a second entry), wait for it to merge, and repeat this step with that PR as `<n>`.
-   - **CI:** the `CI:` line is the result of CI's `Lint and typecheck` job on that exact commit, from its push to `main` (the check leaves out other apps' check runs, such as Vercel's), and must read `CI: Lint and typecheck: completed success`. If it's missing or not yet `completed`, wait a few minutes and re-run the check. If CI failed, or never reports, stop and tell the user.
+   - **CI:** there is a `CI:` line for each of CI's two jobs, `Lint and typecheck` and `Browser tests` (the check leaves out other apps' check runs, such as Vercel's), and both are from that exact commit's push to `main`. Both must read `completed success`: `CI: Lint and typecheck: completed success` and `CI: Browser tests: completed success`, in whichever order the API lists them. If either is missing or not yet `completed`, wait a few minutes and re-run the check. If either failed, or either never reports, stop and tell the user.
 
    If all of that holds, push:
 

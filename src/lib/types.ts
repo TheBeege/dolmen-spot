@@ -61,7 +61,7 @@ export interface InventoryItem {
 }
 
 export interface CharacterContainer {
-  id: string;         // UUID
+  id: string;         // opaque id (lib/ids.ts)
   name: string;       // "Backpack", "Sack", "Belt Pouch", etc.
   capacity: number;   // max weight in coins
 }
@@ -122,14 +122,14 @@ export interface FailedStudyAttempt {
 }
 
 export interface CharacterGlamour {
-  id: string;          // UUID
+  id: string;          // opaque id (lib/ids.ts)
   glamourId: number;   // References GLAMOURS[].id (1-20)
   name: string;        // Denormalized for display
   notes: string;
 }
 
 export interface CharacterRune {
-  id: string;          // UUID
+  id: string;          // opaque id (lib/ids.ts)
   runeId: number;      // References FAIRY_RUNES[].id
   name: string;
   magnitude: 'lesser' | 'greater' | 'mighty';

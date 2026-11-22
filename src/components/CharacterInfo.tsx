@@ -49,6 +49,8 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
   const alignmentWarning = getAlignmentWarning(character.class, character.alignment);
   const hasMoonSign = canHaveMoonSign(character.kindred);
+  // The visible "Moon Sign" label names whichever moon sign control is shown.
+  const moonSignId = 'character-info-moon-sign';
 
   function buildLanguageString(kindredId: KindredId | '', classId: ClassId | '', currentLanguages: string): string {
     const info = getCharacterLanguages(kindredId, classId, 10);
@@ -123,8 +125,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Name */}
         <div>
-          <label className={labelClasses}>Name</label>
+          <label htmlFor="character-info-name" className={labelClasses}>Name</label>
           <input
+            id="character-info-name"
             type="text"
             value={character.name}
             onChange={(e) => onChange({ name: e.target.value })}
@@ -135,8 +138,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Level */}
         <div>
-          <label className={labelClasses}>Level</label>
+          <label htmlFor="character-info-level" className={labelClasses}>Level</label>
           <input
+            id="character-info-level"
             type="number"
             min={1}
             max={15}
@@ -148,8 +152,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Kindred */}
         <div>
-          <label className={labelClasses}>Kindred</label>
+          <label htmlFor="character-info-kindred" className={labelClasses}>Kindred</label>
           <select
+            id="character-info-kindred"
             value={character.kindred}
             onChange={(e) => handleKindredChange(e.target.value as Character['kindred'])}
             className={inputClasses}
@@ -178,7 +183,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Class */}
         <div>
-          <label className={labelClasses}>
+          <label htmlFor="character-info-class" className={labelClasses}>
             Class
             {character.kindred === 'human' ? (
               <span className="text-red-400 font-normal ml-1">(required)</span>
@@ -187,6 +192,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             )}
           </label>
           <select
+            id="character-info-class"
             value={character.class}
             onChange={(e) => handleClassChange(e.target.value as Character['class'])}
             className={inputClasses}
@@ -226,8 +232,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Background */}
         <div>
-          <label className={labelClasses}>Background</label>
+          <label htmlFor="character-info-background" className={labelClasses}>Background</label>
           <input
+            id="character-info-background"
             type="text"
             value={character.background}
             onChange={(e) => onChange({ background: e.target.value })}
@@ -238,8 +245,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Alignment */}
         <div>
-          <label className={labelClasses}>Alignment</label>
+          <label htmlFor="character-info-alignment" className={labelClasses}>Alignment</label>
           <select
+            id="character-info-alignment"
             value={character.alignment}
             onChange={(e) => onChange({ alignment: e.target.value as Character['alignment'] })}
             className={inputClasses}
@@ -264,8 +272,9 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Affiliation */}
         <div>
-          <label className={labelClasses}>Affiliation</label>
+          <label htmlFor="character-info-affiliation" className={labelClasses}>Affiliation</label>
           <input
+            id="character-info-affiliation"
             type="text"
             value={character.affiliation}
             onChange={(e) => onChange({ affiliation: e.target.value })}
@@ -276,10 +285,11 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* Moon Sign & Phase */}
         <div>
-          <label className={labelClasses}>Moon Sign</label>
+          <label htmlFor={moonSignId} className={labelClasses}>Moon Sign</label>
           {hasMoonSign ? (
             <div className="grid grid-cols-2 gap-2">
               <select
+                id={moonSignId}
                 value={character.moonSign}
                 onChange={(e) => onChange({ moonSign: e.target.value })}
                 className={inputClasses}
@@ -295,6 +305,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 value={character.moonPhase}
                 onChange={(e) => onChange({ moonPhase: e.target.value as Character['moonPhase'] })}
                 className={inputClasses}
+                aria-label="Moon phase"
               >
                 <option value="">-- Phase --</option>
                 {MOON_PHASES.map((phase) => (
@@ -307,6 +318,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
           ) : (
             <div>
               <select
+                id={moonSignId}
                 value=""
                 disabled
                 className={`${inputClasses} opacity-50 cursor-not-allowed`}
@@ -322,9 +334,10 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
 
         {/* XP / Next Level XP */}
         <div>
-          <label className={labelClasses}>XP / Next Level XP</label>
+          <label htmlFor="character-info-xp" className={labelClasses}>XP / Next Level XP</label>
           <div className="flex gap-2 items-center">
             <input
+              id="character-info-xp"
               type="number"
               min={0}
               value={character.xp}
@@ -340,13 +353,21 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               onChange={(e) => onChange({ xpNextLevel: parseInt(e.target.value) || 0 })}
               placeholder="Next Level"
               className={inputClasses}
+              aria-label="Next Level"
             />
           </div>
         </div>
 
         {/* XP Modifier */}
         <div>
-          <label className={labelClasses}>XP Modifier</label>
+          {/* Calculated, the override field lives in a collapsed <details>; a
+              label pointing into it would name nothing until it is opened, so
+              the heading is plain text and the override gets its own label. */}
+          {calculated ? (
+            <span className={labelClasses}>XP Modifier</span>
+          ) : (
+            <label htmlFor="character-info-xp-modifier" className={labelClasses}>XP Modifier</label>
+          )}
           {calculated ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-[#f5e6c8]">
@@ -386,16 +407,22 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
                   Manual override
                 </summary>
+                <label htmlFor="character-info-xp-modifier" className="block text-[#f5e6c8]/60 text-xs mt-1">
+                  Manual XP modifier
+                </label>
                 <input
+                  id="character-info-xp-modifier"
                   type="number"
                   value={character.xpModifier}
                   onChange={(e) => onChange({ xpModifier: parseInt(e.target.value) || 0 })}
-                  className={`${inputClasses} mt-1`}
+                  className={inputClasses}
                 />
               </details>
             </div>
           ) : (
+            // Same id as the override above: only one of the two branches renders.
             <input
+              id="character-info-xp-modifier"
               type="number"
               value={character.xpModifier}
               onChange={(e) => onChange({ xpModifier: parseInt(e.target.value) || 0 })}

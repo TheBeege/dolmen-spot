@@ -1,6 +1,7 @@
 import type { Character } from './types';
 import { createDefaultCharacter } from './gamedata';
 import { CURRENT_SCHEMA_VERSION, migrateCharacter, readSchemaVersion } from './migrations';
+import { newId } from './ids';
 import { setCurrentStore } from './current-store';
 import { SAVE_DATA_FORMAT, SAVE_DATA_IMPORT_MESSAGE } from './save-data-file';
 
@@ -299,7 +300,7 @@ export function parseImportedCharacters(
     }
     // What's saved must load again, and load() checks the migrated character too.
     if (nestsDeeperThan(character, MAX_NESTING)) throw new ImportError(IMPORT_MESSAGES.notOpened);
-    character.id = crypto.randomUUID();
+    character.id = newId();
     return character;
   });
 }
