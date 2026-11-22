@@ -814,7 +814,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             {containerId ? (isCollapsed ? '\u25B6' : '\u25BC') : '\u25BC'}
           </span>
           <span className="text-[#c4a35a] text-sm font-semibold">
-            {container ? container.name : 'Loose Items'}
+            {container ? containerLabel(container) : 'Loose Items'}
           </span>
           {container && encumbranceMethod === 'weight' && (
             <span className={`text-xs ${isOverCapacity ? 'text-[#ff6b4a]' : 'text-[#f5e6c8]/50'}`}>
