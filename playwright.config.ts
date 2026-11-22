@@ -16,6 +16,12 @@ const webkit = { browserName: 'webkit' as const };
 // passes more contrast checks), so the accessibility tests run at 16px only.
 const a11yTests = /a11y\.spec\.ts$/;
 
+// The known-issues audit (e2e/known-issues-audit.spec.ts) walks the whole matrix
+// in one process, which the parallel suite can't: it has its own script,
+// `npm run audit:known-issues`, which sets E2E_KNOWN_ISSUES_AUDIT=1.
+const auditTests = /known-issues-audit\.spec\.ts$/;
+const withAudit = process.env.E2E_KNOWN_ISSUES_AUDIT === '1';
+
 export default defineConfig<MatrixOptions>({
   testDir: './e2e',
   fullyParallel: true,
@@ -33,10 +39,11 @@ export default defineConfig<MatrixOptions>({
   // at 24px (a player who has made the browser's text bigger). The layout
   // tests run each at the widths in WIDTHS (e2e/support/test.ts).
   projects: [
-    { name: 'chromium-16px', use: { ...chromium, defaultFontSize: 16 } },
-    { name: 'chromium-24px', use: { ...chromium, defaultFontSize: 24 }, testIgnore: a11yTests },
-    { name: 'webkit-16px', use: { ...webkit, defaultFontSize: 16 } },
-    { name: 'webkit-24px', use: { ...webkit, defaultFontSize: 24 }, testIgnore: a11yTests },
+    // The audit drives Chromium's own font size setting, so only its project runs it.
+    { name: 'chromium-16px', use: { ...chromium, defaultFontSize: 16 }, testIgnore: withAudit ? undefined : auditTests },
+    { name: 'chromium-24px', use: { ...chromium, defaultFontSize: 24 }, testIgnore: withAudit ? a11yTests : [a11yTests, auditTests] },
+    { name: 'webkit-16px', use: { ...webkit, defaultFontSize: 16 }, testIgnore: auditTests },
+    { name: 'webkit-24px', use: { ...webkit, defaultFontSize: 24 }, testIgnore: [a11yTests, auditTests] },
   ],
 
   webServer: {

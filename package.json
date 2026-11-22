@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "tsx --test src/lib/*.test.ts",
     "test:e2e": "playwright test",
+    "audit:known-issues": "E2E_KNOWN_ISSUES_AUDIT=1 playwright test --project=chromium-16px e2e/known-issues-audit.spec.ts",
     "check:msal-bridge": "node scripts/check-msal-bridge.mjs",
     "postinstall": "patch-package --error-on-fail",
     "prepare": "node .husky/install.mjs"
