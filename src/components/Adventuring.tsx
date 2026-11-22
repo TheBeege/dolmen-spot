@@ -1134,7 +1134,9 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             </span>
           )}
         </h3>
-        <div className="flex gap-2">
+        {/* Wraps rather than running past the card: at a big font on a phone,
+            the four names don't fit on one row. */}
+        <div className="flex flex-wrap gap-2">
           {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
             <div
               key={s}

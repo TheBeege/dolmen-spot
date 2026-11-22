@@ -1,8 +1,28 @@
+/** A horizontal layout problem, as findLayoutProblems reports it (see layout.ts). */
+export interface LayoutProblem {
+  /**
+   * - `page-overflow`: the page scrolls sideways. There's one problem for each
+   *   of the outermost elements that reach past its right edge.
+   * - `spills-card`: a control (button, field, link...) sticks out of the card
+   *   that holds it, or of any other box with a background or a border all
+   *   round, or is cut off by one that hides what doesn't fit.
+   * - `box-spills-card`: a box that isn't a control (a div with text, a table,
+   *   a grid) has an edge past the card that holds it. Nothing inside it need
+   *   be out of place — the box itself is what doesn't fit.
+   * - `squeezed-control`: a control is on the page but has no width left, so
+   *   it can't be seen or clicked (say, a flex item that shrank to nothing).
+   */
+  check: 'page-overflow' | 'spills-card' | 'box-spills-card' | 'squeezed-control';
+  /** The element, as `Section › tag "name"`: the heading of its section, then the element. */
+  element: string;
+  detail: string;
+}
+
 /**
  * Helpers that run inside the page. The `page` fixture installs them in every
  * page before the app starts (page.addInitScript), so this function must be
  * self-contained: Playwright sends its source to the browser, without
- * anything it might refer to outside.
+ * anything it might refer to outside. (Types are erased, so naming one is fine.)
  */
 export function installInPageHelpers(): void {
   const TOLERANCE = 1; // px: sub-pixel rounding
@@ -11,6 +31,16 @@ export function installInPageHelpers(): void {
     '[role="button"]', '[role="link"]', '[role="checkbox"]', '[role="radio"]', '[role="switch"]',
     '[role="tab"]', '[role="slider"]', '[role="spinbutton"]', '[role="combobox"]', '[role="textbox"]',
     '[contenteditable=""]', '[contenteditable="true"]', '[tabindex]:not([tabindex^="-"])',
+  ].join(', ');
+  /**
+   * The controls that can hold other elements: a box inside one of these is
+   * the control's own business (check 2), not its own. A merely focusable
+   * container (`[tabindex="0"]`) isn't one of them: the sheet's tab panel is
+   * focusable, and everything on the tab is inside it.
+   */
+  const WRAPPING_CONTROLS = [
+    'a[href]', 'button', 'summary', '[role="button"]', '[role="link"]', '[role="tab"]',
+    '[role="checkbox"]', '[role="radio"]', '[role="switch"]',
   ].join(', ');
 
   const clean = (text: string | null | undefined, max = 40) => {
@@ -111,7 +141,7 @@ export function installInPageHelpers(): void {
 
   /** See findLayoutProblems in layout.ts. */
   const findLayoutProblems = () => {
-    const problems: { check: 'page-overflow' | 'spills-card' | 'squeezed-control'; element: string; detail: string }[] = [];
+    const problems: LayoutProblem[] = [];
     const root = document.documentElement;
     const pageWidth = root.clientWidth;
 
@@ -163,6 +193,43 @@ export function installInPageHelpers(): void {
       if (r.width < 1 && r.height > 0) {
         problems.push({ check: 'squeezed-control', element: describe(el), detail: `is squeezed to ${px(r.width)} wide` });
       }
+    }
+
+    // 4. Boxes that stick out of the card that holds them. A table, a grid or a
+    // div with its own background can be wider than its card without any
+    // control inside it reaching past the card's edge on its own — nothing in
+    // check 2 sees it when the box's own edge is the only thing out of place.
+    // Only the outermost such box is reported, as in check 1, so a wrapper and
+    // what it holds give one problem rather than one each.
+    const spilled: Element[] = [];
+    for (const el of document.body.querySelectorAll('*')) {
+      if (!shown(el) || exempt(el) || el.matches(CONTROLS) || el.closest(WRAPPING_CONTROLS)) continue;
+      const s = getComputedStyle(el);
+      // A box: a background, or a border all round. Its content scrolling
+      // sideways is its own business, not this check's.
+      if (!isBox(s) || scrollsSideways(s)) continue;
+      // The card that holds it: the nearest ancestor that is a box or hides
+      // what doesn't fit. A box with only page-level wrappers around it isn't
+      // in a card, so it isn't this check's problem either.
+      let card: Element | null = el.parentElement;
+      for (; card && card !== document.body; card = card.parentElement) {
+        const cardStyle = getComputedStyle(card);
+        if (isBox(cardStyle) || clipsSideways(cardStyle)) break;
+      }
+      if (!card || card === document.body) continue;
+      const box = card.getBoundingClientRect();
+      const r = el.getBoundingClientRect();
+      const left = box.left - r.left;
+      const right = r.right - box.right;
+      if (left <= TOLERANCE && right <= TOLERANCE) continue;
+      if (spilled.some((outer) => outer.contains(el))) continue;
+      spilled.push(el);
+      const sides = [left > TOLERANCE ? `${px(left)} on the left` : '', right > TOLERANCE ? `${px(right)} on the right` : ''];
+      problems.push({
+        check: 'box-spills-card',
+        element: describe(el),
+        detail: `is ${px(r.width)} wide, ${sides.filter(Boolean).join(' and ')} of the card that holds it`,
+      });
     }
     return problems;
   };
@@ -243,7 +310,7 @@ export function installInPageHelpers(): void {
 
 /** What installInPageHelpers adds to the page. */
 export interface InPageHelpers {
-  findLayoutProblems(): { check: 'page-overflow' | 'spills-card' | 'squeezed-control'; element: string; detail: string }[];
+  findLayoutProblems(): LayoutProblem[];
   describeTargets(targets: { selector: string; withColor: boolean }[]): string[];
   findPlaceholderProblems(): { check: 'placeholder-contrast'; element: string; detail: string }[];
 }
