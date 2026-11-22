@@ -1166,7 +1166,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                     className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e] border-b border-[#5a3a28]/30 last:border-b-0"
                   >
                     {entry.name}
-                    <span className="text-[#a1988f] text-xs ml-2">
+                    <span className="text-[#f5e6c8]/70 text-xs ml-2">
                       ({entry.capacity}w capacity)
                     </span>
                   </button>

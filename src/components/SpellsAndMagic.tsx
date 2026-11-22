@@ -1902,7 +1902,7 @@ function MemorisePicker({
                     className={`flex-1 min-w-0 break-words text-left px-3 py-1.5 text-sm ${
                       atCap
                         ? 'text-[#9c948b] italic cursor-not-allowed'
-                        : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
+                        : 'text-[#f5e6c8] hover:bg-[#37375a]'
                     }`}
                     title={
                       hasNoSlots
