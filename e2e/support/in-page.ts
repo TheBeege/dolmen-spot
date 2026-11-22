@@ -6,9 +6,10 @@ export interface LayoutProblem {
    * - `spills-card`: a control (button, field, link...) sticks out of the card
    *   that holds it, or of any other box with a background or a border all
    *   round, or is cut off by one that hides what doesn't fit.
-   * - `box-spills-card`: a box that isn't a control (a div with text, a table,
-   *   a grid) has an edge past the card that holds it. Nothing inside it need
-   *   be out of place — the box itself is what doesn't fit.
+   * - `box-spills-card`: a box that isn't a control — a table, a grid, or
+   *   anything with a background or a border all round — has an edge past the
+   *   card that holds it. Nothing inside it need be out of place: the box
+   *   itself is what doesn't fit.
    * - `squeezed-control`: a control is on the page but has no width left, so
    *   it can't be seen or clicked (say, a flex item that shrank to nothing).
    */
@@ -61,9 +62,18 @@ export function installInPageHelpers(): void {
         s.getPropertyValue(`border-${side}-style`) !== 'none' &&
         !transparent(s.getPropertyValue(`border-${side}-color`)),
     );
+  /** Laid out as a box of its own, whether or not it draws one: a table or a grid. */
+  const isTableOrGrid = (s: CSSStyleDeclaration) => /^(inline-)?(table|grid)$/.test(s.display);
   const shown = (el: Element) => {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
+  };
+  /** Something on the way up is fully transparent, so nothing inside it shows. */
+  const fadedOut = (el: Element) => {
+    for (let a: Element | null = el; a && a !== document.body; a = a.parentElement) {
+      if (parseFloat(getComputedStyle(a).opacity) === 0) return true;
+    }
+    return false;
   };
   /** Inside something that scrolls sideways by design, or in the map's drawing: not page layout. */
   const exempt = (el: Element) => {
@@ -205,9 +215,13 @@ export function installInPageHelpers(): void {
     for (const el of document.body.querySelectorAll('*')) {
       if (!shown(el) || exempt(el) || el.matches(CONTROLS) || el.closest(WRAPPING_CONTROLS)) continue;
       const s = getComputedStyle(el);
-      // A box: a background, or a border all round. Its content scrolling
-      // sideways is its own business, not this check's.
-      if (!isBox(s) || scrollsSideways(s)) continue;
+      // A box: a background or a border all round, or a table or grid, which is
+      // a box without drawing one. Its content scrolling sideways is its own
+      // business, not this check's.
+      if (!(isBox(s) || isTableOrGrid(s)) || scrollsSideways(s)) continue;
+      // Placed where it is on purpose (an overlay, a badge) rather than laid
+      // out, or faded out until something else happens: not a layout problem.
+      if (s.position === 'absolute' || s.position === 'fixed' || fadedOut(el)) continue;
       // The card that holds it: the nearest ancestor that is a box or hides
       // what doesn't fit. A box with only page-level wrappers around it isn't
       // in a card, so it isn't this check's problem either.
