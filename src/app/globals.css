@@ -59,3 +59,22 @@
     opacity: 1;
   }
 }
+
+/* The map's markers (src/components/MapIcons.tsx) in forced-colours mode, where
+   the browser would otherwise paint the disc, the rim and the glyph one colour
+   and every kind of point of interest would look the same. System colours are
+   kept as they are, so the disc and the glyph's cut-outs stay Canvas and the
+   rim and the glyph stay CanvasText: the glyph reads as a drawing on the disc.
+   Their fill and stroke come from SVG attributes, which any CSS rule overrides. */
+@media (forced-colors: active) {
+  .marker-disc {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .marker-glyph {
+    fill: CanvasText;
+  }
+  .marker-glyph-cut {
+    fill: Canvas;
+  }
+}

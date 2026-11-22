@@ -3,6 +3,11 @@
 // draws them as markers (MarkerShape); the hex inspector beside its items and
 // in its kind picker (PoiIcon, DoorIcon). They're decorative: the marker or
 // control that shows one carries the name.
+//
+// Under forced colours the browser would paint the disc, the rim and the glyph
+// one colour, leaving every kind looking the same. Each shape therefore carries
+// a class that globals.css points at a system colour: the disc and the glyph's
+// cut-outs stay Canvas, while the rim and the glyph itself stay CanvasText.
 import { memo, type SVGProps } from 'react';
 import type { PoiKind } from '@/lib/types';
 import { POI_KINDS } from '@/lib/map-data';
@@ -65,7 +70,7 @@ export const MarkerShape = memo(function MarkerShape({ look, cx, cy, r, rim }: {
   const scale = ((r - rim / 2) * GLYPH_FILL) / GLYPH_EXTENT;
   return (
     <>
-      <circle cx={cx} cy={cy} r={r} fill={look.fill} stroke={look.rim} strokeWidth={rim} />
+      <circle cx={cx} cy={cy} r={r} fill={look.fill} stroke={look.rim} strokeWidth={rim} className="marker-disc" />
       {look.glyph && (
         <g
           transform={`translate(${cx} ${cy}) scale(${scale}) translate(${-GLYPH_CENTER} ${-GLYPH_CENTER})`}
@@ -73,10 +78,10 @@ export const MarkerShape = memo(function MarkerShape({ look, cx, cy, r, rim }: {
           aria-hidden="true"
         >
           {look.glyph.body.map((d, i) => (
-            <path key={`body-${i}`} d={d} fill={look.ink} />
+            <path key={`body-${i}`} d={d} fill={look.ink} className="marker-glyph" />
           ))}
           {look.glyph.cut.map((d, i) => (
-            <path key={`cut-${i}`} d={d} fill={look.fill} />
+            <path key={`cut-${i}`} d={d} fill={look.fill} className="marker-glyph-cut" />
           ))}
         </g>
       )}
@@ -84,7 +89,9 @@ export const MarkerShape = memo(function MarkerShape({ look, cx, cy, r, rim }: {
   );
 });
 
-type IconProps = Omit<SVGProps<SVGSVGElement>, 'children' | 'viewBox'>;
+// An icon is always decorative, so its callers can't set these (the spread
+// below would override them), nor the viewBox it draws in.
+type IconProps = Omit<SVGProps<SVGSVGElement>, 'children' | 'viewBox' | 'aria-hidden' | 'focusable'>;
 
 /** A marker as a small inline image, for HTML: decorative, hidden from assistive technology. */
 function MarkerIcon({ look, ...props }: IconProps & { look: MarkerLook }) {

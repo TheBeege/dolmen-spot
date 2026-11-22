@@ -183,6 +183,18 @@ describe("a point of interest's kind", () => {
     for (const k of POI_KINDS) assert.ok(POI_KIND_NAMES[k].trim() !== '', k);
   });
 
+  test("each kind's name is short enough for its marker, and its description starts with it", () => {
+    // The two 15-entry tables are kept in step by this: a renamed kind that
+    // doesn't start its description shows the mismatch here.
+    for (const k of POI_KINDS) {
+      if (k === 'other') continue;
+      assert.ok(
+        POI_KIND_LABELS[k].startsWith(POI_KIND_NAMES[k]),
+        `${k}: "${POI_KIND_LABELS[k]}" doesn't start with "${POI_KIND_NAMES[k]}"`,
+      );
+    }
+  });
+
   test("a point of interest without a kind, or one that isn't a kind, is 'other'", () => {
     assert.equal(poiKindOf(poi()), 'other');
     assert.equal(poiKindOf(poi({ kind: 'tower' })), 'tower');
@@ -192,6 +204,9 @@ describe("a point of interest's kind", () => {
 
   test("its marker's label names its kind, then it", () => {
     assert.equal(poiLabel(poi({ kind: 'tower' })), 'Tower: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'keep' })), 'Castle: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'shrine' })), 'Church: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'barrow' })), 'Tomb: Hoarblight Keep');
     assert.equal(poiLabel(poi({ kind: 'stones', name: 'The Weeping Stones' })), 'Standing stones: The Weeping Stones');
     assert.equal(poiLabel(poi()), 'Point of interest: Hoarblight Keep');
     assert.equal(poiLabel(poi({ kind: 'inn', name: '' })), 'Inn: Unnamed');

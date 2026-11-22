@@ -38,7 +38,7 @@ export const POI_KIND_LABELS: Readonly<Record<PoiKind, string>> = {
   cave: 'Cave, mine or dungeon entrance',
   inn: 'Inn or tavern',
   camp: 'Camp or hideout',
-  barrow: 'Barrow, tomb or graveyard',
+  barrow: 'Tomb, barrow or graveyard',
   grove: 'Grove or notable tree',
   fairy: 'Fairy ring or mound',
   lair: 'Lair or danger',
@@ -57,15 +57,15 @@ export const POI_KINDS = Object.keys(POI_KIND_LABELS) as readonly PoiKind[];
 export const POI_KIND_NAMES: Readonly<Record<PoiKind, string>> = {
   town: 'Town',
   village: 'Village',
-  keep: 'Keep',
+  keep: 'Castle',
   tower: 'Tower',
   ruin: 'Ruin',
-  shrine: 'Shrine',
+  shrine: 'Church',
   stones: 'Standing stones',
   cave: 'Cave',
   inn: 'Inn',
   camp: 'Camp',
-  barrow: 'Barrow',
+  barrow: 'Tomb',
   grove: 'Grove',
   fairy: 'Fairy ring',
   lair: 'Lair',
@@ -82,9 +82,13 @@ export function poiLabel(poi: Pick<MapPOI, 'kind' | 'name'>): string {
   return `${POI_KIND_NAMES[poiKindOf(poi)]}: ${poi.name || 'Unnamed'}`;
 }
 
-/** `poi` as kind `kind`. 'other' is saved as no kind at all, so it removes the field. */
+/**
+ * `poi` as kind `kind`. 'other' is saved as no kind at all, so it removes the
+ * field: the old one is destructured out only to drop the key, so that a point
+ * of interest never carries `kind: undefined`.
+ */
 export function withPoiKind(poi: MapPOI, kind: PoiKind): MapPOI {
-  const { kind: _previous, ...rest } = poi;
+  const { kind: _droppedOldKind, ...rest } = poi;
   return kind === 'other' ? rest : { ...rest, kind };
 }
 

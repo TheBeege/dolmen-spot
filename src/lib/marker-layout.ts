@@ -22,7 +22,7 @@ export type MarkerKind = 'poi' | 'icon' | 'door';
 export const MARKER_RADIUS: Readonly<Record<MarkerKind, number>> = { poi: POI_RADIUS, icon: ICON_RADIUS, door: DOOR_RADIUS };
 
 // Smallest on-screen sizes, in CSS px.
-export const MIN_MARKER_PX = 12; // POI diameter; doors, badges and rings grow with it
+export const MIN_MARKER_PX = 12; // POI diameter; kind icons, doors, badges and rings grow with it
 export const MIN_STAR_PX = 14; // star diameter
 // The count over the star when the current hex's markers are combined. Its
 // digit is 0.7 of this, so it's no smaller than the map's other text (8 px).

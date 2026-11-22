@@ -1,6 +1,6 @@
 // The map's marker glyphs, drawn by hand: one for each kind of point of
 // interest, and one for fairy doors. Pure geometry, so it can be tested
-// without drawing; src/components/map-icons.tsx draws them.
+// without drawing; src/components/MapIcons.tsx draws them.
 //
 // Each glyph is a silhouette on a 24 × 24 grid (y down), with a few details
 // cut out of it. Every point of it, curve control points included, lies within

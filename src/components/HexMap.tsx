@@ -55,7 +55,7 @@ import {
   withPoiKind,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
-import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './map-icons';
+import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './MapIcons';
 
 interface HexMapProps {
   character: Character;
@@ -64,7 +64,7 @@ interface HexMapProps {
 }
 
 // --- Colours: the terrain's. The theme's parchment, night and gold, and the
-// markers' own colours, are in map-icons.tsx. ---
+// markers' own colours, are in MapIcons.tsx. ---
 const TERRAIN_FILL = { woods: '#2d4a2e', open: '#4a3a26' } as const;
 const GRID_STROKE = '#5a3a28';
 
@@ -957,6 +957,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
       const slotAt = (i: number) => ({ x: c.x + layout.offsets[i].x, y: c.y + layout.offsets[i].y });
       visible.forEach((entry, i) => {
         const m = slotAt(i);
+        const kind = markerKindOf(entry);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
         let label: string;
         if (entry.type === 'poi') {
@@ -975,7 +976,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
               look={lookOf(entry)}
               cx={m.x}
               cy={m.y}
-              r={MARKER_RADIUS[markerKindOf(entry)] * size.marker}
+              r={MARKER_RADIUS[kind] * size.marker}
               rim={MARKER_RIM * size.marker}
             />
           </g>,
@@ -1006,12 +1007,17 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
     const r = onCurrent ? growth.countRadius : growth.combinedRadius;
     const o = onCurrent ? countOnStar(starRadius, r, HEX_INNER_RADIUS) : { x: 0, y: 0 };
     const looks = items.map(lookOf);
-    const shared = !onCurrent && looks.every((l) => l.fill === looks[0].fill && l.rim === looks[0].rim) ? looks[0] : null;
+    // The disc takes the colour its items share (the plain one's red, or a
+    // door's lavender), and is dark otherwise; the rim never does (below).
+    const shared = !onCurrent && looks.every((l) => l.fill === looks[0].fill) ? looks[0] : null;
     const fill = shared?.fill ?? NIGHT;
     return (
       <g key={`combined-${hex}`} {...MAP_BUTTON_PROPS} data-hex={hex} aria-label={label}>
         <title>{label}</title>
-        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={shared?.rim ?? PARCHMENT} strokeWidth={r * 0.15} />
+        {/* The rim is parchment whatever the items: a gold one belongs to a
+            kind's own marker, so a count never wears one and its digit never
+            reads as a kind. */}
+        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={PARCHMENT} strokeWidth={r * 0.15} />
         <text
           x={c.x + o.x}
           y={c.y + o.y + r * 0.5}
@@ -1510,10 +1516,14 @@ function HexInspectorPanel({
 /**
  * The kind of a point of interest, chosen by its icon: a group of radio
  * buttons, so Tab reaches the chosen one and the arrow keys choose the
- * others. The chosen kind's description shows beside the group's name.
+ * others. The legend shows the description of the tile under the pointer or
+ * with focus, falling back to the chosen kind's, since that's the only way a
+ * touch screen or a keyboard can see what a kind covers.
  */
 function PoiKindPicker({ kind, onChange }: { kind: PoiKind; onChange: (kind: PoiKind) => void }) {
   const name = useId();
+  const [lookedAt, setLookedAt] = useState<PoiKind | null>(null);
+  const described = lookedAt ?? kind;
   return (
     // min-w-0: a fieldset is otherwise never narrower than its content.
     <fieldset className="min-w-0">
@@ -1522,21 +1532,30 @@ function PoiKindPicker({ kind, onChange }: { kind: PoiKind; onChange: (kind: Poi
         {/* Hidden from screen readers, which announce the chosen radio button instead. */}
         <span aria-hidden="true">
           {' · '}
-          <span className="text-[#f5e6c8]">{POI_KIND_LABELS[kind]}</span>
+          <span className="text-[#f5e6c8]">{POI_KIND_LABELS[described]}</span>
         </span>
       </legend>
-      {/* Even rows for the 15 kinds, as the space allows: 3 of 5, 8 and 7, or 1 of 15. */}
+      {/* Even rows for the 15 kinds, as the space allows: 5 of 3, 3 of 5, 8 and
+          7, or 1 of 15. Each tier starts where its tiles fit exactly (9.75rem =
+          5 × 1.75rem + 4 gaps), so at a larger font size, where the rem tiers
+          grow but the screen doesn't, the picker drops to fewer columns. */}
       <div className="@container">
-        <div className="grid grid-cols-[repeat(5,1.75rem)] @min-[15.75rem]:grid-cols-[repeat(8,1.75rem)] @min-[29.75rem]:grid-cols-[repeat(15,1.75rem)] gap-1">
+        <div className="grid grid-cols-[repeat(3,1.75rem)] @min-[9.75rem]:grid-cols-[repeat(5,1.75rem)] @min-[15.75rem]:grid-cols-[repeat(8,1.75rem)] @min-[29.75rem]:grid-cols-[repeat(15,1.75rem)] gap-1">
           {POI_KINDS.map((k) => (
             <label
               key={k}
-              title={POI_KIND_LABELS[k]}
+              // The description in the legend follows the pointer and focus:
+              // `title` shows neither on a touch screen, and on a desktop it
+              // can be announced twice.
+              onMouseEnter={() => setLookedAt(k)}
+              onMouseLeave={() => setLookedAt(null)}
+              onFocus={() => setLookedAt(k)}
+              onBlur={() => setLookedAt(null)}
               // In forced colours only the chosen tile has a border, and a thicker one.
               className="relative flex items-center justify-center size-7 rounded border border-transparent cursor-pointer hover:bg-[#2a2a3e] has-checked:border-[#f5e6c8] has-checked:bg-[#5a3a28] forced-colors:border-[color:Canvas] forced-colors:has-checked:border-2 forced-colors:has-checked:border-[color:Highlight] has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-[#c4a35a]"
             >
               <input type="radio" name={name} value={k} checked={k === kind} onChange={() => onChange(k)} className="sr-only" />
-              <PoiIcon kind={k} className="size-5.5" />
+              <PoiIcon kind={k} className="size-5" />
               <span className="sr-only">{POI_KIND_LABELS[k]}</span>
             </label>
           ))}
