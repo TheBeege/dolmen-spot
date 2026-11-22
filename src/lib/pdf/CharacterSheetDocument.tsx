@@ -53,6 +53,7 @@ import {
   getFighterTalentCount,
   getKindredClassLabel,
   getKindredName,
+  getLearnableSpellRanks,
   getRuneUsageFrequency,
   isKnownClassId,
   skillKeyToDisplayName,
@@ -82,6 +83,7 @@ import {
   isSpellInAnyBook,
   isSpellOnScroll,
   isStartingBookApplied,
+  rankAboveLearnableNote,
 } from '@/lib/character-sheet';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import type { SheetFonts } from './fonts';
@@ -1268,6 +1270,21 @@ function SpellcastingBlock({
       ? MAGICIAN_STARTING_SPELL_BOOKS.find((b) => b.name === c.startingSpellBook)
       : undefined;
   const known = [...c.knownSpells].sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
+  // A known spell can be of a Rank above what the character can learn at their
+  // Level: a Level can go down, and the app offers only learnable Ranks when
+  // learning a new one (see getLearnableSpellRanks). The tab notes each such
+  // spell, so the sheet says it too, in the tab's words, plus the names of the
+  // spells each note is about: the note can land at the top of the next page,
+  // away from the Known Spells table above it, and minPresenceAhead can only
+  // move it on, not keep the table with it.
+  const learnableRanks = getLearnableSpellRanks({ spellType: isArcane ? 'arcane' : 'holy', spellsPerDay });
+  const aboveLearnable = learnableRanks.length > 0
+    ? [...new Set(known.filter((k) => !learnableRanks.includes(k.rank)).map((k) => k.rank))].sort((a, b) => a - b)
+    : [];
+  const aboveLearnableNote = aboveLearnable.map((rank) => {
+    const names = [...new Set(known.filter((k) => k.rank === rank).map((k) => k.name || EMPTY))];
+    return `${rankAboveLearnableNote(rank, c.level)} (${names.join(', ')})`;
+  });
 
   return (
     <>
@@ -1354,6 +1371,11 @@ function SpellcastingBlock({
           ) : (
             <Empty>No known spells yet.</Empty>
           )}
+          {aboveLearnableNote.length > 0 ? (
+            <Text style={s.warn} minPresenceAhead={20}>
+              {aboveLearnableNote.join('\n')}
+            </Text>
+          ) : null}
         </>
       ) : null}
     </>
