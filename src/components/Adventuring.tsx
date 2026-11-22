@@ -738,7 +738,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
           </span>
         </div>
         {character.forcedMarchActive && (
-          <div className="text-[#c47a3a] text-xs mb-3">
+          <div className="text-[#e8a765] text-xs mb-3">
             Must rest a full day after forced march or gain exhaustion.
           </div>
         )}

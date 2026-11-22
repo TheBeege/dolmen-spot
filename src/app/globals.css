@@ -33,21 +33,24 @@
   /* The dimmest text tones. Each is solid, so it can be checked, and each
      clears WCAG AA (4.5:1) on the lightest surface it is used on: a card,
      `#2a2a3e`. They replace the opacity modifiers the sheet used to fade
-     text with, which went below AA; the ratios are on a card then on the page
-     (`#1a1a2e`).
+     text with, which went below AA. The ratios are on a card then on the
+     page (`#1a1a2e`), and both parchment tones sit below the /60 tier
+     (5.12) so the scale still reads in order, dimmer as it goes.
 
-       parchment faded   #a8a09a  5.44 / 6.63   for parchment/50
+       parchment faded   #a1988f  4.94 / 6.01   for parchment/50, and for the
+                                                 greys #8b8b9e and #8a7a6a
        parchment faint   #9c948b  4.68 / 5.70   for parchment/20-/40 and
                                                  every field's placeholder
        gold faded        #b0955c  4.87 / 5.93   for gold/30-/70
-       grey cool         #9a9aab  5.06 / 6.16   for #8b8b9e
-       grey warm         #a89a8a  5.11 / 6.22   for #8a7a6a
 
-     Gold on the brown buttons is --color-gold-light (5.71:1 on #5a3a28),
-     which keeps them reading as gold-on-brown beside the parchment-on-brown
-     buttons, where a darker brown would not. The components write these as
-     arbitrary values (`text-[#9c948b]`), like the rest of the sheet's
-     palette; this is the one place that names them. */
+     Unavailable text keeps a cue other than its colour, since AA ruled out
+     fading it: a dashed border on a boxed control, italics on an inline one.
+
+     Gold on the brown buttons is --color-gold-light: `#dbc07a` is 5.71:1 on
+     the resting #5a3a28 and 6.89:1 on their darker hover #4a2f20, so they
+     still read as gold-on-brown beside the parchment-on-brown buttons. The
+     components write these as arbitrary values (`text-[#9c948b]`), like the
+     rest of the sheet's palette; this is the one place that names them. */
 }
 
 @layer base {

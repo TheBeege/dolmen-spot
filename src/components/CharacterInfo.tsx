@@ -263,7 +263,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             <p className={`text-xs mt-1 ${
               alignmentWarning.severity === 'warning'
                 ? 'text-yellow-400'
-                : 'text-[#a8a09a] italic'
+                : 'text-[#a1988f] italic'
             }`}>
               {alignmentWarning.text}
             </p>
@@ -325,7 +325,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               >
                 <option value="">-- N/A --</option>
               </select>
-              <p className="text-[#a8a09a] text-xs mt-1 italic">
+              <p className="text-[#a1988f] text-xs mt-1 italic">
                 Fairies cannot have moon signs.
               </p>
             </div>
@@ -394,7 +394,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 <button
                   type="button"
                   onClick={() => onChange({ xpModifier: calculated.total })}
-                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#7a5a38] transition-colors"
+                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors"
                 >
                   Sync to {formatXpPercent(calculated.total)}
                 </button>
@@ -499,7 +499,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               <button
                 type="button"
                 onClick={handleRollEquipment}
-                className="text-sm px-3 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#7a5a38] transition-colors font-semibold"
+                className="text-sm px-3 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors font-semibold"
               >
                 Roll All
               </button>

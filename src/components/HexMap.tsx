@@ -1348,7 +1348,7 @@ function HexInspectorPanel({
 }) {
   if (!selectedHex) {
     return (
-      <div className="bg-[#2a2a3e] rounded-lg p-4 text-sm text-[#a8a09a] italic">
+      <div className="bg-[#2a2a3e] rounded-lg p-4 text-sm text-[#a1988f] italic">
         Click a hex on the map to inspect it.
       </div>
     );

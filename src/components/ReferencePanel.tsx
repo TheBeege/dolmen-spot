@@ -343,7 +343,7 @@ export default function ReferencePanel() {
                           {expandedSections[`religion-${r.name}`] ? '\u25B2' : '\u25BC'}
                         </span>
                       </div>
-                      <div className="text-[#a8a09a] text-xs">{r.type}</div>
+                      <div className="text-[#a1988f] text-xs">{r.type}</div>
                     </div>
                   </button>
                   {expandedSections[`religion-${r.name}`] && (
@@ -351,7 +351,7 @@ export default function ReferencePanel() {
                       <div><span className="text-[#c4a35a]">Deity:</span> {r.deity}</div>
                       <div><span className="text-[#c4a35a]">Holy Symbol:</span> {r.holySymbol}</div>
                       <div><span className="text-[#c4a35a]">Holy Text:</span> {r.holyText}</div>
-                      <div className="text-[#a8a09a] mt-1">{r.notes}</div>
+                      <div className="text-[#a1988f] mt-1">{r.notes}</div>
                     </div>
                   )}
                 </div>
@@ -489,7 +489,7 @@ export default function ReferencePanel() {
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-2 text-xs text-[#a8a09a]">
+                <div className="mt-2 text-xs text-[#a1988f]">
                   Each smoke weighs 1 coin. Quiet Contemplation: 1 hour smoking, INT check (+1 per 2 companions, max +2). Success = Referee gives a clue.
                 </div>
                 <div className="mt-2">

@@ -258,7 +258,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
 
       {/* No magic message */}
       {hasNoMagic && (
-        <p className="text-[#a8a09a] italic mb-4">
+        <p className="text-[#a1988f] italic mb-4">
           This character has no magical abilities.
         </p>
       )}
@@ -585,7 +585,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   // name is struck through so the state doesn't rest on colour alone. The
   // fade stops at 80%, the faintest that leaves real room above AA contrast
   // for the gold rank label on the row's dark background (50% left it at
-  // 2.8:1, 75% at 4.6:1; the parchment is 9.2:1 here). Its info button,
+  // 2.7:1, 75% at 4.6:1; the parchment is 9.2:1 here). Its info button,
   // summary and delete button don't fade, so they stay readable.
   const fade = spell.cast ? 'opacity-80' : '';
   const castName = spell.cast ? 'line-through' : '';
@@ -1772,7 +1772,7 @@ function SpellStudyBlock({
           </button>
           {/* Rewriting is only for spells already known */}
           {selectedName && draftSource !== 'rewrite' && knownNames.has(selectedName.toLowerCase()) && (
-            <span className="text-[#c47a3a] text-xs italic">Already known — usually unnecessary.</span>
+            <span className="text-[#e8a765] text-xs italic">Already known — usually unnecessary.</span>
           )}
           {selectedName && draftSource === 'book' && failedBlockSet.has(selectedName.toLowerCase()) && (
             <span className="text-red-400 text-xs italic">Previously failed — retry blocked until next level.</span>
@@ -1897,7 +1897,7 @@ function MemorisePicker({
                     onClick={() => memoriseKnown(k)}
                     className={`flex-1 min-w-0 break-words text-left px-3 py-1.5 text-sm ${
                       atCap
-                        ? 'text-[#9c948b] cursor-not-allowed'
+                        ? 'text-[#9c948b] italic cursor-not-allowed'
                         : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
                     }`}
                     title={
@@ -1976,7 +1976,7 @@ function GlamourSection({
               </button>
             </div>
             {ref && (
-              <p className="text-[#a8a09a] text-xs mt-1">{ref.description}</p>
+              <p className="text-[#a1988f] text-xs mt-1">{ref.description}</p>
             )}
             <input
               type="text"
@@ -2200,7 +2200,7 @@ function KnackSection({
         <span className="text-[#c4a35a] font-semibold">{knack.name}</span>
         <button
           onClick={clearKnack}
-          className="text-[#a8a09a] hover:text-[#f5e6c8] text-xs underline transition-colors"
+          className="text-[#a1988f] hover:text-[#f5e6c8] text-xs underline transition-colors"
         >
           Change
         </button>
@@ -2213,7 +2213,7 @@ function KnackSection({
             <div
               key={tier.level}
               className={`bg-[#1a1a2e] p-2 rounded text-sm ${
-                isActive ? 'text-[#f5e6c8]' : 'text-[#9c948b]'
+                isActive ? 'text-[#f5e6c8]' : 'text-[#9c948b] italic'
               }`}
             >
               <span className={`font-semibold ${isActive ? 'text-[#c4a35a]' : 'text-[#b0955c]'}`}>
@@ -2304,7 +2304,7 @@ function GlamourReference() {
         {GLAMOURS.map((g) => (
           <div key={g.id} className="text-xs">
             <span className="text-[#c4a35a]">{g.id}. {g.name}</span>
-            <span className="text-[#a8a09a]"> - {g.description}</span>
+            <span className="text-[#a1988f]"> - {g.description}</span>
           </div>
         ))}
       </div>

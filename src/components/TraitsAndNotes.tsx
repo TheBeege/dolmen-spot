@@ -75,7 +75,7 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
   if (totalSlots === 0) {
     return (
       <div className={cardClasses}>
-        <p className="text-[#a8a09a] text-sm italic">Combat talents unlock at Level 2.</p>
+        <p className="text-[#a1988f] text-sm italic">Combat talents unlock at Level 2.</p>
       </div>
     );
   }
@@ -129,7 +129,7 @@ function TurningUndead() {
   return (
     <div className={cardClasses}>
       <span className={labelClasses}>Turning the Undead</span>
-      <p className="text-[#a8a09a] text-xs mb-2">
+      <p className="text-[#a1988f] text-xs mb-2">
         {FEATURE_NOTES.turningUndead} {TURNING_UNDEAD_TABLE.frequency}.
       </p>
       <div className="flex items-center gap-2 mb-2">
@@ -164,7 +164,7 @@ function HolyOrderSelector({ character, onChange }: TraitsAndNotesProps) {
   if (character.level < 2) {
     return (
       <div className={cardClasses}>
-        <p className="text-[#a8a09a] text-sm italic">Holy orders are available at Level 2+.</p>
+        <p className="text-[#a1988f] text-sm italic">Holy orders are available at Level 2+.</p>
       </div>
     );
   }
@@ -320,22 +320,22 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
       <div className={cardClasses}>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label htmlFor="companion-name" className="text-[#a8a09a] text-xs">Name</label>
+            <label htmlFor="companion-name" className="text-[#a1988f] text-xs">Name</label>
             <input id="companion-name" type="text" value={companion.name} onChange={(e) => update('name', e.target.value)} className={`${inputClasses} text-sm`} />
           </div>
           <div>
-            <label htmlFor="companion-type" className="text-[#a8a09a] text-xs">Type</label>
+            <label htmlFor="companion-type" className="text-[#a1988f] text-xs">Type</label>
             <input id="companion-type" type="text" value={companion.type} onChange={(e) => update('type', e.target.value)} className={`${inputClasses} text-sm`} placeholder="Wolf, hawk..." />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label htmlFor="companion-hp" className="text-[#a8a09a] text-xs">HP</label>
+            <label htmlFor="companion-hp" className="text-[#a1988f] text-xs">HP</label>
             <input id="companion-hp" type="number" value={companion.hp} onChange={(e) => update('hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-sm`} min={0} />
           </div>
         </div>
         <div>
-          <label htmlFor="companion-notes" className="text-[#a8a09a] text-xs">Notes</label>
+          <label htmlFor="companion-notes" className="text-[#a1988f] text-xs">Notes</label>
           <input id="companion-notes" type="text" value={companion.notes} onChange={(e) => update('notes', e.target.value)} className={`${inputClasses} text-sm`} />
         </div>
       </div>
@@ -362,7 +362,7 @@ function BreggleFeatures({ character, onChange }: TraitsAndNotesProps) {
             >
               <div className="text-[#c4a35a] font-semibold">L{h.level}</div>
               <div className="text-[#f5e6c8]/70">{h.length}</div>
-              <div className="text-[#a8a09a]">{h.damage}</div>
+              <div className="text-[#a1988f]">{h.damage}</div>
             </div>
           ))}
         </div>
@@ -435,7 +435,7 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
               className={`${cardClasses} text-center cursor-pointer transition-colors ${active ? 'border-[#c4a35a] bg-[#2a2a3e]' : 'hover:border-[#c4a35a]/50'} ${wilderDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
               <div className="text-[#c4a35a] font-semibold text-sm">{form.name}</div>
-              <div className="text-[#a8a09a] text-xs">{form.description}</div>
+              <div className="text-[#a1988f] text-xs">{form.description}</div>
               {form.ac && (
                 <div className="text-[#f5e6c8]/60 text-xs mt-1">
                   AC {form.ac} | Spd {form.speed}&apos;
@@ -695,19 +695,19 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
               card's number for screen-reader users, who get no visual grouping. */}
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div>
-              <label htmlFor={`retainer-${r.id}-class`} className="text-[#a8a09a]">Class<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-class`} className="text-[#a1988f]">Class<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-class`} type="text" value={r.class} onChange={(e) => updateRetainer(r.id, 'class', e.target.value)} className={`${inputClasses} text-xs`} />
             </div>
             <div>
-              <label htmlFor={`retainer-${r.id}-level`} className="text-[#a8a09a]">Level<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-level`} className="text-[#a1988f]">Level<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-level`} type="number" value={r.level} onChange={(e) => updateRetainer(r.id, 'level', parseInt(e.target.value) || 1)} className={`${inputClasses} text-xs`} min={1} />
             </div>
             <div>
-              <label htmlFor={`retainer-${r.id}-hp`} className="text-[#a8a09a]">HP<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-hp`} className="text-[#a1988f]">HP<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-hp`} type="number" value={r.hp} onChange={(e) => updateRetainer(r.id, 'hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={0} />
             </div>
             <div>
-              <label htmlFor={`retainer-${r.id}-loyalty`} className="text-[#a8a09a]">Loyalty<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-loyalty`} className="text-[#a1988f]">Loyalty<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-loyalty`} type="number" value={r.loyalty} onChange={(e) => updateRetainer(r.id, 'loyalty', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={1} max={12} />
             </div>
           </div>

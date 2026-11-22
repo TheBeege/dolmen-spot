@@ -74,7 +74,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
           <button
             type="button"
             onClick={handleSyncAll}
-            className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#7a5a38] transition-colors"
+            className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors"
           >
             Sync All
           </button>
@@ -83,9 +83,9 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
 
       {/* Expertise Points */}
       {calculated.expertisePoints !== null && (
-        <p className="text-[#9a9aab] text-xs mb-3">
+        <p className="text-[#a1988f] text-xs mb-3">
           Expertise Points: <span className="text-[#f5e6c8] font-semibold">{calculated.expertisePoints}</span>
-          <span className="text-[#9a9aab]"> (distribute among class skills)</span>
+          <span className="text-[#a1988f]"> (distribute among class skills)</span>
         </p>
       )}
 
@@ -130,7 +130,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
       {/* Custom skills */}
       {customKeys.length > 0 && (
         <div className="mt-4 pt-3 border-t border-[#5a3a28]/50">
-          <span className="text-xs text-[#9a9aab] mb-2 block">Custom Skills</span>
+          <span className="text-xs text-[#a1988f] mb-2 block">Custom Skills</span>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {customKeys.map(key => {
               const displayName = skillKeyToDisplayName(key);
@@ -196,7 +196,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
                 setShowAddSkill(false);
                 setNewSkillName('');
               }}
-              className="text-xs px-2 py-1 text-[#a89a8a] hover:text-[#f5e6c8] transition-colors"
+              className="text-xs px-2 py-1 text-[#a1988f] hover:text-[#f5e6c8] transition-colors"
             >
               Cancel
             </button>

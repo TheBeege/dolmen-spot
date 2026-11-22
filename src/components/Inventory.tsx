@@ -516,7 +516,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 className={`${inputClasses} w-20 text-center`}
               />
             </label>
-            <span className={`text-[#a8a09a] text-xs shrink-0 ${ONE_LINE_FIELD_HEIGHT} flex items-center`}>
+            <span className={`text-[#a1988f] text-xs shrink-0 ${ONE_LINE_FIELD_HEIGHT} flex items-center`}>
               {contents.length}/{SPELLBOOK_CAPACITY}
             </span>
             {/* The rest of the Notes column */}
@@ -581,7 +581,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               }
               className={`text-xs px-2 py-0.5 rounded mt-1 ${
                 isFull
-                  ? 'bg-[#1a1a2e] text-[#9c948b] border border-[#5a3a28]/40 cursor-not-allowed'
+                  ? 'bg-[#1a1a2e] text-[#9c948b] border border-dashed border-[#5a3a28]/70 cursor-not-allowed'
                   : 'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8]'
               }`}
             >
@@ -818,7 +818,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             {container ? containerLabel(container) : 'Loose Items'}
           </span>
           {container && encumbranceMethod === 'weight' && (
-            <span className={`text-xs ${isOverCapacity ? 'text-[#ff6b4a]' : 'text-[#a8a09a]'}`}>
+            <span className={`text-xs ${isOverCapacity ? 'text-[#ff6b4a]' : 'text-[#a1988f]'}`}>
               ({usedWeight} / {capacity}w)
             </span>
           )}
@@ -861,7 +861,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             {containerItems.length > 0 && (
               <div className="ml-4">
                 {/* Column headers (hidden on mobile) */}
-                <div className="hidden sm:flex items-center gap-2 text-[#a8a09a] text-xs mb-1 px-2">
+                <div className="hidden sm:flex items-center gap-2 text-[#a1988f] text-xs mb-1 px-2">
                   <span className={NAME_HEADER}>Name</span>
                   <span className="w-16 text-center">Slots</span>
                   <span className="w-20 text-center">Weight</span>
@@ -942,7 +942,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           {/* Controls */}
           <div className="p-4 pb-0 shrink-0">
             <div className="flex items-center gap-2 text-xs mb-2">
-              <span id="catalog-target-label" className="text-[#a8a09a]">Adding to:</span>
+              <span id="catalog-target-label" className="text-[#a1988f]">Adding to:</span>
               <select
                 aria-labelledby="catalog-target-label"
                 value={catalogTarget.section === 'equipped' ? 'equipped' : (catalogTarget.containerId ?? 'loose')}
@@ -1108,7 +1108,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         <h3 className="text-[#c4a35a] text-lg font-bold mb-3">Equipped Items</h3>
 
         {/* Column headers (hidden on mobile) */}
-        <div className="hidden sm:flex items-center gap-2 text-[#a8a09a] text-xs mb-1 px-2">
+        <div className="hidden sm:flex items-center gap-2 text-[#a1988f] text-xs mb-1 px-2">
           <span className={NAME_HEADER}>Name</span>
           <span className="w-16 text-center">Slots</span>
           <span className="w-20 text-center">Weight</span>
@@ -1166,7 +1166,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                     className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e] border-b border-[#5a3a28]/30 last:border-b-0"
                   >
                     {entry.name}
-                    <span className="text-[#a8a09a] text-xs ml-2">
+                    <span className="text-[#a1988f] text-xs ml-2">
                       ({entry.capacity}w capacity)
                     </span>
                   </button>

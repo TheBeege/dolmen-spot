@@ -208,7 +208,7 @@ const ENTRIES: ChangelogEntry[] = [
 
 function ChangeList({ changes }: { changes: string[] }) {
   return (
-    <ul className="list-disc pl-5 space-y-1.5 text-[#f5e6c8] text-sm leading-relaxed marker:text-[#c4a35a]/50">
+    <ul className="list-disc pl-5 space-y-1.5 text-[#f5e6c8] text-sm leading-relaxed marker:text-[#b0955c]">
       {changes.map((change, i) => (
         <li key={i}>{change}</li>
       ))}
@@ -247,9 +247,9 @@ export default function ChangelogPage() {
             >
               <header className="mb-3 flex flex-wrap items-baseline gap-x-3 gap-y-1">
                 <h2 className="text-lg font-semibold text-[#c4a35a]">{entry.title}</h2>
-                <span className="text-xs text-[#f5e6c8]/50">{entry.date}</span>
+                <span className="text-xs text-[#a1988f]">{entry.date}</span>
                 {entry.prNumbers && entry.prNumbers.length > 0 && (
-                  <span className="text-xs text-[#c4a35a]/80">
+                  <span className="text-xs text-[#b0955c]">
                     {entry.prNumbers.length === 1 ? 'PR' : 'PRs'}{' '}
                     {entry.prNumbers.map((pr, i) => (
                       <Fragment key={pr}>
@@ -282,7 +282,7 @@ export default function ChangelogPage() {
       </main>
 
       <footer className="bg-[#1a1a2e] border-t border-[#5a3a28] py-3 text-center">
-        <p className="text-xs text-[#f5e6c8]/30">
+        <p className="text-xs text-[#9c948b]">
           <Link href="/" className="hover:text-[#c4a35a] transition-colors">Sheet</Link>
           {' · '}
           <Link href="/changelog" className="hover:text-[#c4a35a] transition-colors">Changelog</Link>
