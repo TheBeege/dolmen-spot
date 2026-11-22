@@ -24,14 +24,15 @@ const POI_KIND = 'Town or city';
 // one marker with their count wherever they don't fit apart.
 const COMBINED_HEX = '1106';
 
-// The fills the map draws its discs with, as a computed style spells them:
+// The four fills the map draws its discs with, as a computed style spells them:
 // NIGHT (#1a1a2e) for a kind's marker and a combined marker's dark disc,
 // POI_FILL (#8b2500) for a point of interest without a kind, DOOR_FILL
-// (#a774d6) for a fairy door. Each comes from an SVG attribute, which forced
-// colours' rules in globals.css replace with Canvas, so a disc that still has
-// one of them means the emulation did nothing and every comparison below would
-// hold in the ordinary palette too.
-const DISC_FILLS = ['rgb(26, 26, 46)', 'rgb(139, 37, 0)', 'rgb(167, 116, 214)'];
+// (#a774d6) for a fairy door, and GOLD (#c4a35a) for the current-location star.
+// Each comes from an SVG attribute, which forced colours' rules in globals.css
+// replace with Canvas, so a disc that still has one of them means the emulation
+// did nothing and every comparison below would hold in the ordinary palette
+// too.
+const DISC_FILLS = ['rgb(26, 26, 46)', 'rgb(139, 37, 0)', 'rgb(167, 116, 214)', 'rgb(196, 163, 90)'];
 
 /** Open the map, select Prigwort's hex, and return the kind picker, showing. */
 async function openPicker(page: Page): Promise<Locator> {
@@ -80,12 +81,15 @@ test.describe('at 1280px', () => {
     await expect(legend).toContainText(POI_KIND);
     await expect(picker.getByRole('radio')).toHaveCount(15);
 
-    // Every tile is at least 24 by 24 CSS px, whatever the font size.
+    // Every tile is at least 24 by 24 CSS px, whatever the font size. The
+    // count comes first: if the tiles stopped being labels, there would be
+    // nothing to measure and the loop would assert nothing at all.
     const sizes = await picker.locator('label').evaluateAll((tiles) =>
       tiles.map((el) => {
         const r = el.getBoundingClientRect();
         return { w: Math.round(r.width), h: Math.round(r.height) };
       }));
+    expect(sizes, 'every tile is measured').toHaveLength(15);
     for (const { w, h } of sizes) {
       expect.soft(w, 'a tile a thumb can hit').toBeGreaterThanOrEqual(24);
       expect.soft(h, 'a tile a thumb can hit').toBeGreaterThanOrEqual(24);
