@@ -91,9 +91,11 @@ Next.js 16's `next build` no longer lints, so these checks do instead:
   - ESLint on staged `.js`/`.jsx`/`.mjs`/`.cjs`/`.ts`/`.tsx`/`.mts`/`.cts` files.
   - `npm run typecheck` (`next typegen && tsc --noEmit`, whole project) when a `.ts`/`.tsx` file, `tsconfig.json`, `package.json` or `package-lock.json` is staged. Deleting a file counts as staging it.
   - Errors block the commit; warnings are printed but don't block. Nothing is auto-fixed.
-- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`.
-  - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
-  - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
+- **CI** (`.github/workflows/ci.yml`) on every PR and every push to `main`, in two jobs:
+  - **Lint and typecheck**: `npm run lint`, `npm run typecheck`, `npm test` and `npm run check:msal-bridge`. The release process looks this job up by name, so don't rename it.
+    - The MSAL check fails if `public/msal-redirect-bridge.min.js` (loaded by OneDrive sign-in) no longer matches the redirect bridge in the installed `@azure/msal-browser`.
+    - After updating MSAL, run `npm run check:msal-bridge`, then the `cp` command it prints.
+  - **Browser tests**: `npm run test:e2e` (see Browser Tests). When it fails, the HTML report and traces are uploaded as the `playwright-report` artifact.
 
 How the hook works, and what that means for you:
 
@@ -107,6 +109,31 @@ How the hook works, and what that means for you:
 - **If the hook fails because a tracked file changed while it ran** (`--fail-on-changes`), nothing was reverted. Ignore lint-staged's advice to restore from a stash (`git apply --index <hash>`); with `--no-stash` there isn't one. Check `git status`, then commit again.
 - **Commits that git makes for you skip the hook.** That covers a conflict-free `git merge` (`--no-ff` too), `git cherry-pick`, `git revert` and `git rebase`. When you finish a conflict yourself, with `git commit` or with `git merge --continue`, `git cherry-pick --continue` or `git revert --continue`, the hook runs. The exception is `git rebase --continue`, which never runs it. CI is the check for everything the hook skips.
 - **Don't bypass the hook with `git commit --no-verify`.** Fix the errors instead, since CI fails on them anyway.
+
+## Browser Tests
+
+`npm run test:e2e` builds the app, serves the build with `next start` on port 3561 (`E2E_PORT` changes it), and runs the Playwright tests in `e2e/` against it. Run it before asking for review on anything the player sees.
+
+- `smoke.spec.ts`: the app loads, every tab renders, and characters can be made, switched, exported and imported.
+- `layout.spec.ts`: on every tab, with each fixture, the page doesn't scroll sideways, and no control sticks out of its card or is squeezed to nothing (`e2e/support/layout.ts`).
+- `a11y.spec.ts`: axe's WCAG 2.1 AA rules on every tab, with each fixture, plus placeholder contrast, which axe doesn't check. Serious and critical problems fail.
+- Every test also fails on a page error or a console error. The 404 for Vercel Analytics' script, which only Vercel serves, is expected.
+- What they don't see: each tab is checked as it first opens, so nothing is typed and no dialog, menu or collapsed section is opened; text cut off inside a field (a clipped number, a note that stopped growing) isn't measured; axe doesn't check that names are unique; and the tests run the production build, which prints none of React's development warnings (missing keys and the like), so check `next dev`'s console for those.
+
+**The matrix:** Chromium and WebKit, each with a default font size of 16px and of 24px: four projects in `playwright.config.ts`. The font size is the browser's own setting, not a page style, so rem-based breakpoints move as they would for a player. Chromium runs in its new headless mode with its scrollbars shown, so they take room as on a desktop. The layout tests run at 320, 375, 768 and 1280px in all four projects; the accessibility tests at 320 and 1280px at 16px.
+
+**Running it locally:**
+
+- Install the browsers once, and again after a Playwright update: `npx playwright install chromium webkit`. WebKit also needs system libraries (`sudo npx playwright install-deps webkit`). Without them, run Chromium only: `npm run test:e2e -- --project='chromium-*'`. Local WebKit runs are optional; CI runs both browsers.
+- Run a part: `npm run test:e2e -- --project=chromium-16px e2e/layout.spec.ts`. `npx playwright show-report` opens the report, with a trace and a screenshot of each failure.
+- `E2E_REUSE_SERVER=1` tests the server already on the port instead of building, so only use it when that server has your current code.
+- It runs 2 workers locally and 3 in CI. On a machine shared with other work, keep it at 2 or 3 (`--workers`).
+
+**Fixtures** (`e2e/fixtures/`) are characters at the current schema: `default` (what a new player gets), `kitchen-sink` (a level 12 Magician with a bit of everything), `elf` (glamours and runes, in Fairy now) and `mossling` (a knack). To add one, make the character in the app, export it (Save / Load > Export Character) into `e2e/fixtures/`, and add it to `FIXTURES` in `e2e/support/app.ts`; every spec then runs with it. The smoke tests fail if loading a fixture changes it, so after a migration that reshapes a field, re-export the fixtures it changes.
+
+**Writing a test:** import `test` and `expect` from `e2e/support/test.ts`, not from `@playwright/test`, so the page gets the project's font size and the test fails on console errors. Open the app with `openApp(page, fixture)` and a tab with `openTab(page, tab)` (`e2e/support/app.ts`). To check a state a spec opens, such as a dialog, call `findLayoutProblems` or `findA11yProblems` and pass the result through `newProblems` (`e2e/known-issues.ts`).
+
+**Known issues** (`e2e/known-issues.ts`) are problems the app already had when the suite was added. The layout and accessibility tests pass over every problem an entry matches, so a new problem fails only where no entry matches it: a new overflow inside a card an entry already covers, at that width, passes too. Keep entries as narrow as the problem. Each entry says what's wrong and matches problems by check, tab, a regex on `element — detail` as a failure prints it, and optionally the widest window and the font sizes. Nothing fails when an entry stops matching anything, so when you fix one, delete its entry yourself; the tests then keep it fixed. Don't add an entry to get your own change through; fix the problem. Add one only for a problem that was already there (one a new fixture shows, say), and list it in your PR as follow-up work.
 
 ## Releases & Deployment
 

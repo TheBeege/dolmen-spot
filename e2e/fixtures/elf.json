@@ -1,0 +1,255 @@
+{
+  "schemaVersion": 15,
+  "id": "fixture-elf",
+  "name": "Ilvarel of the Gloaming",
+  "kindred": "elf",
+  "class": "",
+  "background": "Courtier",
+  "alignment": "Chaotic",
+  "affiliation": "The Court of the Hidden Moon",
+  "moonSign": "",
+  "moonPhase": "",
+  "level": 3,
+  "xp": 9000,
+  "xpNextLevel": 14000,
+  "xpModifier": 0,
+  "abilityScores": {
+    "strength": 10,
+    "intelligence": 14,
+    "wisdom": 9,
+    "dexterity": 16,
+    "constitution": 10,
+    "charisma": 15
+  },
+  "maxHp": 12,
+  "currentHp": 12,
+  "armorClass": 14,
+  "attackBonus": 2,
+  "speed": 40,
+  "travelPointsPerDay": 8,
+  "magicResistance": 0,
+  "saveTargets": {
+    "doom": 10,
+    "ray": 11,
+    "hold": 12,
+    "blast": 15,
+    "spell": 13
+  },
+  "skillTargets": {
+    "listen": 6,
+    "search": 6,
+    "survival": 6
+  },
+  "equippedItems": [
+    {
+      "id": "elf-eq-01",
+      "name": "Leather",
+      "slots": 1,
+      "weight": 200,
+      "notes": "Stitched with silver thread",
+      "equipped": true
+    },
+    {
+      "id": "elf-eq-02",
+      "name": "Longbow",
+      "slots": 1,
+      "weight": 30,
+      "notes": "",
+      "equipped": true
+    },
+    {
+      "id": "elf-eq-03",
+      "name": "Arrows (20)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": true
+    },
+    {
+      "id": "elf-eq-04",
+      "name": "Shortsword",
+      "slots": 1,
+      "weight": 30,
+      "notes": "",
+      "equipped": true
+    }
+  ],
+  "stowedItems": [],
+  "containers": [],
+  "tinyItems": "",
+  "coins": {
+    "copper": 0,
+    "silver": 0,
+    "gold": 10,
+    "pellucidium": 0
+  },
+  "encumbranceMethod": "slots",
+  "equippedArmourName": "Leather",
+  "hasShield": false,
+  "spells": [],
+  "spellNotes": "",
+  "glamours": [
+    {
+      "id": "elf-gl-01",
+      "glamourId": 14,
+      "name": "Moon Sight",
+      "notes": "Always on"
+    },
+    {
+      "id": "elf-gl-02",
+      "glamourId": 12,
+      "name": "Masquerade",
+      "notes": ""
+    },
+    {
+      "id": "elf-gl-03",
+      "glamourId": 19,
+      "name": "Vanishing",
+      "notes": "Used on the miller"
+    }
+  ],
+  "runes": [
+    {
+      "id": "elf-rn-01",
+      "runeId": 2,
+      "name": "Fog Cloud",
+      "magnitude": "lesser",
+      "usesRemaining": 1,
+      "notes": ""
+    },
+    {
+      "id": "elf-rn-02",
+      "runeId": 9,
+      "name": "Fairy Steed",
+      "magnitude": "greater",
+      "usesRemaining": 0,
+      "notes": "A grey mare called Mist"
+    }
+  ],
+  "knack": null,
+  "startingSpellBook": "",
+  "knownSpells": [],
+  "spellStudy": {
+    "active": null,
+    "queue": []
+  },
+  "failedStudies": [],
+  "classTraits": "",
+  "kindredTraits": "Immortal. Unaging. Cold iron burns.",
+  "languages": "Woldish, Sylvan, High Elfish",
+  "combatTalents": "",
+  "otherNotes": "",
+  "retainers": [],
+  "gazeUsesRemaining": 0,
+  "currentForm": "estray",
+  "wilderUsedToday": false,
+  "madRevelryUsesRemaining": 0,
+  "trophies": [],
+  "animalCompanion": null,
+  "liegeHouse": "",
+  "selectedCombatTalents": [],
+  "holyOrder": "",
+  "symbioticFleshTraits": [],
+  "fungalSymbiosisUsesRemaining": 0,
+  "currentDate": {
+    "day": 3,
+    "month": 6,
+    "year": 3
+  },
+  "currentLocation": "The Hall of Antlers",
+  "currentLocationHex": "0805",
+  "mapData": {
+    "pois": [
+      {
+        "id": "elf-poi-01",
+        "hex": "0805",
+        "name": "Hag's Addle",
+        "notes": "",
+        "kind": "village"
+      }
+    ],
+    "fairyDoors": [
+      {
+        "id": "elf-door-01",
+        "hex": "0805",
+        "name": "The Gloaming Gate",
+        "notes": "",
+        "destination": {
+          "kind": "wild"
+        }
+      }
+    ],
+    "leyLines": []
+  },
+  "journalEntries": [
+    {
+      "id": "elf-entry-01",
+      "date": {
+        "day": 2,
+        "month": 6,
+        "year": 3
+      },
+      "location": "Hag's Addle",
+      "hex": "0805",
+      "text": "Reached the Gloaming Gate."
+    },
+    {
+      "id": "elf-entry-02",
+      "date": {
+        "day": 3,
+        "month": 6,
+        "year": 3
+      },
+      "fairyEvent": {
+        "visitId": "elf-visit-1",
+        "kind": "entered"
+      },
+      "location": "Hag's Addle",
+      "hex": "0805",
+      "text": "Entered Fairy (visit 1)."
+    },
+    {
+      "id": "elf-entry-03",
+      "date": {
+        "day": 3,
+        "month": 6,
+        "year": 3
+      },
+      "fairyDate": {
+        "visitId": "elf-visit-1",
+        "day": 3
+      },
+      "location": "The Hall of Antlers",
+      "text": "The Hall of Antlers. My cousin Sorrel is to be married to a fox."
+    }
+  ],
+  "npcs": [],
+  "exhaustionLevel": 0,
+  "hungerDays": 0,
+  "thirstDays": 0,
+  "rations": {
+    "fresh": 0,
+    "preserved": 0
+  },
+  "activeLightSources": [],
+  "travelDaysWithoutRest": 0,
+  "forcedMarchActive": false,
+  "travelPointsRemaining": 0,
+  "fairyVisits": [
+    {
+      "id": "elf-visit-1",
+      "enteredOn": {
+        "day": 3,
+        "month": 6,
+        "year": 3
+      },
+      "returnedOn": null,
+      "daysInFairy": 4
+    }
+  ],
+  "livedTimeStart": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  }
+}
