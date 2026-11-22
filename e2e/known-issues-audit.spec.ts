@@ -6,15 +6,18 @@
 //
 // It walks the matrix itself, in one process — the suite runs it across
 // parallel workers, so no test sees more than its own tab — and fails with the
-// entries that matched nothing. It drives Chromium's default font size
-// directly, as e2e/support/test.ts does, so it runs in one Chromium project:
-// `npm run audit:known-issues` (see "Browser Tests" in AGENTS.md).
+// entries that matched nothing. `npm run audit:known-issues` runs it (see
+// "Browser Tests" in AGENTS.md), in Chromium alone: it sets the browser's own
+// font size through Chromium's settings, as e2e/support/test.ts does, so it
+// can't do the same in WebKit. An entry only WebKit shows says so with
+// `browsers: ['webkit']`, and this leaves it alone.
 //
 // What it covers is what the layout and accessibility tests cover: every tab as
-// it first opens, at every width and font size of the matrix. States a spec
-// opens by hand (the map's kind picker, say) are not part of it, so an entry
-// for a problem only such a state shows would look unused: add that state here
-// if one is ever needed.
+// it first opens, at every width and font size of the layout matrix, and every
+// tab × fixture × width for the accessibility ones. States a spec opens by hand
+// (the map's kind picker, say) are not part of it, so an entry for a problem
+// only such a state shows would look unused: add that state here if one is ever
+// needed.
 import { expect, test, type Browser } from '@playwright/test';
 import { describeKnownIssue, KNOWN_ISSUES, knownIssuesFor, type KnownIssue, type Where } from './known-issues';
 import { findA11yProblems } from './support/a11y';
@@ -41,11 +44,12 @@ async function matrixPage(browser: Browser, baseURL: string, width: number, font
   return { context, page };
 }
 
-test('every known issue still matches a problem', async ({ browser, browserName, baseURL }, testInfo) => {
+// Playwright.config.ts keeps this file out of the WebKit projects, so it always
+// runs in Chromium: there is no other browser here to skip.
+test('every known issue still matches a problem', async ({ browser, baseURL }, testInfo) => {
   // One process has to see the whole matrix, so this is one long test: it gets
   // its own timeout rather than the suite's 30s.
   test.setTimeout(20 * 60_000);
-  test.skip(browserName !== 'chromium', "the audit sets the browser's font size with Chromium's own settings");
 
   /** The known issues a problem matched, by identity: an entry in KNOWN_ISSUES. */
   const matched = new Set<KnownIssue>();
@@ -82,11 +86,16 @@ test('every known issue still matches a problem', async ({ browser, browserName,
     }
   }
 
-  const unused = KNOWN_ISSUES.filter((issue) => !matched.has(issue));
-  testInfo.annotations.push({ type: 'known issues', description: `${matched.size} of ${KNOWN_ISSUES.length} matched` });
+  // An entry that leaves out Chromium can't be required to match here; one that
+  // names no browser at all is every browser's, so it can.
+  const required = KNOWN_ISSUES.filter((issue) => issue.browsers === undefined || issue.browsers.includes('chromium'));
+  const unused = required.filter((issue) => !matched.has(issue));
+  const webkitOnly = KNOWN_ISSUES.filter((issue) => !required.includes(issue));
+  testInfo.annotations.push({ type: 'known issues', description: `${matched.size} of ${required.length} matched` });
   console.log(
     `known-issues audit: ${states.layout} layout and ${states.a11y} accessibility checks over ${WIDTHS.length} widths and ${FONT_SIZES.length} font sizes; ` +
-      `${matched.size} of ${KNOWN_ISSUES.length} known issues matched a problem, ${unused.length} matched nothing`,
+      `${matched.size} of ${required.length} known issues matched a problem, ${unused.length} matched nothing` +
+      (webkitOnly.length ? ` (${webkitOnly.length} WebKit-only left out)` : ''),
   );
   expect(unused.map(describeKnownIssue), 'known issues no problem matches any more: delete the entry (or fix the audit, if it misses the state)').toEqual([]);
 });

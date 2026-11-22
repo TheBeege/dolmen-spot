@@ -105,3 +105,57 @@ jobs:
             playwright-report/
             test-results/
           retention-days: 14
+
+  # `npm run audit:known-issues`: its own job so its minutes run beside the
+  # browser tests rather than after them (see "Browser Tests" in AGENTS.md).
+  known-issues-audit:
+    name: Known issues audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Skip installing the git hooks; CI never commits.
+          HUSKY: 0
+
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # A cache of its own, keyed apart from the browser-tests job's: this one
+      # needs Chromium alone, and saving that under the shared key would leave
+      # that job without WebKit.
+      - name: Restore the browser
+        id: browser
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install the browser and its system libraries
+        if: steps.browser.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Save the browser
+        if: steps.browser.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.browser.outputs.cache-primary-key }}
+
+      - name: Install the browser's system libraries
+        if: steps.browser.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # Builds the app and serves it (webServer in playwright.config.ts), then
+      # walks the matrix once to fail on a known-issue entry that matched nothing.
+      - name: Audit the known issues
+        run: npm run audit:known-issues

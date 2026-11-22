@@ -27,7 +27,16 @@ export interface KnownIssue {
   maxWidth?: number;
   /** Only at these default font sizes. */
   fontSizes?: number[];
+  /**
+   * The browsers that show the problem, when it isn't every one of them. An
+   * entry covers a problem in whichever browser the suite finds it, but the
+   * audit walks Chromium alone (e2e/known-issues-audit.spec.ts), so an entry
+   * that leaves out chromium is one it can't require to match.
+   */
+  browsers?: BrowserName[];
 }
+
+export type BrowserName = 'chromium' | 'webkit';
 
 const ALL_TABS: TabId[] = TABS.map((tab) => tab.id);
 

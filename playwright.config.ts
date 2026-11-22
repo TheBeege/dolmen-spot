@@ -39,9 +39,11 @@ export default defineConfig<MatrixOptions>({
   // at 24px (a player who has made the browser's text bigger). The layout
   // tests run each at the widths in WIDTHS (e2e/support/test.ts).
   projects: [
-    // The audit drives Chromium's own font size setting, so only its project runs it.
+    // The audit walks both font sizes of the layout matrix itself, in Chromium
+    // (it sets the font size through Chromium's settings), so exactly one
+    // project runs it, and only under its own script.
     { name: 'chromium-16px', use: { ...chromium, defaultFontSize: 16 }, testIgnore: withAudit ? undefined : auditTests },
-    { name: 'chromium-24px', use: { ...chromium, defaultFontSize: 24 }, testIgnore: withAudit ? a11yTests : [a11yTests, auditTests] },
+    { name: 'chromium-24px', use: { ...chromium, defaultFontSize: 24 }, testIgnore: [a11yTests, auditTests] },
     { name: 'webkit-16px', use: { ...webkit, defaultFontSize: 16 }, testIgnore: auditTests },
     { name: 'webkit-24px', use: { ...webkit, defaultFontSize: 24 }, testIgnore: [a11yTests, auditTests] },
   ],
