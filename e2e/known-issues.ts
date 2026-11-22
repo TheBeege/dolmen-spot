@@ -92,7 +92,7 @@ export const KNOWN_ISSUES: KnownIssue[] = [
     issue: 'Map: the ley lines\' and points of interest\' "Del" buttons are dark red on dark blue (1.9:1), and their accessible names ("Delete ley line …", "Delete POI …") don\'t contain the word they show.',
     checks: ['color-contrast', 'label-content-name-mismatch'],
     tabs: ['map'],
-    match: /^(Ley Lines & Crossings|Points of Interest) › button/,
+    match: /^(Ley Lines & Crossings|Points of Interest) › button\[type=button\] "Delete (ley line|POI) /,
   },
 
   // ── Labels ───────────────────────────────────────────────────────────

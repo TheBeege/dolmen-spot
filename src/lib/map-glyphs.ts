@@ -20,6 +20,9 @@ export interface Glyph {
   readonly cut: readonly string[];
 }
 
+/** The kinds of point of interest that have a glyph: every kind but the plain one, 'other'. */
+export type GlyphKind = Exclude<PoiKind, 'other'>;
+
 type Pt = readonly [number, number];
 
 // Coordinates are rounded so that the paths don't carry float noise.
@@ -97,7 +100,7 @@ function ray(cx: number, cy: number, deg: number, from: number, to: number, w0: 
 }
 
 /** Glyphs for the kinds of point of interest. 'other' has none: it's the plain marker. */
-export const POI_GLYPHS: Readonly<Record<Exclude<PoiKind, 'other'>, Glyph>> = {
+export const POI_GLYPHS: Readonly<Record<GlyphKind, Glyph>> = {
   // Three roofs, the middle one a spire.
   town: {
     body: [

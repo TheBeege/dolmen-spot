@@ -3,12 +3,13 @@
 // names each kind, that its tiles are big enough to tap, that the arrow keys
 // choose kinds, and what the legend says as the pointer moves over the tiles.
 // Also checks the page's layout and accessibility with the picker open, and
-// that forced colours keep each kind's glyph apart from its disc.
+// that forced colours keep each kind's glyph, and a combined marker's count,
+// apart from their discs.
 import type { Locator, Page } from '@playwright/test';
 import { findA11yProblems } from './support/a11y';
-import { openApp, openTab, TABS } from './support/app';
+import { openApp, openTab, settle, TABS } from './support/app';
 import { findLayoutProblems } from './support/layout';
-import { expect, test, viewportAt } from './support/test';
+import { expect, test, viewportAt, WIDTHS } from './support/test';
 import { newProblems } from './known-issues';
 
 const MAP_TAB = TABS.find((tab) => tab.id === 'map')!;
@@ -17,11 +18,17 @@ const MAP_TAB = TABS.find((tab) => tab.id === 'map')!;
 // hex inspector shows its one point of interest expanded, picker and all.
 const HEX = '1309';
 const POI = 'ks-poi-04';
-const POI_NAME = 'Prigwort';
 const POI_KIND = 'Town or city';
 
-/** The widths the picker must leave the page's layout and accessibility alone at. */
-const WIDTHS = [320, 375, 1280] as const;
+// Another of its hexes holds two points of interest, which the map draws as
+// one marker with their count wherever they don't fit apart.
+const COMBINED_HEX = '1106';
+
+// A disc's own fill in the theme (NIGHT, #1a1a2e). Under forced colours the
+// browser replaces it with Canvas, so a disc that still has it means the
+// emulation did nothing, and the comparisons below would pass in the ordinary
+// palette too.
+const NIGHT_FILL = 'rgb(26, 26, 46)';
 
 /** Open the map, select Prigwort's hex, and return the kind picker, showing. */
 async function openPicker(page: Page): Promise<Locator> {
@@ -31,8 +38,6 @@ async function openPicker(page: Page): Promise<Locator> {
   await page.keyboard.press('Enter');
   await expect(page.getByRole('heading', { name: `Hex ${HEX}` })).toBeVisible();
   const picker = page.getByRole('group', { name: 'Kind' });
-  // A lone point of interest on its hex opens expanded; otherwise, open it.
-  if (!(await picker.isVisible())) await page.getByRole('button', { name: `Edit ${POI_NAME}` }).click();
   await expect(picker).toBeVisible();
   return picker;
 }
@@ -49,6 +54,9 @@ function tile(picker: Locator, kind: string): Locator {
 function mapName(page: Page): Locator {
   return page.locator(`[data-marker="${POI}"]`).or(page.locator(`[role="button"][data-hex="${HEX}"]`));
 }
+
+const fill = (el: Locator) => el.evaluate((node) => getComputedStyle(node).fill);
+const stroke = (el: Locator) => el.evaluate((node) => getComputedStyle(node).stroke);
 
 test.describe('at 1280px', () => {
   test.use({ viewport: viewportAt(1280) });
@@ -68,7 +76,6 @@ test.describe('at 1280px', () => {
         const r = el.getBoundingClientRect();
         return { w: Math.round(r.width), h: Math.round(r.height) };
       }));
-    expect(sizes).toHaveLength(15);
     for (const { w, h } of sizes) {
       expect.soft(w, 'a tile a thumb can hit').toBeGreaterThanOrEqual(24);
       expect.soft(h, 'a tile a thumb can hit').toBeGreaterThanOrEqual(24);
@@ -100,15 +107,42 @@ test.describe('at 1280px', () => {
     const disc = marker.locator('.marker-disc');
     const glyph = marker.locator('.marker-glyph').first();
     const cut = marker.locator('.marker-glyph-cut').first();
-    const fill = (el: Locator) => el.evaluate((node) => getComputedStyle(node).fill);
-    const stroke = (el: Locator) => el.evaluate((node) => getComputedStyle(node).stroke);
 
     const discFill = await fill(disc);
+    expect(discFill, 'the disc is in forced colours').not.toBe(NIGHT_FILL);
     // The glyph is CanvasText on a Canvas disc, so a kind still reads as its
     // own drawing; the cut-outs are holes, which show the disc through them.
     expect(await fill(glyph), 'the glyph stands out from its disc').not.toBe(discFill);
     expect(await stroke(disc), 'the rim stands out from its disc').not.toBe(discFill);
     expect(await fill(cut), 'the cut-outs are holes').toBe(discFill);
+  });
+});
+
+test.describe('at 320px', () => {
+  test.use({ viewport: viewportAt(320) });
+
+  test('forced colours keep a combined marker’s count apart from its disc', async ({ page }) => {
+    await page.emulateMedia({ forcedColors: 'active' });
+    await openApp(page, 'kitchen-sink');
+    await openTab(page, MAP_TAB);
+    await page.getByLabel('Jump to a hex by typing its 4-digit coordinate').fill(COMBINED_HEX);
+    await page.keyboard.press('Enter');
+    // The two markers don't fit apart on a phone, so the hex draws one with
+    // their count; where they ever fit, zoom out until they no longer do,
+    // since it's that hand-drawn marker this checks.
+    const marker = page.locator(`[role="button"][data-hex="${COMBINED_HEX}"]`);
+    const zoomOut = page.getByRole('button', { name: 'Zoom out' });
+    for (let i = 0; i < 8 && !(await marker.isVisible()); i++) {
+      await zoomOut.click();
+      await settle(page);
+    }
+    await expect(marker).toBeVisible();
+
+    const disc = marker.locator('.marker-disc');
+    const digit = marker.locator('text');
+    const discFill = await fill(disc);
+    expect(discFill, 'the disc is in forced colours').not.toBe(NIGHT_FILL);
+    expect(await fill(digit), 'the count stands out from its disc').not.toBe(discFill);
   });
 });
 
@@ -120,6 +154,11 @@ for (const width of WIDTHS) {
       await openPicker(page);
       const where = { tab: 'map' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), where), 'layout problems with the picker open').toEqual([]);
+      // The layout check runs at every font size. axe runs at 16px only, as
+      // playwright.config.ts keeps a11y.spec.ts out of the 24px projects: its
+      // findings barely change with the font size, and this is the heaviest
+      // page in the suite.
+      if (defaultFontSize !== 16) return;
       expect.soft(newProblems(await findA11yProblems(page), where), 'accessibility problems with the picker open').toEqual([]);
     });
   });

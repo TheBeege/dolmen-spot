@@ -986,8 +986,8 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
         const b = slotAt(visible.length);
         els.push(
           <g key={`overflow-${hex}`} pointerEvents="none" role="img" aria-label={`${overflow} more on hex ${hex}`}>
-            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS * size.marker} fill={NIGHT} stroke={PARCHMENT} strokeWidth={BADGE_RIM * size.marker} />
-            <text x={b.x} y={b.y + BADGE_FONT * size.marker * 0.36} textAnchor="middle" fontSize={BADGE_FONT * size.marker} fill={PARCHMENT} fontWeight="bold">
+            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS * size.marker} fill={NIGHT} stroke={PARCHMENT} strokeWidth={BADGE_RIM * size.marker} className="marker-disc" />
+            <text x={b.x} y={b.y + BADGE_FONT * size.marker * 0.36} textAnchor="middle" fontSize={BADGE_FONT * size.marker} fill={PARCHMENT} fontWeight="bold" className="marker-ink">
               +{overflow}
             </text>
           </g>,
@@ -1016,8 +1016,8 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
         <title>{label}</title>
         {/* The rim is parchment whatever the items: a gold one belongs to a
             kind's own marker, so a count never wears one and its digit never
-            reads as a kind. */}
-        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={PARCHMENT} strokeWidth={r * 0.15} />
+            reads as a kind. The classes are forced colours' (globals.css). */}
+        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={PARCHMENT} strokeWidth={r * 0.15} className="marker-disc" />
         <text
           x={c.x + o.x}
           y={c.y + o.y + r * 0.5}
@@ -1028,6 +1028,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
           fontWeight="bold"
           pointerEvents="none"
           aria-hidden="true"
+          className="marker-ink"
         >
           {items.length}
         </text>
@@ -1041,8 +1042,10 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
     const k = starRadius / STAR_RADIUS;
     return (
       <g pointerEvents="none" aria-hidden="true">
-        <circle cx={c.x} cy={c.y} r={starRadius} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * k} />
-        <text x={c.x} y={c.y + STAR_GLYPH_FONT * k * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * k} fill={NIGHT} fontWeight="bold">
+        {/* Forced colours (globals.css) would otherwise paint the star and its
+            disc one colour. */}
+        <circle cx={c.x} cy={c.y} r={starRadius} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * k} className="marker-disc" />
+        <text x={c.x} y={c.y + STAR_GLYPH_FONT * k * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * k} fill={NIGHT} fontWeight="bold" className="marker-ink">
           ★
         </text>
       </g>
@@ -1516,9 +1519,12 @@ function HexInspectorPanel({
 /**
  * The kind of a point of interest, chosen by its icon: a group of radio
  * buttons, so Tab reaches the chosen one and the arrow keys choose the
- * others. The legend shows the description of the tile under the pointer or
- * with focus, falling back to the chosen kind's, since that's the only way a
- * touch screen or a keyboard can see what a kind covers.
+ * others. The legend describes the tile under the pointer, falling back to the
+ * chosen kind's. A touch screen can't hover, so there it shows the chosen kind
+ * alone: a player who wants to know what another tile means taps it, which
+ * chooses it, and can change it again. Focus needs no watching of its own,
+ * because a radio group has one tab stop, the checked tile, and the arrow keys
+ * check as they move, so the focused tile is always the chosen one.
  */
 function PoiKindPicker({ kind, onChange }: { kind: PoiKind; onChange: (kind: PoiKind) => void }) {
   const name = useId();
@@ -1544,13 +1550,11 @@ function PoiKindPicker({ kind, onChange }: { kind: PoiKind; onChange: (kind: Poi
           {POI_KINDS.map((k) => (
             <label
               key={k}
-              // The description in the legend follows the pointer and focus:
-              // `title` shows neither on a touch screen, and on a desktop it
-              // can be announced twice.
+              // The description in the legend follows the pointer: a `title`
+              // tooltip shows on neither a touch screen nor the keyboard, and
+              // on a desktop it can be announced twice.
               onMouseEnter={() => setLookedAt(k)}
               onMouseLeave={() => setLookedAt(null)}
-              onFocus={() => setLookedAt(k)}
-              onBlur={() => setLookedAt(null)}
               // In forced colours only the chosen tile has a border, and a thicker one.
               className="relative flex items-center justify-center size-7 rounded border border-transparent cursor-pointer hover:bg-[#2a2a3e] has-checked:border-[#f5e6c8] has-checked:bg-[#5a3a28] forced-colors:border-[color:Canvas] forced-colors:has-checked:border-2 forced-colors:has-checked:border-[color:Highlight] has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-[#c4a35a]"
             >

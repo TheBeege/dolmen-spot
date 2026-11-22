@@ -183,9 +183,11 @@ describe("a point of interest's kind", () => {
     for (const k of POI_KINDS) assert.ok(POI_KIND_NAMES[k].trim() !== '', k);
   });
 
-  test("each kind's name is short enough for its marker, and its description starts with it", () => {
+  test("each kind's description starts with its marker's name", () => {
     // The two 15-entry tables are kept in step by this: a renamed kind that
-    // doesn't start its description shows the mismatch here.
+    // doesn't start its description shows the mismatch here. 'other' is left
+    // out: its marker says 'Point of interest' and its picker tile 'Other', so
+    // neither can start the other.
     for (const k of POI_KINDS) {
       if (k === 'other') continue;
       assert.ok(

@@ -1,8 +1,8 @@
 // The map's marker icons: a round marker for each point of interest and fairy
 // door, with a hand-drawn glyph for its kind (src/lib/map-glyphs.ts). The map
-// draws them as markers (MarkerShape); the hex inspector beside its items and
-// in its kind picker (PoiIcon, DoorIcon). They're decorative: the marker or
-// control that shows one carries the name.
+// draws them as markers (MarkerShape); the hex inspector shows them beside its
+// items and, as small HTML images, in its kind picker (PoiIcon, DoorIcon).
+// They're decorative: the marker or control that shows one carries the name.
 //
 // Under forced colours the browser would paint the disc, the rim and the glyph
 // one colour, leaving every kind looking the same. Each shape therefore carries
@@ -11,7 +11,7 @@
 import { memo, type SVGProps } from 'react';
 import type { PoiKind } from '@/lib/types';
 import { POI_KINDS } from '@/lib/map-data';
-import { DOOR_GLYPH, GLYPH_CENTER, GLYPH_EXTENT, POI_GLYPHS, type Glyph } from '@/lib/map-glyphs';
+import { DOOR_GLYPH, GLYPH_CENTER, GLYPH_EXTENT, POI_GLYPHS, type Glyph, type GlyphKind } from '@/lib/map-glyphs';
 
 // The theme's colours, which the rest of the map uses too.
 export const PARCHMENT = '#f5e6c8';
@@ -30,8 +30,6 @@ export interface MarkerLook {
   /** The glyph's colour. Its cut-out details take the disc's colour. */
   ink: string;
 }
-
-type GlyphKind = Exclude<PoiKind, 'other'>;
 
 // Each look is made once, so that a marker gets the same object on every
 // render and MarkerShape (memoised) can skip it while the map pans.
