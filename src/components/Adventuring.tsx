@@ -49,7 +49,7 @@ interface AdventuringProps {
 }
 
 const inputClasses =
-  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
 
@@ -61,16 +61,16 @@ const smallButtonClasses =
 
 const SEASON_COLORS: Record<string, string> = {
   Winter: '#a0c4e8',
-  Spring: '#8fb368',
-  Summer: '#c4a35a',
-  Autumn: '#c47a3a',
+  Spring: '#a8cf82',
+  Summer: '#d8b878',
+  Autumn: '#eeae72',
 };
 
 const SLEEP_DIFFICULTY_COLORS: Record<string, string> = {
   easy: '#8fb368',
   moderate: '#c4a35a',
-  difficult: '#c47a3a',
-  impossible: '#b33a1a',
+  difficult: '#e8a765',
+  impossible: '#ef8a6a',
 };
 
 function getFestivalsForMonth(month: number): { day: number; name: string }[] {
@@ -602,7 +602,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
                     ? 'Ready to complete (see Spells tab)'
                     : `${remaining} week${remaining === 1 ? '' : 's'} remaining`}
                 </div>
-                <div className="text-[#f5e6c8]/40 text-xs italic mt-1">
+                <div className="text-[#9c948b] text-xs italic mt-1">
                   via {active.source}
                 </div>
               </div>
@@ -793,7 +793,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         </div>
 
         {character.activeLightSources.length === 0 && (
-          <div className="text-[#f5e6c8]/40 text-sm italic">No active light sources.</div>
+          <div className="text-[#9c948b] text-sm italic">No active light sources.</div>
         )}
 
         <div className="space-y-2">
@@ -1120,7 +1120,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         )}
 
         {festivalsThisMonth.length === 0 && celestialThisMonth.length === 0 && (
-          <div className="text-[#f5e6c8]/40 text-sm italic mt-2">
+          <div className="text-[#9c948b] text-sm italic mt-2">
             No festivals or celestial events this month.
           </div>
         )}
@@ -1141,9 +1141,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             <div
               key={s}
               className={`flex-1 text-center rounded py-2 text-sm font-semibold transition-colors ${
-                currentMonth.season === s
-                  ? 'ring-2 ring-[#c4a35a]'
-                  : 'opacity-40'
+                currentMonth.season === s ? 'ring-2 ring-[#c4a35a]' : ''
               }`}
               style={{
                 backgroundColor: currentMonth.season === s

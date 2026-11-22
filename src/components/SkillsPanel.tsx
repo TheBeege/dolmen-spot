@@ -74,7 +74,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
           <button
             type="button"
             onClick={handleSyncAll}
-            className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors"
+            className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#7a5a38] transition-colors"
           >
             Sync All
           </button>
@@ -83,9 +83,9 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
 
       {/* Expertise Points */}
       {calculated.expertisePoints !== null && (
-        <p className="text-[#8b8b9e] text-xs mb-3">
+        <p className="text-[#9a9aab] text-xs mb-3">
           Expertise Points: <span className="text-[#f5e6c8] font-semibold">{calculated.expertisePoints}</span>
-          <span className="text-[#8b8b9e]"> (distribute among class skills)</span>
+          <span className="text-[#9a9aab]"> (distribute among class skills)</span>
         </p>
       )}
 
@@ -130,7 +130,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
       {/* Custom skills */}
       {customKeys.length > 0 && (
         <div className="mt-4 pt-3 border-t border-[#5a3a28]/50">
-          <span className="text-xs text-[#8b8b9e] mb-2 block">Custom Skills</span>
+          <span className="text-xs text-[#9a9aab] mb-2 block">Custom Skills</span>
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
             {customKeys.map(key => {
               const displayName = skillKeyToDisplayName(key);
@@ -179,7 +179,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
                 }
               }}
               placeholder="Skill name..."
-              className="bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a] transition-colors placeholder-[#5a4a3a]"
+              className="bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-sm focus:outline-none focus:border-[#c4a35a] transition-colors placeholder:text-[#9c948b]"
               autoFocus
               aria-label="New skill name"
             />
@@ -196,7 +196,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
                 setShowAddSkill(false);
                 setNewSkillName('');
               }}
-              className="text-xs px-2 py-1 text-[#8a7a6a] hover:text-[#f5e6c8] transition-colors"
+              className="text-xs px-2 py-1 text-[#a89a8a] hover:text-[#f5e6c8] transition-colors"
             >
               Cancel
             </button>

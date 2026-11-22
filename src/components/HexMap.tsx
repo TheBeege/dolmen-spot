@@ -120,7 +120,7 @@ const REVEAL_INSPECTOR_QUERY = '(max-width: 767px), (max-height: 500px)';
 
 // Inputs are 16 px on phones so iOS doesn't zoom the page when they get focus.
 const INPUT_BASE =
-  'border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-base md:text-sm focus:outline-none focus:border-[#c4a35a]';
+  'border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-base md:text-sm focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 const INPUT_ON_CARD = `bg-[#1a1a2e] ${INPUT_BASE}`; // on a #2a2a3e card
 const INPUT_ON_ITEM = `bg-[#2a2a3e] ${INPUT_BASE}`; // inside a #1a1a2e item box
 
@@ -1146,7 +1146,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
             }}
           />
           {!draft && (
-            <span className="text-[#f5e6c8]/40 text-xs ml-auto basis-full md:basis-auto">
+            <span className="text-[#9c948b] text-xs ml-auto basis-full md:basis-auto">
               <span className="pointer-coarse:hidden">
                 Drag to pan · Scroll or +/− to zoom · Click a hex to inspect · Hover a marker for details
               </span>
@@ -1281,7 +1281,7 @@ function JumpToHexInput({ drafting, onJump }: { drafting: boolean; onJump: (hex:
         aria-label={drafting ? 'Add a hex to the ley line by typing its coordinate' : 'Jump to a hex by typing its 4-digit coordinate'}
         aria-invalid={error ? true : undefined}
         aria-describedby={statusId}
-        className={`bg-[#1a1a2e] border ${border} text-[#f5e6c8] rounded px-2 py-1 text-base md:text-xs w-28 focus:outline-none`}
+        className={`bg-[#1a1a2e] border ${border} text-[#f5e6c8] rounded px-2 py-1 text-base md:text-xs w-28 focus:outline-none placeholder:text-[#9c948b]`}
       />
       <button type="submit" className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 text-xs transition-colors">
         Go
@@ -1348,7 +1348,7 @@ function HexInspectorPanel({
 }) {
   if (!selectedHex) {
     return (
-      <div className="bg-[#2a2a3e] rounded-lg p-4 text-sm text-[#f5e6c8]/50 italic">
+      <div className="bg-[#2a2a3e] rounded-lg p-4 text-sm text-[#a8a09a] italic">
         Click a hex on the map to inspect it.
       </div>
     );
@@ -1807,7 +1807,7 @@ function DoorEditor({
           aria-label="Fairy door name"
           className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
-        <span className="text-xs text-[#f5e6c8]/40">{door.destination.kind === 'wild' ? 'wild' : `→ ${partner?.hex ?? '?'}`}</span>
+        <span className="text-xs text-[#9c948b]">{door.destination.kind === 'wild' ? 'wild' : `→ ${partner?.hex ?? '?'}`}</span>
         <button
           type="button"
           onClick={() => setExpanded((x) => !x)}
@@ -1905,7 +1905,7 @@ function LeyLinesPanel({
         Ley Lines &amp; Crossings
       </h3>
       {leyLines.length === 0 ? (
-        <div className="text-xs text-[#f5e6c8]/40 italic">None yet. Use “Draw Ley Line” above.</div>
+        <div className="text-xs text-[#9c948b] italic">None yet. Use “Draw Ley Line” above.</div>
       ) : (
         <div className="space-y-2">
           {leyLines.map((ll, i) => (
@@ -1968,7 +1968,7 @@ function LeyLineEditor({
           aria-label="Ley line name"
           className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
         />
-        <span className="text-xs text-[#f5e6c8]/40">
+        <span className="text-xs text-[#9c948b]">
           {leyLine.hexes.length} hex{leyLine.hexes.length === 1 ? '' : 'es'}
         </span>
         <button type="button" onClick={onDelete} aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
@@ -1991,7 +1991,7 @@ function LeyLineEditor({
         <input type="color" value={leyLine.color} onChange={(e) => onSave({ color: e.target.value })} aria-label={`Colour of ${label}`} className="bg-[#2a2a3e] border border-[#5a3a28] rounded h-8 md:h-6 w-full" />
         <input value={leyLine.notes} onChange={(e) => onSave({ notes: e.target.value })} placeholder="Notes" aria-label={`Notes for ${label}`} className={INPUT_ON_ITEM} />
       </div>
-      <div className="text-[10px] text-[#f5e6c8]/40 truncate">{leyLine.hexes.join(' → ')}</div>
+      <div className="text-[10px] text-[#9c948b] truncate">{leyLine.hexes.join(' → ')}</div>
     </div>
   );
 }

@@ -117,7 +117,7 @@ export default function AbilityScores({ character, onChange }: AbilityScoresProp
                     {modStr}
                   </span>
                 </div>
-                <span className="text-[10px] text-[#8a7a6a] mt-1 italic">{ability.note}</span>
+                <span className="text-[10px] text-[#a89a8a] mt-1 italic">{ability.note}</span>
               </div>
             );
           })}

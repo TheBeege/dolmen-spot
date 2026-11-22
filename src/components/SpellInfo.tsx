@@ -340,7 +340,7 @@ function SpellSummaryText({ summary }: { summary: SpellSummary }) {
     <>
       <span className="block">
         <span className="text-[#c4a35a]">Range:</span> {summary.range}
-        <span aria-hidden="true" className="text-[#f5e6c8]/50"> · </span>
+        <span aria-hidden="true" className="text-[#a8a09a]"> · </span>
         <span className="text-[#c4a35a]">Duration:</span> {summary.duration}
       </span>
       <span className="block mt-0.5">{summary.effect}</span>

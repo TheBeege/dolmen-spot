@@ -51,7 +51,7 @@ interface JournalProps {
 // Inputs are 16 px, so iOS doesn't zoom the page when they get focus, and
 // placeholders are bright enough to read (AA contrast).
 const fieldClasses =
-  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] placeholder:text-[#f5e6c8]/60 rounded px-2 py-1 text-base focus:outline-none focus:border-[#c4a35a]';
+  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] placeholder:text-[#9c948b] rounded px-2 py-1 text-base focus:outline-none focus:border-[#c4a35a]';
 const buttonClasses = 'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-3 py-1 transition-colors';
 // Padded so that each is at least 24 px tall to tap.
 const linkClasses = 'text-[#c4a35a] hover:underline rounded px-1 py-1';

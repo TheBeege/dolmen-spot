@@ -80,6 +80,7 @@ Character data is stored in localStorage and must survive schema changes across 
 - **State management**: React hooks + localStorage persistence via `src/hooks/useCharacter.ts`
 - **No external UI libraries**: All components are custom
 - **Theme**: Dark fantasy -- base background `#1a1a2e`, cards `#2a2a3e`, text `#f5e6c8`, gold accent `#c4a35a`, warm-brown borders `#5a3a28`, written as arbitrary-value classes (e.g. `bg-[#2a2a3e]`)
+- **Faded text**: anything dimmer than those colours uses one of the solid tones tagged in `globals.css`, never an opacity modifier (`text-[#f5e6c8]/40` and the like fall below WCAG AA, which the browser tests check): `text-[#a8a09a]` (parchment faded), `text-[#9c948b]` (parchment faint, and every field's `placeholder:text-[#9c948b]`), `text-[#b0955c]` (gold faded), `text-[#9a9aab]` and `text-[#a89a8a]` (the old greys). Gold on the brown buttons is `text-[#dbc07a]`, not `#c4a35a` (4.2:1)
 - **Types**: All game interfaces live in `src/lib/types.ts`
 - **Game data**: All static game data lives in `src/lib/gamedata.ts`, except the hex-map manifest `src/lib/hex-grid.json`. It is generated from the printed map by `scripts/extract_hex_grid.py` (don't edit it by hand) and loaded through `src/lib/hex-grid.ts`; its types are in `types.ts` like the rest
 

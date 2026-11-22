@@ -141,7 +141,7 @@ export default function ReferencePanel() {
                 </h3>
                 <table className="w-full text-xs text-[#f5e6c8] mb-2">
                   <thead>
-                    <tr className="text-[#c4a35a]/70 border-b border-[#5a3a28]">
+                    <tr className="text-[#b0955c] border-b border-[#5a3a28]">
                       <th className="text-left py-1 pr-2">Item</th>
                       <th className="text-center py-1 px-1">Cost</th>
                       <th className="text-center py-1 px-1">Wt</th>
@@ -157,7 +157,7 @@ export default function ReferencePanel() {
                         <td className="py-1 pr-2">
                           {g.name}
                           {g.notes && (
-                            <span className="text-[#f5e6c8]/40 ml-1">({g.notes})</span>
+                            <span className="text-[#9c948b] ml-1">({g.notes})</span>
                           )}
                         </td>
                         <td className="text-center py-1 px-1">
@@ -199,7 +199,7 @@ export default function ReferencePanel() {
               <tbody>
                 {MONTHS.map((m, i) => (
                   <tr key={m.name} className="border-b border-[#5a3a28]/30">
-                    <td className="py-1 pr-2 text-[#f5e6c8]/40">{i + 1}</td>
+                    <td className="py-1 pr-2 text-[#9c948b]">{i + 1}</td>
                     <td className="py-1 pr-2 font-semibold">
                       {m.name}
                       <div className="sm:hidden font-normal text-[#f5e6c8]/60">{m.season}</div>
@@ -339,11 +339,11 @@ export default function ReferencePanel() {
                     <div className="bg-[#1a1a2e] rounded p-2 hover:bg-[#1a1a2e]/80 transition-colors">
                       <div className="flex items-center justify-between">
                         <span className="text-[#c4a35a] text-sm font-semibold">{r.name}</span>
-                        <span className="text-[#f5e6c8]/40 text-xs">
+                        <span className="text-[#9c948b] text-xs">
                           {expandedSections[`religion-${r.name}`] ? '\u25B2' : '\u25BC'}
                         </span>
                       </div>
-                      <div className="text-[#f5e6c8]/50 text-xs">{r.type}</div>
+                      <div className="text-[#a8a09a] text-xs">{r.type}</div>
                     </div>
                   </button>
                   {expandedSections[`religion-${r.name}`] && (
@@ -351,7 +351,7 @@ export default function ReferencePanel() {
                       <div><span className="text-[#c4a35a]">Deity:</span> {r.deity}</div>
                       <div><span className="text-[#c4a35a]">Holy Symbol:</span> {r.holySymbol}</div>
                       <div><span className="text-[#c4a35a]">Holy Text:</span> {r.holyText}</div>
-                      <div className="text-[#f5e6c8]/50 mt-1">{r.notes}</div>
+                      <div className="text-[#a8a09a] mt-1">{r.notes}</div>
                     </div>
                   )}
                 </div>
@@ -370,14 +370,14 @@ export default function ReferencePanel() {
               <div key={rarity} className="mb-3">
                 <button
                   onClick={() => toggleSection(`bev-${rarity}`)}
-                  className="text-[#c4a35a]/80 text-xs font-semibold uppercase tracking-wider hover:underline"
+                  className="text-[#b0955c] text-xs font-semibold uppercase tracking-wider hover:underline"
                 >
                   {expandedSections[`bev-${rarity}`] ? '\u25B2' : '\u25BC'} {rarity} ({BEVERAGE_RARITY[rarity].length})
                 </button>
                 {expandedSections[`bev-${rarity}`] && (
                   <table className="w-full text-xs text-[#f5e6c8] mt-1">
                     <thead>
-                      <tr className="text-[#c4a35a]/70 border-b border-[#5a3a28]">
+                      <tr className="text-[#b0955c] border-b border-[#5a3a28]">
                         <th className="text-left py-1 pr-2">Name</th>
                         <th className="text-center py-1 px-1">Type</th>
                         <th className="text-center py-1 px-1">Cost</th>
@@ -489,7 +489,7 @@ export default function ReferencePanel() {
                     </tbody>
                   </table>
                 </div>
-                <div className="mt-2 text-xs text-[#f5e6c8]/50">
+                <div className="mt-2 text-xs text-[#a8a09a]">
                   Each smoke weighs 1 coin. Quiet Contemplation: 1 hour smoking, INT check (+1 per 2 companions, max +2). Success = Referee gives a clue.
                 </div>
                 <div className="mt-2">
@@ -519,7 +519,7 @@ export default function ReferencePanel() {
                 {FOOD_MENU.map((tier) => (
                   <div key={tier.tier}>
                     <div className="text-[#c4a35a] text-xs font-semibold mb-1">
-                      {tier.tier} <span className="text-[#f5e6c8]/40 font-normal">({tier.dailyAvailability})</span>
+                      {tier.tier} <span className="text-[#9c948b] font-normal">({tier.dailyAvailability})</span>
                     </div>
                     <table className="w-full text-xs text-[#f5e6c8] mb-1">
                       <tbody>
@@ -530,7 +530,7 @@ export default function ReferencePanel() {
                             <tr key={item.name} className="border-b border-[#5a3a28]/20">
                               {idx === 0 && (
                                 <td
-                                  className="py-0.5 pr-2 text-[#c4a35a]/60 capitalize align-top"
+                                  className="py-0.5 pr-2 text-[#b0955c] capitalize align-top"
                                   rowSpan={items.length}
                                 >
                                   {cat}

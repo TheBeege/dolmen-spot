@@ -70,7 +70,7 @@ interface SpellsAndMagicProps {
 }
 
 const inputClasses =
-  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 
 const sectionHeadingClasses =
   'text-lg font-bold text-[#c4a35a] mb-2 border-b border-[#5a3a28] pb-1';
@@ -258,7 +258,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
 
       {/* No magic message */}
       {hasNoMagic && (
-        <p className="text-[#f5e6c8]/50 italic mb-4">
+        <p className="text-[#a8a09a] italic mb-4">
           This character has no magical abilities.
         </p>
       )}
@@ -581,9 +581,14 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   onUpdate: (id: string, updates: Partial<SpellSlot>) => void;
   onDelete: (id: string) => void;
 } & SpellDisclosure) {
-  // A cast spell's name and controls fade. Its info button and summary
-  // don't, so they stay readable.
-  const fade = spell.cast ? 'opacity-50' : '';
+  // A cast spell's name and its fields are de-emphasised: they fade, and the
+  // name is struck through so the state doesn't rest on colour alone. The
+  // fade stops at 80%, the faintest that leaves real room above AA contrast
+  // for the gold rank label on the row's dark background (50% left it at
+  // 2.8:1, 75% at 4.6:1; the parchment is 9.2:1 here). Its info button,
+  // summary and delete button don't fade, so they stay readable.
+  const fade = spell.cast ? 'opacity-80' : '';
+  const castName = spell.cast ? 'line-through' : '';
   const name = spell.name.trim();
   return (
     <div data-spell-row="" className="bg-[#1a1a2e] p-2 rounded mb-1">
@@ -593,7 +598,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
             <>
               <span className={`text-[#c4a35a] font-semibold shrink-0 ${fade}`}>R{spell.rank}</span>
               <span className="text-[#f5e6c8] min-w-0">
-                <SpellInfo spellType="arcane" name={spell.name} context={context} labelClassName={fade} {...info}>
+                <SpellInfo spellType="arcane" name={spell.name} context={context} labelClassName={`${fade} ${castName}`} {...info}>
                   {spell.name}
                 </SpellInfo>
               </span>
@@ -606,7 +611,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 onChange={(e) => onUpdate(spell.id, { name: e.target.value })}
                 placeholder="Spell name"
                 aria-label={`Spell name (slot ${slotNumber})`}
-                className={`${inputClasses} flex-1 min-w-0 ${fade}`}
+                className={`${inputClasses} flex-1 min-w-0 ${fade} ${castName}`}
               />
               {/* The button appears once the name matches a holy spell; its
                   space is kept either way so the row doesn't shift as you type.
@@ -672,7 +677,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
           </span>
           <button
             onClick={() => onDelete(spell.id)}
-            className={`text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0 ${fade}`}
+            className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
             title="Delete spell"
             aria-label={name ? `Delete ${name} (slot ${slotNumber})` : `Delete spell (slot ${slotNumber})`}
           >
@@ -1892,7 +1897,7 @@ function MemorisePicker({
                     onClick={() => memoriseKnown(k)}
                     className={`flex-1 min-w-0 break-words text-left px-3 py-1.5 text-sm ${
                       atCap
-                        ? 'text-[#f5e6c8]/30 cursor-not-allowed'
+                        ? 'text-[#9c948b] cursor-not-allowed'
                         : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
                     }`}
                     title={
@@ -1906,7 +1911,7 @@ function MemorisePicker({
                     <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
                     {k.name}
                     {atCap && (
-                      <span className="text-[#f5e6c8]/40 text-xs ml-2 whitespace-nowrap">
+                      <span className="text-[#9c948b] text-xs ml-2 whitespace-nowrap">
                         {hasNoSlots ? '(no slots yet)' : `(R${k.rank} full)`}
                       </span>
                     )}
@@ -1971,7 +1976,7 @@ function GlamourSection({
               </button>
             </div>
             {ref && (
-              <p className="text-[#f5e6c8]/50 text-xs mt-1">{ref.description}</p>
+              <p className="text-[#a8a09a] text-xs mt-1">{ref.description}</p>
             )}
             <input
               type="text"
@@ -2005,7 +2010,7 @@ function GlamourSection({
       )}
 
       {atMax && availableGlamours.length > 0 && (
-        <p className="text-[#f5e6c8]/40 text-xs italic mt-2">
+        <p className="text-[#9c948b] text-xs italic mt-2">
           Maximum glamours known. Remove one to add another.
         </p>
       )}
@@ -2195,7 +2200,7 @@ function KnackSection({
         <span className="text-[#c4a35a] font-semibold">{knack.name}</span>
         <button
           onClick={clearKnack}
-          className="text-[#f5e6c8]/50 hover:text-[#f5e6c8] text-xs underline transition-colors"
+          className="text-[#a8a09a] hover:text-[#f5e6c8] text-xs underline transition-colors"
         >
           Change
         </button>
@@ -2208,15 +2213,15 @@ function KnackSection({
             <div
               key={tier.level}
               className={`bg-[#1a1a2e] p-2 rounded text-sm ${
-                isActive ? 'text-[#f5e6c8]' : 'text-[#f5e6c8]/30'
+                isActive ? 'text-[#f5e6c8]' : 'text-[#9c948b]'
               }`}
             >
-              <span className={`font-semibold ${isActive ? 'text-[#c4a35a]' : 'text-[#c4a35a]/30'}`}>
+              <span className={`font-semibold ${isActive ? 'text-[#c4a35a]' : 'text-[#b0955c]'}`}>
                 L{tier.level}:
               </span>{' '}
               {tier.description}
               {!isActive && (
-                <span className="text-[#f5e6c8]/20 text-xs ml-1">(Level {tier.level})</span>
+                <span className="text-[#9c948b] text-xs ml-1">(Level {tier.level})</span>
               )}
             </div>
           );
@@ -2299,7 +2304,7 @@ function GlamourReference() {
         {GLAMOURS.map((g) => (
           <div key={g.id} className="text-xs">
             <span className="text-[#c4a35a]">{g.id}. {g.name}</span>
-            <span className="text-[#f5e6c8]/50"> - {g.description}</span>
+            <span className="text-[#a8a09a]"> - {g.description}</span>
           </div>
         ))}
       </div>
