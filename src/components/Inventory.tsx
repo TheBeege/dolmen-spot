@@ -786,13 +786,20 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
-  const renderContainerGroup = (container: CharacterContainer | null) => {
+  const renderContainerGroup = (container: CharacterContainer | null, containerNumber: number) => {
     const containerId = container?.id;
     const containerItems = getContainerItems(stowedItems, containerId);
     const isCollapsed = containerId ? collapsedContainers.has(containerId) : false;
 
     const { usedWeight, capacity, fillPercent, isOverCapacity } = getContainerLoad(container, stowedItems);
-    const destination = container ? container.name || 'container' : 'Loose Items';
+    // Two containers can share a name ("Backpack"), so a shared one says which
+    // it is: its place among the containers.
+    const sharedName =
+      container !== null &&
+      containers.filter((c) => (c.name || 'container') === (container.name || 'container')).length > 1;
+    const destination = container
+      ? `${container.name || 'container'}${sharedName ? ` ${containerNumber}` : ''}`
+      : 'Loose Items';
 
     return (
       <div key={containerId ?? 'loose'} className="mb-3">
@@ -820,8 +827,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 handleDeleteContainer(container.id);
               }}
               className="text-[#ff6b4a] hover:text-[#f5e6c8] text-xs ml-auto px-1"
-              title={`Remove ${container.name}`}
-              aria-label={`Remove ${container.name}`}
+              title={`Remove ${destination}`}
+              aria-label={`Remove ${destination}`}
             >
               &times;
             </button>
@@ -861,7 +868,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   <span className="w-6" />
                 </div>
                 {containerItems.map((item, i) =>
-                  renderInventoryItem(item, false, container ? `item ${i + 1} in ${container.name || 'a container'}` : `loose item ${i + 1}`),
+                  renderInventoryItem(item, false, container ? `item ${i + 1} in ${destination}` : `loose item ${i + 1}`),
                 )}
               </div>
             )}
@@ -1167,10 +1174,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         </div>
 
         {/* Container groups */}
-        {containers.map((container) => renderContainerGroup(container))}
+        {containers.map((container, index) => renderContainerGroup(container, index + 1))}
 
         {/* Loose items (no container) */}
-        {renderContainerGroup(null)}
+        {renderContainerGroup(null, containers.length + 1)}
       </div>
 
       {/* Tiny Items */}

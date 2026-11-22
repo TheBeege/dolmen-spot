@@ -608,6 +608,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               type="checkbox"
               checked={spell.prepared}
               onChange={(e) => onUpdate(spell.id, { prepared: e.target.checked })}
+              aria-label={`Prep (slot ${slotNumber})`}
               className="accent-[#c4a35a]"
             />
             Prep
@@ -617,6 +618,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               type="checkbox"
               checked={spell.cast}
               onChange={(e) => onUpdate(spell.id, { cast: e.target.checked })}
+              aria-label={`Cast (slot ${slotNumber})`}
               className="accent-[#c4a35a]"
             />
             Cast
@@ -640,6 +642,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
             onClick={() => onDelete(spell.id)}
             className={`text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0 ${fade}`}
             title="Delete spell"
+            aria-label={name ? `Delete ${name} (slot ${slotNumber})` : `Delete spell (slot ${slotNumber})`}
           >
             X
           </button>
@@ -1835,7 +1838,8 @@ function GlamourSection({
               <button
                 onClick={() => deleteGlamour(glamour.id)}
                 className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-                title="Remove glamour"
+                title={`Remove ${glamour.name}`}
+                aria-label={`Remove ${glamour.name}`}
               >
                 X
               </button>
@@ -1936,7 +1940,7 @@ function RuneSection({
                     onClick={() =>
                       updateRune(rune.id, { usesRemaining: Math.max(0, rune.usesRemaining - 1) })
                     }
-                    aria-label={`Spend a use of ${rune.name}`}
+                    aria-label={`Spend a use of ${rune.name} (rune ${index + 1})`}
                     className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     -
@@ -1946,7 +1950,7 @@ function RuneSection({
                   </span>
                   <button
                     onClick={() => updateRune(rune.id, { usesRemaining: rune.usesRemaining + 1 })}
-                    aria-label={`Regain a use of ${rune.name}`}
+                    aria-label={`Regain a use of ${rune.name} (rune ${index + 1})`}
                     className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     +
@@ -1955,7 +1959,8 @@ function RuneSection({
                 <button
                   onClick={() => deleteRune(rune.id)}
                   className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-                  title="Remove rune"
+                  title={`Remove ${rune.name} (rune ${index + 1})`}
+                  aria-label={`Remove ${rune.name} (rune ${index + 1})`}
                 >
                   X
                 </button>

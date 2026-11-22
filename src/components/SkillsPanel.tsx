@@ -116,6 +116,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
                     onClick={() => handleSkillChange(key, String(calc))}
                     className="text-[10px] text-[#c4a35a] hover:text-[#f5e6c8] transition-colors"
                     title={`Sync to ${calc}`}
+                    aria-label={`Sync ${displayName} to ${calc}`}
                   >
                     {calc}
                   </button>

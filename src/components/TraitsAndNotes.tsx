@@ -684,7 +684,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
             <button
               type="button"
               onClick={() => removeRetainer(r.id)}
-              aria-label={r.name.trim() ? `Remove ${r.name.trim()}` : `Remove retainer ${index + 1}`}
+              aria-label={r.name.trim() ? `Remove retainer ${index + 1}: ${r.name.trim()}` : `Remove retainer ${index + 1}`}
               className="text-red-400 text-xs hover:text-red-300"
             >
               Remove
