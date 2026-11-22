@@ -1,7 +1,7 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { test as base, expect, type ConsoleMessage } from '@playwright/test';
+import { test as base, expect, type ConsoleMessage, type Page } from '@playwright/test';
 import { installInPageHelpers } from './in-page';
 
 /** Options each project in playwright.config.ts sets, besides the browser. */
@@ -38,6 +38,29 @@ interface TestFixtures {
 function isKnownConsoleNoise(message: ConsoleMessage): boolean {
   const where = `${message.text()} ${message.location().url}`;
   return /\/_vercel\/insights\//.test(where);
+}
+
+/**
+ * Check that the project's settings are really in force: the browser's own
+ * default font size — the sheet is rem-based, so its type and its breakpoints
+ * move with it as they would for a player — and, in Chromium, a scrollbar that
+ * takes room as on a desktop.
+ */
+async function expectMatrixSettings(page: Page, browserName: string, defaultFontSize: number): Promise<void> {
+  const { rootFontSize, scrollbarWidth } = await page.evaluate(() => {
+    const rootFontSize = getComputedStyle(document.documentElement).fontSize;
+    // Something taller than the window, to make the scrollbar show even if the
+    // page's own content is short.
+    const tall = document.createElement('div');
+    tall.style.height = '200vh';
+    document.body.appendChild(tall);
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    tall.remove();
+    return { rootFontSize, scrollbarWidth };
+  });
+  expect(rootFontSize, "the browser's default font size").toBe(`${defaultFontSize}px`);
+  // Only Chromium's is checked: whether WebKit's scrollbars take room depends on the platform.
+  if (browserName === 'chromium') expect(scrollbarWidth, 'room the scrollbar takes').toBeGreaterThan(0);
 }
 
 export const test = base.extend<TestFixtures, MatrixOptions>({
@@ -86,19 +109,7 @@ export const test = base.extend<TestFixtures, MatrixOptions>({
     // every rem-based breakpoint) moves as it would for a player, and Chromium
     // shows its scrollbars, so they take room as on a desktop. A project whose
     // setting didn't take would quietly test a different layout.
-    const { rootFontSize, scrollbarWidth } = await page.evaluate(() => {
-      const rootFontSize = getComputedStyle(document.documentElement).fontSize;
-      // Something taller than the window, to make the scrollbar show.
-      const tall = document.createElement('div');
-      tall.style.height = '200vh';
-      document.body.appendChild(tall);
-      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-      tall.remove();
-      return { rootFontSize, scrollbarWidth };
-    });
-    expect(rootFontSize, "the browser's default font size").toBe(`${defaultFontSize}px`);
-    // Only Chromium's is checked: whether WebKit's scrollbars take room depends on the platform.
-    if (browserName === 'chromium') expect(scrollbarWidth, 'room the scrollbar takes').toBeGreaterThan(0);
+    await expectMatrixSettings(page, browserName, defaultFontSize);
     await page.addInitScript(installInPageHelpers);
     page.on('pageerror', (error) => consoleProblems.push(`page error: ${error.message}`));
     page.on('console', (message) => {
@@ -106,7 +117,14 @@ export const test = base.extend<TestFixtures, MatrixOptions>({
         consoleProblems.push(`console error: ${message.text()} (${message.location().url})`);
       }
     });
-    await use(page);
+    try {
+      await use(page);
+    } finally {
+      // And again on the sheet itself, once the test is done: the check above
+      // sees a blank page, so a page style that pins the root font size or takes
+      // the scrollbar away would pass it and still be what the test measured.
+      if (!page.isClosed()) await expectMatrixSettings(page, browserName, defaultFontSize);
+    }
   },
 
   consoleProblems: async ({}, use) => {
