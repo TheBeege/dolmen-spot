@@ -12,31 +12,32 @@
 // can't do the same in WebKit. An entry only WebKit shows says so with
 // `browsers: ['webkit']`, and this leaves it alone.
 //
-// What it covers is what the layout and accessibility tests cover: every tab as
-// it first opens, at every width and font size of the layout matrix, and at the
-// widths of the accessibility matrix (A11Y_WIDTHS, at the smallest font size).
-// States a spec opens by hand (the map's kind picker, say) are not part of it,
-// so an entry for a problem only such a state shows would look unused: add that
-// state here if one is ever needed.
+// What it covers is what the layout and accessibility tests check on a tab as
+// it first opens: every tab with every fixture, at every width and font size of
+// the layout matrix, and at the widths and font size of the accessibility
+// matrix. States a spec opens by hand — the map's kind picker, a dialog — are
+// not part of it, so an entry for a problem only such a state shows would look
+// unused: add that state here if one is ever needed.
 //
 // It makes its own pages rather than using the `page` fixture, so it does the
-// two things that fixture does for every test by itself: it watches each page
-// for page and console errors, and it checks that the project's settings are in
-// force — before the app loads and again once it has.
+// two things that fixture does for every test by itself: it checks that the
+// project's settings are in force, before the app loads and again after the
+// walk, and it watches each page for page and console errors.
 import { expect, test } from '@playwright/test';
 import { describeKnownIssue, KNOWN_ISSUES, knownIssuesFor, type KnownIssue, type Problem, type Where } from './known-issues';
 import { findA11yProblems } from './support/a11y';
 import { ALL_FIXTURES, openApp, openTab, TABS } from './support/app';
 import { installInPageHelpers } from './support/in-page';
 import { findLayoutProblems } from './support/layout';
-import { A11Y_WIDTHS, expectMatrixSettings, FONT_SIZES, viewportAt, WIDTHS, watchForErrors } from './support/test';
+import { A11Y_FONT_SIZE, A11Y_WIDTHS, expectMatrixSettings, FONT_SIZES, viewportAt, WIDTHS, watchForErrors } from './support/test';
 
 /** The widths whose accessibility problems the suite can leave to an entry. */
 const A11Y_STATES = new Set<number>(A11Y_WIDTHS);
 
-test('every known issue still matches a problem', async ({ browser, baseURL }, testInfo) => {
+test('every known issue still matches a problem', async ({ browser, browserName, baseURL }, testInfo) => {
   // One process has to see the whole matrix, so this is one long test: it gets
-  // its own timeout rather than the suite's 30s.
+  // its own timeout rather than the suite's 30s, and the CI job's timeout is
+  // longer still, so this one reports first.
   test.setTimeout(20 * 60_000);
 
   /** The known issues a problem matched, by identity: an entry in KNOWN_ISSUES. */
@@ -47,7 +48,7 @@ test('every known issue still matches a problem', async ({ browser, baseURL }, t
     }
   };
 
-  const states = { layout: 0, a11y: 0 };
+  const visited = { layout: 0, a11y: 0 };
   for (const fontSize of FONT_SIZES) {
     for (const width of WIDTHS) {
       for (const fixture of ALL_FIXTURES) {
@@ -57,34 +58,33 @@ test('every known issue still matches a problem', async ({ browser, baseURL }, t
         const context = await browser.newContext({ viewport: viewportAt(width), baseURL });
         const page = await context.newPage();
         try {
-          // The two things the page fixture does for every test, done here for
-          // the pages this test makes itself.
-          const errors: string[] = [];
-          watchForErrors(page, errors);
           // Chrome's Settings > Appearance > Font size, which also sets the
           // fixed-width size 3px lower. Set before the first check measures it.
           const cdp = await context.newCDPSession(page);
           await cdp.send('Page.setFontSizes', { fontSizes: { standard: fontSize, fixed: fontSize - 3 } });
-          await expectMatrixSettings(page, 'chromium', fontSize);
+          await expectMatrixSettings(page, browserName, fontSize);
           await page.addInitScript(installInPageHelpers);
+          const errors: string[] = [];
+          watchForErrors(page, errors);
           await openApp(page, fixture);
-          // Again on the sheet, as the fixture does: a page style that pinned
-          // the root font size would leave the audit walking the wrong size and
-          // still reporting that every entry matched.
-          await expectMatrixSettings(page, 'chromium', fontSize);
 
           for (const tab of TABS) {
             await openTab(page, tab);
             const where = { tab: tab.id, width, fontSize };
             await visit(where, () => findLayoutProblems(page));
-            states.layout++;
-            // The accessibility tests run at A11Y_WIDTHS and the smallest font
-            // size (playwright.config.ts), so these are the states whose
-            // problems they can leave to an entry.
-            if (fontSize !== FONT_SIZES[0] || !A11Y_STATES.has(width)) continue;
+            visited.layout++;
+            // The accessibility tests run at A11Y_WIDTHS and A11Y_FONT_SIZE
+            // (playwright.config.ts), so these are the states whose problems
+            // they can leave to an entry.
+            if (fontSize !== A11Y_FONT_SIZE || !A11Y_STATES.has(width)) continue;
             await visit(where, () => findA11yProblems(page));
-            states.a11y++;
+            visited.a11y++;
           }
+
+          // Again on the sheet, as the fixture does — after the walk, so a page
+          // style that pinned the root font size on a tab is caught rather than
+          // hidden behind a check made before those tabs were open.
+          await expectMatrixSettings(page, browserName, fontSize);
           expect(errors, `page and console errors with ${at}`).toEqual([]);
         } finally {
           await context.close();
@@ -101,7 +101,8 @@ test('every known issue still matches a problem', async ({ browser, baseURL }, t
   const webkitOnly = KNOWN_ISSUES.length - required.length;
   testInfo.annotations.push({ type: 'known issues', description: `${requiredMatched.length} of ${required.length} matched` });
   console.log(
-    `known-issues audit: ${states.layout} layout and ${states.a11y} accessibility checks over ${WIDTHS.length} widths and ${FONT_SIZES.length} font sizes; ` +
+    `known-issues audit: layout ${visited.layout} checks (${WIDTHS.length} widths × ${FONT_SIZES.length} font sizes), ` +
+      `accessibility ${visited.a11y} checks (${A11Y_WIDTHS.length} widths × ${A11Y_FONT_SIZE}px); ` +
       `${requiredMatched.length} of ${required.length} known issues matched a problem, ${unused.length} matched nothing` +
       (webkitOnly ? ` (${webkitOnly} WebKit-only left out)` : ''),
   );

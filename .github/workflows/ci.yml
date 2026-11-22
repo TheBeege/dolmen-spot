@@ -111,7 +111,11 @@ jobs:
   known-issues-audit:
     name: Known issues audit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    # Longer than the test's own 20-minute timeout, so a slow walk is reported by
+    # Playwright — with the entries that matched nothing — rather than killed by
+    # the runner with no output at all. It also has npm ci, a cold browser
+    # install and a build to fit.
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
 
@@ -130,32 +134,36 @@ jobs:
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      # A cache of its own, keyed apart from the browser-tests job's: this one
-      # needs Chromium alone, and saving that under the shared key would leave
-      # that job without WebKit.
-      - name: Restore the browser
-        id: browser
+      # The browser-tests job's cache, read only: it holds both browsers, and
+      # this job needs Chromium. It never saves, so a cold cache costs it an
+      # install but can't leave that job with a Chromium-only cache.
+      - name: Restore the browsers
+        id: browsers
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-chromium-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install the browser and its system libraries
-        if: steps.browser.outputs.cache-hit != 'true'
+        if: steps.browsers.outputs.cache-hit != 'true'
         run: npx playwright install --with-deps chromium
 
-      - name: Save the browser
-        if: steps.browser.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v6
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ steps.browser.outputs.cache-primary-key }}
-
-      - name: Install the browser's system libraries
-        if: steps.browser.outputs.cache-hit == 'true'
+      - name: Install the browsers' system libraries
+        if: steps.browsers.outputs.cache-hit == 'true'
         run: npx playwright install-deps chromium
 
       # Builds the app and serves it (webServer in playwright.config.ts), then
       # walks the matrix once to fail on a known-issue entry that matched nothing.
       - name: Audit the known issues
         run: npm run audit:known-issues
+
+      # The one long test is traced too, and this is where its trace is useful.
+      - name: Upload the report and traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: known-issues-audit-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

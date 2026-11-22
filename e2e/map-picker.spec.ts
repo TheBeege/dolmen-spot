@@ -9,7 +9,7 @@ import type { Locator, Page } from '@playwright/test';
 import { findA11yProblems } from './support/a11y';
 import { openApp, openTab, settle, TABS } from './support/app';
 import { findLayoutProblems } from './support/layout';
-import { expect, test, viewportAt, WIDTHS } from './support/test';
+import { A11Y_FONT_SIZE, expect, test, viewportAt, WIDTHS } from './support/test';
 import { newProblems } from './known-issues';
 
 const MAP_TAB = TABS.find((tab) => tab.id === 'map')!;
@@ -166,11 +166,11 @@ for (const width of WIDTHS) {
       await openPicker(page);
       const where = { tab: 'map' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), where), 'layout problems with the picker open').toEqual([]);
-      // The layout check runs at every font size. axe runs at 16px only, as
-      // playwright.config.ts keeps a11y.spec.ts out of the 24px projects: its
-      // findings barely change with the font size, and this is the heaviest
-      // page in the suite.
-      if (defaultFontSize !== 16) return;
+      // The layout check runs at every font size. axe runs at the matrix's
+      // smallest only, as playwright.config.ts keeps a11y.spec.ts out of the
+      // other projects: its findings barely change with the font size, and this
+      // is the heaviest page in the suite.
+      if (defaultFontSize !== A11Y_FONT_SIZE) return;
       expect.soft(newProblems(await findA11yProblems(page), where), 'accessibility problems with the picker open').toEqual([]);
     });
   });

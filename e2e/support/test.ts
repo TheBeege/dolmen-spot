@@ -30,6 +30,14 @@ export const A11Y_WIDTHS = [WIDTHS[0], WIDTHS[WIDTHS.length - 1]] as const;
  */
 export const FONT_SIZES = [16, 24] as const;
 
+/**
+ * The font size the accessibility checks run at: the smallest of the matrix, in
+ * px, since axe looks at elements and colours, which a bigger font barely
+ * changes. playwright.config.ts keeps a11y.spec.ts out of the other projects,
+ * and the specs that run axe for a state they open check this themselves.
+ */
+export const A11Y_FONT_SIZE = Math.min(...FONT_SIZES);
+
 /** The window for a width of the matrix. Only the width matters to the checks. */
 export function viewportAt(width: number) {
   return { width, height: 800 };

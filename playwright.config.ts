@@ -1,5 +1,5 @@
 import { defineConfig } from '@playwright/test';
-import { FONT_SIZES, type MatrixOptions } from './e2e/support/test';
+import { A11Y_FONT_SIZE, FONT_SIZES, type MatrixOptions } from './e2e/support/test';
 
 // The browser tests (e2e/), run with `npm run test:e2e`. They build the app
 // and test the production build. See "Browser Tests" in AGENTS.md.
@@ -18,7 +18,8 @@ const BROWSERS = [
 ];
 
 // axe looks at elements and colours, which a bigger font barely changes (it only
-// passes more contrast checks), so the accessibility tests run at 16px only.
+// passes more contrast checks), so the accessibility tests run at the matrix's
+// smallest font size only.
 const a11yTests = /a11y\.spec\.ts$/;
 
 // The known-issues audit (e2e/known-issues-audit.spec.ts) walks the whole matrix
@@ -50,10 +51,11 @@ export default defineConfig<MatrixOptions>({
       name: `${browser.name}-${fontSize}px`,
       use: { ...browser.options, defaultFontSize: fontSize },
       testIgnore: [
-        ...(fontSize === FONT_SIZES[0] ? [] : [a11yTests]),
+        ...(fontSize === A11Y_FONT_SIZE ? [] : [a11yTests]),
         // The audit sets the browser's font size through Chromium's settings,
-        // so exactly one project runs it, and only under its own script.
-        ...(browser.name === 'chromium' && fontSize === FONT_SIZES[0] && withAudit ? [] : [auditTests]),
+        // so exactly one project runs it — the first Chromium one, and only
+        // under its own script.
+        ...(browser.options.browserName === 'chromium' && fontSize === FONT_SIZES[0] && withAudit ? [] : [auditTests]),
       ],
     })),
   ),
