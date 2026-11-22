@@ -61,6 +61,7 @@ import {
   useSpellDisclosures,
   type SpellDisclosure,
 } from '@/components/SpellInfo';
+import { FOCUS_RING } from '@/components/focus-ring';
 
 interface SpellsAndMagicProps {
   character: Character;
@@ -143,6 +144,10 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
     hasKnacks,
     isBregglesPreMagic,
   } = getMagicSections(character);
+
+  // One of the two Magic Notes boxes below is drawn, never both, so they can
+  // share this.
+  const magicNotesHeadingId = useId();
 
   // ── Spell Slot Helpers ──────────────────────────────────
 
@@ -323,11 +328,12 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
       {/* ── SPELL NOTES ── */}
       {!hasNoMagic && (
         <div className="mb-4">
-          <h3 className={sectionHeadingClasses}>Magic Notes</h3>
+          <h3 id={magicNotesHeadingId} className={sectionHeadingClasses}>Magic Notes</h3>
           <textarea
             value={character.spellNotes}
             onChange={(e) => onChange({ spellNotes: e.target.value })}
             placeholder="General magic notes, components, restrictions..."
+            aria-labelledby={magicNotesHeadingId}
             rows={3}
             className={`${inputClasses} w-full resize-y`}
           />
@@ -337,11 +343,12 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
       {/* Notes textarea for non-magic characters too */}
       {hasNoMagic && (
         <div className="mb-4">
-          <h3 className={sectionHeadingClasses}>Magic Notes</h3>
+          <h3 id={magicNotesHeadingId} className={sectionHeadingClasses}>Magic Notes</h3>
           <textarea
             value={character.spellNotes}
             onChange={(e) => onChange({ spellNotes: e.target.value })}
             placeholder="Notes about magical items, potions, scrolls..."
+            aria-labelledby={magicNotesHeadingId}
             rows={3}
             className={`${inputClasses} w-full resize-y`}
           />
@@ -489,6 +496,7 @@ function SpellCasterSection({
           <MemorisedSpellRow
             key={spell.id}
             spell={spell}
+            slotNumber={i + 1}
             spellType={spellType}
             context={memorisedContexts[i]}
             maxRank={maxRank}
@@ -554,6 +562,7 @@ function SpellCasterSection({
 // Memoised, so typing in one row's Notes re-renders only that row.
 const MemorisedSpellRow = memo(function MemorisedSpellRow({
   spell,
+  slotNumber,
   spellType,
   context,
   maxRank,
@@ -562,6 +571,8 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   ...info
 }: {
   spell: SpellSlot;
+  /** Its place in the list: two slots can hold one spell, so names need it. */
+  slotNumber: number;
   spellType: SpellType;
   /** For the info button's name: see spellRowContexts. */
   context: string;
@@ -593,6 +604,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 value={spell.name}
                 onChange={(e) => onUpdate(spell.id, { name: e.target.value })}
                 placeholder="Spell name"
+                aria-label={`Spell name (slot ${slotNumber})`}
                 className={`${inputClasses} flex-1 min-w-0 ${fade}`}
               />
               {/* The button appears once the name matches a holy spell; its
@@ -615,7 +627,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 rank: Math.min(maxRank, Math.max(1, parseInt(e.target.value) || 1)),
               })
             }
-            aria-label={name ? `Rank of ${name}` : 'Rank'}
+            aria-label={name ? `Rank of ${name} (slot ${slotNumber})` : `Rank (slot ${slotNumber})`}
             title="Rank"
             className={`${inputClasses} w-14 text-center ${fade}`}
           />
@@ -627,6 +639,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               type="checkbox"
               checked={spell.prepared}
               onChange={(e) => onUpdate(spell.id, { prepared: e.target.checked })}
+              aria-label={`Prep (slot ${slotNumber})`}
               className="accent-[#c4a35a]"
             />
             Prep
@@ -636,6 +649,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               type="checkbox"
               checked={spell.cast}
               onChange={(e) => onUpdate(spell.id, { cast: e.target.checked })}
+              aria-label={`Cast (slot ${slotNumber})`}
               className="accent-[#c4a35a]"
             />
             Cast
@@ -651,6 +665,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               value={spell.notes}
               onChange={(e) => onUpdate(spell.id, { notes: e.target.value })}
               placeholder="Notes"
+              aria-label={name ? `Notes for ${name} (slot ${slotNumber})` : `Spell notes (slot ${slotNumber})`}
               className={`${inputClasses} block w-full ${fade}`}
             />
           </span>
@@ -658,6 +673,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
             onClick={() => onDelete(spell.id)}
             className={`text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0 ${fade}`}
             title="Delete spell"
+            aria-label={name ? `Delete ${name} (slot ${slotNumber})` : `Delete spell (slot ${slotNumber})`}
           >
             X
           </button>
@@ -944,6 +960,7 @@ function KnownSpellsBlock({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search known spells..."
+          aria-label="Search known spells"
           className={`${inputClasses} flex-1 min-w-[140px] text-sm`}
         />
         <select
@@ -1735,6 +1752,7 @@ function SpellStudyBlock({
           value={draftNotes}
           onChange={(e) => setDraftNotes(e.target.value)}
           placeholder="Notes (mentor name, source book, ...)"
+          aria-label="Study notes"
           className={`${inputClasses} w-full text-sm mb-2`}
         />
         <div className="flex items-center gap-2">
@@ -1945,7 +1963,8 @@ function GlamourSection({
               <button
                 onClick={() => deleteGlamour(glamour.id)}
                 className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-                title="Remove glamour"
+                title={`Remove ${glamour.name}`}
+                aria-label={`Remove ${glamour.name}`}
               >
                 X
               </button>
@@ -1958,6 +1977,7 @@ function GlamourSection({
               value={glamour.notes}
               onChange={(e) => updateGlamour(glamour.id, { notes: e.target.value })}
               placeholder="Notes"
+              aria-label={`Notes for ${glamour.name}`}
               className={`${inputClasses} w-full mt-1 text-sm`}
             />
           </div>
@@ -1971,6 +1991,7 @@ function GlamourSection({
             const id = parseInt(e.target.value);
             if (id) addGlamour(id);
           }}
+          aria-label="Add a glamour"
           className={`${selectClasses} mt-2 w-full text-sm`}
         >
           <option value="">+ Add Glamour...</option>
@@ -2017,7 +2038,7 @@ function RuneSection({
         <p className="text-[#f5e6c8]/60 text-sm italic mb-2">No runes granted yet.</p>
       )}
 
-      {character.runes.map((rune) => {
+      {character.runes.map((rune, index) => {
         const freq = getRuneUsageFrequency(rune.magnitude, level);
         return (
           <div key={rune.id} className="bg-[#1a1a2e] p-2 rounded mb-1">
@@ -2044,7 +2065,7 @@ function RuneSection({
                     onClick={() =>
                       updateRune(rune.id, { usesRemaining: Math.max(0, rune.usesRemaining - 1) })
                     }
-                    aria-label={`Spend a use of ${rune.name}`}
+                    aria-label={`Spend a use of ${rune.name} (rune ${index + 1})`}
                     className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     -
@@ -2054,7 +2075,7 @@ function RuneSection({
                   </span>
                   <button
                     onClick={() => updateRune(rune.id, { usesRemaining: rune.usesRemaining + 1 })}
-                    aria-label={`Regain a use of ${rune.name}`}
+                    aria-label={`Regain a use of ${rune.name} (rune ${index + 1})`}
                     className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     +
@@ -2063,7 +2084,8 @@ function RuneSection({
                 <button
                   onClick={() => deleteRune(rune.id)}
                   className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
-                  title="Remove rune"
+                  title={`Remove ${rune.name} (rune ${index + 1})`}
+                  aria-label={`Remove ${rune.name} (rune ${index + 1})`}
                 >
                   X
                 </button>
@@ -2077,6 +2099,7 @@ function RuneSection({
               value={rune.notes}
               onChange={(e) => updateRune(rune.id, { notes: e.target.value })}
               placeholder="Notes"
+              aria-label={`Notes for ${rune.name} (rune ${index + 1})`}
               className={`${inputClasses} w-full mt-1 text-sm`}
             />
           </div>
@@ -2089,6 +2112,7 @@ function RuneSection({
           const id = parseInt(e.target.value);
           if (id) addRune(id);
         }}
+        aria-label="Add a rune"
         className={`${selectClasses} mt-2 w-full text-sm`}
       >
         <option value="">+ Add Rune...</option>
@@ -2145,6 +2169,7 @@ function KnackSection({
             const id = parseInt(e.target.value);
             if (id) selectKnack(id);
           }}
+          aria-label="Choose a mossling knack"
           className={`${selectClasses} w-full`}
         >
           <option value="">-- Select Knack --</option>
@@ -2202,6 +2227,7 @@ function KnackSection({
         value={knack.notes}
         onChange={(e) => onChange({ knack: { ...knack, notes: e.target.value } })}
         placeholder="Knack notes"
+        aria-label="Knack notes"
         className={`${inputClasses} w-full mt-2 text-sm`}
       />
     </div>
@@ -2320,8 +2346,9 @@ function RuneReference({ level }: { level: number }) {
         <div className="mt-3 text-[#f5e6c8]/70 text-xs">
           <div id={frequencyId} className="text-[#c4a35a] font-semibold mb-1">Usage Frequency:</div>
           {/* Too wide for a narrow screen with a large font, so it scrolls
-              sideways there; focusable so the keyboard can scroll it too. */}
-          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className="overflow-x-auto">
+              sideways there; focusable so the keyboard can scroll it too, with
+              the same focus ring as the Reference panel's armour table. */}
+          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className={`overflow-x-auto ${FOCUS_RING}`}>
             <table className="w-full">
               <thead>
                 <tr className="text-[#f5e6c8]/60">

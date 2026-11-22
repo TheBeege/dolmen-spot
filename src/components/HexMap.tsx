@@ -55,6 +55,7 @@ import {
   withPoiKind,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
+import { FOCUS_RING } from '@/components/focus-ring';
 import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './MapIcons';
 
 interface HexMapProps {
@@ -169,7 +170,6 @@ function newId(): string {
 // Markers and ley lines are buttons for keyboard and screen-reader users.
 // Their clicks and Enter/Space presses are handled once, on the SVG, by
 // reading their data-* attributes (see activateMapItem).
-const FOCUS_RING = 'focus-visible:outline-2 focus-visible:outline-[#c4a35a] focus-visible:outline-offset-2';
 const MAP_BUTTON_PROPS = {
   role: 'button',
   tabIndex: 0,
