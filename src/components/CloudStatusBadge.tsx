@@ -11,7 +11,7 @@ export default function CloudStatusBadge({ metadata }: Props) {
 
   return (
     <span
-      className="text-[#c4a35a]/60 ml-1 flex-shrink-0"
+      className="text-[#b0955c] ml-1 flex-shrink-0"
       title={`Saved to ${metadata.provider === 'google-drive' ? 'Google Drive' : 'OneDrive'} on ${new Date(metadata.lastSaved).toLocaleString()}`}
     >
       <svg className="w-3.5 h-3.5 inline-block" fill="none" stroke="currentColor" viewBox="0 0 24 24">

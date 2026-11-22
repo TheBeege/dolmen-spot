@@ -1,4 +1,4 @@
-import { TABS, type TabId } from './support/app';
+import type { TabId } from './support/app';
 
 /**
  * Problems the app already had when the browser tests were added. The layout
@@ -25,8 +25,6 @@ export interface KnownIssue {
   /** Only at these default font sizes. */
   fontSizes?: number[];
 }
-
-const ALL_TABS: TabId[] = TABS.map((tab) => tab.id);
 
 export const KNOWN_ISSUES: KnownIssue[] = [
   // ── Layout ───────────────────────────────────────────────────────────
@@ -66,32 +64,7 @@ export const KNOWN_ISSUES: KnownIssue[] = [
 
   // ── Contrast ─────────────────────────────────────────────────────────
   {
-    issue:
-      'Faded text is below 4.5:1 app-wide: parchment at 20–50% (`text-[#f5e6c8]/20`…`/50`, 1.8–4.5:1), gold at 30–70% (`text-[#c4a35a]/30`…`/70`), the greys `text-[#8b8b9e]` and `text-[#8a7a6a]` (4.1–4.2:1), and rows faded to 50% (cast spells). The footer is the worst, at 2.4:1.',
-    checks: ['color-contrast'],
-    tabs: ALL_TABS,
-    match: /\((text-\[#f5e6c8\]\/[2-5]0|text-\[#c4a35a\]\/[3-7]0|text-\[#8b8b9e\]|text-\[#8a7a6a\]|text-\[#[0-9a-f]{6}\], opacity 0\.5)\)/,
-  },
-  {
-    issue: "Placeholders are below 4.5:1 app-wide: Tailwind makes them half the field's text colour, 4.4:1 on the usual field background and 4.0:1 on a card (the map's ley line notes).",
-    checks: ['placeholder-contrast'],
-    tabs: ALL_TABS,
-    match: /\((#88807b on #1a1a2e|#908883 on #2a2a3e),/,
-  },
-  {
-    issue: 'Gold text on brown buttons is 4.2:1 (#c4a35a on #5a3a28): the Sync buttons for skills, magic resistance and the XP modifier.',
-    checks: ['color-contrast'],
-    tabs: ['character', 'abilities', 'combat'],
-    match: /foreground color: #c4a35a, background color: #5a3a28/,
-  },
-  {
-    issue: 'Coloured text below 4.5:1: the copper and pellucidium coin labels (Inventory), the sleep difficulty (Adventuring), and the seasons other than the current one, faded to 40% (1.6–2.1:1).',
-    checks: ['color-contrast'],
-    tabs: ['inventory', 'calendar'],
-    match: /^(Coins|Camping|Season).*\(style color /,
-  },
-  {
-    issue: 'Map: the "Del" buttons of a ley line, a point of interest and a fairy door are dark red on dark blue (1.9:1), and their accessible names ("Delete ley line …", "Delete POI …", "Delete fairy door …") don\'t contain the word they show. No test opens a fairy door\'s editor, so this entry matches the other two.',
+    issue: 'Map: the "Del" buttons of a ley line, a point of interest and a fairy door are dark red on dark blue (1.9:1; hovering them is better but still short, 2.9:1), and their accessible names ("Delete ley line …", "Delete POI …", "Delete fairy door …") don\'t contain the word they show. No test opens a fairy door\'s editor, so this entry matches the other two.',
     checks: ['color-contrast', 'label-content-name-mismatch'],
     tabs: ['map'],
     match: /^(Ley Lines & Crossings|Points of Interest) › button\[type=button\] "Delete (ley line|POI) /,

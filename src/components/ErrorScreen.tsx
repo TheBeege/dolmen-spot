@@ -288,7 +288,7 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
             Try Again
           </button>
           {unsaved && (
-            <button type="button" ref={unsavedRef} onClick={downloadUnsavedCharacters} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#7a5a38]`}>
+            <button type="button" ref={unsavedRef} onClick={downloadUnsavedCharacters} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#4a2f20]`}>
               Download Unsaved Characters
             </button>
           )}
@@ -297,7 +297,7 @@ export default function ErrorScreen({ error, onTryAgain }: { error: unknown; onT
           </button>
           {canReadSaves && (
             <>
-              <button type="button" onClick={downloadSaveData} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#7a5a38]`}>
+              <button type="button" onClick={downloadSaveData} className={`${BUTTON} bg-[#5a3a28] hover:bg-[#4a2f20]`}>
                 Download Save Data
               </button>
               <button type="button" onClick={showSaveData} className={`${BUTTON} border border-[#5a3a28] hover:bg-[#3a3a4e]`}>

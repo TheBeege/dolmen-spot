@@ -70,13 +70,13 @@ interface SpellsAndMagicProps {
 }
 
 const inputClasses =
-  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 
 const sectionHeadingClasses =
   'text-lg font-bold text-[#c4a35a] mb-2 border-b border-[#5a3a28] pb-1';
 
 const buttonClasses =
-  'bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-sm font-semibold px-3 py-1 rounded transition-colors';
+  'bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] text-sm font-semibold px-3 py-1 rounded transition-colors';
 
 const selectClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
@@ -258,7 +258,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
 
       {/* No magic message */}
       {hasNoMagic && (
-        <p className="text-[#f5e6c8]/50 italic mb-4">
+        <p className="text-[#a1988f] italic mb-4">
           This character has no magical abilities.
         </p>
       )}
@@ -581,9 +581,18 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   onUpdate: (id: string, updates: Partial<SpellSlot>) => void;
   onDelete: (id: string) => void;
 } & SpellDisclosure) {
-  // A cast spell's name and controls fade. Its info button and summary
-  // don't, so they stay readable.
-  const fade = spell.cast ? 'opacity-50' : '';
+  // A cast spell's row is de-emphasised: its rank, the Prep and Cast labels
+  // and an arcane spell's name fade, and that name is struck through, so the
+  // state doesn't rest on colour alone. The fade stops at 80%, the faintest
+  // that leaves real room above AA contrast for the gold rank label on the
+  // row's dark background (50% left it at 2.7:1, 75% at 4.6:1; the parchment
+  // is 9.2:1 here). A holy spell's name is an input, where a strike-through
+  // never paints the value and a faded field dims its placeholder, so it
+  // neither fades nor strikes: its Cast box carries the state. Its info
+  // button, summary and delete button don't fade either, so they stay
+  // readable.
+  const fade = spell.cast ? 'opacity-80' : '';
+  const castName = spell.cast ? 'line-through' : '';
   const name = spell.name.trim();
   return (
     <div data-spell-row="" className="bg-[#1a1a2e] p-2 rounded mb-1">
@@ -593,7 +602,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
             <>
               <span className={`text-[#c4a35a] font-semibold shrink-0 ${fade}`}>R{spell.rank}</span>
               <span className="text-[#f5e6c8] min-w-0">
-                <SpellInfo spellType="arcane" name={spell.name} context={context} labelClassName={fade} {...info}>
+                <SpellInfo spellType="arcane" name={spell.name} context={context} labelClassName={`${fade} ${castName}`} {...info}>
                   {spell.name}
                 </SpellInfo>
               </span>
@@ -606,7 +615,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 onChange={(e) => onUpdate(spell.id, { name: e.target.value })}
                 placeholder="Spell name"
                 aria-label={`Spell name (slot ${slotNumber})`}
-                className={`${inputClasses} flex-1 min-w-0 ${fade}`}
+                className={`${inputClasses} flex-1 min-w-0`}
               />
               {/* The button appears once the name matches a holy spell; its
                   space is kept either way so the row doesn't shift as you type.
@@ -667,12 +676,12 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               onChange={(e) => onUpdate(spell.id, { notes: e.target.value })}
               placeholder="Notes"
               aria-label={name ? `Notes for ${name} (slot ${slotNumber})` : `Spell notes (slot ${slotNumber})`}
-              className={`${inputClasses} block w-full ${fade}`}
+              className={`${inputClasses} block w-full`}
             />
           </span>
           <button
             onClick={() => onDelete(spell.id)}
-            className={`text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0 ${fade}`}
+            className="text-red-400 hover:text-red-300 text-sm font-bold px-2 py-1 rounded hover:bg-red-400/10 transition-colors shrink-0"
             title="Delete spell"
             aria-label={name ? `Delete ${name} (slot ${slotNumber})` : `Delete spell (slot ${slotNumber})`}
           >
@@ -736,7 +745,7 @@ function InventoryScrollsList({
             <button
               type="button"
               onClick={() => castScroll(s.id)}
-              className="ml-auto bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-3 py-1 rounded shrink-0"
+              className="ml-auto bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] text-xs font-semibold px-3 py-1 rounded shrink-0"
               title="Cast from scroll (consumes it)"
             >
               Cast
@@ -1767,7 +1776,7 @@ function SpellStudyBlock({
           </button>
           {/* Rewriting is only for spells already known */}
           {selectedName && draftSource !== 'rewrite' && knownNames.has(selectedName.toLowerCase()) && (
-            <span className="text-[#c47a3a] text-xs italic">Already known — usually unnecessary.</span>
+            <span className="text-[#e8a765] text-xs italic">Already known — usually unnecessary.</span>
           )}
           {selectedName && draftSource === 'book' && failedBlockSet.has(selectedName.toLowerCase()) && (
             <span className="text-red-400 text-xs italic">Previously failed — retry blocked until next level.</span>
@@ -1892,8 +1901,8 @@ function MemorisePicker({
                     onClick={() => memoriseKnown(k)}
                     className={`flex-1 min-w-0 break-words text-left px-3 py-1.5 text-sm ${
                       atCap
-                        ? 'text-[#f5e6c8]/30 cursor-not-allowed'
-                        : 'text-[#f5e6c8] hover:bg-[#3a3a5e]'
+                        ? 'text-[#9c948b] italic cursor-not-allowed'
+                        : 'text-[#f5e6c8] hover:bg-[#37375a]'
                     }`}
                     title={
                       hasNoSlots
@@ -1906,7 +1915,7 @@ function MemorisePicker({
                     <span className="text-[#c4a35a] mr-2">R{k.rank}</span>
                     {k.name}
                     {atCap && (
-                      <span className="text-[#f5e6c8]/40 text-xs ml-2 whitespace-nowrap">
+                      <span className="text-[#9c948b] text-xs ml-2 whitespace-nowrap">
                         {hasNoSlots ? '(no slots yet)' : `(R${k.rank} full)`}
                       </span>
                     )}
@@ -1971,7 +1980,7 @@ function GlamourSection({
               </button>
             </div>
             {ref && (
-              <p className="text-[#f5e6c8]/50 text-xs mt-1">{ref.description}</p>
+              <p className="text-[#a1988f] text-xs mt-1">{ref.description}</p>
             )}
             <input
               type="text"
@@ -2005,7 +2014,7 @@ function GlamourSection({
       )}
 
       {atMax && availableGlamours.length > 0 && (
-        <p className="text-[#f5e6c8]/40 text-xs italic mt-2">
+        <p className="text-[#9c948b] text-xs italic mt-2">
           Maximum glamours known. Remove one to add another.
         </p>
       )}
@@ -2067,7 +2076,7 @@ function RuneSection({
                       updateRune(rune.id, { usesRemaining: Math.max(0, rune.usesRemaining - 1) })
                     }
                     aria-label={`Spend a use of ${rune.name} (rune ${index + 1})`}
-                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#4a2f20] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     -
                   </button>
@@ -2077,7 +2086,7 @@ function RuneSection({
                   <button
                     onClick={() => updateRune(rune.id, { usesRemaining: rune.usesRemaining + 1 })}
                     aria-label={`Regain a use of ${rune.name} (rune ${index + 1})`}
-                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#4a2f20] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     +
                   </button>
@@ -2195,7 +2204,7 @@ function KnackSection({
         <span className="text-[#c4a35a] font-semibold">{knack.name}</span>
         <button
           onClick={clearKnack}
-          className="text-[#f5e6c8]/50 hover:text-[#f5e6c8] text-xs underline transition-colors"
+          className="text-[#a1988f] hover:text-[#f5e6c8] text-xs underline transition-colors"
         >
           Change
         </button>
@@ -2208,15 +2217,15 @@ function KnackSection({
             <div
               key={tier.level}
               className={`bg-[#1a1a2e] p-2 rounded text-sm ${
-                isActive ? 'text-[#f5e6c8]' : 'text-[#f5e6c8]/30'
+                isActive ? 'text-[#f5e6c8]' : 'text-[#9c948b] italic'
               }`}
             >
-              <span className={`font-semibold ${isActive ? 'text-[#c4a35a]' : 'text-[#c4a35a]/30'}`}>
+              <span className={`font-semibold ${isActive ? 'text-[#c4a35a]' : 'text-[#b0955c]'}`}>
                 L{tier.level}:
               </span>{' '}
               {tier.description}
               {!isActive && (
-                <span className="text-[#f5e6c8]/20 text-xs ml-1">(Level {tier.level})</span>
+                <span className="text-[#9c948b] text-xs ml-1">(Level {tier.level})</span>
               )}
             </div>
           );
@@ -2299,7 +2308,7 @@ function GlamourReference() {
         {GLAMOURS.map((g) => (
           <div key={g.id} className="text-xs">
             <span className="text-[#c4a35a]">{g.id}. {g.name}</span>
-            <span className="text-[#f5e6c8]/50"> - {g.description}</span>
+            <span className="text-[#a1988f]"> - {g.description}</span>
           </div>
         ))}
       </div>
@@ -2326,15 +2335,15 @@ function RuneReference({ level }: { level: number }) {
               <td className="pr-2 py-0.5">2-</td>
               <td>No rune (fickle displeasure)</td>
             </tr>
-            <tr className="text-green-400/70">
+            <tr className="text-green-400">
               <td className="pr-2 py-0.5">3-7</td>
               <td>1 lesser rune (random)</td>
             </tr>
-            <tr className="text-blue-400/70">
+            <tr className="text-blue-400">
               <td className="pr-2 py-0.5">8-11</td>
               <td>1 greater rune (random)</td>
             </tr>
-            <tr className="text-purple-400/70">
+            <tr className="text-purple-400">
               <td className="pr-2 py-0.5">12+</td>
               <td>1 mighty rune (random)</td>
             </tr>
@@ -2360,19 +2369,19 @@ function RuneReference({ level }: { level: number }) {
                 </tr>
               </thead>
               <tbody>
-                <tr className="text-green-400/70">
+                <tr className="text-green-400">
                   <td className="pr-2">Lesser</td>
                   <td className="pr-2">1x/day</td>
                   <td className="pr-2">2x/day</td>
                   <td>3x/day</td>
                 </tr>
-                <tr className="text-blue-400/70">
+                <tr className="text-blue-400">
                   <td className="pr-2">Greater</td>
                   <td className="pr-2">1x/level</td>
                   <td className="pr-2">1x/week</td>
                   <td>1x/day</td>
                 </tr>
-                <tr className="text-purple-400/70">
+                <tr className="text-purple-400">
                   <td className="pr-2">Mighty</td>
                   <td className="pr-2">1x ever</td>
                   <td className="pr-2">1x ever</td>

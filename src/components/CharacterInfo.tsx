@@ -26,7 +26,7 @@ interface CharacterInfoProps {
 }
 
 const inputClasses =
-  'w-full bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'w-full bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
 
@@ -188,7 +188,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             {character.kindred === 'human' ? (
               <span className="text-red-400 font-normal ml-1">(required)</span>
             ) : (
-              <span className="text-[#f5e6c8]/40 font-normal ml-1">(optional)</span>
+              <span className="text-[#9c948b] font-normal ml-1">(optional)</span>
             )}
           </label>
           <select
@@ -263,7 +263,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
             <p className={`text-xs mt-1 ${
               alignmentWarning.severity === 'warning'
                 ? 'text-yellow-400'
-                : 'text-[#f5e6c8]/50 italic'
+                : 'text-[#a1988f] italic'
             }`}>
               {alignmentWarning.text}
             </p>
@@ -325,7 +325,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               >
                 <option value="">-- N/A --</option>
               </select>
-              <p className="text-[#f5e6c8]/50 text-xs mt-1 italic">
+              <p className="text-[#a1988f] text-xs mt-1 italic">
                 Fairies cannot have moon signs.
               </p>
             </div>
@@ -345,7 +345,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               placeholder="Current XP"
               className={inputClasses}
             />
-            <span className="text-[#f5e6c8]/40 shrink-0">/</span>
+            <span className="text-[#9c948b] shrink-0">/</span>
             <input
               type="number"
               min={0}
@@ -376,13 +376,13 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 </span>
                 {calculated.humanBonus > 0 && (
                   <>
-                    <span className="text-[#f5e6c8]/40">+</span>
+                    <span className="text-[#9c948b]">+</span>
                     <span className="bg-[#1a1a2e] border border-[#5a3a28] rounded px-2 py-1">
                       Human: {formatXpPercent(calculated.humanBonus)}
                     </span>
                   </>
                 )}
-                <span className="text-[#f5e6c8]/40">=</span>
+                <span className="text-[#9c948b]">=</span>
                 <span className={`font-bold text-lg ${
                   calculated.total > 0 ? 'text-green-400' : calculated.total < 0 ? 'text-red-400' : 'text-[#f5e6c8]'
                 }`}>
@@ -394,7 +394,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 <button
                   type="button"
                   onClick={() => onChange({ xpModifier: calculated.total })}
-                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors"
+                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors"
                 >
                   Sync to {formatXpPercent(calculated.total)}
                 </button>
@@ -404,7 +404,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 open={xpOverrideOpen}
                 onToggle={(e) => setXpOverrideOpen((e.target as HTMLDetailsElement).open)}
               >
-                <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
+                <summary className="text-xs text-[#9c948b] cursor-pointer hover:text-[#f5e6c8]/60">
                   Manual override
                 </summary>
                 <label htmlFor="character-info-xp-modifier" className="block text-[#f5e6c8]/60 text-xs mt-1">
@@ -499,7 +499,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               <button
                 type="button"
                 onClick={handleRollEquipment}
-                className="text-sm px-3 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors font-semibold"
+                className="text-sm px-3 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors font-semibold"
               >
                 Roll All
               </button>

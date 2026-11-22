@@ -150,7 +150,7 @@ export default function Home() {
             <span className="text-lg font-bold text-[#c4a35a] tracking-wide min-w-0 truncate">
               Dolmen Spot
             </span>
-            <div className="hidden sm:block text-[#f5e6c8]/40 text-xs">|</div>
+            <div className="hidden sm:block text-[#9c948b] text-xs">|</div>
             <div className="flex items-center gap-2 min-w-0 flex-1 basis-40">
               <button
                 ref={switcherRef}
@@ -393,13 +393,13 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="bg-[#1a1a2e] border-t border-[#5a3a28] py-2 text-center">
-        <p className="text-xs text-[#f5e6c8]/30">
+        <p className="text-xs text-[#9c948b]">
           Dolmenwood is a trademark of Necrotic Gnome. This is an unofficial fan tool.
         </p>
-        <p className="text-xs text-[#f5e6c8]/30 mt-1">
-          Found a bug? <a href="https://github.com/TheBeege/dolmen-spot/issues" target="_blank" rel="noopener noreferrer" className="text-[#c4a35a]/50 hover:text-[#c4a35a] underline transition-colors">File an issue on GitHub</a>
+        <p className="text-xs text-[#9c948b] mt-1">
+          Found a bug? <a href="https://github.com/TheBeege/dolmen-spot/issues" target="_blank" rel="noopener noreferrer" className="text-[#b0955c] hover:text-[#c4a35a] underline transition-colors">File an issue on GitHub</a>
         </p>
-        <p className="text-xs text-[#f5e6c8]/30 mt-1">
+        <p className="text-xs text-[#9c948b] mt-1">
           <Link href="/changelog" className="hover:text-[#c4a35a] transition-colors">Changelog</Link>
           {' · '}
           <Link href="/about" className="hover:text-[#c4a35a] transition-colors">About</Link>

@@ -111,7 +111,7 @@ export default function AboutPage() {
       </main>
 
       <footer className="bg-[#1a1a2e] border-t border-[#5a3a28] py-3 text-center">
-        <p className="text-xs text-[#f5e6c8]/30">
+        <p className="text-xs text-[#9c948b]">
           <Link href="/" className="hover:text-[#c4a35a] transition-colors">Sheet</Link>
           {' · '}
           <Link href="/changelog" className="hover:text-[#c4a35a] transition-colors">Changelog</Link>

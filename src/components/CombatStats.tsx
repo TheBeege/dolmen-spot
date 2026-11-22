@@ -19,7 +19,7 @@ interface CombatStatsProps {
 }
 
 const inputClasses =
-  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 
 // Armour options for the dropdown (exclude Shield row)
 const ARMOUR_OPTIONS = ARMOUR_TABLE.filter(a => a.name !== 'Shield');
@@ -96,7 +96,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <button
             type="button"
             onClick={() => adjustHp(-1)}
-            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
           >
             -
           </button>
@@ -114,18 +114,18 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
               >
                 {character.currentHp}
               </span>
-              <span className="text-[#8b8b9e] text-xl">/</span>
+              <span className="text-[#a1988f] text-xl">/</span>
               <span className="text-3xl font-bold text-[#f5e6c8]">
                 {character.maxHp}
               </span>
             </div>
-            <span className="text-[#8b8b9e] text-xs">Current / Maximum</span>
+            <span className="text-[#a1988f] text-xs">Current / Maximum</span>
           </div>
 
           <button
             type="button"
             onClick={() => adjustHp(1)}
-            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
           >
             +
           </button>
@@ -134,7 +134,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         {/* HP Number Inputs */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label htmlFor="hit-points-current" className="text-[#8b8b9e] text-xs block mb-1">Current HP</label>
+            <label htmlFor="hit-points-current" className="text-[#a1988f] text-xs block mb-1">Current HP</label>
             <input
               id="hit-points-current"
               type="number"
@@ -146,7 +146,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             />
           </div>
           <div>
-            <label htmlFor="hit-points-max" className="text-[#8b8b9e] text-xs block mb-1">Max HP</label>
+            <label htmlFor="hit-points-max" className="text-[#a1988f] text-xs block mb-1">Max HP</label>
             <input
               id="hit-points-max"
               type="number"
@@ -160,7 +160,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           </div>
         </div>
 
-        <p className="text-[#8b8b9e] text-xs mt-2">
+        <p className="text-[#a1988f] text-xs mt-2">
           CON modifier: {formatModifier(conMod)} applied per Hit Die
         </p>
       </div>
@@ -174,7 +174,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         {/* Armour Picker */}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label htmlFor="armour-class-armour" className="text-[#8b8b9e] text-xs block mb-1">Armour</label>
+            <label htmlFor="armour-class-armour" className="text-[#a1988f] text-xs block mb-1">Armour</label>
             <select
               id="armour-class-armour"
               value={character.equippedArmourName}
@@ -202,7 +202,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         </div>
 
         {armourWarning && (
-          <p className="text-[#b33a1a] text-xs mb-2">{armourWarning}</p>
+          <p className="text-[#ff8a6a] text-xs mb-2">{armourWarning}</p>
         )}
 
         {/* AC Display with Sync */}
@@ -213,19 +213,19 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
               <button
                 type="button"
                 onClick={() => onChange({ armorClass: calcAC.ac })}
-                className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors"
+                className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors"
               >
                 Sync to {calcAC.ac}
               </button>
             )}
             {calcAC && calcAC.notes.length > 0 && (
-              <p className="text-[#8b8b9e] text-xs mt-1">{calcAC.notes.join(', ')}</p>
+              <p className="text-[#a1988f] text-xs mt-1">{calcAC.notes.join(', ')}</p>
             )}
           </div>
         </div>
 
         <details>
-          <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
+          <summary className="text-xs text-[#9c948b] cursor-pointer hover:text-[#f5e6c8]/60">
             Manual override
           </summary>
           <label htmlFor="armour-class-override" className="block text-[#f5e6c8]/60 text-xs mt-1">
@@ -254,7 +254,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
               <button
                 type="button"
                 onClick={() => onChange({ attackBonus: calcAttack })}
-                className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors"
+                className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors"
               >
                 Sync to {formatModifier(calcAttack)}
               </button>
@@ -265,14 +265,14 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         {/* Derived melee/missile modifiers */}
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="bg-[#1a1a2e] rounded p-2 text-center">
-            <span className="text-[#8b8b9e] text-xs block">Melee</span>
+            <span className="text-[#a1988f] text-xs block">Melee</span>
             <span className="text-[#f5e6c8] font-bold">{formatModifier(meleeModifier)}</span>
-            <span className="text-[#8b8b9e] text-xs block">ATK {formatModifier(character.attackBonus)} + STR {formatModifier(getAbilityModifier(character.abilityScores.strength))}</span>
+            <span className="text-[#a1988f] text-xs block">ATK {formatModifier(character.attackBonus)} + STR {formatModifier(getAbilityModifier(character.abilityScores.strength))}</span>
           </div>
           <div className="bg-[#1a1a2e] rounded p-2 text-center">
-            <span className="text-[#8b8b9e] text-xs block">Missile</span>
+            <span className="text-[#a1988f] text-xs block">Missile</span>
             <span className="text-[#f5e6c8] font-bold">{formatModifier(missileModifier)}</span>
-            <span className="text-[#8b8b9e] text-xs block">
+            <span className="text-[#a1988f] text-xs block">
               ATK {formatModifier(character.attackBonus)} + DEX {formatModifier(getAbilityModifier(character.abilityScores.dexterity))}
               {character.class === 'hunter' ? ' +1 Hunter' : ''}
             </span>
@@ -280,7 +280,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         </div>
 
         <details className="mt-2">
-          <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
+          <summary className="text-xs text-[#9c948b] cursor-pointer hover:text-[#f5e6c8]/60">
             Manual override
           </summary>
           <label htmlFor="attack-bonus-override" className="block text-[#f5e6c8]/60 text-xs mt-1">
@@ -308,18 +308,18 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
                 <button
                   type="button"
                   onClick={() => onChange({ magicResistance: calcMR.value })}
-                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#c4a35a] rounded hover:bg-[#7a5a38] transition-colors"
+                  className="text-xs px-2 py-1 bg-[#5a3a28] text-[#dbc07a] rounded hover:bg-[#4a2f20] transition-colors"
                 >
                   Sync to {formatModifier(calcMR.value)}
                 </button>
               )}
               {calcMR && calcMR.notes.length > 0 && (
-                <p className="text-[#8b8b9e] text-xs mt-1">{calcMR.notes.join(', ')}</p>
+                <p className="text-[#a1988f] text-xs mt-1">{calcMR.notes.join(', ')}</p>
               )}
             </div>
           </div>
           <details>
-            <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
+            <summary className="text-xs text-[#9c948b] cursor-pointer hover:text-[#f5e6c8]/60">
               Manual override
             </summary>
             <label htmlFor="magic-resistance-override" className="block text-[#f5e6c8]/60 text-xs mt-1">
