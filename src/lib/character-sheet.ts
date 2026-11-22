@@ -17,6 +17,7 @@ import type {
   KnownSpellSource,
   SaveTargets,
   SpellSlot,
+  SpellStudyEntry,
 } from './types';
 import {
   BREGGLE_GAZE_PER_DAY,
@@ -290,6 +291,39 @@ export function getMagicSections(character: Pick<Character, 'kindred' | 'class' 
     // Breggle kindred-class arcane magic unlocks at Level 4.
     isBregglesPreMagic: character.kindred === 'breggle' && !character.class && character.level < 4,
   };
+}
+
+/**
+ * The note on a known spell or a study of a Rank the character can't learn at
+ * their Level (see getLearnableSpellRanks). Such an entry has three origins:
+ * learned before the app checked learnable Ranks, when it offered every Rank of
+ * the class; left above by a Level lowered since; or a spell a Referee granted,
+ * which the manual add form records through its "Above your Level (Referee
+ * grant)" group.
+ */
+export function rankAboveLearnableNote(rank: number, level: number): string {
+  return `Rank ${rank} is above what you can learn at Level ${level}.`;
+}
+
+/**
+ * The note on a spell study that would teach a spell of a Rank the character
+ * can't learn at their Level, or undefined when it wouldn't. Finishing a study
+ * adds the spell (the Level isn't re-checked then: a Level can go down while a
+ * study runs), so the player is told before they finish it. Rewriting a spell
+ * they already know isn't learning it, so it gets no note.
+ *
+ * Shared by the Spells & Magic tab's study card and queue and the Adventuring
+ * tab's study panel, so both say the same thing.
+ */
+export function studyRankAboveLearnableNote(
+  study: Pick<SpellStudyEntry, 'spellName' | 'rank' | 'source'>,
+  character: Pick<Character, 'level' | 'knownSpells'>,
+  learnableRanks: readonly number[],
+): string | undefined {
+  if (learnableRanks.includes(study.rank)) return undefined;
+  const rewritingKnown = study.source === 'rewrite'
+    && character.knownSpells.some((k) => k.name.toLowerCase() === study.spellName.toLowerCase());
+  return rewritingKnown ? undefined : rankAboveLearnableNote(study.rank, character.level);
 }
 
 // ── Traits ───────────────────────────────────────────────────

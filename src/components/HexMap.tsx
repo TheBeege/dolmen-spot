@@ -11,6 +11,7 @@ import type {
   LeyLine,
   LeyLineDraft,
   MapPOI,
+  PoiKind,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
 import {
@@ -27,28 +28,35 @@ import {
 } from '@/lib/hex';
 import {
   BADGE_RADIUS,
-  DOOR_RADIUS,
   HEX_INNER_RADIUS,
+  MARKER_RADIUS,
   MARKER_RIM,
-  POI_RADIUS,
   STAR_RADIUS,
   countOnStar,
   layoutRing,
   markerGrowth,
   ringFor,
+  type MarkerKind,
 } from '@/lib/marker-layout';
 import {
   DEFAULT_LEY_LINE_TYPE,
   LEY_LINE_COLORS,
+  POI_KINDS,
+  POI_KIND_LABELS,
+  POI_KIND_NAMES,
   deleteFairyDoor,
   isPathKind,
   pairableDoors,
   pathKindFromType,
+  poiKindOf,
+  poiLabel,
   upsertFairyDoor,
   withMapLists,
+  withPoiKind,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
 import { newId } from '@/lib/ids';
+import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './MapIcons';
 
 interface HexMapProps {
   character: Character;
@@ -56,14 +64,10 @@ interface HexMapProps {
   onOpenJournal: (hex: HexCoord) => void; // opens the Journal tab, filtered to that hex
 }
 
-// --- Colours ---
+// --- Colours: the terrain's. The theme's parchment, night and gold, and the
+// markers' own colours, are in MapIcons.tsx. ---
 const TERRAIN_FILL = { woods: '#2d4a2e', open: '#4a3a26' } as const;
 const GRID_STROKE = '#5a3a28';
-const GOLD = '#c4a35a';
-const PARCHMENT = '#f5e6c8';
-const NIGHT = '#1a1a2e';
-const POI_FILL = '#8b2500';
-const DOOR_FILL = '#a774d6';
 
 // --- Sizes in image units (the printed map's pixels); they scale with zoom ---
 // Marker and star sizes, and how they grow, are in marker-layout.ts.
@@ -75,7 +79,6 @@ const COORD_LABEL_FONT = 30;
 const COORD_LABEL_OFFSET = HEX_SIZE * 0.55; // label sits this far above the centre
 const DRAFT_STEP_FONT = 50;
 const ROAD_LABEL_FONT = 34;
-const DOOR_GLYPH_FONT = 38; // the ✦ on a fairy door marker
 const BADGE_FONT = 28; // the "+N" overflow badge
 const STAR_GLYPH_FONT = 56; // the ★ of the current location
 const BADGE_RIM = 3;
@@ -140,6 +143,23 @@ const NOTES_PREVIEW_LENGTH = 120;
 /** " — " and the start of `notes`, for a marker's label; '' if there are none. */
 function notesPreview(notes: string): string {
   return notes ? ` — ${notes.slice(0, NOTES_PREVIEW_LENGTH)}` : '';
+}
+
+/** One of a hex's items: a point of interest or a fairy door. */
+type HexItem = { type: 'poi'; item: MapPOI } | { type: 'door'; item: FairyDoor };
+
+/** The marker an item gets: a fairy door, a point of interest's kind icon, or the plain dot. */
+function markerKindOf(e: HexItem): MarkerKind {
+  if (e.type === 'door') return 'door';
+  return poiKindOf(e.item) === 'other' ? 'poi' : 'icon';
+}
+
+const lookOf = (e: HexItem) => markerLook(e.type === 'door' ? 'door' : poiKindOf(e.item));
+
+/** An item in a combined marker's list: "Lankshorn (town)". */
+function itemSummary(e: HexItem): string {
+  const what = e.type === 'door' ? 'fairy door' : POI_KIND_NAMES[poiKindOf(e.item)].toLowerCase();
+  return `${e.item.name || 'Unnamed'} (${what})`;
 }
 
 // Markers and ley lines are buttons for keyboard and screen-reader users.
@@ -913,9 +933,9 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
     itemsByHex.forEach((bucket, hex) => {
       const c = hexCenterOf(hex);
       if (!c) return;
-      const items = [
-        ...bucket.pois.map((poi) => ({ kind: 'poi' as const, item: poi })),
-        ...bucket.doors.map((door) => ({ kind: 'door' as const, item: door })),
+      const items: HexItem[] = [
+        ...bucket.pois.map((poi) => ({ type: 'poi' as const, item: poi })),
+        ...bucket.doors.map((door) => ({ type: 'door' as const, item: door })),
       ];
       const visible = items.slice(0, MAX_VISIBLE_MARKERS);
       const overflow = items.length - visible.length;
@@ -925,54 +945,47 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
       // inside their hex: where they'd crowd each other or the star, as when
       // zoomed out on a phone, the hex gets one combined marker instead.
       const onCurrent = hex === currentHex;
-      const layout = layoutRing(ringFor({ kinds: visible.map((e) => e.kind), badge: overflow > 0, onCurrent, growth }));
+      // Each marker's kind is worked out once, for its place in the ring and
+      // for its size.
+      const slots = visible.map((entry) => ({ entry, kind: markerKindOf(entry) }));
+      const layout = layoutRing(ringFor({ kinds: slots.map((slot) => slot.kind), badge: overflow > 0, onCurrent, growth }));
       if (layout.kind === 'combined') {
         els.push(renderCombinedMarker(hex, c, items, onCurrent));
         return;
       }
       const slotAt = (i: number) => ({ x: c.x + layout.offsets[i].x, y: c.y + layout.offsets[i].y });
-      visible.forEach((entry, i) => {
+      slots.forEach(({ entry, kind }, i) => {
         const m = slotAt(i);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
-        if (entry.kind === 'poi') {
-          const label = `POI: ${entry.item.name || 'Unnamed'}${notesPreview(entry.item.notes)}`;
-          els.push(
-            <g key={`poi-${entry.item.id}`} {...markerProps} aria-label={label}>
-              <title>{label}</title>
-              <circle cx={m.x} cy={m.y} r={POI_RADIUS * size.marker} fill={POI_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
-            </g>,
-          );
+        let label: string;
+        if (entry.type === 'poi') {
+          label = `${poiLabel(entry.item)}${notesPreview(entry.item.notes)}`;
         } else {
           const door = entry.item;
           const dest = door.destination;
           const destLabel = dest.kind === 'wild' ? 'wild → Fairy' : `roaded${dest.roadName ? ` via "${dest.roadName}"` : ''}`;
-          const label = `Fairy Door: ${door.name || 'Unnamed'} (${destLabel})${notesPreview(door.notes)}`;
-          els.push(
-            <g key={`door-${door.id}`} {...markerProps} aria-label={label}>
-              <title>{label}</title>
-              <circle cx={m.x} cy={m.y} r={DOOR_RADIUS * size.marker} fill={DOOR_FILL} stroke={PARCHMENT} strokeWidth={MARKER_RIM * size.marker} />
-              <text
-                x={m.x}
-                y={m.y + DOOR_GLYPH_FONT * size.marker * 0.32}
-                textAnchor="middle"
-                fontSize={DOOR_GLYPH_FONT * size.marker}
-                fill={NIGHT}
-                fontWeight="bold"
-                pointerEvents="none"
-                aria-hidden="true"
-              >
-                ✦
-              </text>
-            </g>,
-          );
+          label = `Fairy Door: ${door.name || 'Unnamed'} (${destLabel})${notesPreview(door.notes)}`;
         }
+        // The icon is decorative: the marker's label names the item and its kind.
+        els.push(
+          <g key={`${entry.type}-${entry.item.id}`} {...markerProps} aria-label={label}>
+            <title>{label}</title>
+            <MarkerShape
+              look={lookOf(entry)}
+              cx={m.x}
+              cy={m.y}
+              r={MARKER_RADIUS[kind] * size.marker}
+              rim={MARKER_RIM * size.marker}
+            />
+          </g>,
+        );
       });
       if (overflow > 0) {
         const b = slotAt(visible.length);
         els.push(
           <g key={`overflow-${hex}`} pointerEvents="none" role="img" aria-label={`${overflow} more on hex ${hex}`}>
-            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS * size.marker} fill={NIGHT} stroke={PARCHMENT} strokeWidth={BADGE_RIM * size.marker} />
-            <text x={b.x} y={b.y + BADGE_FONT * size.marker * 0.36} textAnchor="middle" fontSize={BADGE_FONT * size.marker} fill={PARCHMENT} fontWeight="bold">
+            <circle cx={b.x} cy={b.y} r={BADGE_RADIUS * size.marker} fill={NIGHT} stroke={PARCHMENT} strokeWidth={BADGE_RIM * size.marker} className="marker-disc" />
+            <text x={b.x} y={b.y + BADGE_FONT * size.marker * 0.36} textAnchor="middle" fontSize={BADGE_FONT * size.marker} fill={PARCHMENT} fontWeight="bold" className="marker-ink">
               +{overflow}
             </text>
           </g>,
@@ -984,32 +997,36 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
 
   // One marker for all of a hex's items when they don't fit in it separately:
   // their count, in the middle of the hex, or over the star's lower right on
-  // the current hex. It opens the hex, whose inspector lists the items.
-  const renderCombinedMarker = (
-    hex: HexCoord,
-    c: Point,
-    items: ({ kind: 'poi'; item: MapPOI } | { kind: 'door'; item: FairyDoor })[],
-    onCurrent: boolean,
-  ) => {
-    const names = items.map((e) => e.item.name || 'Unnamed').join(', ');
-    const label = `${items.length} ${items.length === 1 ? 'item' : 'items'} on hex ${hex}: ${names}`;
+  // the current hex. It opens the hex, whose inspector lists the items. It
+  // has its items' colours if they all share them (plain points of interest,
+  // ones with kinds, or fairy doors), and is dark otherwise.
+  const renderCombinedMarker = (hex: HexCoord, c: Point, items: HexItem[], onCurrent: boolean) => {
+    const label = `${items.length} ${items.length === 1 ? 'item' : 'items'} on hex ${hex}: ${items.map(itemSummary).join(', ')}`;
     const r = onCurrent ? growth.countRadius : growth.combinedRadius;
     const o = onCurrent ? countOnStar(starRadius, r, HEX_INNER_RADIUS) : { x: 0, y: 0 };
-    const fill = onCurrent || !items.every((e) => e.kind === items[0].kind) ? NIGHT : items[0].kind === 'poi' ? POI_FILL : DOOR_FILL;
+    const looks = items.map(lookOf);
+    // The disc takes the colour its items share (the plain one's red, or a
+    // door's lavender), and is dark otherwise; the rim never does (below).
+    const shared = !onCurrent && looks.every((l) => l.fill === looks[0].fill) ? looks[0] : null;
+    const fill = shared?.fill ?? NIGHT;
     return (
       <g key={`combined-${hex}`} {...MAP_BUTTON_PROPS} data-hex={hex} aria-label={label}>
         <title>{label}</title>
-        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={PARCHMENT} strokeWidth={r * 0.15} />
+        {/* The rim is parchment whatever the items: a gold one belongs to a
+            kind's own marker, so a count never wears one and its digit never
+            reads as a kind. The classes are forced colours' (globals.css). */}
+        <circle cx={c.x + o.x} cy={c.y + o.y} r={r} fill={fill} stroke={PARCHMENT} strokeWidth={r * 0.15} className="marker-disc" />
         <text
           x={c.x + o.x}
           y={c.y + o.y + r * 0.5}
           textAnchor="middle"
           fontSize={r * 1.4}
-          // Dark on the pale door fill, like a door's ✦; pale on the others.
+          // Dark on the pale door fill, like a door's glyph; pale on the others.
           fill={fill === DOOR_FILL ? NIGHT : PARCHMENT}
           fontWeight="bold"
           pointerEvents="none"
           aria-hidden="true"
+          className="marker-ink"
         >
           {items.length}
         </text>
@@ -1023,8 +1040,10 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
     const k = starRadius / STAR_RADIUS;
     return (
       <g pointerEvents="none" aria-hidden="true">
-        <circle cx={c.x} cy={c.y} r={starRadius} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * k} />
-        <text x={c.x} y={c.y + STAR_GLYPH_FONT * k * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * k} fill={NIGHT} fontWeight="bold">
+        {/* Forced colours (globals.css) would otherwise paint the star and its
+            disc one colour. */}
+        <circle cx={c.x} cy={c.y} r={starRadius} fill={GOLD} stroke={PARCHMENT} strokeWidth={STAR_RIM * k} className="marker-disc" />
+        <text x={c.x} y={c.y + STAR_GLYPH_FONT * k * 0.32} textAnchor="middle" fontSize={STAR_GLYPH_FONT * k} fill={NIGHT} fontWeight="bold" className="marker-ink">
           ★
         </text>
       </g>
@@ -1351,8 +1370,10 @@ function HexInspectorPanel({
     moveFocusTo(next ? `item:${next}` : 'inspector-title');
   };
 
-  const savePoi = (id: string, patch: Partial<MapPOI>) =>
+  const savePoi = (id: string, patch: Partial<Pick<MapPOI, 'name' | 'notes'>>) =>
     updateMap((md) => ({ ...md, pois: md.pois.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
+  const savePoiKind = (id: string, kind: PoiKind) =>
+    updateMap((md) => ({ ...md, pois: md.pois.map((x) => (x.id === id ? withPoiKind(x, kind) : x)) }));
   const saveDoorText = (id: string, patch: Partial<Pick<FairyDoor, 'name' | 'notes'>>) =>
     updateMap((md) => ({ ...md, fairyDoors: md.fairyDoors.map((x) => (x.id === id ? { ...x, ...patch } : x)) }));
   // Pairing is validated and both ends updated from the doors as they are
@@ -1453,6 +1474,7 @@ function HexInspectorPanel({
                     singleton={singleton}
                     focusRequest={focusRequestFor(p.id)}
                     onSave={(patch) => savePoi(p.id, patch)}
+                    onSaveKind={(kind) => savePoiKind(p.id, kind)}
                     onDelete={() => {
                       updateMap((md) => ({ ...md, pois: md.pois.filter((x) => x.id !== p.id) }));
                       focusAfterDelete(p.id);
@@ -1491,17 +1513,73 @@ function HexInspectorPanel({
 }
 
 // --- POI form / editor ---
+
+/**
+ * The kind of a point of interest, chosen by its icon: a group of radio
+ * buttons, so Tab reaches the chosen one and the arrow keys choose the
+ * others. The legend describes the tile under the pointer, falling back to the
+ * chosen kind's. A touch screen can't hover, so there it shows the chosen kind
+ * alone: a player who wants to know what another tile means taps it, which
+ * chooses it, and can change it again. Focus needs no watching of its own,
+ * because a radio group has one tab stop, the checked tile, and the arrow keys
+ * check as they move, so the focused tile is always the chosen one.
+ */
+function PoiKindPicker({ kind, onChange }: { kind: PoiKind; onChange: (kind: PoiKind) => void }) {
+  const name = useId();
+  const [lookedAt, setLookedAt] = useState<PoiKind | null>(null);
+  const described = lookedAt ?? kind;
+  return (
+    // min-w-0: a fieldset is otherwise never narrower than its content.
+    <fieldset className="min-w-0">
+      <legend className="text-xs text-[#f5e6c8]/70 mb-1">
+        Kind
+        {/* Hidden from screen readers, which announce the chosen radio button instead. */}
+        <span aria-hidden="true">
+          {' · '}
+          <span className="text-[#f5e6c8]">{POI_KIND_LABELS[described]}</span>
+        </span>
+      </legend>
+      {/* Even rows for the 15 kinds, as the space allows: 5 of 3, 3 of 5, 8 and
+          7, or 1 of 15. Each tier starts where its tiles fit exactly (9.75rem =
+          5 × 1.75rem + 4 gaps), so at a larger font size, where the rem tiers
+          grow but the screen doesn't, the picker drops to fewer columns. */}
+      <div className="@container">
+        <div className="grid grid-cols-[repeat(3,1.75rem)] @min-[9.75rem]:grid-cols-[repeat(5,1.75rem)] @min-[15.75rem]:grid-cols-[repeat(8,1.75rem)] @min-[29.75rem]:grid-cols-[repeat(15,1.75rem)] gap-1">
+          {POI_KINDS.map((k) => (
+            <label
+              key={k}
+              // The description in the legend follows the pointer: a `title`
+              // tooltip shows on neither a touch screen nor the keyboard, and
+              // on a desktop it can be announced twice.
+              onMouseEnter={() => setLookedAt(k)}
+              onMouseLeave={() => setLookedAt(null)}
+              // In forced colours only the chosen tile has a border, and a thicker one.
+              className="relative flex items-center justify-center size-7 rounded border border-transparent cursor-pointer hover:bg-[#2a2a3e] has-checked:border-[#f5e6c8] has-checked:bg-[#5a3a28] forced-colors:border-[color:Canvas] forced-colors:has-checked:border-2 forced-colors:has-checked:border-[color:Highlight] has-focus-visible:outline-2 has-focus-visible:outline-offset-1 has-focus-visible:outline-[#c4a35a]"
+            >
+              <input type="radio" name={name} value={k} checked={k === kind} onChange={() => onChange(k)} className="sr-only" />
+              <PoiIcon kind={k} className="size-5" />
+              <span className="sr-only">{POI_KIND_LABELS[k]}</span>
+            </label>
+          ))}
+        </div>
+      </div>
+    </fieldset>
+  );
+}
+
 function POIForm({ hex, onSubmit, onCancel }: { hex: HexCoord; onSubmit: (p: MapPOI) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<PoiKind>('other');
   const [notes, setNotes] = useState('');
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    onSubmit({ id: newId(), hex, name: name.trim(), notes: notes.trim() });
+    onSubmit(withPoiKind({ id: newId(), hex, name: name.trim(), notes: notes.trim() }, kind));
   };
   return (
-    <form onSubmit={submit} className="bg-[#1a1a2e] rounded p-2 mb-2 space-y-1">
+    <form onSubmit={submit} className="bg-[#1a1a2e] rounded p-2 mb-2 space-y-2">
       <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Name" aria-label="Point of interest name" className={`w-full ${INPUT_ON_ITEM}`} />
+      <PoiKindPicker kind={kind} onChange={setKind} />
       <textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes" aria-label="Point of interest notes" rows={2} className={`w-full ${INPUT_ON_ITEM}`} />
       <div className="flex justify-end gap-2 text-xs">
         <button type="button" onClick={onCancel} className="text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors">
@@ -1520,12 +1598,14 @@ function POIEditor({
   singleton,
   focusRequest,
   onSave,
+  onSaveKind,
   onDelete,
 }: {
   poi: MapPOI;
   singleton: boolean;
   focusRequest: FocusRequest | undefined;
-  onSave: (patch: Partial<MapPOI>) => void;
+  onSave: (patch: Partial<Pick<MapPOI, 'name' | 'notes'>>) => void;
+  onSaveKind: (kind: PoiKind) => void;
   onDelete: () => void;
 }) {
   const [expanded, setExpanded] = useExpanded(singleton, focusRequest?.seq);
@@ -1533,17 +1613,19 @@ function POIEditor({
   const nameRef = useRef<HTMLInputElement>(null);
   useFocusOnRequest(focusRequest, rootRef, nameRef);
   const label = poi.name || 'unnamed';
+  const kind = poiKindOf(poi);
   return (
     <div
       ref={rootRef}
       role="group"
-      aria-label={`Point of interest ${label}`}
+      // Names the kind, which the row shows only as its (decorative) icon.
+      aria-label={`${POI_KIND_NAMES[kind]}: ${label}`}
       tabIndex={-1}
       data-focus-key={`item:${poi.id}`}
       className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
     >
       <div className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#8b2500] shrink-0" aria-hidden="true" />
+        <PoiIcon kind={kind} className="size-5 shrink-0" />
         <input
           ref={nameRef}
           value={poi.name}
@@ -1555,24 +1637,27 @@ function POIEditor({
           type="button"
           onClick={() => setExpanded((x) => !x)}
           aria-expanded={expanded}
-          aria-label={`Notes for ${label}`}
+          aria-label={`Edit ${label}`}
           className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] transition-colors whitespace-nowrap"
         >
-          Notes <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
+          Edit <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
         </button>
         <button type="button" onClick={onDelete} aria-label={`Delete POI ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
           Del
         </button>
       </div>
       {expanded && (
-        <textarea
-          value={poi.notes}
-          onChange={(e) => onSave({ notes: e.target.value })}
-          placeholder="Notes"
-          aria-label={`Notes for ${label}`}
-          rows={3}
-          className={`w-full ${INPUT_ON_ITEM}`}
-        />
+        <div className="space-y-2 pt-1">
+          <PoiKindPicker kind={kind} onChange={onSaveKind} />
+          <textarea
+            value={poi.notes}
+            onChange={(e) => onSave({ notes: e.target.value })}
+            placeholder="Notes"
+            aria-label={`Notes for ${label}`}
+            rows={3}
+            className={`w-full ${INPUT_ON_ITEM}`}
+          />
+        </div>
       )}
     </div>
   );
@@ -1714,7 +1799,7 @@ function DoorEditor({
       className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
     >
       <div className="flex items-center gap-2">
-        <span className="w-2.5 h-2.5 rounded-full bg-[#a774d6] shrink-0" aria-hidden="true" />
+        <DoorIcon className="size-5 shrink-0" />
         <input
           ref={nameRef}
           value={door.name}

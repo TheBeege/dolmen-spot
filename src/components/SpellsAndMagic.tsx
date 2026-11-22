@@ -30,6 +30,7 @@ import {
   FEATURE_NOTES,
   findArcaneSpell,
   findSpell,
+  getLearnableSpellRanks,
   getSpellSummary,
   getStudyConfig,
 } from '@/lib/gamedata';
@@ -41,6 +42,8 @@ import {
   isSpellInAnyBook,
   isSpellOnScroll,
   isStartingBookApplied,
+  rankAboveLearnableNote,
+  studyRankAboveLearnableNote,
   KNOWN_SPELL_SOURCE_LABELS,
 } from '@/lib/character-sheet';
 import {
@@ -106,6 +109,28 @@ function spellRowContexts(spellType: SpellType, names: readonly string[], label:
     const total = totals.get(key) ?? 1;
     return total > 1 ? `${label}, ${n} of ${total}` : label;
   });
+}
+
+// Spells can only be learned of a Rank the character can memorise at their
+// Level (Player's Book p78), so the pickers for learning one offer only those
+// Ranks. This says why, when the class has higher ones. (In these messages a
+// non-breaking space keeps "Level 1" and "Rank 1" together on a narrow screen.)
+function learnableRanksHint(level: number, learnableRanks: readonly number[]): string {
+  const highest = learnableRanks[learnableRanks.length - 1];
+  // Defensive: no arcane class reaches this today (a breggle below Level 4
+  // doesn't render the section).
+  if (!highest) return `At Level ${level} you can't learn spells yet.`;
+  return highest === 1
+    ? `At Level ${level} you can learn only Rank 1 spells.`
+    : `At Level ${level} you can learn spells up to Rank ${highest}.`;
+}
+
+// Whether the pickers hide any Rank the class has: learnableRanksHint says
+// why. Compare the highest Rank the character can learn (0 if none) with the
+// class's highest, rather than counting the Ranks, so a table with a gap in it
+// can't produce a hint naming a Rank the character can't learn.
+function offersUnlearnableRanks(learnableRanks: readonly number[], maxRank: number): boolean {
+  return (learnableRanks[learnableRanks.length - 1] ?? 0) < maxRank;
 }
 
 export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicProps) {
@@ -375,6 +400,12 @@ function SpellCasterSection({
   const spellType: SpellType = isArcane ? 'arcane' : 'holy';
   const isMagician = character.class === 'magician';
   const maxRank = profile.maxSpellRank || 6;
+  // spellsPerDay is a row of the table, the same array until the Level or
+  // class changes, so the known-spell and study blocks get a new list only then.
+  const learnableRanks = useMemo(
+    () => getLearnableSpellRanks({ spellType, spellsPerDay }),
+    [spellType, spellsPerDay],
+  );
   const spellInfo = useSpellDisclosures();
   const startingBookId = useId();
 
@@ -509,8 +540,8 @@ function SpellCasterSection({
           since those are referenced far less often during play. */}
       {isArcane && (
         <>
-          <KnownSpellsBlock character={character} maxRank={maxRank} onChange={onChange} />
-          <SpellStudyBlock character={character} maxRank={maxRank} onChange={onChange} />
+          <KnownSpellsBlock character={character} maxRank={maxRank} learnableRanks={learnableRanks} onChange={onChange} />
+          <SpellStudyBlock character={character} maxRank={maxRank} learnableRanks={learnableRanks} onChange={onChange} />
         </>
       )}
     </div>
@@ -790,10 +821,13 @@ type AvailFilter = 'all' | 'in-hand' | 'no-book';
 function KnownSpellsBlock({
   character,
   maxRank,
+  learnableRanks,
   onChange,
 }: {
   character: Character;
   maxRank: number;
+  /** The Ranks the character can learn at their Level: see getLearnableSpellRanks. */
+  learnableRanks: readonly number[];
   onChange: (updates: CharacterUpdater) => void;
 }) {
   const [sort, setSort] = useState<KnownSort>('rank-asc');
@@ -806,8 +840,34 @@ function KnownSpellsBlock({
   const [addSource, setAddSource] = useState<KnownSpellSource>('manual');
   const spellInfo = useSpellDisclosures();
   const addSummaryId = useId();
+  const addHintId = useId();
 
   const ranks = Array.from({ length: maxRank }, (_, i) => i + 1);
+
+  // The picker offers only the Ranks the character can learn. A choice it no
+  // longer offers (made before switching to a lower-Level character, say)
+  // counts as no choice.
+  //
+  // Adding one by hand is the one deliberate exception, because the app is the
+  // character's only record: a spell a Referee grants above those Ranks has to
+  // be writable down somewhere. So the manual source alone also offers the
+  // higher Ranks, in a group of their own labelled as a Referee grant, which
+  // the player has to pick deliberately; every other source stays
+  // rules-enforced. The known spell it adds then carries the red note that says
+  // the Rank is above what the character can learn (see the rows below), for
+  // the player and Referee to settle.
+  const addChoice = findArcaneSpell(addName);
+  const highestLearnable = learnableRanks[learnableRanks.length - 1] ?? 0;
+  const refereeRanks = addSource === 'manual' ? ranks.filter((rank) => rank > highestLearnable) : [];
+  const addOfferedRanks = [...learnableRanks, ...refereeRanks];
+  const addSelected = addChoice && addOfferedRanks.includes(addChoice.rank) ? addChoice.name : '';
+  const addHint = offersUnlearnableRanks(learnableRanks, maxRank)
+    ? learnableRanksHint(character.level, learnableRanks)
+    : null;
+  const addDescribedBy = [
+    addHint ? addHintId : null,
+    getSpellSummary('arcane', addSelected) ? addSummaryId : null,
+  ].filter(Boolean).join(' ');
 
   const decorated = useMemo(() => {
     return character.knownSpells.map((k) => ({
@@ -843,13 +903,12 @@ function KnownSpellsBlock({
   const knownContexts = spellRowContexts('arcane', filtered.map((k) => k.name), 'known');
 
   const handleAdd = () => {
-    const matched = findArcaneSpell(addName);
-    if (!matched) return;
+    if (!addChoice || !addSelected) return;
     const now = getCurrentTimelinePoint(character);
     const newSpell: KnownSpell = {
       id: newId(),
-      name: matched.name,
-      rank: matched.rank,
+      name: addChoice.name,
+      rank: addChoice.rank,
       source: addSource,
       learnedAt: now.date,
       learnedInFairy: now.fairyDate,
@@ -970,6 +1029,7 @@ function KnownSpellsBlock({
             context={knownContexts[i]}
             learnedOn={k.learnedAt ? formatRecordDate(character, k.learnedAt, k.learnedInFairy) : undefined}
             learnedInFairyOn={k.learnedInFairy ? formatFairyDate(character, k.learnedInFairy, k.learnedAt) : undefined}
+            rankNote={learnableRanks.includes(k.rank) ? undefined : rankAboveLearnableNote(k.rank, character.level)}
             onDelete={handleDelete}
             {...spellInfo(k.id)}
           />
@@ -989,26 +1049,40 @@ function KnownSpellsBlock({
         ) : (
           <div className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 p-2 rounded">
             <select
-              value={addName}
+              value={addSelected}
               onChange={(e) => setAddName(e.target.value)}
               aria-label="Known spell to add"
-              aria-describedby={getSpellSummary('arcane', addName) ? addSummaryId : undefined}
+              aria-describedby={addDescribedBy || undefined}
               className={`${selectClasses} flex-1 min-w-[180px] text-sm`}
             >
               <option value="">-- Select spell --</option>
-              {[1, 2, 3, 4, 5, 6]
-                .filter((r) => r <= maxRank)
-                .map((rank) => (
-                  <optgroup key={rank} label={`Rank ${rank}`}>
-                    {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
-                      <option key={s.name} value={s.name}>{s.name}</option>
-                    ))}
-                  </optgroup>
-                ))}
+              {learnableRanks.map((rank) => (
+                <optgroup key={rank} label={`Rank ${rank}`}>
+                  {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+              {refereeRanks.length > 0 && (
+                <optgroup label="Above your Level (Referee grant)">
+                  {ARCANE_SPELLS.filter((s) => refereeRanks.includes(s.rank)).map((s) => (
+                    // One group spans several Ranks, so each option names its
+                    // own, as a study's options do.
+                    <option key={s.name} value={s.name}>{`R${s.rank} · ${s.name}`}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <select
               value={addSource}
-              onChange={(e) => setAddSource(e.target.value as KnownSpellSource)}
+              onChange={(e) => {
+                setAddSource(e.target.value as KnownSpellSource);
+                // The same rule as the study form's source choice: picking a
+                // source clears the spell. Otherwise a spell chosen from the
+                // Referee group would survive a switch away from Manual
+                // invisibly, and be re-armed by a switch back.
+                setAddName('');
+              }}
               className={`${selectClasses} text-xs`}
               title="How was this spell learned?"
               aria-label="How was this spell learned?"
@@ -1020,8 +1094,8 @@ function KnownSpellsBlock({
             <button
               type="button"
               onClick={handleAdd}
-              disabled={!addName}
-              className={`${buttonClasses} text-xs ${!addName ? 'opacity-50 cursor-not-allowed' : ''}`}
+              disabled={!addSelected}
+              className={`${buttonClasses} text-xs ${!addSelected ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               Add
             </button>
@@ -1032,7 +1106,10 @@ function KnownSpellsBlock({
             >
               Cancel
             </button>
-            <ChosenSpellSummary spellType="arcane" name={addName} id={addSummaryId} className="basis-full" />
+            {addHint && (
+              <p id={addHintId} className="basis-full text-[#f5e6c8]/60 text-xs italic">{addHint}</p>
+            )}
+            <ChosenSpellSummary spellType="arcane" name={addSelected} id={addSummaryId} className="basis-full" />
           </div>
         )}
       </div>
@@ -1047,6 +1124,7 @@ const KnownSpellRow = memo(function KnownSpellRow({
   context,
   learnedOn,
   learnedInFairyOn,
+  rankNote,
   onDelete,
   ...info
 }: {
@@ -1057,10 +1135,12 @@ const KnownSpellRow = memo(function KnownSpellRow({
   learnedOn: string | undefined;
   /** When it was learned, if that was in Fairy. */
   learnedInFairyOn: string | undefined;
+  /** Set when its Rank is above what the character can learn at their Level. */
+  rankNote: string | undefined;
   onDelete: (id: string) => void;
 } & SpellDisclosure) {
   return (
-    <div data-spell-row="" className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm">
+    <div data-spell-row="known" className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm">
       <span className={rowNameClasses}>
         <span
           className="shrink-0 text-xs"
@@ -1098,6 +1178,9 @@ const KnownSpellRow = memo(function KnownSpellRow({
           Learned on {learnedInFairyOn}
         </span>
       )}
+      {rankNote && (
+        <span className="basis-full text-red-400 text-xs pl-5">{rankNote}</span>
+      )}
     </div>
   );
 });
@@ -1108,10 +1191,13 @@ const KnownSpellRow = memo(function KnownSpellRow({
 function SpellStudyBlock({
   character,
   maxRank,
+  learnableRanks,
   onChange,
 }: {
   character: Character;
   maxRank: number;
+  /** The Ranks the character can learn at their Level: see getLearnableSpellRanks. */
+  learnableRanks: readonly number[];
   onChange: (updates: CharacterUpdater) => void;
 }) {
   const study = character.spellStudy ?? { active: null, queue: [] };
@@ -1124,6 +1210,7 @@ function SpellStudyBlock({
   const [draftNotes, setDraftNotes] = useState('');
   const spellInfo = useSpellDisclosures();
   const draftSummaryId = useId();
+  const draftHintId = useId();
   const targetBookId = useId();
 
   const availableBooks = useMemo(
@@ -1145,43 +1232,65 @@ function SpellStudyBlock({
     return blocked;
   }, [character.failedStudies, character.level]);
 
-  // Pool of spells the player can study, depending on the source.
+  // Pool of spells the player can study, depending on the source. Learning a
+  // spell is only possible at a Rank the character can memorise at their
+  // Level (RAW p78), so book, mentor and research offer only those Ranks.
   // - Book: spells present in any inventory spellbook minus already-known.
   //         (You can't learn a spell from a book you don't possess.)
   // - Rewrite: spells you already know (RAW p78 — rewriting is for lost
-  //   spell books, i.e. recovering spells you previously learned).
-  // - Mentor / Research: any arcane spell at or below caster's max rank.
+  //   spell books, i.e. recovering spells you previously learned). That
+  //   isn't learning them, so their Rank doesn't matter.
+  // - Mentor / Research: any arcane spell of a learnable Rank.
   const studyPool = useMemo(() => {
     if (draftSource === 'book') {
       const inBooks = new Map<string, number>();
       for (const book of getSpellbooks(character)) {
         for (const entry of book.spellbookContents ?? []) {
           if (!entry.name) continue;
-          inBooks.set(entry.name, entry.rank);
+          // The Rank handleAddToQueue gives the study
+          inBooks.set(entry.name, findArcaneSpell(entry.name)?.rank ?? entry.rank);
         }
       }
       return Array.from(inBooks.entries())
         .map(([name, rank]) => ({ name, rank }))
-        .filter((s) => !knownNames.has(s.name.toLowerCase()) && s.rank <= maxRank)
+        .filter((s) => !knownNames.has(s.name.toLowerCase()) && learnableRanks.includes(s.rank))
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     }
     if (draftSource === 'rewrite') {
-      return character.knownSpells
-        .filter((k) => k.rank <= maxRank)
-        .map((k) => ({ name: k.name, rank: k.rank }))
+      // Once each, though a spell can be on the known list twice. Any Rank:
+      // rewriting copies a spell the character has already learned.
+      const known = new Map<string, { name: string; rank: number }>();
+      for (const k of character.knownSpells) {
+        const key = k.name.toLowerCase();
+        if (!known.has(key)) known.set(key, { name: k.name, rank: k.rank });
+      }
+      return Array.from(known.values())
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     }
-    return ARCANE_SPELLS.filter((s) => s.rank <= maxRank);
+    return ARCANE_SPELLS.filter((s) => learnableRanks.includes(s.rank));
     // knownNames is a memo of character.knownSpells; depending on
     // character.knownSpells alone is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, maxRank]);
+  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, learnableRanks]);
 
-  // Reset selection if it falls outside the new pool when source changes.
-  const draftRank = useMemo(() => {
-    const match = studyPool.find((s) => s.name === draftName);
-    return match?.rank ?? findArcaneSpell(draftName)?.rank ?? 1;
-  }, [draftName, studyPool]);
+  // The chosen spell, while the pool still has it. Changing the source clears
+  // the choice, but a Level, inventory or known spell can change under it,
+  // and so can the character, with this tab left open on another one.
+  const selectedName = studyPool.some((s) => s.name === draftName) ? draftName : '';
+  const draftRank = studyPool.find((s) => s.name === selectedName)?.rank ?? 1;
+  const draftHint = draftSource !== 'rewrite' && offersUnlearnableRanks(learnableRanks, maxRank)
+    ? learnableRanksHint(character.level, learnableRanks)
+    : null;
+  const draftDescribedBy = [
+    draftHint ? draftHintId : null,
+    getSpellSummary('arcane', selectedName) ? draftSummaryId : null,
+  ].filter(Boolean).join(' ');
+
+  // A study that would teach the character a spell of a Rank they can't learn
+  // at their Level gets a note, which the Adventuring tab's study panel shows
+  // too (see studyRankAboveLearnableNote).
+  const rankNoteFor = (entry: SpellStudyEntry) =>
+    studyRankAboveLearnableNote(entry, character, learnableRanks);
 
   const config = getStudyConfig(draftSource, draftRank);
 
@@ -1194,7 +1303,7 @@ function SpellStudyBlock({
   const hasBeenToFairy = getFairyVisits(character).length > 0;
 
   const handleAddToQueue = () => {
-    const trimmed = draftName.trim();
+    const trimmed = selectedName.trim();
     if (!trimmed) return;
     if (failedBlockSet.has(trimmed.toLowerCase()) && draftSource === 'book') {
       alert(`A previous attempt to study ${trimmed} failed. Wait until your next level-up before retrying from a book.`);
@@ -1248,6 +1357,10 @@ function SpellStudyBlock({
     let updatedStowed = character.stowedItems;
 
     if (passed) {
+      // Deliberately not re-gated on the current Level: this study may have
+      // started at a higher Level and the Level can go down, and refusing it
+      // would strand weeks of the player's study. The note the new known spell
+      // gets from rankAboveLearnableNote warns instead.
       // Add to known if not already present
       const exists = updatedKnown.some((k) => k.name.toLowerCase() === active.spellName.toLowerCase());
       if (!exists) {
@@ -1321,6 +1434,7 @@ function SpellStudyBlock({
   };
 
   const queueContexts = spellRowContexts('arcane', queue.map((q) => q.spellName), 'queued');
+  const activeRankNote = active ? rankNoteFor(active) : undefined;
 
   const removeFromQueue = (id: string) => {
     onChange({ spellStudy: { active, queue: queue.filter((q) => q.id !== id) } });
@@ -1358,6 +1472,9 @@ function SpellStudyBlock({
             <span className="ml-auto text-[#f5e6c8]/60 text-xs">
               started on {formatRecordDate(character, active.startedOn, active.startedInFairy)}
             </span>
+            {activeRankNote && (
+              <span className="basis-full text-red-400 text-xs">{activeRankNote}</span>
+            )}
           </div>
           <div className="text-[#f5e6c8] text-sm mb-2">
             Progress:{' '}
@@ -1465,8 +1582,9 @@ function SpellStudyBlock({
             {queue.map((q, i) => {
               const info = spellInfo(q.id);
               const context = queueContexts[i];
+              const rankNote = rankNoteFor(q);
               return (
-                <div key={q.id} data-spell-row="" className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
+                <div key={q.id} data-spell-row="study-queue" className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={rowNameClasses}>
                       <span className="text-[#c4a35a] text-xs">{i + 1}.</span>
@@ -1501,6 +1619,9 @@ function SpellStudyBlock({
                         X
                       </button>
                     </span>
+                    {rankNote && (
+                      <span className="basis-full text-red-400 text-xs">{rankNote}</span>
+                    )}
                   </div>
                 </div>
               );
@@ -1541,42 +1662,45 @@ function SpellStudyBlock({
         )}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <select
-            value={draftName}
+            value={selectedName}
             onChange={(e) => setDraftName(e.target.value)}
             aria-label="Spell to study"
-            aria-describedby={getSpellSummary('arcane', draftName) ? draftSummaryId : undefined}
+            aria-describedby={draftDescribedBy || undefined}
             className={`${selectClasses} flex-1 min-w-[180px] text-sm`}
           >
             <option value="">
               {draftSource === 'book' && studyPool.length === 0
-                ? '-- No unknown spells in your books --'
-                : '-- Select spell --'}
+                ? '-- No spells in your books you can learn --'
+                : draftSource === 'rewrite' && studyPool.length === 0
+                  ? '-- No known spells to rewrite --'
+                  : '-- Select spell --'}
             </option>
-            {draftSource === 'book'
+            {draftSource === 'book' || draftSource === 'rewrite'
               ? studyPool.map((s) => (
                   <option key={s.name} value={s.name}>
                     {`R${s.rank} · ${s.name}`}
                   </option>
                 ))
-              : [1, 2, 3, 4, 5, 6]
-                  .filter((r) => r <= maxRank)
-                  .map((rank) => (
-                    <optgroup key={rank} label={`Rank ${rank}`}>
-                      {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
-                        <option key={s.name} value={s.name}>{s.name}</option>
-                      ))}
-                    </optgroup>
-                  ))}
+              : learnableRanks.map((rank) => (
+                  <optgroup key={rank} label={`Rank ${rank}`}>
+                    {studyPool.filter((s) => s.rank === rank).map((s) => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
           </select>
-          {draftName && (
+          {selectedName && (
             <span className="text-[#c4a35a] text-xs shrink-0">R{draftRank}</span>
           )}
-          <ChosenSpellSummary spellType="arcane" name={draftName} id={draftSummaryId} className="basis-full" />
+          <ChosenSpellSummary spellType="arcane" name={selectedName} id={draftSummaryId} className="basis-full" />
         </div>
         {draftSource === 'book' && (
           <div className="text-[#f5e6c8]/60 text-xs italic mb-2">
             Only spells in your inventory spell books are shown.
           </div>
+        )}
+        {draftHint && (
+          <div id={draftHintId} className="text-[#f5e6c8]/60 text-xs italic mb-2">{draftHint}</div>
         )}
         <div className="flex flex-wrap items-center gap-2 mb-2">
           <span className="text-[#f5e6c8]/60 text-xs">
@@ -1618,15 +1742,16 @@ function SpellStudyBlock({
           <button
             type="button"
             onClick={handleAddToQueue}
-            disabled={!draftName.trim()}
-            className={`${buttonClasses} text-sm ${!draftName.trim() ? 'opacity-50 cursor-not-allowed' : ''}`}
+            disabled={!selectedName}
+            className={`${buttonClasses} text-sm ${!selectedName ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             {active ? '+ Queue Study' : '+ Start Study'}
           </button>
-          {draftName.trim() && knownNames.has(draftName.trim().toLowerCase()) && (
+          {/* Rewriting is only for spells already known */}
+          {selectedName && draftSource !== 'rewrite' && knownNames.has(selectedName.toLowerCase()) && (
             <span className="text-[#c47a3a] text-xs italic">Already known — usually unnecessary.</span>
           )}
-          {draftName.trim() && draftSource === 'book' && failedBlockSet.has(draftName.trim().toLowerCase()) && (
+          {selectedName && draftSource === 'book' && failedBlockSet.has(selectedName.toLowerCase()) && (
             <span className="text-red-400 text-xs italic">Previously failed — retry blocked until next level.</span>
           )}
         </div>

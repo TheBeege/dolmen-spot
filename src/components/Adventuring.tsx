@@ -26,7 +26,10 @@ import {
   getMoonName,
   addDays,
   isWysenday,
+  getCharacterMagicProfile,
+  getLearnableSpellRanks,
 } from '@/lib/gamedata';
+import { studyRankAboveLearnableNote } from '@/lib/character-sheet';
 import {
   getEarliestDolmenwoodDate,
   getFairyVisits,
@@ -575,12 +578,24 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             const progress = getStudyProgress(character);
             const remaining = progress?.weeksRemaining ?? active.weeksRequired;
             const ready = progress?.ready ?? false;
+            // The same note the Spells tab's study card shows, from the same
+            // place, so finishing a study that adds a spell above the Ranks the
+            // character can learn doesn't surprise anyone reading this panel.
+            const profile = getCharacterMagicProfile(character.kindred, character.class, character.level);
+            const rankNote = studyRankAboveLearnableNote(
+              active,
+              character,
+              getLearnableSpellRanks(profile),
+            );
             return (
               <div className={`bg-[#1a1a2e] rounded p-3 ${ready ? 'ring-1 ring-[#c4a35a]' : ''}`}>
                 <div className="text-[#c4a35a] text-sm font-semibold mb-2">🪄 Spell Study</div>
                 <div className="text-[#f5e6c8] text-sm font-bold">
                   R{active.rank} {active.spellName}
                 </div>
+                {rankNote && (
+                  <div className="text-red-400 text-xs">{rankNote}</div>
+                )}
                 <div className="text-[#f5e6c8]/60 text-xs">
                   {ready
                     ? 'Ready to complete (see Spells tab)'
