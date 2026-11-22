@@ -13,6 +13,15 @@ function asSaved(fixture: Character) {
   return { ...fixture, schemaVersion: expect.any(Number) };
 }
 
+/**
+ * The fixture's field paths, without `schemaVersion`: the comparison above
+ * accepts any version there, a migration having raised it, so comparing the
+ * key's presence here as well would ask for more than that check does.
+ */
+function fieldsOf(character: object) {
+  return keyPaths(character).filter((path) => path !== 'schemaVersion');
+}
+
 /** The header button that shows the open character and opens the list of characters. */
 function characterSwitcher(page: Page) {
   return page.locator('header').getByRole('button').first();
@@ -48,7 +57,7 @@ for (const fixture of ALL_FIXTURES) {
       .poll(
         async () => {
           const saved = (await savedCharacters(page)).characters[0] ?? {};
-          return keyPathDiff(keyPaths(character), keyPaths(saved));
+          return keyPathDiff(fieldsOf(character), fieldsOf(saved));
         },
         { message: `the saved ${fixture} character has the fixture's fields, at every depth` },
       )
