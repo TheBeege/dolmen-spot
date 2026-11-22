@@ -24,18 +24,6 @@ function characterRow(page: Page, name: string) {
   return page.locator('header').getByRole('button', { name: new RegExp(`^${escaped} .*Lv\\.\\d+$`) });
 }
 
-test('the matrix settings are in force', async ({ page, browserName, defaultFontSize }) => {
-  await openApp(page, FIXTURES.kitchenSink);
-  await openTab(page, TABS[3]); // Inventory, which is taller than the window
-  const { rootFontSize, scrollbarWidth } = await page.evaluate(() => ({
-    rootFontSize: getComputedStyle(document.documentElement).fontSize,
-    scrollbarWidth: window.innerWidth - document.documentElement.clientWidth,
-  }));
-  expect(rootFontSize, "the browser's default font size").toBe(`${defaultFontSize}px`);
-  // Only Chromium's is checked: whether WebKit's scrollbars take room depends on the platform.
-  if (browserName === 'chromium') expect(scrollbarWidth, 'room the scrollbar takes').toBeGreaterThan(0);
-});
-
 test('a first visit starts a new character', async ({ page }) => {
   await openApp(page);
   await expect(characterSwitcher(page)).toContainText('New Adventurer');

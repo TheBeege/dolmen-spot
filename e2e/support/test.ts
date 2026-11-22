@@ -81,6 +81,24 @@ export const test = base.extend<TestFixtures, MatrixOptions>({
       const cdp = await context.newCDPSession(page);
       await cdp.send('Page.setFontSizes', { fontSizes: { standard: defaultFontSize, fixed: defaultFontSize - 3 } });
     }
+    // Every test starts on the settings its project promises, before the app
+    // loads: the font size is the browser's own, so every rem in the sheet (and
+    // every rem-based breakpoint) moves as it would for a player, and Chromium
+    // shows its scrollbars, so they take room as on a desktop. A project whose
+    // setting didn't take would quietly test a different layout.
+    const { rootFontSize, scrollbarWidth } = await page.evaluate(() => {
+      const rootFontSize = getComputedStyle(document.documentElement).fontSize;
+      // Something taller than the window, to make the scrollbar show.
+      const tall = document.createElement('div');
+      tall.style.height = '200vh';
+      document.body.appendChild(tall);
+      const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+      tall.remove();
+      return { rootFontSize, scrollbarWidth };
+    });
+    expect(rootFontSize, "the browser's default font size").toBe(`${defaultFontSize}px`);
+    // Only Chromium's is checked: whether WebKit's scrollbars take room depends on the platform.
+    if (browserName === 'chromium') expect(scrollbarWidth, 'room the scrollbar takes').toBeGreaterThan(0);
     await page.addInitScript(installInPageHelpers);
     page.on('pageerror', (error) => consoleProblems.push(`page error: ${error.message}`));
     page.on('console', (message) => {
