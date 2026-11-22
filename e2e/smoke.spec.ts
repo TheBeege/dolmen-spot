@@ -52,7 +52,9 @@ for (const fixture of ALL_FIXTURES) {
     await expect.poll(async () => (await savedCharacters(page)).characters).toMatchObject([asSaved(character)]);
     // toMatchObject is a subset match, and load reconciles a character over the
     // defaults: a fixture that had lost a field would be filled back in and
-    // still pass. So the saved copy must have exactly the fixture's fields.
+    // still pass. So the saved copy must have exactly the fixture's top-level
+    // fields. (A missing nested field still passes: the keys below are only the
+    // top level. Compare flattened key paths to catch those too.)
     await expect.poll(async () => Object.keys((await savedCharacters(page)).characters[0] ?? {}).sort())
       .toEqual(Object.keys(character).sort());
     for (const tab of TABS) {

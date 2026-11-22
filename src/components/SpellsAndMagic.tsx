@@ -845,16 +845,16 @@ function KnownSpellsBlock({
 
   // The picker offers only the Ranks the character can learn. A choice it no
   // longer offers (made before switching to a lower-Level character, say)
-  // counts as no choice. Adding one by hand is held to the same rules: this is
-  // the form's default source, so exempting it would let any Rank be recorded
-  // as learned.
+  // counts as no choice.
   //
-  // A spell a Referee grants above those Ranks has to be recordable somehow,
-  // though. So the manual source alone also offers the higher Ranks, in a group
-  // of their own that the player has to pick deliberately; every other source
-  // stays rules-enforced. The known spell it adds then carries the red note
-  // that says the Rank is above what the character can learn (see the rows
-  // below), for the player and Referee to settle.
+  // Adding one by hand is the one deliberate exception, because the app is the
+  // character's only record: a spell a Referee grants above those Ranks has to
+  // be writable down somewhere. So the manual source alone also offers the
+  // higher Ranks, in a group of their own labelled as a Referee grant, which
+  // the player has to pick deliberately; every other source stays
+  // rules-enforced. The known spell it adds then carries the red note that says
+  // the Rank is above what the character can learn (see the rows below), for
+  // the player and Referee to settle.
   const addChoice = findArcaneSpell(addName);
   const highestLearnable = learnableRanks[learnableRanks.length - 1] ?? 0;
   const refereeRanks = addSource === 'manual' ? ranks.filter((rank) => rank > highestLearnable) : [];
@@ -1065,14 +1065,23 @@ function KnownSpellsBlock({
               {refereeRanks.length > 0 && (
                 <optgroup label="Above your Level (Referee grant)">
                   {ARCANE_SPELLS.filter((s) => refereeRanks.includes(s.rank)).map((s) => (
-                    <option key={s.name} value={s.name}>{s.name}</option>
+                    // One group spans several Ranks, so each option names its
+                    // own, as a study's options do.
+                    <option key={s.name} value={s.name}>{`R${s.rank} · ${s.name}`}</option>
                   ))}
                 </optgroup>
               )}
             </select>
             <select
               value={addSource}
-              onChange={(e) => setAddSource(e.target.value as KnownSpellSource)}
+              onChange={(e) => {
+                setAddSource(e.target.value as KnownSpellSource);
+                // The same rule as the study form's source choice: picking a
+                // source clears the spell. Otherwise a spell chosen from the
+                // Referee group would survive a switch away from Manual
+                // invisibly, and be re-armed by a switch back.
+                setAddName('');
+              }}
               className={`${selectClasses} text-xs`}
               title="How was this spell learned?"
               aria-label="How was this spell learned?"

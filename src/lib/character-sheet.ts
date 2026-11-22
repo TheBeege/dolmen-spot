@@ -295,9 +295,11 @@ export function getMagicSections(character: Pick<Character, 'kindred' | 'class' 
 
 /**
  * The note on a known spell or a study of a Rank the character can't learn at
- * their Level (see getLearnableSpellRanks). A Level can go down, and before the
- * app checked learnable Ranks it offered every Rank of the class, so a saved
- * spell can be above what the current Level can learn.
+ * their Level (see getLearnableSpellRanks). Such an entry has three origins:
+ * learned before the app checked learnable Ranks, when it offered every Rank of
+ * the class; left above by a Level lowered since; or a spell a Referee granted,
+ * which the manual add form records through its "Above your Level (Referee
+ * grant)" group.
  */
 export function rankAboveLearnableNote(rank: number, level: number): string {
   return `Rank ${rank} is above what you can learn at Level ${level}.`;

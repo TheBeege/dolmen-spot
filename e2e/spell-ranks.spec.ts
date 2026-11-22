@@ -62,8 +62,9 @@ test('a level 3 magician is offered only the spell Ranks they can learn', async 
   await expect.poll(() => offeredRanks(studyPicker)).toEqual(['Rank 1', 'Rank 2']);
   expect(await offeredRanks(addPicker)).toEqual(['Rank 1', 'Rank 2', REFEREE_GROUP]);
 
-  // So no spell of a higher Rank can be studied. Fireball is Rank 3, Teleport
-  // Rank 5 (and Teleport is already known, which a study must not offer).
+  // So no spell of a higher Rank can be studied. Fireball is Rank 3 and Teleport
+  // Rank 5; the mentor pool filters on Rank alone (a known spell stays in it,
+  // marked "Already known"), so that filter is what leaves both out.
   for (const spell of ['Fireball', 'Teleport']) {
     await expect(studyPicker.locator('option', { hasText: spell })).toHaveCount(0);
   }
@@ -81,9 +82,17 @@ test('a spell a Referee grants above those Ranks can still be recorded by hand',
 
   // Fireball (Rank 3) is one Rank above what a level 3 magician can learn, and
   // the picker offers it only under the Referee-grant group, which a player has
-  // to choose deliberately.
-  await expect(addPicker.locator(`optgroup[label="${REFEREE_GROUP}"] option`, { hasText: 'Fireball' })).toHaveCount(1);
-  await addPicker.selectOption({ label: 'Fireball' });
+  // to choose deliberately. That one group spans Ranks 3 to 6, so every option
+  // names its own Rank, as a study's options do.
+  const refereeOptionTexts = await addPicker
+    .locator(`optgroup[label="${REFEREE_GROUP}"] option`)
+    .evaluateAll((options) => options.map((option) => option.textContent ?? ''));
+  expect(refereeOptionTexts.length).toBeGreaterThan(0);
+  for (const text of refereeOptionTexts) expect(text).toMatch(/^R\d+ · \S/);
+  expect(refereeOptionTexts).toContain('R3 · Fireball');
+  expect(refereeOptionTexts).toContain('R5 · Teleport');
+
+  await addPicker.selectOption({ label: 'R3 · Fireball' });
   await addButton.click();
 
   // It is recorded, and marked with the same red note as any other too-high spell.
@@ -92,14 +101,16 @@ test('a spell a Referee grants above those Ranks can still be recorded by hand',
   await expect(note).toHaveClass(/text-red-400/);
 
   // The escape belongs to the manual source alone: switching the source to
-  // Mentor drops the group, and the spell chosen from it counts as no choice,
-  // as any other choice the picker no longer offers does.
+  // Mentor drops the group and clears the choice, as it does in the study form,
+  // so a spell picked there can't be re-armed by switching back.
   await page.getByRole('button', { name: '+ Add known spell (manual)' }).click();
-  await addPicker.selectOption({ label: 'Fireball' });
+  await addPicker.selectOption({ label: 'R3 · Fireball' });
   await page.getByLabel('How was this spell learned?').selectOption({ label: 'Mentor' });
   await expect.poll(() => offeredRanks(addPicker)).toEqual(['Rank 1', 'Rank 2']);
   await expect(addPicker).toHaveValue('');
   await expect(addButton).toBeDisabled();
+  await page.getByLabel('How was this spell learned?').selectOption({ label: 'Manual' });
+  await expect(addPicker).toHaveValue('');
 });
 
 test('known spells and studies above those Ranks say so', async ({ page }) => {

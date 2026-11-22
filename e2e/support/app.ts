@@ -25,7 +25,8 @@ export const FIXTURES = {
    * A level 3 Magician who can learn only Ranks 1 and 2, but knows a Rank 5
    * spell and has Rank 4 studies active and queued: learned before the app
    * limited learnable Ranks, and a Level lowered since would leave them above
-   * too.
+   * too. Built with the app's own helpers rather than exported from it, since
+   * the study flow that made its above-Rank studies is what the limit closes.
    */
   lowLevelMagician: 'low-level-magician',
 } as const;
