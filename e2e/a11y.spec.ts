@@ -8,9 +8,7 @@
 import { newProblems } from './known-issues';
 import { ALL_FIXTURES, openApp, openTab, TABS } from './support/app';
 import { findA11yProblems } from './support/a11y';
-import { expect, test, viewportAt } from './support/test';
-
-const A11Y_WIDTHS = [320, 1280];
+import { A11Y_WIDTHS, expect, test, viewportAt } from './support/test';
 
 for (const width of A11Y_WIDTHS) {
   test.describe(`at ${width}px`, () => {
