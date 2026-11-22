@@ -1,0 +1,17 @@
+docs: Say what the audit runs beside, not as part of, and how long it takes
+
+Six documentation fixes from the last review, all of them places where the
+prose had drifted from what the code does:
+
+- README no longer reads as though `npm run test:e2e` runs the audit: it is a
+  separate command, which is the whole point of it not being in the suite.
+- AGENTS.md gives the audit's real runtime — about three and a half minutes
+  locally, more on CI's runners — rather than the five to eight it had before
+  the walk got faster.
+- The audit's header, and AGENTS.md with it, now say its settings check runs
+  before the app loads and again on every tab, which is what it does.
+- The audit job's own "keep in step" note points at the browser-tests job
+  above it, not at nothing below it.
+- The audit job's comment no longer promises that a slow walk always prints
+  the entries that matched nothing: if the test's own timeout fires, Playwright
+  reports a timeout.

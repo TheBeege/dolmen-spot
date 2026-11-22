@@ -21,8 +21,8 @@
 //
 // It makes its own pages rather than using the `page` fixture, so it does the
 // two things that fixture does for every test by itself: it checks that the
-// project's settings are in force, before the app loads and again after the
-// walk, and it watches each page for page and console errors.
+// project's settings are in force — before the app loads, and again on every
+// tab it opens — and it watches each page for page and console errors.
 import { expect, test } from '@playwright/test';
 import { describeKnownIssue, KNOWN_ISSUES, knownIssuesFor, type BrowserName, type KnownIssue, type Problem, type Where } from './known-issues';
 import { findA11yProblems } from './support/a11y';

@@ -68,7 +68,7 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-`npm test` runs the unit tests. `npm run test:e2e` builds the app and runs the browser tests: smoke, layout and accessibility checks in Chromium and WebKit, and `npm run audit:known-issues` fails on a known-issue entry that no longer matches a problem (see "Browser Tests" in [AGENTS.md](AGENTS.md)).
+`npm test` runs the unit tests. `npm run test:e2e` builds the app and runs the browser tests: smoke, layout and accessibility checks in Chromium and WebKit (see "Browser Tests" in [AGENTS.md](AGENTS.md)). `npm run audit:known-issues` is a separate run: it fails on a known-issue entry that no longer matches a problem.
 
 Cloud save is optional. To enable it locally, copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and/or `NEXT_PUBLIC_MICROSOFT_CLIENT_ID`. Without them the app runs on localStorage alone.
 

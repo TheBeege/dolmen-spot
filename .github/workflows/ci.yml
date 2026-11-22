@@ -121,8 +121,8 @@ jobs:
     # 20 (the test's own timeout) + 1 (npm ci) + 3 (a cold browser install with
     # its system libraries) + 5 (the build's own cap) + 1 (the upload) ≈ 30, so
     # 40 leaves room for a slow day. Above the test's timeout on purpose: a slow
-    # walk is then reported by Playwright — with the entries that matched
-    # nothing — rather than killed by the runner with no output at all.
+    # walk is then reported by Playwright — a timeout, or the entries that
+    # matched nothing — rather than killed by the runner with no output at all.
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
@@ -138,7 +138,7 @@ jobs:
           # Skip installing the git hooks; CI never commits.
           HUSKY: 0
 
-      # Keep in step with the known-issues-audit job below: both key the browser
+      # Keep in step with the browser-tests job above: both key the browser
       # cache by this version.
       - name: Find the Playwright version
         id: playwright
