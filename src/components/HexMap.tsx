@@ -1624,7 +1624,7 @@ function POIEditor({
       data-focus-key={`item:${poi.id}`}
       className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <PoiIcon kind={kind} className="size-5 shrink-0" />
         <input
           ref={nameRef}
@@ -1642,8 +1642,13 @@ function POIEditor({
         >
           Edit <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
         </button>
-        <button type="button" onClick={onDelete} aria-label={`Delete POI ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
-          Del
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete POI ${label}`}
+          className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors whitespace-nowrap"
+        >
+          Delete
         </button>
       </div>
       {expanded && (
@@ -1798,7 +1803,7 @@ function DoorEditor({
       data-focus-key={`item:${door.id}`}
       className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${FOCUS_RING}`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <DoorIcon className="size-5 shrink-0" />
         <input
           ref={nameRef}
@@ -1817,8 +1822,13 @@ function DoorEditor({
         >
           Edit <span aria-hidden="true">{expanded ? '▴' : '▾'}</span>
         </button>
-        <button type="button" onClick={onDelete} aria-label={`Delete fairy door ${label}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
-          Del
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete fairy door ${label}`}
+          className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors whitespace-nowrap"
+        >
+          Delete
         </button>
       </div>
       {expanded && (
@@ -1953,7 +1963,7 @@ function LeyLineEditor({
       data-focus-key={`ley-line:${leyLine.id}`}
       className={`bg-[#1a1a2e] rounded p-2 space-y-1 ${selected ? 'ring-1 ring-[#c4a35a]/60' : ''} ${FOCUS_RING}`}
     >
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onSelect}
@@ -1971,8 +1981,13 @@ function LeyLineEditor({
         <span className="text-xs text-[#9c948b]">
           {leyLine.hexes.length} hex{leyLine.hexes.length === 1 ? '' : 'es'}
         </span>
-        <button type="button" onClick={onDelete} aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`} className="text-xs text-[#8b2500] hover:text-[#b33a1a] transition-colors">
-          Del
+        <button
+          type="button"
+          onClick={onDelete}
+          aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`}
+          className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors whitespace-nowrap"
+        >
+          Delete
         </button>
       </div>
       <div className="grid grid-cols-3 gap-1">
