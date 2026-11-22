@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import type { Character } from '../src/lib/types';
 import { ALL_FIXTURES, FIXTURES, loadFixture, openApp, openTab, savedCharacters, TABS } from './support/app';
+import { keyPathDiff, keyPaths } from './support/keys';
 import { expect, test } from './support/test';
 
 /** What the app should have saved for a fixture: the same character, at the current schema version. */
@@ -51,12 +52,19 @@ for (const fixture of ALL_FIXTURES) {
     // Loading it changed nothing: the fixture is a current character.
     await expect.poll(async () => (await savedCharacters(page)).characters).toMatchObject([asSaved(character)]);
     // toMatchObject is a subset match, and load reconciles a character over the
-    // defaults: a fixture that had lost a field would be filled back in and
-    // still pass. So the saved copy must have exactly the fixture's top-level
-    // fields. (A missing nested field still passes: the keys below are only the
-    // top level. Compare flattened key paths to catch those too.)
-    await expect.poll(async () => Object.keys((await savedCharacters(page)).characters[0] ?? {}).sort())
-      .toEqual(Object.keys(character).sort());
+    // defaults: a fixture that had lost a field (a nested one included) would be
+    // filled back in and still pass. So the saved copy must have exactly the
+    // fixture's fields, at every depth, and the failure names the paths that
+    // went missing or came back.
+    await expect
+      .poll(
+        async () => {
+          const saved = (await savedCharacters(page)).characters[0] ?? {};
+          return keyPathDiff(keyPaths(character), keyPaths(saved));
+        },
+        { message: `the saved ${fixture} character has the fixture's fields, at every depth` },
+      )
+      .toEqual({ missing: [], extra: [] });
     for (const tab of TABS) {
       await openTab(page, tab);
       await expect(page.locator('main').locator('h2, h3').first(), `${tab.label} shows its sections`).toBeVisible();
