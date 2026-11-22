@@ -949,15 +949,17 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
       // inside their hex: where they'd crowd each other or the star, as when
       // zoomed out on a phone, the hex gets one combined marker instead.
       const onCurrent = hex === currentHex;
-      const layout = layoutRing(ringFor({ kinds: visible.map(markerKindOf), badge: overflow > 0, onCurrent, growth }));
+      // Each marker's kind is worked out once, for its place in the ring and
+      // for its size.
+      const slots = visible.map((entry) => ({ entry, kind: markerKindOf(entry) }));
+      const layout = layoutRing(ringFor({ kinds: slots.map((slot) => slot.kind), badge: overflow > 0, onCurrent, growth }));
       if (layout.kind === 'combined') {
         els.push(renderCombinedMarker(hex, c, items, onCurrent));
         return;
       }
       const slotAt = (i: number) => ({ x: c.x + layout.offsets[i].x, y: c.y + layout.offsets[i].y });
-      visible.forEach((entry, i) => {
+      slots.forEach(({ entry, kind }, i) => {
         const m = slotAt(i);
-        const kind = markerKindOf(entry);
         const markerProps = { ...MAP_BUTTON_PROPS, 'data-marker': entry.item.id, 'data-marker-hex': hex };
         let label: string;
         if (entry.type === 'poi') {

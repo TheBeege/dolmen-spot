@@ -24,11 +24,14 @@ const POI_KIND = 'Town or city';
 // one marker with their count wherever they don't fit apart.
 const COMBINED_HEX = '1106';
 
-// A disc's own fill in the theme (NIGHT, #1a1a2e). Under forced colours the
-// browser replaces it with Canvas, so a disc that still has it means the
-// emulation did nothing, and the comparisons below would pass in the ordinary
-// palette too.
-const NIGHT_FILL = 'rgb(26, 26, 46)';
+// The fills the map draws its discs with, as a computed style spells them:
+// NIGHT (#1a1a2e) for a kind's marker and a combined marker's dark disc,
+// POI_FILL (#8b2500) for a point of interest without a kind, DOOR_FILL
+// (#a774d6) for a fairy door. Each comes from an SVG attribute, which forced
+// colours' rules in globals.css replace with Canvas, so a disc that still has
+// one of them means the emulation did nothing and every comparison below would
+// hold in the ordinary palette too.
+const DISC_FILLS = ['rgb(26, 26, 46)', 'rgb(139, 37, 0)', 'rgb(167, 116, 214)'];
 
 /** Open the map, select Prigwort's hex, and return the kind picker, showing. */
 async function openPicker(page: Page): Promise<Locator> {
@@ -57,6 +60,13 @@ function mapName(page: Page): Locator {
 
 const fill = (el: Locator) => el.evaluate((node) => getComputedStyle(node).fill);
 const stroke = (el: Locator) => el.evaluate((node) => getComputedStyle(node).stroke);
+
+/** The disc's computed fill, once it's certain the page really is in forced colours. */
+async function forcedDiscFill(disc: Locator): Promise<string> {
+  const discFill = await fill(disc);
+  expect(DISC_FILLS, 'the disc is in forced colours').not.toContain(discFill);
+  return discFill;
+}
 
 test.describe('at 1280px', () => {
   test.use({ viewport: viewportAt(1280) });
@@ -108,8 +118,7 @@ test.describe('at 1280px', () => {
     const glyph = marker.locator('.marker-glyph').first();
     const cut = marker.locator('.marker-glyph-cut').first();
 
-    const discFill = await fill(disc);
-    expect(discFill, 'the disc is in forced colours').not.toBe(NIGHT_FILL);
+    const discFill = await forcedDiscFill(disc);
     // The glyph is CanvasText on a Canvas disc, so a kind still reads as its
     // own drawing; the cut-outs are holes, which show the disc through them.
     expect(await fill(glyph), 'the glyph stands out from its disc').not.toBe(discFill);
@@ -140,8 +149,7 @@ test.describe('at 320px', () => {
 
     const disc = marker.locator('.marker-disc');
     const digit = marker.locator('text');
-    const discFill = await fill(disc);
-    expect(discFill, 'the disc is in forced colours').not.toBe(NIGHT_FILL);
+    const discFill = await forcedDiscFill(disc);
     expect(await fill(digit), 'the count stands out from its disc').not.toBe(discFill);
   });
 });

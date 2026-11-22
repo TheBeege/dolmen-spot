@@ -1,8 +1,9 @@
 // The map's marker icons: a round marker for each point of interest and fairy
 // door, with a hand-drawn glyph for its kind (src/lib/map-glyphs.ts). The map
-// draws them as markers (MarkerShape); the hex inspector shows them beside its
-// items and, as small HTML images, in its kind picker (PoiIcon, DoorIcon).
-// They're decorative: the marker or control that shows one carries the name.
+// draws them as markers (MarkerShape). As small HTML images, the hex inspector
+// shows them beside its items (PoiIcon, DoorIcon), and the kind picker shows
+// one on each tile (PoiIcon). They're decorative: the marker or control that
+// shows one carries the name.
 //
 // Under forced colours the browser would paint the disc, the rim and the glyph
 // one colour, leaving every kind looking the same. Each shape therefore carries
