@@ -15,6 +15,7 @@ import type {
   SpellbookEntry,
 } from './types';
 import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, daysBetween } from './gamedata';
+import { newId } from './ids';
 import { fitCountingStart, getLivedDayAtDolmenwoodDate } from './livedTime';
 import { HEX_GRID_META } from './hex-grid';
 import { isValidHex, pixelToHex } from './hex';
@@ -267,7 +268,7 @@ function sanitizeFairyTime(data: any): void {
     const seenIds = new Set<string>();
     let previousReturn: { day: number; month: number; year: number } | null = null;
     visits.forEach((visit, i) => {
-      if (typeof visit.id !== 'string' || visit.id === '' || seenIds.has(visit.id)) visit.id = crypto.randomUUID();
+      if (typeof visit.id !== 'string' || visit.id === '' || seenIds.has(visit.id)) visit.id = newId();
       seenIds.add(visit.id);
       visit.enteredOn = sanitizeDate(visit.enteredOn);
       if (previousReturn && daysBetween(previousReturn, visit.enteredOn) < 0) visit.enteredOn = { ...previousReturn };
@@ -325,13 +326,6 @@ const MAP_PINS_MARKER = '<!--MAP_PINS-->';
 // aren't on the printed map), so nothing the player wrote is thrown away.
 const LOST_ITEMS_HEADING = "Map markers that couldn't be placed:";
 const HEX_COLOR_RE = /^#[0-9a-f]{6}$/i;
-
-// A new id for an item repaired on load (a map item, a journal entry).
-function newId(): string {
-  return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : `id-${Math.random().toString(36).slice(2)}`;
-}
 
 /** A text field read defensively: strings as is, finite numbers as text, anything else ''. */
 function asText(v: unknown): string {

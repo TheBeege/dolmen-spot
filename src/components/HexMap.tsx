@@ -48,6 +48,7 @@ import {
   withMapLists,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
+import { newId } from '@/lib/ids';
 
 interface HexMapProps {
   character: Character;
@@ -139,11 +140,6 @@ const NOTES_PREVIEW_LENGTH = 120;
 /** " — " and the start of `notes`, for a marker's label; '' if there are none. */
 function notesPreview(notes: string): string {
   return notes ? ` — ${notes.slice(0, NOTES_PREVIEW_LENGTH)}` : '';
-}
-
-function newId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  return `id-${Math.random().toString(36).slice(2)}`;
 }
 
 // Markers and ley lines are buttons for keyboard and screen-reader users.

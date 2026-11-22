@@ -34,6 +34,7 @@ import {
   getStudyProgress,
 } from '@/lib/livedTime';
 import { getJournalEntries } from '@/lib/journal';
+import { newId } from '@/lib/ids';
 import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
 import { errorClasses, formatYearNumber, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
@@ -242,7 +243,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
 
   const handleAddLightSource = (type: 'torch' | 'lantern' | 'candle') => {
     const source: ActiveLightSource = {
-      id: crypto.randomUUID(),
+      id: newId(),
       type,
       minutesRemaining: LIGHT_SOURCE_TYPES[type].minutes,
     };

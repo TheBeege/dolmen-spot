@@ -51,6 +51,7 @@ import {
   getStudyProgress,
   getStudyStart,
 } from '@/lib/livedTime';
+import { newId } from '@/lib/ids';
 import {
   ChosenSpellSummary,
   SpellInfo,
@@ -131,7 +132,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
 
   const addSpell = () => {
     const newSpell: SpellSlot = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: '',
       rank: 1,
       prepared: false,
@@ -155,7 +156,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
     const ref = GLAMOURS.find((g) => g.id === glamourId);
     if (!ref) return;
     const newGlamour: CharacterGlamour = {
-      id: crypto.randomUUID(),
+      id: newId(),
       glamourId: ref.id,
       name: ref.name,
       notes: '',
@@ -179,7 +180,7 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
     const ref = FAIRY_RUNES.find((r) => r.id === runeId);
     if (!ref) return;
     const newRune: CharacterRune = {
-      id: crypto.randomUUID(),
+      id: newId(),
       runeId: ref.id,
       name: ref.name,
       magnitude: ref.magnitude,
@@ -743,7 +744,7 @@ function ApplyStartingBookButton({
         return ref ? { name: ref.name, rank: ref.rank } : { name, rank: 1 };
       });
     const newBook: InventoryItem = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: book.name,
       slots: 1,
       weight: 10,
@@ -757,7 +758,7 @@ function ApplyStartingBookButton({
     const newKnown: KnownSpell[] = contents
       .filter((c) => !existingKnown.has(c.name.toLowerCase()))
       .map((c) => ({
-        id: crypto.randomUUID(),
+        id: newId(),
         name: c.name,
         rank: c.rank,
         source: 'starting' as const,
@@ -846,7 +847,7 @@ function KnownSpellsBlock({
     if (!matched) return;
     const now = getCurrentTimelinePoint(character);
     const newSpell: KnownSpell = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: matched.name,
       rank: matched.rank,
       source: addSource,
@@ -1203,7 +1204,7 @@ function SpellStudyBlock({
     const rank = matched?.rank ?? draftRank;
     const cfg = getStudyConfig(draftSource, rank);
     const entry: SpellStudyEntry = {
-      id: crypto.randomUUID(),
+      id: newId(),
       spellName: matched?.name ?? trimmed,
       rank,
       source: draftSource,
@@ -1253,7 +1254,7 @@ function SpellStudyBlock({
         updatedKnown = [
           ...updatedKnown,
           {
-            id: crypto.randomUUID(),
+            id: newId(),
             name: active.spellName,
             rank: active.rank,
             source: active.source === 'book' ? 'studied'
@@ -1694,7 +1695,7 @@ function MemorisePicker({
   const memoriseKnown = (k: KnownSpell) => {
     if (isAtCap(k.rank)) return;
     const newSlot: SpellSlot = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: k.name,
       rank: k.rank,
       prepared: true,

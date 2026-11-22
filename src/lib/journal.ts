@@ -5,6 +5,7 @@
 import type { CalendarDate, Character, FairyVisit, HexCoord, JournalEntry } from './types';
 import { getAbsoluteDay } from './gamedata';
 import { isValidHex } from './hex';
+import { newId } from './ids';
 import {
   LIVED_TIME_EPOCH,
   formatRecordDate,
@@ -39,7 +40,7 @@ export function createJournalEntry(
 ): JournalEntry {
   const now = getCurrentTimelinePoint(character);
   return {
-    id: crypto.randomUUID(),
+    id: newId(),
     date: now.date,
     ...(now.fairyDate ? { fairyDate: now.fairyDate } : {}),
     ...(now.sinceReturnFrom ? { sinceReturnFrom: now.sinceReturnFrom } : {}),

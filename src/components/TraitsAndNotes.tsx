@@ -25,6 +25,7 @@ import {
   hasAnyKindredFeature,
 } from '@/lib/character-sheet';
 import { pluralize } from '@/lib/grammar';
+import { newId } from '@/lib/ids';
 
 interface TraitsAndNotesProps {
   character: Character;
@@ -234,7 +235,7 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
 
   const addTrophy = () => {
     if (!newCreature.trim()) return;
-    const trophy: Trophy = { id: crypto.randomUUID(), creatureType: newCreature.trim() };
+    const trophy: Trophy = { id: newId(), creatureType: newCreature.trim() };
     onChange({ trophies: [...character.trophies, trophy] });
     setNewCreature('');
   };
@@ -620,7 +621,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
 
   const addRetainer = () => {
     const retainer: Retainer = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: '',
       class: '',
       level: 1,
