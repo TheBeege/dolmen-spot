@@ -397,6 +397,15 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const slotsFieldId = (itemId: string) => `inventory-${itemId}-slots`;
   const focusSlots = (itemId: string) => () => document.getElementById(slotsFieldId(itemId))?.focus();
 
+  // Two containers can share a name ("Backpack"), so one that does says which
+  // it is - its place among the containers - wherever a player picks one or is
+  // told which one they mean.
+  const containerLabel = (container: CharacterContainer) => {
+    const name = container.name || 'container';
+    const shared = containers.filter((c) => (c.name || 'container') === name).length > 1;
+    return shared ? `${name} ${containers.findIndex((c) => c.id === container.id) + 1}` : name;
+  };
+
   // A row's move select (stowed items, when there are containers) and its ×.
   // Every row renders each twice: on phones together after the name
   // (phoneControlsFor), and from sm up at the end of the row, with the other
@@ -416,7 +425,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           <option value="">Loose</option>
           {containers.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {containerLabel(c)}
             </option>
           ))}
         </select>
@@ -445,6 +454,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const renderSpellbookItem = (item: InventoryItem, equipped: boolean, position: string) => {
     const contents = item.spellbookContents ?? [];
     const bookName = item.name.trim() || 'spell book';
+    const bookLabel = `${bookName} (${position})`;
     const isCollapsed = collapsedSpellbooks.has(item.id);
     const isFull = contents.length >= SPELLBOOK_CAPACITY;
     return (
@@ -461,7 +471,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               onClick={() => toggleSpellbookCollapse(item.id)}
               className={`text-[#c4a35a] text-xs shrink-0 w-4 ${ONE_LINE_FIELD_HEIGHT} flex items-center justify-center`}
               title={isCollapsed ? 'Expand spell book' : 'Collapse spell book'}
-              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${bookName}`}
+              aria-label={`${isCollapsed ? 'Expand' : 'Collapse'} ${bookLabel}`}
               aria-expanded={!isCollapsed}
             >
               {isCollapsed ? '▶' : '▼'}
@@ -479,7 +489,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               fieldClassName={inputClasses}
             />
           </span>
-          {phoneControlsFor(item, equipped, bookName)}
+          {phoneControlsFor(item, equipped, bookLabel)}
           <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
             <label className="flex flex-col gap-0.5">
               {phoneLabel('Slots')}
@@ -490,7 +500,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 onChange={(e) => handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)}
                 min={0}
                 title="Slots"
-                aria-label={`${bookName} slots`}
+                aria-label={`${bookLabel} slots`}
                 className={`${inputClasses} w-16 text-center`}
               />
             </label>
@@ -502,7 +512,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
                 min={0}
                 title="Weight"
-                aria-label={`${bookName} weight`}
+                aria-label={`${bookLabel} weight`}
                 className={`${inputClasses} w-20 text-center`}
               />
             </label>
@@ -511,9 +521,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             </span>
             {/* The rest of the Notes column */}
             <span className="flex-1" />
-            {moveSelectFor(item, equipped, bookName, 'hidden sm:flex')}
+            {moveSelectFor(item, equipped, bookLabel, 'hidden sm:flex')}
           </div>
-          {removeButtonFor(item, equipped, bookName, 'hidden sm:block')}
+          {removeButtonFor(item, equipped, bookLabel, 'hidden sm:block')}
         </div>
 
         {/* Spell list */}
@@ -534,7 +544,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                       rank: matched?.rank ?? entry.rank,
                     });
                   }}
-                  aria-label={`Spell ${index + 1} in ${bookName}`}
+                  aria-label={`Spell ${index + 1} in ${bookLabel}`}
                   className={`${inputClasses} flex-1 min-w-[160px] text-sm`}
                 >
                   <option value="">-- Select spell --</option>
@@ -553,8 +563,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   type="button"
                   onClick={() => handleSpellbookRemoveEntry(equipped, item.id, index)}
                   className="text-[#ff6b4a] hover:text-[#f5e6c8] text-sm shrink-0 px-1"
-                  title={`Remove ${entry.name || `spell ${index + 1}`} from ${bookName}`}
-                  aria-label={`Remove ${entry.name || `spell ${index + 1}`} from ${bookName}`}
+                  title={`Remove ${entry.name || `spell ${index + 1}`} from ${bookLabel}`}
+                  aria-label={`Remove ${entry.name || `spell ${index + 1}`} from ${bookLabel}`}
                 >
                   &times;
                 </button>
@@ -566,8 +576,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               disabled={isFull}
               aria-label={
                 isFull
-                  ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY}): ${bookName}`
-                  : `Add spell to ${bookName}`
+                  ? `Full (${SPELLBOOK_CAPACITY}/${SPELLBOOK_CAPACITY}): ${bookLabel}`
+                  : `Add spell to ${bookLabel}`
               }
               className={`text-xs px-2 py-0.5 rounded mt-1 ${
                 isFull
@@ -581,7 +591,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               value={item.notes}
               onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes (language, source, etc.)"
-              aria-label={`${bookName} notes`}
+              aria-label={`${bookLabel} notes`}
               className="mt-1"
               fieldClassName={`${inputClasses} text-xs`}
             />
@@ -599,6 +609,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const renderScrollItem = (item: InventoryItem, equipped: boolean, position: string) => {
     const scroll = item.scrollSpell ?? { name: '', rank: 1 };
     const scrollName = scroll.name ? `scroll of ${scroll.name}` : 'scroll';
+    const scrollLabel = `${scrollName} (${position})`;
     return (
       <div key={item.id} className={`flex flex-wrap items-start gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1 ${BORDERED_ROW_PADDING}`}>
         <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
@@ -626,7 +637,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             ))}
           </select>
         </span>
-        {phoneControlsFor(item, equipped, scrollName)}
+        {phoneControlsFor(item, equipped, scrollLabel)}
         <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
           <span className="hidden sm:block w-16 shrink-0" />
           <label className="flex flex-col gap-0.5">
@@ -637,7 +648,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
               min={0}
               title="Weight"
-              aria-label={`${scrollName} weight`}
+              aria-label={`${scrollLabel} weight`}
               className={`${inputClasses} w-20 text-center`}
             />
           </label>
@@ -654,20 +665,21 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               }}
               className="bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-2 py-1 rounded shrink-0"
               title="Use scroll (consumes it)"
-              aria-label={`Use ${scrollName}`}
+              aria-label={`Use ${scrollLabel}`}
             >
               Use
             </button>
           </span>
-          {moveSelectFor(item, equipped, scrollName, 'hidden sm:flex')}
+          {moveSelectFor(item, equipped, scrollLabel, 'hidden sm:flex')}
         </div>
-        {removeButtonFor(item, equipped, scrollName, 'hidden sm:block')}
+        {removeButtonFor(item, equipped, scrollLabel, 'hidden sm:block')}
       </div>
     );
   };
 
   // `position` says where the item is ("equipped item 2", "item 1 in Backpack"),
-  // to give each row's name field a name of its own for screen readers.
+  // and every renderer puts it in its controls' names for screen readers: two
+  // items can share a name, and so can two spell books or two untitled scrolls.
   const renderInventoryItem = (item: InventoryItem, equipped: boolean, position: string) => {
     if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped, position);
     if (item.kind === 'scroll') return renderScrollItem(item, equipped, position);
@@ -719,6 +731,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   // the move select and × centred on the first line.
   const renderItemRow = (item: InventoryItem, equipped: boolean, position: string) => {
     const itemName = item.name.trim() || 'item';
+    const rowLabel = `${itemName} (${position})`;
 
     return (
       <div key={item.id} className="flex flex-wrap items-start gap-2 bg-[#1a1a2e] p-2 rounded mb-1">
@@ -733,7 +746,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           className={`flex-1 ${NAME_MIN_WIDTH} ${NAME_COLUMN}`}
           fieldClassName={inputClasses}
         />
-        {phoneControlsFor(item, equipped, itemName)}
+        {phoneControlsFor(item, equipped, rowLabel)}
         <div className="flex flex-wrap items-start gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap">
           <label className="flex flex-col gap-0.5">
             {phoneLabel('Slots')}
@@ -747,7 +760,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               min={0}
               title="Slots"
               placeholder="Sl"
-              aria-label={`${itemName} slots`}
+              aria-label={`${itemName} slots (${position})`}
               className={`${inputClasses} w-16 text-center`}
             />
           </label>
@@ -762,7 +775,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               min={0}
               title="Weight"
               placeholder="Wt"
-              aria-label={`${itemName} weight`}
+              aria-label={`${itemName} weight (${position})`}
               className={`${inputClasses} w-20 text-center`}
             />
           </label>
@@ -772,13 +785,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               value={item.notes}
               onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes"
-              aria-label={`${itemName} notes`}
+              aria-label={`${itemName} notes (${position})`}
               fieldClassName={inputClasses}
             />
           </label>
-          {moveSelectFor(item, equipped, itemName, 'hidden sm:flex')}
+          {moveSelectFor(item, equipped, rowLabel, 'hidden sm:flex')}
         </div>
-        {removeButtonFor(item, equipped, itemName, 'hidden sm:block')}
+        {removeButtonFor(item, equipped, rowLabel, 'hidden sm:block')}
       </div>
     );
   };
@@ -789,7 +802,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     const isCollapsed = containerId ? collapsedContainers.has(containerId) : false;
 
     const { usedWeight, capacity, fillPercent, isOverCapacity } = getContainerLoad(container, stowedItems);
-    const destination = container ? container.name || 'container' : 'Loose Items';
+    const destination = container ? containerLabel(container) : 'Loose Items';
 
     return (
       <div key={containerId ?? 'loose'} className="mb-3">
@@ -802,7 +815,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             {containerId ? (isCollapsed ? '\u25B6' : '\u25BC') : '\u25BC'}
           </span>
           <span className="text-[#c4a35a] text-sm font-semibold">
-            {container ? container.name : 'Loose Items'}
+            {container ? containerLabel(container) : 'Loose Items'}
           </span>
           {container && encumbranceMethod === 'weight' && (
             <span className={`text-xs ${isOverCapacity ? 'text-[#ff6b4a]' : 'text-[#f5e6c8]/50'}`}>
@@ -817,8 +830,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 handleDeleteContainer(container.id);
               }}
               className="text-[#ff6b4a] hover:text-[#f5e6c8] text-xs ml-auto px-1"
-              title={`Remove ${container.name}`}
-              aria-label={`Remove ${container.name}`}
+              title={`Remove ${destination}`}
+              aria-label={`Remove ${destination}`}
             >
               &times;
             </button>
@@ -858,7 +871,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   <span className="w-6" />
                 </div>
                 {containerItems.map((item, i) =>
-                  renderInventoryItem(item, false, container ? `item ${i + 1} in ${container.name || 'a container'}` : `loose item ${i + 1}`),
+                  renderInventoryItem(item, false, container ? `item ${i + 1} in ${destination}` : `loose item ${i + 1}`),
                 )}
               </div>
             )}
@@ -929,8 +942,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           {/* Controls */}
           <div className="p-4 pb-0 shrink-0">
             <div className="flex items-center gap-2 text-xs mb-2">
-              <span className="text-[#f5e6c8]/50">Adding to:</span>
+              <span id="catalog-target-label" className="text-[#f5e6c8]/50">Adding to:</span>
               <select
+                aria-labelledby="catalog-target-label"
                 value={catalogTarget.section === 'equipped' ? 'equipped' : (catalogTarget.containerId ?? 'loose')}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -947,7 +961,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 <option value="equipped">Equipped Items</option>
                 <option value="loose">Stowed - Loose Items</option>
                 {containers.map((c) => (
-                  <option key={c.id} value={c.id}>Stowed - {c.name}</option>
+                  <option key={c.id} value={c.id}>Stowed - {containerLabel(c)}</option>
                 ))}
               </select>
             </div>
@@ -958,6 +972,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               value={catalogSearch}
               onChange={(e) => setCatalogSearch(e.target.value)}
               placeholder="Search items..."
+              aria-label="Search items"
               autoFocus
               className={`${inputClasses} w-full mb-2`}
             />
@@ -1170,11 +1185,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
       {/* Tiny Items */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h3 className="text-[#c4a35a] text-lg font-bold mb-3">Tiny Items</h3>
+        <h3 id="tiny-items-heading" className="text-[#c4a35a] text-lg font-bold mb-3">Tiny Items</h3>
         <textarea
           value={tinyItems}
           onChange={(e) => onChange({ tinyItems: e.target.value })}
           placeholder="Miscellaneous small items..."
+          aria-labelledby="tiny-items-heading"
           rows={3}
           className={`${inputClasses} w-full resize-y`}
         />

@@ -98,11 +98,12 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
           const displayName = skillKeyToDisplayName(key);
           return (
             <div key={key} className="flex flex-col items-center gap-1">
-              <label className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide text-center leading-tight">
+              <label htmlFor={`skill-target-${key}`} className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide text-center leading-tight">
                 {displayName}
               </label>
               <div className="flex items-center gap-1">
                 <input
+                  id={`skill-target-${key}`}
                   type="number"
                   value={stored ?? ''}
                   onChange={(e) => handleSkillChange(key, e.target.value)}
@@ -115,6 +116,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
                     onClick={() => handleSkillChange(key, String(calc))}
                     className="text-[10px] text-[#c4a35a] hover:text-[#f5e6c8] transition-colors"
                     title={`Sync to ${calc}`}
+                    aria-label={`Sync ${displayName} to ${calc}`}
                   >
                     {calc}
                   </button>
@@ -134,10 +136,11 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
               const displayName = skillKeyToDisplayName(key);
               return (
                 <div key={key} className="flex flex-col items-center gap-1 relative group">
-                  <label className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide text-center leading-tight">
+                  <label htmlFor={`custom-skill-target-${key}`} className="text-xs font-semibold text-[#c4a35a] uppercase tracking-wide text-center leading-tight">
                     {displayName}
                   </label>
                   <input
+                    id={`custom-skill-target-${key}`}
                     type="number"
                     value={character.skillTargets[key] || ''}
                     onChange={(e) => handleSkillChange(key, e.target.value)}

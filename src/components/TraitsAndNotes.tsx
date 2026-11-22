@@ -88,8 +88,9 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
         return (
           <div key={i} className={cardClasses}>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[#c4a35a] text-xs font-semibold">Slot {i + 1}</span>
+              <label htmlFor={`combat-talent-slot-${i + 1}`} className="text-[#c4a35a] text-xs font-semibold">Slot {i + 1}</label>
               <select
+                id={`combat-talent-slot-${i + 1}`}
                 value={sel.talentId}
                 onChange={(e) => updateTalent(i, e.target.value)}
                 className={`${inputClasses} max-w-xs text-sm`}
@@ -109,6 +110,7 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
                 value={sel.specification}
                 onChange={(e) => updateSpec(i, e.target.value)}
                 placeholder={sel.talentId === 'slayer' ? 'Creature type...' : 'Weapon type...'}
+                aria-label={`${sel.talentId === 'slayer' ? 'Slayer creature type' : 'Weapon specialisation weapon'} (slot ${i + 1})`}
                 className={`${inputClasses} text-sm mt-1`}
               />
             )}
@@ -126,13 +128,14 @@ function TurningUndead() {
 
   return (
     <div className={cardClasses}>
-      <label className={labelClasses}>Turning the Undead</label>
+      <span className={labelClasses}>Turning the Undead</span>
       <p className="text-[#f5e6c8]/50 text-xs mb-2">
         {FEATURE_NOTES.turningUndead} {TURNING_UNDEAD_TABLE.frequency}.
       </p>
       <div className="flex items-center gap-2 mb-2">
-        <label className="text-[#f5e6c8]/60 text-xs">Undead HD:</label>
+        <label htmlFor="turning-undead-hd" className="text-[#f5e6c8]/60 text-xs">Undead HD:</label>
         <input
+          id="turning-undead-hd"
           type="number"
           value={undeadHD}
           onChange={(e) => setUndeadHD(e.target.value)}
@@ -201,11 +204,12 @@ function KnightLiegeHouse({ character, onChange }: TraitsAndNotesProps) {
 
   return (
     <div>
-      <label className={labelClasses}>Liege House</label>
+      <label htmlFor="knight-liege-house" className={labelClasses}>Liege House</label>
       {character.alignment && matchingHouses.length === 0 && (
         <p className="text-red-400 text-xs mb-1">No houses match your alignment ({character.alignment}).</p>
       )}
       <select
+        id="knight-liege-house"
         value={character.liegeHouse}
         onChange={(e) => onChange({ liegeHouse: e.target.value })}
         className={`${inputClasses} text-sm`}
@@ -246,15 +250,16 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
 
   return (
     <div>
-      <label className={labelClasses}>
+      <span className={labelClasses}>
         Trophies <span className="text-[#f5e6c8]/40 font-normal">{FEATURE_NOTES.trophies}</span>
-      </label>
+      </span>
       {character.trophies.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {character.trophies.map(t => (
+          {character.trophies.map((t, index) => (
             <span key={t.id} className={chipClasses}>
               {t.creatureType}
-              <button type="button" onClick={() => removeTrophy(t.id)} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
+              {/* Numbered: the same creature can be taken twice. */}
+              <button type="button" onClick={() => removeTrophy(t.id)} aria-label={`Remove ${t.creatureType} (trophy ${index + 1})`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
             </span>
           ))}
         </div>
@@ -266,6 +271,7 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
           onChange={(e) => setNewCreature(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addTrophy()}
           placeholder="Creature type..."
+          aria-label="Trophy creature type"
           className={`${inputClasses} text-sm flex-1`}
         />
         <button type="button" onClick={addTrophy} className={btnClasses}>Add</button>
@@ -282,7 +288,7 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
   if (!companion) {
     return (
       <div>
-        <label className={labelClasses}>Animal Companion</label>
+        <span className={labelClasses}>Animal Companion</span>
         <button
           type="button"
           onClick={() => onChange({ animalCompanion: { name: '', type: '', hp: 1, notes: '' } })}
@@ -301,10 +307,11 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <label className={labelClasses}>Animal Companion</label>
+        <span className={labelClasses}>Animal Companion</span>
         <button
           type="button"
           onClick={() => onChange({ animalCompanion: null })}
+          aria-label="Remove animal companion"
           className="text-red-400 text-xs hover:text-red-300"
         >
           Remove
@@ -313,23 +320,23 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
       <div className={cardClasses}>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label className="text-[#f5e6c8]/50 text-xs">Name</label>
-            <input type="text" value={companion.name} onChange={(e) => update('name', e.target.value)} className={`${inputClasses} text-sm`} />
+            <label htmlFor="companion-name" className="text-[#f5e6c8]/50 text-xs">Name</label>
+            <input id="companion-name" type="text" value={companion.name} onChange={(e) => update('name', e.target.value)} className={`${inputClasses} text-sm`} />
           </div>
           <div>
-            <label className="text-[#f5e6c8]/50 text-xs">Type</label>
-            <input type="text" value={companion.type} onChange={(e) => update('type', e.target.value)} className={`${inputClasses} text-sm`} placeholder="Wolf, hawk..." />
+            <label htmlFor="companion-type" className="text-[#f5e6c8]/50 text-xs">Type</label>
+            <input id="companion-type" type="text" value={companion.type} onChange={(e) => update('type', e.target.value)} className={`${inputClasses} text-sm`} placeholder="Wolf, hawk..." />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label className="text-[#f5e6c8]/50 text-xs">HP</label>
-            <input type="number" value={companion.hp} onChange={(e) => update('hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-sm`} min={0} />
+            <label htmlFor="companion-hp" className="text-[#f5e6c8]/50 text-xs">HP</label>
+            <input id="companion-hp" type="number" value={companion.hp} onChange={(e) => update('hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-sm`} min={0} />
           </div>
         </div>
         <div>
-          <label className="text-[#f5e6c8]/50 text-xs">Notes</label>
-          <input type="text" value={companion.notes} onChange={(e) => update('notes', e.target.value)} className={`${inputClasses} text-sm`} />
+          <label htmlFor="companion-notes" className="text-[#f5e6c8]/50 text-xs">Notes</label>
+          <input id="companion-notes" type="text" value={companion.notes} onChange={(e) => update('notes', e.target.value)} className={`${inputClasses} text-sm`} />
         </div>
       </div>
     </div>
@@ -346,7 +353,7 @@ function BreggleFeatures({ character, onChange }: TraitsAndNotesProps) {
     <div className="space-y-3">
       {/* Horn Progression */}
       <div>
-        <label className={labelClasses}>Horn Progression</label>
+        <span className={labelClasses}>Horn Progression</span>
         <div className="grid grid-cols-5 gap-1 text-xs">
           {BREGGLE_HORN_PROGRESSION.map(h => (
             <div
@@ -364,9 +371,9 @@ function BreggleFeatures({ character, onChange }: TraitsAndNotesProps) {
       {/* Gaze */}
       {profile.hasGaze && (
         <div>
-          <label className={labelClasses}>
+          <span className={labelClasses}>
             Breggle Gaze <span className="text-[#f5e6c8]/40 font-normal">(Level 4+)</span>
-          </label>
+          </span>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -408,7 +415,7 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
 
   return (
     <div>
-      <label className={labelClasses}>Current Form</label>
+      <span className={labelClasses}>Current Form</span>
       <div className="grid grid-cols-3 gap-2">
         {forms.map(formId => {
           const form = GRIMALKIN_FORMS[formId];
@@ -472,9 +479,9 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
 
   return (
     <div>
-      <label className={labelClasses}>
+      <span className={labelClasses}>
         Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{usesLeft}/{maxUses} uses</span>
-      </label>
+      </span>
       <div className="flex items-center gap-2 mb-2">
         <button
           type="button"
@@ -496,6 +503,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
         </button>
       </div>
       <select
+        aria-label="Mad Revelry melody"
         value={selectedMelody}
         onChange={(e) => setSelectedMelody(e.target.value)}
         className={`${inputClasses} text-sm mb-1`}
@@ -535,9 +543,9 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
     <div className="space-y-3">
       {/* Symbiotic Flesh */}
       <div>
-        <label className={labelClasses}>
+        <span className={labelClasses}>
           Symbiotic Flesh <span className="text-[#f5e6c8]/40 font-normal">(1 trait per level)</span>
-        </label>
+        </span>
         {character.symbioticFleshTraits.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
             {character.symbioticFleshTraits.map((roll, i) => {
@@ -545,7 +553,8 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
               return (
                 <span key={i} className={chipClasses}>
                   [{roll}] {entry?.trait ?? '???'}
-                  <button type="button" onClick={() => removeTrait(i)} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
+                  {/* Numbered: the same trait can be rolled twice. */}
+                  <button type="button" onClick={() => removeTrait(i)} aria-label={`Remove ${entry?.trait ?? `trait ${roll}`} (trait ${i + 1})`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
                 </span>
               );
             })}
@@ -554,6 +563,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
         <div className="flex gap-2 items-end">
           <div className="flex-1">
             <select
+              aria-label="Symbiotic flesh trait"
               onChange={(e) => {
                 const val = parseInt(e.target.value);
                 if (val) addTrait(val);
@@ -574,9 +584,9 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
       {/* Fungal Symbiosis */}
       {profile.hasFungalSymbiosis && (
         <div>
-          <label className={labelClasses}>
+          <span className={labelClasses}>
             Fungal Symbiosis <span className="text-[#f5e6c8]/40 font-normal">(Level 4+)</span>
-          </label>
+          </span>
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -646,9 +656,9 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <div className="flex items-center justify-between mb-2">
-        <label className={labelClasses}>
+        <span className={labelClasses}>
           Retainers <span className="text-[#f5e6c8]/40 font-normal">({character.retainers.length} of {maxRetainers})</span>
-        </label>
+        </span>
         <button
           type="button"
           onClick={addRetainer}
@@ -661,7 +671,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
       {character.retainers.length === 0 && (
         <p className="text-[#f5e6c8]/40 text-xs italic">No retainers hired. Max = 4 + CHA modifier (min 1).</p>
       )}
-      {character.retainers.map(r => (
+      {character.retainers.map((r, index) => (
         <div key={r.id} className={cardClasses}>
           <div className="flex items-center justify-between mb-2">
             <input
@@ -669,36 +679,40 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
               value={r.name}
               onChange={(e) => updateRetainer(r.id, 'name', e.target.value)}
               placeholder="Name..."
+              aria-label={`Retainer ${index + 1} name`}
               className={`${inputClasses} text-sm flex-1 mr-2`}
             />
             <button
               type="button"
               onClick={() => removeRetainer(r.id)}
+              aria-label={r.name.trim() ? `Remove retainer ${index + 1}: ${r.name.trim()}` : `Remove retainer ${index + 1}`}
               className="text-red-400 text-xs hover:text-red-300"
             >
               Remove
             </button>
           </div>
+          {/* The visible words repeat on every card, so each label carries the
+              card's number for screen-reader users, who get no visual grouping. */}
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div>
-              <label className="text-[#f5e6c8]/50">Class</label>
-              <input type="text" value={r.class} onChange={(e) => updateRetainer(r.id, 'class', e.target.value)} className={`${inputClasses} text-xs`} />
+              <label htmlFor={`retainer-${r.id}-class`} className="text-[#f5e6c8]/50">Class<span className="sr-only"> for retainer {index + 1}</span></label>
+              <input id={`retainer-${r.id}-class`} type="text" value={r.class} onChange={(e) => updateRetainer(r.id, 'class', e.target.value)} className={`${inputClasses} text-xs`} />
             </div>
             <div>
-              <label className="text-[#f5e6c8]/50">Level</label>
-              <input type="number" value={r.level} onChange={(e) => updateRetainer(r.id, 'level', parseInt(e.target.value) || 1)} className={`${inputClasses} text-xs`} min={1} />
+              <label htmlFor={`retainer-${r.id}-level`} className="text-[#f5e6c8]/50">Level<span className="sr-only"> for retainer {index + 1}</span></label>
+              <input id={`retainer-${r.id}-level`} type="number" value={r.level} onChange={(e) => updateRetainer(r.id, 'level', parseInt(e.target.value) || 1)} className={`${inputClasses} text-xs`} min={1} />
             </div>
             <div>
-              <label className="text-[#f5e6c8]/50">HP</label>
-              <input type="number" value={r.hp} onChange={(e) => updateRetainer(r.id, 'hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={0} />
+              <label htmlFor={`retainer-${r.id}-hp`} className="text-[#f5e6c8]/50">HP<span className="sr-only"> for retainer {index + 1}</span></label>
+              <input id={`retainer-${r.id}-hp`} type="number" value={r.hp} onChange={(e) => updateRetainer(r.id, 'hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={0} />
             </div>
             <div>
-              <label className="text-[#f5e6c8]/50">Loyalty</label>
-              <input type="number" value={r.loyalty} onChange={(e) => updateRetainer(r.id, 'loyalty', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={1} max={12} />
+              <label htmlFor={`retainer-${r.id}-loyalty`} className="text-[#f5e6c8]/50">Loyalty<span className="sr-only"> for retainer {index + 1}</span></label>
+              <input id={`retainer-${r.id}-loyalty`} type="number" value={r.loyalty} onChange={(e) => updateRetainer(r.id, 'loyalty', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={1} max={12} />
             </div>
           </div>
           <div className="mt-1">
-            <input type="text" value={r.notes} onChange={(e) => updateRetainer(r.id, 'notes', e.target.value)} placeholder="Notes..." className={`${inputClasses} text-xs`} />
+            <input type="text" value={r.notes} onChange={(e) => updateRetainer(r.id, 'notes', e.target.value)} placeholder="Notes..." aria-label={`Retainer ${index + 1} notes`} className={`${inputClasses} text-xs`} />
           </div>
         </div>
       ))}
@@ -716,6 +730,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
   const { langInfo, currentLangs, bonusLangs, allKnown, availableCommon, availableObscure } =
     getLanguageBreakdown(character);
   const bonusUsed = bonusLangs.length;
+  // The bonus-language picker only renders while there are slots left; while
+  // there aren't, the visible label has nothing to point at.
+  const canAddBonusLanguage = langInfo.bonusSlots > 0 && bonusUsed < langInfo.bonusSlots;
 
   const handleAddBonusLang = (lang: string) => {
     if (!lang || allKnown.has(lang)) return;
@@ -746,16 +763,16 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
             <div className="space-y-3">
               {profile.hasCombatTalents && (
                 <div>
-                  <label className={labelClasses}>
+                  <span className={labelClasses}>
                     Combat Talents <span className="text-[#f5e6c8]/40 font-normal">({pluralize(getFighterTalentCount(character.level), 'slot')})</span>
-                  </label>
+                  </span>
                   <FighterTalents character={character} onChange={onChange} />
                 </div>
               )}
 
               {profile.hasHolyOrder && (
                 <div>
-                  <label className={labelClasses}>Holy Order</label>
+                  <span className={labelClasses}>Holy Order</span>
                   <HolyOrderSelector character={character} onChange={onChange} />
                 </div>
               )}
@@ -816,7 +833,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
           {/* Native Languages */}
           {langInfo.nativeLanguages.length > 0 && (
             <div className="mb-2">
-              <label className={labelClasses}>Native Languages</label>
+              <span className={labelClasses}>Native Languages</span>
               <div className="flex flex-wrap gap-1">
                 {langInfo.nativeLanguages.map(lang => (
                   <span key={lang} className={chipClasses}>
@@ -830,7 +847,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
           {/* Class Languages */}
           {langInfo.classLanguages.length > 0 && (
             <div className="mb-2">
-              <label className={labelClasses}>Class Languages</label>
+              <span className={labelClasses}>Class Languages</span>
               <div className="flex flex-wrap gap-1">
                 {langInfo.classLanguages.map(lang => (
                   <span key={lang} className={chipClasses}>
@@ -843,12 +860,12 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
 
           {/* Bonus Languages */}
           <div className="mb-2">
-            <label className={labelClasses}>
+            <span className={labelClasses}>
               Bonus Languages
               <span className="text-[#f5e6c8]/40 font-normal ml-1">
                 ({bonusUsed} of {pluralize(langInfo.bonusSlots, 'slot')} used)
               </span>
-            </label>
+            </span>
 
             {bonusLangs.length > 0 && (
               <div className="flex flex-wrap gap-1 mb-2">
@@ -868,9 +885,10 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               </div>
             )}
 
-            {langInfo.bonusSlots > 0 && bonusUsed < langInfo.bonusSlots && (
+            {canAddBonusLanguage && (
               <div className="flex items-center gap-2">
                 <select
+                  aria-label="Add a bonus language"
                   value={bonusLangValue}
                   onChange={(e) => {
                     if (e.target.value) handleAddBonusLang(e.target.value);
@@ -913,6 +931,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               value={character.languages}
               onChange={(e) => onChange({ languages: e.target.value })}
               placeholder="Common, Sylvan, Woldish..."
+              aria-label="Languages list"
               className={`${inputClasses} mt-1`}
             />
           </details>
@@ -923,8 +942,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
           <h3 className={sectionHeadingClasses}>Notes</h3>
           <div className="space-y-3">
             <div>
-              <label className={labelClasses}>Class Notes</label>
+              <label htmlFor="class-notes" className={labelClasses}>Class Notes</label>
               <textarea
+                id="class-notes"
                 value={character.classTraits}
                 onChange={(e) => onChange({ classTraits: e.target.value })}
                 placeholder="Additional class abilities, features, and special traits..."
@@ -933,8 +953,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               />
             </div>
             <div>
-              <label className={labelClasses}>Kindred Notes</label>
+              <label htmlFor="kindred-notes" className={labelClasses}>Kindred Notes</label>
               <textarea
+                id="kindred-notes"
                 value={character.kindredTraits}
                 onChange={(e) => onChange({ kindredTraits: e.target.value })}
                 placeholder="Additional kindred abilities, innate traits..."
@@ -943,8 +964,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               />
             </div>
             <div>
-              <label className={labelClasses}>Combat Notes</label>
+              <label htmlFor="combat-notes" className={labelClasses}>Combat Notes</label>
               <textarea
+                id="combat-notes"
                 value={character.combatTalents}
                 onChange={(e) => onChange({ combatTalents: e.target.value })}
                 placeholder="Combat notes, weapon proficiencies, fighting styles..."
@@ -953,8 +975,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               />
             </div>
             <div>
-              <label className={labelClasses}>Other Notes</label>
+              <label htmlFor="other-notes" className={labelClasses}>Other Notes</label>
               <textarea
+                id="other-notes"
                 value={character.otherNotes}
                 onChange={(e) => onChange({ otherNotes: e.target.value })}
                 placeholder="Any other notes, allies, enemies, backstory details..."
