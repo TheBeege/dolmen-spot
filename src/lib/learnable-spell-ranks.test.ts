@@ -1,10 +1,12 @@
 // Which Ranks of spell a character can learn: only those they can memorise at
 // their current Level (Player's Book p78), read off the Spells Per Day tables
-// (magician p73, breggle kindred-class p180). Run with `npm test`.
+// (magician p73, breggle kindred-class p180), and the note the tab and the PDF
+// put on an entry of a Rank above them. Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { CLASSES, KINDREDS, SPELLS_PER_DAY, getCharacterMagicProfile, getLearnableSpellRanks } from './gamedata';
-import type { ClassId, KindredId } from './types';
+import { rankAboveLearnableNote, studyRankAboveLearnableNote } from './character-sheet';
+import type { Character, ClassId, KindredId, SpellStudyEntry, StudySource } from './types';
 
 const learnable = (kindred: KindredId | '', classId: ClassId | '', level: number) =>
   getLearnableSpellRanks(getCharacterMagicProfile(kindred, classId, level));
@@ -81,5 +83,60 @@ describe('getLearnableSpellRanks', () => {
         slots.forEach((count, i) => assert.equal(count > 0, i < n, `${table} Level ${level} Rank ${i + 1}`));
       }
     }
+  });
+});
+
+describe('studyRankAboveLearnableNote', () => {
+  // A level 3 magician: Ranks 1 and 2, so a Rank 5 study is above what they can
+  // learn. Only the fields the note reads are filled in.
+  const LEARNABLE = [1, 2];
+  const asCharacter = (knownSpells: string[]): Pick<Character, 'level' | 'knownSpells'> => ({
+    level: 3,
+    knownSpells: knownSpells.map((name) => ({ id: name, name, rank: 5, source: 'mentor' })),
+  });
+  const asStudy = (
+    spellName: string,
+    rank: number,
+    source: StudySource,
+  ): Pick<SpellStudyEntry, 'spellName' | 'rank' | 'source'> => ({ spellName, rank, source });
+
+  test('a study of a learnable Rank gets no note', () => {
+    for (const rank of LEARNABLE) {
+      assert.equal(studyRankAboveLearnableNote(asStudy('Fireball', rank, 'mentor'), asCharacter([]), LEARNABLE), undefined, `Rank ${rank}`);
+    }
+  });
+
+  test('a study above those Ranks gets the note, whatever its source', () => {
+    for (const source of ['book', 'mentor', 'research'] as const) {
+      assert.equal(
+        studyRankAboveLearnableNote(asStudy('Teleport', 5, source), asCharacter([]), LEARNABLE),
+        rankAboveLearnableNote(5, 3),
+        source,
+      );
+    }
+  });
+
+  test('rewriting a spell the character already knows gets no note: it is not learning it', () => {
+    // At any Rank, including the highest, which the character can't learn at all.
+    for (const rank of [5, 6]) {
+      assert.equal(
+        studyRankAboveLearnableNote(asStudy('Teleport', rank, 'rewrite'), asCharacter(['Teleport']), LEARNABLE),
+        undefined,
+        `Rank ${rank}`,
+      );
+    }
+    // Matched as the tab matches it, ignoring case.
+    assert.equal(
+      studyRankAboveLearnableNote(asStudy('teleport', 5, 'rewrite'), asCharacter(['Teleport']), LEARNABLE),
+      undefined,
+      'lower case',
+    );
+  });
+
+  test('rewriting a spell the character does not know gets the note: finishing it would teach it', () => {
+    assert.equal(
+      studyRankAboveLearnableNote(asStudy('Wall of Fire', 5, 'rewrite'), asCharacter(['Teleport']), LEARNABLE),
+      rankAboveLearnableNote(5, 3),
+    );
   });
 });

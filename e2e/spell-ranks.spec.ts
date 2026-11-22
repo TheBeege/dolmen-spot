@@ -11,6 +11,7 @@ import { FIXTURES, openApp, openTab, TABS } from './support/app';
 import { expect, test } from './support/test';
 
 const SPELLS_TAB = TABS.find((tab) => tab.id === 'spells')!;
+const CALENDAR_TAB = TABS.find((tab) => tab.id === 'calendar')!;
 
 /** The add form's group of the Ranks above the character's: the Referee-grant escape. */
 const REFEREE_GROUP = 'Above your Level (Referee grant)';
@@ -127,4 +128,10 @@ test('known spells and studies above those Ranks say so', async ({ page }) => {
   // Only two rows carry a note: the known Rank 5 spell and the queued Rank 4
   // study (the active study's is in its card, not in a row).
   await expect(notedRows(page).filter({ hasText: 'is above what you can learn' })).toHaveCount(2);
+
+  // The Adventuring tab's Spell Study panel says the same for the study in
+  // progress, so finishing it isn't a surprise. Only the active study is there,
+  // so one note where the Spells tab showed two.
+  await openTab(page, CALENDAR_TAB);
+  await expect(page.getByText(rankAboveLearnableNote(4, character.level), { exact: true })).toHaveCount(1);
 });
