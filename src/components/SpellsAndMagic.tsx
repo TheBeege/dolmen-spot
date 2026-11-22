@@ -43,6 +43,7 @@ import {
   isSpellOnScroll,
   isStartingBookApplied,
   rankAboveLearnableNote,
+  studyRankAboveLearnableNote,
   KNOWN_SPELL_SOURCE_LABELS,
 } from '@/lib/character-sheet';
 import {
@@ -846,10 +847,19 @@ function KnownSpellsBlock({
   // longer offers (made before switching to a lower-Level character, say)
   // counts as no choice. Adding one by hand is held to the same rules: this is
   // the form's default source, so exempting it would let any Rank be recorded
-  // as learned. The consequence is that a spell a Referee grants above these
-  // Ranks can't be recorded through this form.
+  // as learned.
+  //
+  // A spell a Referee grants above those Ranks has to be recordable somehow,
+  // though. So the manual source alone also offers the higher Ranks, in a group
+  // of their own that the player has to pick deliberately; every other source
+  // stays rules-enforced. The known spell it adds then carries the red note
+  // that says the Rank is above what the character can learn (see the rows
+  // below), for the player and Referee to settle.
   const addChoice = findArcaneSpell(addName);
-  const addSelected = addChoice && learnableRanks.includes(addChoice.rank) ? addChoice.name : '';
+  const highestLearnable = learnableRanks[learnableRanks.length - 1] ?? 0;
+  const refereeRanks = addSource === 'manual' ? ranks.filter((rank) => rank > highestLearnable) : [];
+  const addOfferedRanks = [...learnableRanks, ...refereeRanks];
+  const addSelected = addChoice && addOfferedRanks.includes(addChoice.rank) ? addChoice.name : '';
   const addHint = offersUnlearnableRanks(learnableRanks, maxRank)
     ? learnableRanksHint(character.level, learnableRanks)
     : null;
@@ -1052,6 +1062,13 @@ function KnownSpellsBlock({
                   ))}
                 </optgroup>
               ))}
+              {refereeRanks.length > 0 && (
+                <optgroup label="Above your Level (Referee grant)">
+                  {ARCANE_SPELLS.filter((s) => refereeRanks.includes(s.rank)).map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             <select
               value={addSource}
@@ -1113,7 +1130,7 @@ const KnownSpellRow = memo(function KnownSpellRow({
   onDelete: (id: string) => void;
 } & SpellDisclosure) {
   return (
-    <div data-spell-row="" className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm">
+    <div data-spell-row="known" className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 px-2 py-1 rounded text-sm">
       <span className={rowNameClasses}>
         <span
           className="shrink-0 text-xs"
@@ -1260,13 +1277,10 @@ function SpellStudyBlock({
   ].filter(Boolean).join(' ');
 
   // A study that would teach the character a spell of a Rank they can't learn
-  // at their Level gets a note (see rankAboveLearnableNote). Rewriting a spell
-  // they already know isn't learning it.
-  const rankNoteFor = (entry: SpellStudyEntry) => {
-    const learnable = learnableRanks.includes(entry.rank);
-    const rewritingKnown = entry.source === 'rewrite' && knownNames.has(entry.spellName.toLowerCase());
-    return learnable || rewritingKnown ? undefined : rankAboveLearnableNote(entry.rank, character.level);
-  };
+  // at their Level gets a note, which the Adventuring tab's study panel shows
+  // too (see studyRankAboveLearnableNote).
+  const rankNoteFor = (entry: SpellStudyEntry) =>
+    studyRankAboveLearnableNote(entry, character, learnableRanks);
 
   const config = getStudyConfig(draftSource, draftRank);
 
@@ -1560,7 +1574,7 @@ function SpellStudyBlock({
               const context = queueContexts[i];
               const rankNote = rankNoteFor(q);
               return (
-                <div key={q.id} data-spell-row="" className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
+                <div key={q.id} data-spell-row="study-queue" className="bg-[#2a2a3e]/40 rounded px-2 py-1 text-sm">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={rowNameClasses}>
                       <span className="text-[#c4a35a] text-xs">{i + 1}.</span>

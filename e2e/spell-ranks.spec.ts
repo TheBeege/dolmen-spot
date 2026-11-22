@@ -1,7 +1,9 @@
 // Spell Ranks: a character can only learn spells of a Rank they can memorise at
 // their Level (Player's Book p78), so the Spells & Magic tab's pickers offer
 // only those Ranks, say why they stop there, and note the spells and studies
-// already recorded that are above them (see getLearnableSpellRanks).
+// already recorded that are above them (see getLearnableSpellRanks). Adding a
+// known spell by hand also offers the higher Ranks, in a group of their own, so
+// that a spell a Referee grants can still be recorded.
 import type { Locator, Page } from '@playwright/test';
 import { rankAboveLearnableNote } from '../src/lib/character-sheet';
 import { getCharacterMagicProfile, getLearnableSpellRanks } from '../src/lib/gamedata';
@@ -10,14 +12,27 @@ import { expect, test } from './support/test';
 
 const SPELLS_TAB = TABS.find((tab) => tab.id === 'spells')!;
 
+/** The add form's group of the Ranks above the character's: the Referee-grant escape. */
+const REFEREE_GROUP = 'Above your Level (Referee grant)';
+
 /** The labels of a picker's `optgroup`s: the Ranks it offers spells of. */
 async function offeredRanks(picker: Locator): Promise<(string | null)[]> {
   return picker.locator('optgroup').evaluateAll((groups) => groups.map((group) => group.getAttribute('label')));
 }
 
-/** A spell row, as the tab marks one whose summary can show: known spells and queued studies. */
-function spellRow(page: Page, spell: string): Locator {
-  return page.locator('[data-spell-row]').filter({ hasText: spell });
+/**
+ * A known spell's row. Every row whose summary card keeps clear of its controls
+ * is marked `data-spell-row` — memorised and prepared spells and scrolls too —
+ * so this reads the Known Spells list by the kind of row, or a memorised copy of
+ * a spell would be counted twice.
+ */
+function knownSpellRow(page: Page, spell: string): Locator {
+  return page.locator('[data-spell-row="known"]').filter({ hasText: spell });
+}
+
+/** The rows that can carry a note on a too-high Rank: a known spell's and a queued study's. */
+function notedRows(page: Page): Locator {
+  return page.locator('[data-spell-row="known"], [data-spell-row="study-queue"]');
 }
 
 test('a level 3 magician is offered only the spell Ranks they can learn', async ({ page }) => {
@@ -29,29 +44,62 @@ test('a level 3 magician is offered only the spell Ranks they can learn', async 
   expect(learnable, 'the Ranks the fixture can learn').toEqual([1, 2]);
 
   // One hint in the study picker, then another under the picker that adds a
-  // known spell by hand, once it's open.
-  const hint = 'At Level 3 you can learn spells up to Rank 2.';
+  // known spell by hand, once it's open. The tab sets "Level" and "Rank" apart
+  // from their numbers with a non-breaking space, so this does too.
+  const hint = 'At Level\u00a03 you can learn spells up to Rank\u00a02.';
   await expect(page.getByText(hint, { exact: true })).toHaveCount(1);
   await page.getByRole('button', { name: '+ Add known spell (manual)' }).click();
   await expect(page.getByText(hint, { exact: true })).toHaveCount(2);
 
-  // Both pickers group their spells by Rank, offering the learnable Ranks. A
-  // study reads its spell from a book by default, so switch to the mentor
-  // source, which offers every spell of a learnable Rank.
-  await page.getByRole('radio', { name: 'Mentor' }).check();
-  await expect.poll(() => offeredRanks(page.getByLabel('Spell to study'))).toEqual(['Rank 1', 'Rank 2']);
-  expect(await offeredRanks(page.getByLabel('Known spell to add'))).toEqual(['Rank 1', 'Rank 2']);
-
-  // So no spell of a higher Rank can be picked. Fireball is Rank 3, Teleport
-  // Rank 5 (and Teleport is already known, which a study must not offer).
   const addPicker = page.getByLabel('Known spell to add');
   const studyPicker = page.getByLabel('Spell to study');
-  for (const picker of [addPicker, studyPicker]) {
-    await expect(picker.locator('option', { hasText: 'Fireball' })).toHaveCount(0);
-    await expect(picker.locator('option', { hasText: 'Teleport' })).toHaveCount(0);
+
+  // Adding by hand is the add form's default source, and it also offers the
+  // higher Ranks, in one group of their own and after the learnable ones. A
+  // study reads its spell from a book by default, so switch to the mentor
+  // source, which offers every spell of a learnable Rank: it gets no such group.
+  await page.getByRole('radio', { name: 'Mentor' }).check();
+  await expect.poll(() => offeredRanks(studyPicker)).toEqual(['Rank 1', 'Rank 2']);
+  expect(await offeredRanks(addPicker)).toEqual(['Rank 1', 'Rank 2', REFEREE_GROUP]);
+
+  // So no spell of a higher Rank can be studied. Fireball is Rank 3, Teleport
+  // Rank 5 (and Teleport is already known, which a study must not offer).
+  for (const spell of ['Fireball', 'Teleport']) {
+    await expect(studyPicker.locator('option', { hasText: spell })).toHaveCount(0);
   }
-  // Rank 2's Levitate is still offered, so the pickers aren't simply empty.
+  // Rank 2's Levitate is still offered, so the study picker isn't simply empty.
   await expect(studyPicker.locator('option', { hasText: 'Levitate' })).toHaveCount(1);
+});
+
+test('a spell a Referee grants above those Ranks can still be recorded by hand', async ({ page }) => {
+  const character = await openApp(page, FIXTURES.lowLevelMagician);
+  await openTab(page, SPELLS_TAB);
+  await page.getByRole('button', { name: '+ Add known spell (manual)' }).click();
+
+  const addPicker = page.getByLabel('Known spell to add');
+  const addButton = page.getByRole('button', { name: 'Add', exact: true });
+
+  // Fireball (Rank 3) is one Rank above what a level 3 magician can learn, and
+  // the picker offers it only under the Referee-grant group, which a player has
+  // to choose deliberately.
+  await expect(addPicker.locator(`optgroup[label="${REFEREE_GROUP}"] option`, { hasText: 'Fireball' })).toHaveCount(1);
+  await addPicker.selectOption({ label: 'Fireball' });
+  await addButton.click();
+
+  // It is recorded, and marked with the same red note as any other too-high spell.
+  const note = knownSpellRow(page, 'Fireball').getByText(rankAboveLearnableNote(3, character.level), { exact: true });
+  await expect(note).toHaveCount(1);
+  await expect(note).toHaveClass(/text-red-400/);
+
+  // The escape belongs to the manual source alone: switching the source to
+  // Mentor drops the group, and the spell chosen from it counts as no choice,
+  // as any other choice the picker no longer offers does.
+  await page.getByRole('button', { name: '+ Add known spell (manual)' }).click();
+  await addPicker.selectOption({ label: 'Fireball' });
+  await page.getByLabel('How was this spell learned?').selectOption({ label: 'Mentor' });
+  await expect.poll(() => offeredRanks(addPicker)).toEqual(['Rank 1', 'Rank 2']);
+  await expect(addPicker).toHaveValue('');
+  await expect(addButton).toBeDisabled();
 });
 
 test('known spells and studies above those Ranks say so', async ({ page }) => {
@@ -59,7 +107,7 @@ test('known spells and studies above those Ranks say so', async ({ page }) => {
   await openTab(page, SPELLS_TAB);
 
   // The Rank 5 spell the fixture has already learned, in a red note.
-  const knownNote = spellRow(page, 'Teleport').getByText(rankAboveLearnableNote(5, character.level), { exact: true });
+  const knownNote = knownSpellRow(page, 'Teleport').getByText(rankAboveLearnableNote(5, character.level), { exact: true });
   await expect(knownNote).toHaveCount(1);
   await expect(knownNote).toHaveClass(/text-red-400/);
 
@@ -67,5 +115,5 @@ test('known spells and studies above those Ranks say so', async ({ page }) => {
   await expect(page.getByText(rankAboveLearnableNote(4, character.level), { exact: true })).toHaveCount(2);
   // Only two rows carry a note: the known Rank 5 spell and the queued Rank 4
   // study (the active study's is in its card, not in a row).
-  await expect(page.locator('[data-spell-row]').filter({ hasText: 'is above what you can learn' })).toHaveCount(2);
+  await expect(notedRows(page).filter({ hasText: 'is above what you can learn' })).toHaveCount(2);
 });

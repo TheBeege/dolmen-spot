@@ -93,7 +93,9 @@ let dismissShownCard: (() => void) | null = null;
  * `data-spell-list`, and the card keeps off the list's spells where it can;
  * `data-spell-list="whole"` keeps it off the whole element, for a menu. Mark
  * a row with `data-spell-row`, and the card keeps clear of the row's
- * controls whenever it has anywhere else to go.
+ * controls whenever it has anywhere else to go. Only the presence of those
+ * attributes matters here, so their values are free for the markup to name a
+ * row or list by (`data-spell-row="known"`).
  */
 export const SpellInfo = memo(function SpellInfo({
   spellType,

@@ -50,6 +50,11 @@ for (const fixture of ALL_FIXTURES) {
     await expect(characterSwitcher(page)).toContainText(character.name);
     // Loading it changed nothing: the fixture is a current character.
     await expect.poll(async () => (await savedCharacters(page)).characters).toMatchObject([asSaved(character)]);
+    // toMatchObject is a subset match, and load reconciles a character over the
+    // defaults: a fixture that had lost a field would be filled back in and
+    // still pass. So the saved copy must have exactly the fixture's fields.
+    await expect.poll(async () => Object.keys((await savedCharacters(page)).characters[0] ?? {}).sort())
+      .toEqual(Object.keys(character).sort());
     for (const tab of TABS) {
       await openTab(page, tab);
       await expect(page.locator('main').locator('h2, h3').first(), `${tab.label} shows its sections`).toBeVisible();

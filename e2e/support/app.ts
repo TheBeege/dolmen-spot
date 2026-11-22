@@ -21,7 +21,12 @@ export const FIXTURES = {
   elf: 'elf',
   /** A Mossling (kindred-class) with a knack, symbiotic flesh and weight-based encumbrance. */
   mossling: 'mossling',
-  /** A level 3 Magician known to be able to learn only Ranks 1 and 2, but with a Rank 5 spell already known and Rank 4 studies active and queued, as a Level that goes down leaves her. */
+  /**
+   * A level 3 Magician who can learn only Ranks 1 and 2, but knows a Rank 5
+   * spell and has Rank 4 studies active and queued: learned before the app
+   * limited learnable Ranks, and a Level lowered since would leave them above
+   * too.
+   */
   lowLevelMagician: 'low-level-magician',
 } as const;
 
