@@ -432,7 +432,7 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
                 if (formId === 'wilder') updates.wilderUsedToday = true;
                 onChange(updates);
               }}
-              className={`${cardClasses} text-center cursor-pointer transition-colors ${active ? 'border-[#c4a35a] bg-[#2a2a3e]' : 'hover:border-[#c4a35a]/50'} ${wilderDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+              className={`${cardClasses} text-center cursor-pointer transition-colors ${active ? 'border-[#c4a35a] bg-[#2a2a3e]' : 'hover:border-[#c4a35a]/50'} ${wilderDisabled ? 'border-dashed cursor-not-allowed' : ''}`}
             >
               <div className="text-[#c4a35a] font-semibold text-sm">{form.name}</div>
               <div className="text-[#a1988f] text-xs">{form.description}</div>

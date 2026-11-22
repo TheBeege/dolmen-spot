@@ -96,7 +96,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <button
             type="button"
             onClick={() => adjustHp(-1)}
-            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
           >
             -
           </button>
@@ -125,7 +125,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <button
             type="button"
             onClick={() => adjustHp(1)}
-            className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
           >
             +
           </button>

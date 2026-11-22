@@ -114,7 +114,7 @@ export default function ExportPdfButton({ character }: { character: Character })
         aria-disabled={busy || undefined}
         aria-label="Download PDF"
         title="Download a printable PDF of this character"
-        className="text-xs px-2 py-1 bg-[#5a3a28] hover:bg-[#7a5a38] aria-disabled:cursor-wait aria-disabled:hover:bg-[#5a3a28] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
+        className="text-xs px-2 py-1 bg-[#5a3a28] hover:bg-[#4a2f20] aria-disabled:cursor-wait aria-disabled:hover:bg-[#5a3a28] text-[#f5e6c8] rounded transition-colors flex items-center gap-1"
       >
         {busy ? (
           <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">

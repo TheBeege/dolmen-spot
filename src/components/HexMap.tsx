@@ -1067,7 +1067,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
   );
 
   const zoomPercent = Math.round((baseBounds.w / view.w) * 100);
-  const toolButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 transition-colors';
+  const toolButton = 'bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-2 py-1 transition-colors';
 
   return (
     // The page's scroll padding keeps an element that focus moves to clear of
@@ -1283,7 +1283,7 @@ function JumpToHexInput({ drafting, onJump }: { drafting: boolean; onJump: (hex:
         aria-describedby={statusId}
         className={`bg-[#1a1a2e] border ${border} text-[#f5e6c8] rounded px-2 py-1 text-base md:text-xs w-28 focus:outline-none placeholder:text-[#9c948b]`}
       />
-      <button type="submit" className="bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-2 py-1 text-xs transition-colors">
+      <button type="submit" className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-2 py-1 text-xs transition-colors">
         Go
       </button>
       <span id={statusId} role="status" className="text-xs text-[#ff8a70] min-w-0 [overflow-wrap:anywhere]">
@@ -1362,7 +1362,7 @@ function HexInspectorPanel({
     focus?.id === id ? { seq: focus.seq, target: focus.target } : undefined;
   // The action buttons give way to the chosen form; Add or Cancel brings them back.
   const activeForm = pendingForm?.hex === selectedHex ? pendingForm.type : null;
-  const actionButton = 'bg-[#5a3a28] hover:bg-[#8b6b52] text-[#f5e6c8] rounded px-3 py-2 transition-colors';
+  const actionButton = 'bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-2 transition-colors';
   // After a delete, focus goes to the next item on the hex, or the title.
   const itemIds = [...pois.map((p) => p.id), ...doors.map((d) => d.id)];
   const focusAfterDelete = (id: string) => {
@@ -1448,7 +1448,7 @@ function HexInspectorPanel({
               if (!isCurrent) setCurrentLocation(selectedHex);
             }}
             aria-disabled={isCurrent}
-            className="bg-[#2d4a2e] hover:bg-[#3d6b3e] aria-disabled:opacity-40 aria-disabled:hover:bg-[#2d4a2e] aria-disabled:cursor-default text-[#f5e6c8] rounded px-3 py-2 transition-colors"
+            className="bg-[#2d4a2e] hover:bg-[#3d6b3e] aria-disabled:outline-1 aria-disabled:outline-dashed aria-disabled:outline-[#9c948b] aria-disabled:hover:bg-[#2d4a2e] aria-disabled:cursor-default text-[#f5e6c8] rounded px-3 py-2 transition-colors"
           >
             📍 Set Current
           </button>

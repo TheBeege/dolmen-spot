@@ -186,7 +186,7 @@ export default function SkillsPanel({ character, onChange }: SkillsPanelProps) {
             <button
               type="button"
               onClick={handleAddSkill}
-              className="text-xs px-2 py-1 bg-[#5a3a28] text-[#f5e6c8] rounded hover:bg-[#7a5a38] transition-colors"
+              className="text-xs px-2 py-1 bg-[#5a3a28] text-[#f5e6c8] rounded hover:bg-[#4a2f20] transition-colors"
             >
               Add
             </button>

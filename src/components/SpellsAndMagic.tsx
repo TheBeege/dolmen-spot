@@ -672,7 +672,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               onChange={(e) => onUpdate(spell.id, { notes: e.target.value })}
               placeholder="Notes"
               aria-label={name ? `Notes for ${name} (slot ${slotNumber})` : `Spell notes (slot ${slotNumber})`}
-              className={`${inputClasses} block w-full ${fade}`}
+              className={`${inputClasses} block w-full`}
             />
           </span>
           <button

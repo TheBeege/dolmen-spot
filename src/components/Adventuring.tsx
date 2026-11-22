@@ -393,7 +393,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
                 title={
                   !isAtEarliestDate ? '' : earliestIsReturn ? 'You came back from Fairy on this day' : 'Already at Year 1, day 1'
                 }
-                className={`${buttonClasses} ${isAtEarliestDate ? 'opacity-40 cursor-not-allowed' : ''}`}
+                className={`${buttonClasses} ${isAtEarliestDate ? 'cursor-not-allowed outline-1 outline-dashed outline-[#9c948b]' : ''}`}
               >
                 Previous Day
               </button>
@@ -402,7 +402,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
                 aria-disabled={isAtLatestDate}
                 aria-describedby={isAtLatestDate ? `${dateFieldsId}-last-note` : undefined}
                 title={isAtLatestDate ? "The calendar's last day" : ''}
-                className={`${buttonClasses} ${isAtLatestDate ? 'opacity-40 cursor-not-allowed' : ''}`}
+                className={`${buttonClasses} ${isAtLatestDate ? 'cursor-not-allowed outline-1 outline-dashed outline-[#9c948b]' : ''}`}
               >
                 Next Day
               </button>

@@ -64,7 +64,7 @@ export const KNOWN_ISSUES: KnownIssue[] = [
 
   // ── Contrast ─────────────────────────────────────────────────────────
   {
-    issue: 'Map: the "Del" buttons of a ley line, a point of interest and a fairy door are dark red on dark blue (1.9:1), and their accessible names ("Delete ley line …", "Delete POI …", "Delete fairy door …") don\'t contain the word they show. No test opens a fairy door\'s editor, so this entry matches the other two.',
+    issue: 'Map: the "Del" buttons of a ley line, a point of interest and a fairy door are dark red on dark blue (1.9:1; hovering them is better but still short, 2.9:1), and their accessible names ("Delete ley line …", "Delete POI …", "Delete fairy door …") don\'t contain the word they show. No test opens a fairy door\'s editor, so this entry matches the other two.',
     checks: ['color-contrast', 'label-content-name-mismatch'],
     tabs: ['map'],
     match: /^(Ley Lines & Crossings|Points of Interest) › button\[type=button\] "Delete (ley line|POI) /,
