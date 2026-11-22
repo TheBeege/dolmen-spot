@@ -33,7 +33,7 @@ interface TraitsAndNotesProps {
 }
 
 const inputClasses =
-  'w-full bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'w-full bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 
 const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
 
@@ -75,7 +75,7 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
   if (totalSlots === 0) {
     return (
       <div className={cardClasses}>
-        <p className="text-[#f5e6c8]/50 text-sm italic">Combat talents unlock at Level 2.</p>
+        <p className="text-[#a1988f] text-sm italic">Combat talents unlock at Level 2.</p>
       </div>
     );
   }
@@ -129,7 +129,7 @@ function TurningUndead() {
   return (
     <div className={cardClasses}>
       <span className={labelClasses}>Turning the Undead</span>
-      <p className="text-[#f5e6c8]/50 text-xs mb-2">
+      <p className="text-[#a1988f] text-xs mb-2">
         {FEATURE_NOTES.turningUndead} {TURNING_UNDEAD_TABLE.frequency}.
       </p>
       <div className="flex items-center gap-2 mb-2">
@@ -151,7 +151,7 @@ function TurningUndead() {
           </div>
         ))}
       </div>
-      <p className="text-[#f5e6c8]/40 text-xs mt-1">
+      <p className="text-[#9c948b] text-xs mt-1">
         {TURNING_UNDEAD_TABLE.levelModifier}
       </p>
     </div>
@@ -164,7 +164,7 @@ function HolyOrderSelector({ character, onChange }: TraitsAndNotesProps) {
   if (character.level < 2) {
     return (
       <div className={cardClasses}>
-        <p className="text-[#f5e6c8]/50 text-sm italic">Holy orders are available at Level 2+.</p>
+        <p className="text-[#a1988f] text-sm italic">Holy orders are available at Level 2+.</p>
       </div>
     );
   }
@@ -183,7 +183,7 @@ function HolyOrderSelector({ character, onChange }: TraitsAndNotesProps) {
             <div className="flex items-center gap-2">
               <span className={`w-3 h-3 rounded-full border ${selected ? 'bg-[#c4a35a] border-[#c4a35a]' : 'border-[#5a3a28]'}`} />
               <span className="text-[#c4a35a] font-semibold text-sm">{order.name}</span>
-              <span className="text-[#f5e6c8]/40 text-xs">({order.title})</span>
+              <span className="text-[#9c948b] text-xs">({order.title})</span>
             </div>
             <p className="text-[#f5e6c8]/60 text-xs mt-1 ml-5">{order.bonus}</p>
           </button>
@@ -220,12 +220,12 @@ function KnightLiegeHouse({ character, onChange }: TraitsAndNotesProps) {
         ))}
       </select>
       <details className="mt-2">
-        <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
+        <summary className="text-xs text-[#9c948b] cursor-pointer hover:text-[#f5e6c8]/60">
           The Code of Chivalry
         </summary>
         <div className="text-[#f5e6c8]/60 text-xs mt-1 space-y-0.5">
           <p>{FEATURE_NOTES.chivalryVirtues}</p>
-          <p className="text-[#f5e6c8]/40 italic">{FEATURE_NOTES.chivalryRules}</p>
+          <p className="text-[#9c948b] italic">{FEATURE_NOTES.chivalryRules}</p>
         </div>
       </details>
     </div>
@@ -251,7 +251,7 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <span className={labelClasses}>
-        Trophies <span className="text-[#f5e6c8]/40 font-normal">{FEATURE_NOTES.trophies}</span>
+        Trophies <span className="text-[#9c948b] font-normal">{FEATURE_NOTES.trophies}</span>
       </span>
       {character.trophies.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
@@ -320,22 +320,22 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
       <div className={cardClasses}>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label htmlFor="companion-name" className="text-[#f5e6c8]/50 text-xs">Name</label>
+            <label htmlFor="companion-name" className="text-[#a1988f] text-xs">Name</label>
             <input id="companion-name" type="text" value={companion.name} onChange={(e) => update('name', e.target.value)} className={`${inputClasses} text-sm`} />
           </div>
           <div>
-            <label htmlFor="companion-type" className="text-[#f5e6c8]/50 text-xs">Type</label>
+            <label htmlFor="companion-type" className="text-[#a1988f] text-xs">Type</label>
             <input id="companion-type" type="text" value={companion.type} onChange={(e) => update('type', e.target.value)} className={`${inputClasses} text-sm`} placeholder="Wolf, hawk..." />
           </div>
         </div>
         <div className="grid grid-cols-2 gap-2 mb-2">
           <div>
-            <label htmlFor="companion-hp" className="text-[#f5e6c8]/50 text-xs">HP</label>
+            <label htmlFor="companion-hp" className="text-[#a1988f] text-xs">HP</label>
             <input id="companion-hp" type="number" value={companion.hp} onChange={(e) => update('hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-sm`} min={0} />
           </div>
         </div>
         <div>
-          <label htmlFor="companion-notes" className="text-[#f5e6c8]/50 text-xs">Notes</label>
+          <label htmlFor="companion-notes" className="text-[#a1988f] text-xs">Notes</label>
           <input id="companion-notes" type="text" value={companion.notes} onChange={(e) => update('notes', e.target.value)} className={`${inputClasses} text-sm`} />
         </div>
       </div>
@@ -362,7 +362,7 @@ function BreggleFeatures({ character, onChange }: TraitsAndNotesProps) {
             >
               <div className="text-[#c4a35a] font-semibold">L{h.level}</div>
               <div className="text-[#f5e6c8]/70">{h.length}</div>
-              <div className="text-[#f5e6c8]/50">{h.damage}</div>
+              <div className="text-[#a1988f]">{h.damage}</div>
             </div>
           ))}
         </div>
@@ -372,7 +372,7 @@ function BreggleFeatures({ character, onChange }: TraitsAndNotesProps) {
       {profile.hasGaze && (
         <div>
           <span className={labelClasses}>
-            Breggle Gaze <span className="text-[#f5e6c8]/40 font-normal">(Level 4+)</span>
+            Breggle Gaze <span className="text-[#9c948b] font-normal">(Level 4+)</span>
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -432,17 +432,17 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
                 if (formId === 'wilder') updates.wilderUsedToday = true;
                 onChange(updates);
               }}
-              className={`${cardClasses} text-center cursor-pointer transition-colors ${active ? 'border-[#c4a35a] bg-[#2a2a3e]' : 'hover:border-[#c4a35a]/50'} ${wilderDisabled ? 'opacity-40 cursor-not-allowed' : ''}`}
+              className={`${cardClasses} text-center cursor-pointer transition-colors ${active ? 'border-[#c4a35a] bg-[#2a2a3e]' : 'hover:border-[#c4a35a]/50'} ${wilderDisabled ? 'border-dashed cursor-not-allowed' : ''}`}
             >
               <div className="text-[#c4a35a] font-semibold text-sm">{form.name}</div>
-              <div className="text-[#f5e6c8]/50 text-xs">{form.description}</div>
+              <div className="text-[#a1988f] text-xs">{form.description}</div>
               {form.ac && (
                 <div className="text-[#f5e6c8]/60 text-xs mt-1">
                   AC {form.ac} | Spd {form.speed}&apos;
                 </div>
               )}
               {form.attacks && (
-                <div className="text-[#f5e6c8]/40 text-xs">{form.attacks}</div>
+                <div className="text-[#9c948b] text-xs">{form.attacks}</div>
               )}
             </button>
           );
@@ -453,7 +453,7 @@ function GrimalkinForms({ character, onChange }: TraitsAndNotesProps) {
       )}
       {character.wilderUsedToday && character.currentForm !== 'wilder' && (
         <div className="flex items-center gap-2 mt-2">
-          <span className="text-[#f5e6c8]/40 text-xs">Wilder used today.</span>
+          <span className="text-[#9c948b] text-xs">Wilder used today.</span>
           <button
             type="button"
             onClick={() => onChange({ wilderUsedToday: false })}
@@ -480,7 +480,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
   return (
     <div>
       <span className={labelClasses}>
-        Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{usesLeft}/{maxUses} uses</span>
+        Mad Revelry <span className="text-[#9c948b] font-normal">{usesLeft}/{maxUses} uses</span>
       </span>
       <div className="flex items-center gap-2 mb-2">
         <button
@@ -516,7 +516,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
       {melody && (
         <p className="text-[#f5e6c8]/60 text-xs mt-1">{melody.effect}</p>
       )}
-      <p className="text-[#f5e6c8]/40 text-xs mt-1">
+      <p className="text-[#9c948b] text-xs mt-1">
         {FEATURE_NOTES.madRevelry}
       </p>
     </div>
@@ -544,7 +544,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
       {/* Symbiotic Flesh */}
       <div>
         <span className={labelClasses}>
-          Symbiotic Flesh <span className="text-[#f5e6c8]/40 font-normal">(1 trait per level)</span>
+          Symbiotic Flesh <span className="text-[#9c948b] font-normal">(1 trait per level)</span>
         </span>
         {character.symbioticFleshTraits.length > 0 && (
           <div className="flex flex-wrap gap-1 mb-2">
@@ -585,7 +585,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
       {profile.hasFungalSymbiosis && (
         <div>
           <span className={labelClasses}>
-            Fungal Symbiosis <span className="text-[#f5e6c8]/40 font-normal">(Level 4+)</span>
+            Fungal Symbiosis <span className="text-[#9c948b] font-normal">(Level 4+)</span>
           </span>
           <div className="flex items-center gap-3">
             <button
@@ -615,7 +615,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
               Reset
             </button>
           </div>
-          <p className="text-[#f5e6c8]/40 text-xs mt-1">
+          <p className="text-[#9c948b] text-xs mt-1">
             {FEATURE_NOTES.fungalSymbiosis}
           </p>
         </div>
@@ -657,7 +657,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
     <div>
       <div className="flex items-center justify-between mb-2">
         <span className={labelClasses}>
-          Retainers <span className="text-[#f5e6c8]/40 font-normal">({character.retainers.length} of {maxRetainers})</span>
+          Retainers <span className="text-[#9c948b] font-normal">({character.retainers.length} of {maxRetainers})</span>
         </span>
         <button
           type="button"
@@ -669,7 +669,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
         </button>
       </div>
       {character.retainers.length === 0 && (
-        <p className="text-[#f5e6c8]/40 text-xs italic">No retainers hired. Max = 4 + CHA modifier (min 1).</p>
+        <p className="text-[#9c948b] text-xs italic">No retainers hired. Max = 4 + CHA modifier (min 1).</p>
       )}
       {character.retainers.map((r, index) => (
         <div key={r.id} className={cardClasses}>
@@ -695,19 +695,19 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
               card's number for screen-reader users, who get no visual grouping. */}
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div>
-              <label htmlFor={`retainer-${r.id}-class`} className="text-[#f5e6c8]/50">Class<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-class`} className="text-[#a1988f]">Class<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-class`} type="text" value={r.class} onChange={(e) => updateRetainer(r.id, 'class', e.target.value)} className={`${inputClasses} text-xs`} />
             </div>
             <div>
-              <label htmlFor={`retainer-${r.id}-level`} className="text-[#f5e6c8]/50">Level<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-level`} className="text-[#a1988f]">Level<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-level`} type="number" value={r.level} onChange={(e) => updateRetainer(r.id, 'level', parseInt(e.target.value) || 1)} className={`${inputClasses} text-xs`} min={1} />
             </div>
             <div>
-              <label htmlFor={`retainer-${r.id}-hp`} className="text-[#f5e6c8]/50">HP<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-hp`} className="text-[#a1988f]">HP<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-hp`} type="number" value={r.hp} onChange={(e) => updateRetainer(r.id, 'hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={0} />
             </div>
             <div>
-              <label htmlFor={`retainer-${r.id}-loyalty`} className="text-[#f5e6c8]/50">Loyalty<span className="sr-only"> for retainer {index + 1}</span></label>
+              <label htmlFor={`retainer-${r.id}-loyalty`} className="text-[#a1988f]">Loyalty<span className="sr-only"> for retainer {index + 1}</span></label>
               <input id={`retainer-${r.id}-loyalty`} type="number" value={r.loyalty} onChange={(e) => updateRetainer(r.id, 'loyalty', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={1} max={12} />
             </div>
           </div>
@@ -764,7 +764,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               {profile.hasCombatTalents && (
                 <div>
                   <span className={labelClasses}>
-                    Combat Talents <span className="text-[#f5e6c8]/40 font-normal">({pluralize(getFighterTalentCount(character.level), 'slot')})</span>
+                    Combat Talents <span className="text-[#9c948b] font-normal">({pluralize(getFighterTalentCount(character.level), 'slot')})</span>
                   </span>
                   <FighterTalents character={character} onChange={onChange} />
                 </div>
@@ -862,7 +862,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
           <div className="mb-2">
             <span className={labelClasses}>
               Bonus Languages
-              <span className="text-[#f5e6c8]/40 font-normal ml-1">
+              <span className="text-[#9c948b] font-normal ml-1">
                 ({bonusUsed} of {pluralize(langInfo.bonusSlots, 'slot')} used)
               </span>
             </span>
@@ -915,7 +915,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
             )}
 
             {langInfo.bonusSlots === 0 && (
-              <p className="text-[#f5e6c8]/40 text-xs italic">
+              <p className="text-[#9c948b] text-xs italic">
                 INT modifier does not grant bonus languages.
               </p>
             )}
@@ -923,7 +923,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
 
           {/* Raw languages display for reference */}
           <details className="mt-1">
-            <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
+            <summary className="text-xs text-[#9c948b] cursor-pointer hover:text-[#f5e6c8]/60">
               Edit raw
             </summary>
             <input

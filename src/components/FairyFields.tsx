@@ -16,7 +16,7 @@ import { MAX_YEAR, MONTHS } from '@/lib/gamedata';
 // gold-and-green calendar.
 
 const inputBase =
-  'bg-[#1a1a2e] border text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
+  'bg-[#1a1a2e] border text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 export const inputClass = (invalid: boolean) => `${inputBase} ${invalid ? 'border-[#ff8a6a]' : 'border-[#5a3a28]'}`;
 export const labelClasses = 'block text-[#c4a35a] text-sm font-semibold mb-1';
 export const errorClasses = 'text-[#ff8a6a] text-xs mt-1';
