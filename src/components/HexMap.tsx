@@ -55,6 +55,7 @@ import {
   withPoiKind,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
+import { newId } from '@/lib/ids';
 import { FOCUS_RING } from '@/components/focus-ring';
 import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './MapIcons';
 
@@ -160,11 +161,6 @@ const lookOf = (e: HexItem) => markerLook(e.type === 'door' ? 'door' : poiKindOf
 function itemSummary(e: HexItem): string {
   const what = e.type === 'door' ? 'fairy door' : POI_KIND_NAMES[poiKindOf(e.item)].toLowerCase();
   return `${e.item.name || 'Unnamed'} (${what})`;
-}
-
-function newId(): string {
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  return `id-${Math.random().toString(36).slice(2)}`;
 }
 
 // Markers and ley lines are buttons for keyboard and screen-reader users.

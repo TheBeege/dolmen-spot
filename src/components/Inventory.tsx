@@ -23,6 +23,7 @@ import {
   getContainerLoad,
 } from '@/lib/character-sheet';
 import { pluralize } from '@/lib/grammar';
+import { newId } from '@/lib/ids';
 
 interface InventoryProps {
   character: Character;
@@ -143,7 +144,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   // ── Item handlers ──
   const handleAddItem = (equipped: boolean, containerId?: string) => {
     const newItem: InventoryItem = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: '',
       slots: 1,
       weight: 10,
@@ -165,7 +166,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     // (e.g. a hypothetical "Anti-Spellbook Ward") aren't misclassified.
     const isSpellbook = /^spell\s*book/i.test(entry.name);
     const newItem: InventoryItem = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: entry.name,
       slots: entry.slots,
       weight: entry.weight,
@@ -186,7 +187,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   const handleAddSpellbook = (equipped: boolean, containerId?: string) => {
     const newItem: InventoryItem = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: 'Spell Book',
       slots: 1,
       weight: 10,
@@ -203,7 +204,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   const handleAddScroll = (equipped: boolean, containerId?: string) => {
     const newItem: InventoryItem = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: 'Scroll',
       slots: 0,
       weight: 1,
@@ -315,7 +316,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   // ── Container handlers ──
   const handleAddContainer = (entry: EquipmentEntry) => {
     const newContainer: CharacterContainer = {
-      id: crypto.randomUUID(),
+      id: newId(),
       name: entry.name,
       capacity: entry.capacity ?? 0,
     };

@@ -1,5 +1,6 @@
 import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile, SpellSummary, SpellType } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
+import { newId } from './ids';
 import { pluralize } from './grammar';
 
 // Kindred-class restrictions from the Player's Book.
@@ -3246,7 +3247,7 @@ export function getHungerEffects(days: number, kindredId: KindredId | ''): strin
 export function createDefaultCharacter(): Character {
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
-    id: crypto.randomUUID(),
+    id: newId(),
     name: '',
     kindred: '',
     class: '',

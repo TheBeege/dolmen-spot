@@ -44,6 +44,7 @@ import type {
   JournalEntry,
 } from './types';
 import { isValidHex } from './hex';
+import { newId } from './ids';
 import { getPlaceNameOn } from './map-data';
 import {
   MAX_YEAR,
@@ -484,9 +485,9 @@ export function enterFairy(character: Character): Partial<Character> | null {
   if (isInFairy(character)) return null;
   const visits = getFairyVisits(character);
   const enteredOn = { ...character.currentDate };
-  const visit: FairyVisit = { id: crypto.randomUUID(), enteredOn, returnedOn: null, daysInFairy: 0 };
+  const visit: FairyVisit = { id: newId(), enteredOn, returnedOn: null, daysInFairy: 0 };
   const entry: JournalEntry = {
-    id: crypto.randomUUID(),
+    id: newId(),
     date: { ...enteredOn },
     fairyEvent: { visitId: visit.id, kind: 'entered' },
     ...getCurrentPlace(character),
@@ -550,7 +551,7 @@ export function returnFromFairy(
   const date = { day: returnedOn.day, month: returnedOn.month, year: returnedOn.year };
   const { hex, location, sameHex } = getReturnPlace(character, cameBackIn);
   const entry: JournalEntry = {
-    id: crypto.randomUUID(),
+    id: newId(),
     date: { ...date },
     fairyEvent: { visitId: open.id, kind: 'returned' },
     location,
