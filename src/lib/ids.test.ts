@@ -44,8 +44,8 @@ describe('newId', () => {
     assert.match(id, FALLBACK_RE);
   });
 
-  test('the fallback never repeats an id', () => {
-    const ids = withCrypto({}, () => Array.from({ length: 100 }, newId));
+  test('the fallback mints distinct ids', () => {
+    const ids = withCrypto({}, () => Array.from({ length: 1000 }, newId));
     assert.equal(new Set(ids).size, ids.length);
   });
 

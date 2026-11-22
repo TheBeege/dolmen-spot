@@ -5,13 +5,14 @@
 // it was.
 
 /**
- * A new id: a UUID from `crypto.randomUUID`, or a random string where that
- * isn't there. `crypto.randomUUID` is missing outside a secure context (an
- * http:// address other than localhost) and on older Safari, where calling it
- * throws, so nothing should call it directly.
+ * A new id: a UUID from `crypto.randomUUID`, or a random string where there
+ * isn't one. That method only exists in a secure context (https, or localhost)
+ * and only in browsers recent enough to have it, and it is absent rather than
+ * throwing there: the throw comes from calling it anyway, which is what the
+ * old code did. Nothing should call it directly.
  */
 export function newId(): string {
   return typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
     ? crypto.randomUUID()
-    : `id-${Math.random().toString(36).slice(2)}`;
+    : `id-${Math.random().toString(36).slice(2) || '0'}`;
 }

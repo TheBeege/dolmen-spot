@@ -16,11 +16,12 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    // Accessibility rules beyond the ones eslint-config-next turns on. Each
-    // catches markup that reads fine in a browser and breaks for a screen
-    // reader or keyboard user, rather than a style preference. Two of them
-    // allow, through their own options, markup that's deliberate here; the
-    // comment at each of those places says why.
+    // Accessibility rules beyond the ones eslint-config-next turns on, plus
+    // two it turns on only as warnings, raised to errors here so CI fails
+    // rather than passing them by. Each catches markup that reads fine in a
+    // browser and breaks for a screen reader or keyboard user, rather than a
+    // style preference. Two of them allow, through their own options, markup
+    // that's deliberate here; the comment at each of those places says why.
     rules: {
       // An aria-hidden subtree can't be tabbed into, so hiding a focusable
       // element leaves a keyboard user with a control they can reach but no
@@ -28,9 +29,12 @@ const eslintConfig = defineConfig([
       "jsx-a11y/no-aria-hidden-on-focusable": "error",
       // A role with required states/properties missing, such as a checkbox
       // with no aria-checked, is announced without them.
+      // eslint-config-next has this one already, at "warn": "error" is what
+      // makes it fail a lint run.
       "jsx-a11y/role-has-required-aria-props": "error",
       // And an aria-* the role doesn't take is ignored by assistive tech,
-      // which hides a mistaken role as well.
+      // which hides a mistaken role as well. Also a warning in
+      // eslint-config-next, raised here for the same reason.
       "jsx-a11y/role-supports-aria-props": "error",
       // aria-activedescendant is only followed on a focused element, so it
       // needs something tabbable to live on.
@@ -40,7 +44,7 @@ const eslintConfig = defineConfig([
       // `role="list"` on an <ol> is the exception: Safari drops a list's
       // semantics when its bullets are styled away, as Tailwind's preflight
       // does, and the explicit role is what puts them back.
-      "jsx-a11y/no-redundant-roles": ["error", { ol: ["list"], ul: ["list"] }],
+      "jsx-a11y/no-redundant-roles": ["error", { ol: ["list"] }],
       // An <a> with no href isn't a link to a keyboard or screen reader; it's
       // a span that looks like one.
       "jsx-a11y/anchor-is-valid": "error",
