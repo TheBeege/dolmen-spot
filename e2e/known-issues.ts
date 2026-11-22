@@ -41,7 +41,9 @@ export const KNOWN_ISSUES: KnownIssue[] = [
     issue: 'Spells & Magic: at a 24px font and 320px, the study picker and its "What … does" button stick out of the Spell Study card.',
     checks: ['spills-card'],
     tabs: ['spells'],
-    match: /^Spell Study › /,
+    // Those two controls only (the picker, and the info button of the study it
+    // shows): the rest of the card, its hint included, is checked like any other.
+    match: /^Spell Study › (select "Spell to study"|button\[type=button\] "What .+ does \(studying\)")/,
     maxWidth: 320,
     fontSizes: [24],
   },
@@ -89,10 +91,10 @@ export const KNOWN_ISSUES: KnownIssue[] = [
     match: /^(Coins|Camping|Season).*\(style color /,
   },
   {
-    issue: 'Map: the ley lines\' "Del" buttons are dark red on dark blue (1.9:1), and their accessible names ("Delete ley line …") don\'t contain the word they show.',
+    issue: 'Map: the "Del" buttons of a ley line, a point of interest and a fairy door are dark red on dark blue (1.9:1), and their accessible names ("Delete ley line …", "Delete POI …", "Delete fairy door …") don\'t contain the word they show. No test opens a fairy door\'s editor, so this entry matches the other two.',
     checks: ['color-contrast', 'label-content-name-mismatch'],
     tabs: ['map'],
-    match: /^Ley Lines & Crossings › button/,
+    match: /^(Ley Lines & Crossings|Points of Interest) › button\[type=button\] "Delete (ley line|POI) /,
   },
 ];
 

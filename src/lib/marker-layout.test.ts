@@ -4,16 +4,16 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   HEX_INNER_RADIUS as INNER,
+  MARKER_RIM,
   MAX_MARKER_OVERLAP,
   countOnStar,
   layoutRing,
   markerGrowth,
   ringFor,
+  type MarkerKind as Kind,
   type Offset,
 } from './marker-layout';
 import { gridBounds } from './hex';
-
-type Kind = 'poi' | 'door';
 const dist = (o: Offset) => Math.hypot(o.x, o.y);
 const round = (o: Offset) => ({ x: Math.round(o.x), y: Math.round(o.y) });
 const layout = (px: number | null, kinds: Kind[], badge: boolean, onCurrent: boolean) => {
@@ -28,9 +28,16 @@ const PHONE_390 = (390 - 24) / b.w;
 const PHONE_320 = (320 - 24) / b.w;
 const DESKTOP = 540 / b.h;
 
-// Every mix of up to four markers, with and without the "+N" badge.
+// Every mix of up to four markers (plain POIs, POIs with a kind's icon,
+// doors), with and without the "+N" badge.
 const MIXES: Kind[][] = [];
-for (let n = 1; n <= 4; n++) for (let doors = 0; doors <= n; doors++) MIXES.push([...Array(n - doors).fill('poi'), ...Array(doors).fill('door')]);
+for (let n = 1; n <= 4; n++) {
+  for (let icons = 0; icons <= n; icons++) {
+    for (let doors = 0; doors <= n - icons; doors++) {
+      MIXES.push([...Array(n - icons - doors).fill('poi'), ...Array(icons).fill('icon'), ...Array(doors).fill('door')]);
+    }
+  }
+}
 // Scales from far zoomed out to well past full size.
 const SCALES = Array.from({ length: 80 }, (_, i) => 0.03 * 1.06 ** i);
 
@@ -114,12 +121,27 @@ describe('layoutRing at every zoom', () => {
         if (kinds.length >= 2) assert.equal(layout(px, kinds, false, false).layout.kind, 'combined', `${kinds}`);
       }
       assert.equal(layout(px, ['poi'], false, false).layout.kind, 'separate', 'a lone POI fits');
+      assert.equal(layout(px, ['icon'], false, false).layout.kind, 'separate', "a lone kind's icon fits");
       assert.equal(layout(px, ['door'], false, false).layout.kind, 'separate', 'a lone door fits');
     }
   });
-  test("at a desktop's whole-map view, two POIs on the current hex still fit", () => {
+  test("at a desktop's whole-map view, two POIs on the current hex still fit, with kinds or without", () => {
     assert.equal(layout(DESKTOP, ['poi', 'poi'], false, true).layout.kind, 'separate');
+    assert.equal(layout(DESKTOP, ['icon', 'icon'], false, true).layout.kind, 'separate');
+    assert.equal(layout(DESKTOP, ['icon', 'poi'], false, true).layout.kind, 'separate');
     assert.equal(layout(DESKTOP, ['door'], false, true).layout.kind, 'combined', 'a door is bigger');
+  });
+});
+
+describe('marker sizes', () => {
+  test("a kind's icon is a little bigger than a plain POI, and smaller than a door", () => {
+    const radius = (kind: Kind) => ringFor({ kinds: [kind], badge: false, onCurrent: false, growth: markerGrowth(1) }).markerRadius - MARKER_RIM / 2;
+    assert.deepEqual([radius('poi'), radius('icon'), radius('door')], [22, 24, 26]);
+  });
+  test('a ring makes room for its largest marker', () => {
+    const input = (kinds: Kind[]) => ringFor({ kinds, badge: false, onCurrent: false, growth: markerGrowth(1) }).markerRadius;
+    assert.equal(input(['poi', 'icon']), input(['icon']));
+    assert.equal(input(['icon', 'door', 'poi']), input(['door']));
   });
 });
 
