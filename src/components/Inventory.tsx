@@ -396,6 +396,15 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const slotsFieldId = (itemId: string) => `inventory-${itemId}-slots`;
   const focusSlots = (itemId: string) => () => document.getElementById(slotsFieldId(itemId))?.focus();
 
+  // Two containers can share a name ("Backpack"), so one that does says which
+  // it is - its place among the containers - wherever a player picks one or is
+  // told which one they mean.
+  const containerLabel = (container: CharacterContainer) => {
+    const name = container.name || 'container';
+    const shared = containers.filter((c) => (c.name || 'container') === name).length > 1;
+    return shared ? `${name} ${containers.findIndex((c) => c.id === container.id) + 1}` : name;
+  };
+
   // A row's move select (stowed items, when there are containers) and its ×.
   // Every row renders each twice: on phones together after the name
   // (phoneControlsFor), and from sm up at the end of the row, with the other
@@ -415,7 +424,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           <option value="">Loose</option>
           {containers.map((c) => (
             <option key={c.id} value={c.id}>
-              {c.name}
+              {containerLabel(c)}
             </option>
           ))}
         </select>
@@ -786,20 +795,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
-  const renderContainerGroup = (container: CharacterContainer | null, containerNumber: number) => {
+  const renderContainerGroup = (container: CharacterContainer | null) => {
     const containerId = container?.id;
     const containerItems = getContainerItems(stowedItems, containerId);
     const isCollapsed = containerId ? collapsedContainers.has(containerId) : false;
 
     const { usedWeight, capacity, fillPercent, isOverCapacity } = getContainerLoad(container, stowedItems);
-    // Two containers can share a name ("Backpack"), so a shared one says which
-    // it is: its place among the containers.
-    const sharedName =
-      container !== null &&
-      containers.filter((c) => (c.name || 'container') === (container.name || 'container')).length > 1;
-    const destination = container
-      ? `${container.name || 'container'}${sharedName ? ` ${containerNumber}` : ''}`
-      : 'Loose Items';
+    const destination = container ? containerLabel(container) : 'Loose Items';
 
     return (
       <div key={containerId ?? 'loose'} className="mb-3">
@@ -958,7 +960,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                 <option value="equipped">Equipped Items</option>
                 <option value="loose">Stowed - Loose Items</option>
                 {containers.map((c) => (
-                  <option key={c.id} value={c.id}>Stowed - {c.name}</option>
+                  <option key={c.id} value={c.id}>Stowed - {containerLabel(c)}</option>
                 ))}
               </select>
             </div>
@@ -1174,10 +1176,10 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         </div>
 
         {/* Container groups */}
-        {containers.map((container, index) => renderContainerGroup(container, index + 1))}
+        {containers.map((container) => renderContainerGroup(container))}
 
         {/* Loose items (no container) */}
-        {renderContainerGroup(null, containers.length + 1)}
+        {renderContainerGroup(null)}
       </div>
 
       {/* Tiny Items */}
