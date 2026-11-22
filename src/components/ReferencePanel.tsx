@@ -66,7 +66,12 @@ export default function ReferencePanel() {
       </div>
 
       {tab === 'armour' && (
-        <div className="overflow-x-auto">
+        <div
+          role="region"
+          aria-label="Armour table"
+          tabIndex={0}
+          className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c4a35a]"
+        >
           <table className="w-full text-xs text-[#f5e6c8]">
             <thead>
               <tr className="text-[#c4a35a] border-b border-[#5a3a28]">

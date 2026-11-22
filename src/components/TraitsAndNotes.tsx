@@ -534,7 +534,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
     <div className="space-y-3">
       {/* Symbiotic Flesh */}
       <div>
-        <label className={labelClasses}>
+        <label htmlFor="symbiotic-flesh" className={labelClasses}>
           Symbiotic Flesh <span className="text-[#f5e6c8]/40 font-normal">(1 trait per level)</span>
         </label>
         {character.symbioticFleshTraits.length > 0 && (
@@ -553,6 +553,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
         <div className="flex gap-2 items-end">
           <div className="flex-1">
             <select
+              id="symbiotic-flesh"
               onChange={(e) => {
                 const val = parseInt(e.target.value);
                 if (val) addTrait(val);
@@ -680,20 +681,20 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
           </div>
           <div className="grid grid-cols-4 gap-2 text-xs">
             <div>
-              <label className="text-[#f5e6c8]/50">Class</label>
-              <input type="text" value={r.class} onChange={(e) => updateRetainer(r.id, 'class', e.target.value)} className={`${inputClasses} text-xs`} />
+              <label htmlFor={`retainer-${r.id}-class`} className="text-[#f5e6c8]/50">Class</label>
+              <input id={`retainer-${r.id}-class`} type="text" value={r.class} onChange={(e) => updateRetainer(r.id, 'class', e.target.value)} className={`${inputClasses} text-xs`} />
             </div>
             <div>
-              <label className="text-[#f5e6c8]/50">Level</label>
-              <input type="number" value={r.level} onChange={(e) => updateRetainer(r.id, 'level', parseInt(e.target.value) || 1)} className={`${inputClasses} text-xs`} min={1} />
+              <label htmlFor={`retainer-${r.id}-level`} className="text-[#f5e6c8]/50">Level</label>
+              <input id={`retainer-${r.id}-level`} type="number" value={r.level} onChange={(e) => updateRetainer(r.id, 'level', parseInt(e.target.value) || 1)} className={`${inputClasses} text-xs`} min={1} />
             </div>
             <div>
-              <label className="text-[#f5e6c8]/50">HP</label>
-              <input type="number" value={r.hp} onChange={(e) => updateRetainer(r.id, 'hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={0} />
+              <label htmlFor={`retainer-${r.id}-hp`} className="text-[#f5e6c8]/50">HP</label>
+              <input id={`retainer-${r.id}-hp`} type="number" value={r.hp} onChange={(e) => updateRetainer(r.id, 'hp', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={0} />
             </div>
             <div>
-              <label className="text-[#f5e6c8]/50">Loyalty</label>
-              <input type="number" value={r.loyalty} onChange={(e) => updateRetainer(r.id, 'loyalty', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={1} max={12} />
+              <label htmlFor={`retainer-${r.id}-loyalty`} className="text-[#f5e6c8]/50">Loyalty</label>
+              <input id={`retainer-${r.id}-loyalty`} type="number" value={r.loyalty} onChange={(e) => updateRetainer(r.id, 'loyalty', parseInt(e.target.value) || 0)} className={`${inputClasses} text-xs`} min={1} max={12} />
             </div>
           </div>
           <div className="mt-1">
@@ -842,7 +843,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
 
           {/* Bonus Languages */}
           <div className="mb-2">
-            <label className={labelClasses}>
+            <label htmlFor="bonus-languages" className={labelClasses}>
               Bonus Languages
               <span className="text-[#f5e6c8]/40 font-normal ml-1">
                 ({bonusUsed} of {pluralize(langInfo.bonusSlots, 'slot')} used)
@@ -870,6 +871,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
             {langInfo.bonusSlots > 0 && bonusUsed < langInfo.bonusSlots && (
               <div className="flex items-center gap-2">
                 <select
+                  id="bonus-languages"
                   value={bonusLangValue}
                   onChange={(e) => {
                     if (e.target.value) handleAddBonusLang(e.target.value);

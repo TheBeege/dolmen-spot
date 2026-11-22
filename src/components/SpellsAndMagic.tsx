@@ -1846,6 +1846,7 @@ function GlamourSection({
             const id = parseInt(e.target.value);
             if (id) addGlamour(id);
           }}
+          aria-label="Add a glamour"
           className={`${selectClasses} mt-2 w-full text-sm`}
         >
           <option value="">+ Add Glamour...</option>
@@ -1964,6 +1965,7 @@ function RuneSection({
           const id = parseInt(e.target.value);
           if (id) addRune(id);
         }}
+        aria-label="Add a rune"
         className={`${selectClasses} mt-2 w-full text-sm`}
       >
         <option value="">+ Add Rune...</option>
@@ -2020,6 +2022,7 @@ function KnackSection({
             const id = parseInt(e.target.value);
             if (id) selectKnack(id);
           }}
+          aria-label="Choose a mossling knack"
           className={`${selectClasses} w-full`}
         >
           <option value="">-- Select Knack --</option>

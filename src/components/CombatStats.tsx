@@ -134,8 +134,9 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         {/* HP Number Inputs */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[#8b8b9e] text-xs block mb-1">Current HP</label>
+            <label htmlFor="hit-points-current" className="text-[#8b8b9e] text-xs block mb-1">Current HP</label>
             <input
+              id="hit-points-current"
               type="number"
               value={character.currentHp}
               onChange={(e) =>
@@ -145,8 +146,9 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             />
           </div>
           <div>
-            <label className="text-[#8b8b9e] text-xs block mb-1">Max HP</label>
+            <label htmlFor="hit-points-max" className="text-[#8b8b9e] text-xs block mb-1">Max HP</label>
             <input
+              id="hit-points-max"
               type="number"
               value={character.maxHp}
               onChange={(e) =>
@@ -172,8 +174,9 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
         {/* Armour Picker */}
         <div className="grid grid-cols-2 gap-3 mb-3">
           <div>
-            <label className="text-[#8b8b9e] text-xs block mb-1">Armour</label>
+            <label htmlFor="armour-class-armour" className="text-[#8b8b9e] text-xs block mb-1">Armour</label>
             <select
+              id="armour-class-armour"
               value={character.equippedArmourName}
               onChange={(e) => onChange({ equippedArmourName: e.target.value })}
               className={`${inputClasses} w-full`}
