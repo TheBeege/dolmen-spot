@@ -254,7 +254,7 @@ export const SpellInfo = memo(function SpellInfo({
         onPointerEnter={onAnchorEnter}
         onPointerLeave={onAnchorLeave}
       >
-        {children !== undefined && <span className={`min-w-0 break-words ${labelClassName}`}>{children}</span>}
+        {children !== undefined && <span className={`min-w-0 break-words hyphens-auto ${labelClassName}`}>{children}</span>}
         {spell && summary && (
           <button
             ref={buttonRef}

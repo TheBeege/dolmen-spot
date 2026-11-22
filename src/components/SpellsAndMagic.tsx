@@ -1079,7 +1079,7 @@ function KnownSpellsBlock({
               onChange={(e) => setAddName(e.target.value)}
               aria-label="Known spell to add"
               aria-describedby={addDescribedBy || undefined}
-              className={`${selectClasses} flex-1 min-w-[180px] text-sm`}
+              className={`${selectClasses} min-w-0 flex-1 text-sm`}
             >
               <option value="">-- Select spell --</option>
               {learnableRanks.map((rank) => (
@@ -1483,7 +1483,9 @@ function SpellStudyBlock({
         <div className={`bg-[#2a2a3e]/60 border rounded p-2 mb-2 ${studyReady ? 'border-[#c4a35a]' : 'border-[#5a3a28]/60'}`}>
           <div className="flex flex-wrap items-center gap-2 mb-1">
             <span className="text-[#c4a35a] font-semibold">R{active.rank}</span>
-            <span className="text-[#f5e6c8] font-semibold">
+            {/* min-w-0, so a long spell name at a big font wraps inside the
+                row instead of pushing its info button off the card. */}
+            <span className="min-w-0 text-[#f5e6c8] font-semibold">
               <SpellInfo spellType="arcane" name={active.spellName} context="studying" {...spellInfo(active.id)}>
                 {active.spellName}
               </SpellInfo>
@@ -1692,7 +1694,7 @@ function SpellStudyBlock({
             onChange={(e) => setDraftName(e.target.value)}
             aria-label="Spell to study"
             aria-describedby={draftDescribedBy || undefined}
-            className={`${selectClasses} flex-1 min-w-[180px] text-sm`}
+            className={`${selectClasses} min-w-0 flex-1 text-sm`}
           >
             <option value="">
               {draftSource === 'book' && studyPool.length === 0

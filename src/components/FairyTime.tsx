@@ -108,7 +108,7 @@ export function FairyStatusPanel({
           In Fairy &mdash; day {visit.daysInFairy + 1}
         </h3>
         <p className="text-[#f5e6c8]/80 text-sm mt-1">
-          <span className="whitespace-nowrap">entered {formatShortDate(visit.enteredOn)}</span> &middot;{' '}
+          entered {formatShortDate(visit.enteredOn)} &middot;{' '}
           <span className="whitespace-nowrap">visit {visitNumber}</span>
         </p>
       </div>
@@ -168,7 +168,12 @@ export function FairyStatusPanel({
       </div>
 
       <div className="text-center">
-        <button type="button" ref={openerRef} onClick={() => setReturning(true)} className={greenButtonClasses}>
+        <button
+          type="button"
+          ref={openerRef}
+          onClick={() => setReturning(true)}
+          className={`${greenButtonClasses} max-w-full whitespace-normal`}
+        >
           Return to Dolmenwood&hellip;
         </button>
         <p className="text-[#f5e6c8]/80 text-xs mt-2">

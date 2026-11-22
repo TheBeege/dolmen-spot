@@ -644,8 +644,10 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Rations
         </h2>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="bg-[#1a1a2e] rounded p-3">
+        {/* One column when a cell can't hold its − count + row (a big font on a
+            phone), two when it can. */}
+        <div className="flex flex-wrap gap-3 mb-3">
+          <div className="min-w-0 grow basis-32 bg-[#1a1a2e] rounded p-3">
             <div className="text-[#c4a35a] text-sm font-semibold mb-2">Fresh</div>
             <div className="flex items-center gap-2">
               <button
@@ -661,7 +663,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
               >+</button>
             </div>
           </div>
-          <div className="bg-[#1a1a2e] rounded p-3">
+          <div className="min-w-0 grow basis-32 bg-[#1a1a2e] rounded p-3">
             <div className="text-[#c4a35a] text-sm font-semibold mb-2">Preserved</div>
             <div className="flex items-center gap-2">
               <button
@@ -698,18 +700,21 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Travel Points
         </h2>
-        <div className="flex items-center gap-3 mb-3">
-          <button
-            onClick={() => onChange({ travelPointsRemaining: Math.max(0, character.travelPointsRemaining - 1) })}
-            className={smallButtonClasses}
-          >-</button>
-          <span className="text-[#f5e6c8] text-2xl font-bold w-12 text-center">
-            {character.travelPointsRemaining}
-          </span>
-          <button
-            onClick={() => onChange({ travelPointsRemaining: character.travelPointsRemaining + 1 })}
-            className={smallButtonClasses}
-          >+</button>
+        {/* The − count + group stays together; the label and Reset wrap after it. */}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onChange({ travelPointsRemaining: Math.max(0, character.travelPointsRemaining - 1) })}
+              className={smallButtonClasses}
+            >-</button>
+            <span className="text-[#f5e6c8] text-2xl font-bold w-12 text-center">
+              {character.travelPointsRemaining}
+            </span>
+            <button
+              onClick={() => onChange({ travelPointsRemaining: character.travelPointsRemaining + 1 })}
+              className={smallButtonClasses}
+            >+</button>
+          </div>
           <span className="text-[#f5e6c8]/60 text-sm">TP remaining</span>
           <button
             onClick={() => onChange({
@@ -780,7 +785,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Light Sources
         </h2>
-        <div className="flex gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-3">
           <button onClick={() => handleAddLightSource('torch')} className={buttonClasses}>
             + Torch
           </button>
@@ -802,32 +807,39 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             return (
               <div
                 key={source.id}
-                className={`flex items-center gap-2 p-2 rounded ${
+                className={`flex flex-wrap items-center gap-2 p-2 rounded ${
                   burnedOut ? 'bg-red-900/30 border border-red-400/30' : 'bg-[#1a1a2e]'
                 }`}
               >
-                <span className={`text-sm font-semibold w-16 ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
-                  {LIGHT_SOURCE_TYPES[source.type].label}
-                </span>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 10)}
-                  className={smallButtonClasses}
-                >-10</button>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 1)}
-                  className={smallButtonClasses}
-                >-1</button>
-                <span className={`text-sm font-bold w-16 text-center ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
-                  {source.minutesRemaining} min
-                </span>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 1)}
-                  className={smallButtonClasses}
-                >+1</button>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 10)}
-                  className={smallButtonClasses}
-                >+10</button>
+                {/* The light and its time stay together, and the four time
+                    buttons move to their own line when the row can't hold them
+                    beside it (a big font on a phone). */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-sm font-semibold w-16 ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
+                    {LIGHT_SOURCE_TYPES[source.type].label}
+                  </span>
+                  <span className={`text-sm font-bold w-16 text-center ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
+                    {source.minutesRemaining} min
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 10)}
+                    className={smallButtonClasses}
+                  >-10</button>
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 1)}
+                    className={smallButtonClasses}
+                  >-1</button>
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 1)}
+                    className={smallButtonClasses}
+                  >+1</button>
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 10)}
+                    className={smallButtonClasses}
+                  >+10</button>
+                </div>
                 <button
                   onClick={() => handleRemoveLightSource(source.id)}
                   className="text-red-400 hover:text-red-300 text-sm ml-auto px-1"
@@ -1136,11 +1148,12 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             </span>
           )}
         </h3>
-        <div className="flex gap-2">
+        {/* Two rows of two when four names won't fit across (a big font). */}
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
             <div
               key={s}
-              className={`flex-1 text-center rounded py-2 text-sm font-semibold transition-colors ${
+              className={`text-center rounded py-2 text-sm font-semibold transition-colors ${
                 currentMonth.season === s ? 'ring-2 ring-[#c4a35a]' : ''
               }`}
               style={{

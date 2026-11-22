@@ -91,20 +91,22 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           </div>
         </div>
 
-        {/* Large HP Display with +/- Buttons */}
-        <div className="flex items-center justify-center gap-4 mb-4">
+        {/* Large HP Display with +/- Buttons. The numbers shrink a step and the
+            row may wrap, so a phone at a big font keeps both buttons beside
+            them instead of off the card. */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mb-4">
           <button
             type="button"
             onClick={() => adjustHp(-1)}
-            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-2 sm:px-3 py-1 text-lg sm:text-xl font-bold transition-colors"
           >
             -
           </button>
 
-          <div className="text-center">
-            <div className="flex items-baseline justify-center gap-2">
+          <div className="min-w-0 text-center">
+            <div className="flex flex-wrap items-baseline justify-center gap-2">
               <span
-                className={`text-3xl font-bold ${
+                className={`text-2xl sm:text-3xl font-bold ${
                   character.currentHp <= 0
                     ? 'text-red-400'
                     : hpPercentage <= 25
@@ -114,8 +116,8 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
               >
                 {character.currentHp}
               </span>
-              <span className="text-[#a1988f] text-xl">/</span>
-              <span className="text-3xl font-bold text-[#f5e6c8]">
+              <span className="text-[#a1988f] text-lg sm:text-xl">/</span>
+              <span className="text-2xl sm:text-3xl font-bold text-[#f5e6c8]">
                 {character.maxHp}
               </span>
             </div>
@@ -125,7 +127,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <button
             type="button"
             onClick={() => adjustHp(1)}
-            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-3 py-1 text-xl font-bold transition-colors"
+            className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] rounded px-2 sm:px-3 py-1 text-lg sm:text-xl font-bold transition-colors"
           >
             +
           </button>
