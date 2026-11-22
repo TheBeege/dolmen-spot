@@ -14,6 +14,7 @@ import SpellsAndMagic from '@/components/SpellsAndMagic';
 import TraitsAndNotes from '@/components/TraitsAndNotes';
 import Adventuring from '@/components/Adventuring';
 import Journal, { type JournalOpening } from '@/components/Journal';
+import NpcTracker from '@/components/NpcTracker';
 import HexMap from '@/components/HexMap';
 import ReferencePanel from '@/components/ReferencePanel';
 import TabBar, { panelElementId, tabElementId, type TabBarTab } from '@/components/TabBar';
@@ -27,7 +28,18 @@ import type { HexCoord } from '@/lib/types';
 
 const CloudStorageModal = lazy(() => import('@/components/CloudStorageModal'));
 
-type Tab = 'character' | 'abilities' | 'combat' | 'inventory' | 'spells' | 'traits' | 'calendar' | 'journal' | 'map' | 'reference';
+type Tab =
+  | 'character'
+  | 'abilities'
+  | 'combat'
+  | 'inventory'
+  | 'spells'
+  | 'traits'
+  | 'calendar'
+  | 'journal'
+  | 'npcs'
+  | 'map'
+  | 'reference';
 
 const TABS: TabBarTab<Tab>[] = [
   { id: 'character', label: 'Character', shortLabel: 'Char' },
@@ -38,6 +50,7 @@ const TABS: TabBarTab<Tab>[] = [
   { id: 'traits', label: 'Traits & Notes', shortLabel: 'Traits' },
   { id: 'calendar', label: 'Adventuring', shortLabel: 'Adv' },
   { id: 'journal', label: 'Journal', shortLabel: 'Journal' },
+  { id: 'npcs', label: 'NPCs', shortLabel: 'NPCs' },
   { id: 'map', label: 'Map', shortLabel: 'Map' },
   { id: 'reference', label: 'Reference', shortLabel: 'Ref' },
 ];
@@ -350,6 +363,11 @@ export default function Home() {
                     opening={journalOpening}
                     onOpened={handleJournalOpened}
                   />
+                )}
+                {activeTab === 'npcs' && (
+                  // Keyed by character so a half-written note, an open form and
+                  // the search reset when switching characters.
+                  <NpcTracker key={activeCharacter.id} character={activeCharacter} onChange={updateCharacter} />
                 )}
                 {activeTab === 'map' && (
                   // Keyed by character so selections, open forms and the view reset
