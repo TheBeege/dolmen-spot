@@ -20,6 +20,7 @@ import TabBar, { panelElementId, tabElementId, type TabBarTab } from '@/componen
 import CloudStatusBadge from '@/components/CloudStatusBadge';
 import ExportPdfButton from '@/components/ExportPdfButton';
 import StorageBanner, { StorageAnnouncer, StorageReminder } from '@/components/StorageBanner';
+import { FOCUS_RING } from '@/components/focus-ring';
 import { ImportError } from '@/lib/storage';
 import { isInFairy } from '@/lib/livedTime';
 import type { HexCoord } from '@/lib/types';
@@ -314,7 +315,7 @@ export default function Home() {
             aria-labelledby={tabElementId(id)}
             hidden={id !== activeTab}
             tabIndex={0}
-            className="rounded-lg focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c4a35a]"
+            className={`rounded-lg ${FOCUS_RING}`}
           >
             {id === activeTab && (
               <>

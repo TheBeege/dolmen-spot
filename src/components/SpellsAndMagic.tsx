@@ -58,6 +58,7 @@ import {
   useSpellDisclosures,
   type SpellDisclosure,
 } from '@/components/SpellInfo';
+import { FOCUS_RING } from '@/components/focus-ring';
 
 interface SpellsAndMagicProps {
   character: Character;
@@ -2199,8 +2200,8 @@ function RuneReference({ level }: { level: number }) {
           <div id={frequencyId} className="text-[#c4a35a] font-semibold mb-1">Usage Frequency:</div>
           {/* Too wide for a narrow screen with a large font, so it scrolls
               sideways there; focusable so the keyboard can scroll it too, with
-              the same focus ring as the Reference panel's tables. */}
-          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c4a35a]">
+              the same focus ring as the Reference panel's armour table. */}
+          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className={`overflow-x-auto ${FOCUS_RING}`}>
             <table className="w-full">
               <thead>
                 <tr className="text-[#f5e6c8]/60">

@@ -22,6 +22,7 @@ import {
   PIPES,
   FOOD_MENU,
 } from '@/lib/gamedata';
+import { FOCUS_RING } from '@/components/focus-ring';
 
 type RefTab = 'armour' | 'weapons' | 'gear' | 'calendar' | 'world' | 'consumables' | 'languages';
 
@@ -70,7 +71,7 @@ export default function ReferencePanel() {
           role="region"
           aria-label="Armour table"
           tabIndex={0}
-          className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c4a35a]"
+          className={`overflow-x-auto ${FOCUS_RING}`}
         >
           <table className="w-full text-xs text-[#f5e6c8]">
             <thead>

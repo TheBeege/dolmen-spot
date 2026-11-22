@@ -344,7 +344,6 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               onChange={(e) => onChange({ xp: parseInt(e.target.value) || 0 })}
               placeholder="Current XP"
               className={inputClasses}
-              aria-label="Current XP"
             />
             <span className="text-[#f5e6c8]/40 shrink-0">/</span>
             <input
@@ -421,6 +420,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               </details>
             </div>
           ) : (
+            // Same id as the override above: only one of the two branches renders.
             <input
               id="character-info-xp-modifier"
               type="number"

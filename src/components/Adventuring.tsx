@@ -493,8 +493,9 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
 
       {/* ── 5b. Current Location (existing) ──────────────────────── */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <label className={labelClasses}>Current Location</label>
+        <label htmlFor="current-location" className={labelClasses}>Current Location</label>
         <input
+          id="current-location"
           type="text"
           value={currentLocation}
           onChange={(e) => onChange({ currentLocation: e.target.value })}
