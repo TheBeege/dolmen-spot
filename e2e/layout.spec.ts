@@ -1,6 +1,8 @@
 // Layout: on every tab, with each fixture, at every width and font size of the
-// matrix, the page doesn't scroll sideways, and no control sticks out of its
-// card or is squeezed to nothing (see e2e/support/layout.ts).
+// matrix, the page doesn't scroll sideways, no control sticks out of its card
+// or is squeezed to nothing, and no box — a table, a grid, anything with a
+// background or a border all round — has an edge past the card that holds it
+// (see e2e/support/layout.ts).
 import { newProblems } from './known-issues';
 import { ALL_FIXTURES, openApp, openTab, TABS } from './support/app';
 import { findLayoutProblems } from './support/layout';

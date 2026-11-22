@@ -1136,11 +1136,14 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             </span>
           )}
         </h3>
-        <div className="flex gap-2">
+        {/* Two even columns rather than one row: at a big font on a phone the four
+            names don't fit across, and equal widths keep the last one from
+            stretching over the whole card on a line of its own. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
             <div
               key={s}
-              className={`flex-1 text-center rounded py-2 text-sm font-semibold transition-colors ${
+              className={`text-center rounded py-2 text-sm font-semibold transition-colors ${
                 currentMonth.season === s ? 'ring-2 ring-[#c4a35a]' : ''
               }`}
               style={{
