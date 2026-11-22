@@ -1148,8 +1148,10 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             </span>
           )}
         </h3>
-        {/* Two rows of two when four names won't fit across (a big font). */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        {/* Two even columns rather than one row: at a big font on a phone the four
+            names don't fit across, and equal widths keep the last one from
+            stretching over the whole card on a line of its own. */}
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
             <div
               key={s}

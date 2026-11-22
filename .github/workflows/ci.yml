@@ -8,6 +8,11 @@ on:
 permissions:
   contents: read
 
+env:
+  # The key the browser cache is stored under, shared by the jobs that install
+  # the browsers: the browser tests save it, and the audit reads it.
+  PLAYWRIGHT_CACHE_PREFIX: playwright-browsers
+
 concurrency:
   # One group per PR, so a new push cancels the PR's older run. Each push to
   # main gets its own group: in a shared group, a newer run would cancel a
@@ -64,6 +69,8 @@ jobs:
           # Skip installing the git hooks; CI never commits.
           HUSKY: 0
 
+      # Keep in step with the known-issues-audit job below: both key the browser
+      # cache by this version.
       - name: Find the Playwright version
         id: playwright
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
@@ -75,7 +82,7 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-browsers-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+          key: ${{ env.PLAYWRIGHT_CACHE_PREFIX }}-${{ runner.os }}-${{ steps.playwright.outputs.version }}
 
       - name: Install the browsers and their system libraries
         if: steps.browsers.outputs.cache-hit != 'true'
@@ -101,6 +108,71 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
+  # `npm run audit:known-issues`: its own job so its minutes run beside the
+  # browser tests rather than after them (see "Browser Tests" in AGENTS.md).
+  known-issues-audit:
+    name: Known issues audit
+    runs-on: ubuntu-latest
+    # 20 (the test's own timeout) + 1 (npm ci) + 3 (a cold browser install with
+    # its system libraries) + 5 (the build's own cap) + 1 (the upload) ≈ 30, so
+    # 40 leaves room for a slow day. Above the test's timeout on purpose: a slow
+    # walk is then reported by Playwright — a timeout, or the entries that
+    # matched nothing — rather than killed by the runner with no output at all.
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+        env:
+          # Skip installing the git hooks; CI never commits.
+          HUSKY: 0
+
+      # Keep in step with the browser-tests job above: both key the browser
+      # cache by this version.
+      - name: Find the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+
+      # The browser-tests job's cache, read only: it holds both browsers, and
+      # this job needs Chromium. It never saves, so a cold cache costs it an
+      # install but can't leave that job with a Chromium-only cache.
+      - name: Restore the browsers
+        id: browsers
+        uses: actions/cache/restore@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ env.PLAYWRIGHT_CACHE_PREFIX }}-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+
+      - name: Install the browser and its system libraries
+        if: steps.browsers.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium
+
+      - name: Install the browsers' system libraries
+        if: steps.browsers.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      # Builds the app and serves it (webServer in playwright.config.ts), then
+      # walks the matrix once to fail on a known-issue entry that matched nothing.
+      - name: Audit the known issues
+        run: npm run audit:known-issues
+
+      # The one long test is traced too, and this is where its trace is useful.
+      - name: Upload the report and traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: known-issues-audit-report
           path: |
             playwright-report/
             test-results/
