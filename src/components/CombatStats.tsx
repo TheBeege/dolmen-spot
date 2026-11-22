@@ -228,7 +228,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
             Manual override
           </summary>
-          <label htmlFor="armour-class-override" className="block text-[#f5e6c8]/50 text-xs mt-1">
+          <label htmlFor="armour-class-override" className="block text-[#f5e6c8]/60 text-xs mt-1">
             Manual armour class
           </label>
           <input
@@ -283,7 +283,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
             Manual override
           </summary>
-          <label htmlFor="attack-bonus-override" className="block text-[#f5e6c8]/50 text-xs mt-1">
+          <label htmlFor="attack-bonus-override" className="block text-[#f5e6c8]/60 text-xs mt-1">
             Manual attack bonus
           </label>
           <input
@@ -322,7 +322,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
               Manual override
             </summary>
-            <label htmlFor="magic-resistance-override" className="block text-[#f5e6c8]/50 text-xs mt-1">
+            <label htmlFor="magic-resistance-override" className="block text-[#f5e6c8]/60 text-xs mt-1">
               Manual magic resistance
             </label>
             <input

@@ -596,7 +596,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 rank: Math.min(maxRank, Math.max(1, parseInt(e.target.value) || 1)),
               })
             }
-            aria-label={name ? `Rank of ${name}` : 'Rank'}
+            aria-label={name ? `Rank of ${name} (slot ${slotNumber})` : `Rank (slot ${slotNumber})`}
             title="Rank"
             className={`${inputClasses} w-14 text-center ${fade}`}
           />

@@ -407,7 +407,7 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
                   Manual override
                 </summary>
-                <label htmlFor="character-info-xp-modifier" className="block text-[#f5e6c8]/50 text-xs mt-1">
+                <label htmlFor="character-info-xp-modifier" className="block text-[#f5e6c8]/60 text-xs mt-1">
                   Manual XP modifier
                 </label>
                 <input

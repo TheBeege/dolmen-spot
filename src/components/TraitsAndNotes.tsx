@@ -254,10 +254,11 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
       </span>
       {character.trophies.length > 0 && (
         <div className="flex flex-wrap gap-1 mb-2">
-          {character.trophies.map(t => (
+          {character.trophies.map((t, index) => (
             <span key={t.id} className={chipClasses}>
               {t.creatureType}
-              <button type="button" onClick={() => removeTrophy(t.id)} aria-label={`Remove ${t.creatureType}`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
+              {/* Numbered: the same creature can be taken twice. */}
+              <button type="button" onClick={() => removeTrophy(t.id)} aria-label={`Remove ${t.creatureType} (trophy ${index + 1})`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
             </span>
           ))}
         </div>
@@ -309,6 +310,7 @@ function AnimalCompanionCard({ character, onChange }: TraitsAndNotesProps) {
         <button
           type="button"
           onClick={() => onChange({ animalCompanion: null })}
+          aria-label="Remove animal companion"
           className="text-red-400 text-xs hover:text-red-300"
         >
           Remove
@@ -550,7 +552,8 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
               return (
                 <span key={i} className={chipClasses}>
                   [{roll}] {entry?.trait ?? '???'}
-                  <button type="button" onClick={() => removeTrait(i)} aria-label={`Remove ${entry?.trait ?? `trait ${roll}`}`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
+                  {/* Numbered: the same trait can be rolled twice. */}
+                  <button type="button" onClick={() => removeTrait(i)} aria-label={`Remove ${entry?.trait ?? `trait ${roll}`} (trait ${i + 1})`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
                 </span>
               );
             })}
@@ -681,6 +684,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
             <button
               type="button"
               onClick={() => removeRetainer(r.id)}
+              aria-label={r.name.trim() ? `Remove ${r.name.trim()}` : `Remove retainer ${index + 1}`}
               className="text-red-400 text-xs hover:text-red-300"
             >
               Remove
