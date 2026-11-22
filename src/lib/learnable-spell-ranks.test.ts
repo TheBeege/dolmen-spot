@@ -3,7 +3,7 @@
 // (magician p73, breggle kindred-class p180). Run with `npm test`.
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SPELLS_PER_DAY, getCharacterMagicProfile, getLearnableSpellRanks } from './gamedata';
+import { CLASSES, KINDREDS, SPELLS_PER_DAY, getCharacterMagicProfile, getLearnableSpellRanks } from './gamedata';
 import type { ClassId, KindredId } from './types';
 
 const learnable = (kindred: KindredId | '', classId: ClassId | '', level: number) =>
@@ -57,8 +57,19 @@ describe('getLearnableSpellRanks', () => {
   });
 
   test('every arcane table at every Level gives Ranks 1 to n: exactly those with a slot', () => {
-    const arcane: [KindredId | '', ClassId | '', string][] = [['human', 'magician', 'magician'], ['breggle', '', 'breggle']];
-    for (const [kindred, classId, table] of arcane) {
+    // The tables are found through the profiles themselves, so a third arcane
+    // class is covered here without editing the test. Today's are the
+    // Magician's (whatever the Kindred) and the Breggle kindred-class's.
+    const arcane = new Map<string, { kindred: KindredId | ''; classId: ClassId | '' }>();
+    for (const kindred of ['' as const, ...KINDREDS.map((k) => k.id)]) {
+      for (const classId of ['' as const, ...CLASSES.map((c) => c.id)]) {
+        const profile = getCharacterMagicProfile(kindred, classId, 15);
+        if (profile.spellType === 'arcane' && profile.spellsPerDay) arcane.set(classId || kindred, { kindred, classId });
+      }
+    }
+    for (const table of ['magician', 'breggle']) assert.ok(arcane.has(table), `${table} is missing from the sweep`);
+
+    for (const [table, { kindred, classId }] of arcane) {
       for (let level = 1; level <= 15; level++) {
         const slots = SPELLS_PER_DAY[table][level];
         const n = slots.filter((count) => count > 0).length;

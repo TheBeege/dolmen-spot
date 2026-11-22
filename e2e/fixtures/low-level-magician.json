@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 15,
+  "id": "fixture-low-level-magician",
+  "name": "Ottilie Thrum",
+  "kindred": "human",
+  "class": "magician",
+  "background": "",
+  "alignment": "",
+  "affiliation": "",
+  "moonSign": "",
+  "moonPhase": "",
+  "level": 3,
+  "xp": 5000,
+  "xpNextLevel": 10000,
+  "xpModifier": 0,
+  "abilityScores": {
+    "strength": 9,
+    "intelligence": 15,
+    "wisdom": 11,
+    "dexterity": 13,
+    "constitution": 12,
+    "charisma": 10
+  },
+  "maxHp": 7,
+  "currentHp": 7,
+  "armorClass": 10,
+  "attackBonus": 0,
+  "speed": 40,
+  "travelPointsPerDay": 8,
+  "magicResistance": 0,
+  "saveTargets": {
+    "doom": 14,
+    "ray": 14,
+    "hold": 13,
+    "blast": 16,
+    "spell": 14
+  },
+  "skillTargets": {
+    "listen": 6,
+    "search": 6,
+    "survival": 6,
+    "detect_magic": 5
+  },
+  "equippedItems": [],
+  "stowedItems": [],
+  "containers": [],
+  "tinyItems": "",
+  "coins": {
+    "copper": 0,
+    "silver": 0,
+    "gold": 10,
+    "pellucidium": 0
+  },
+  "encumbranceMethod": "slots",
+  "equippedArmourName": "",
+  "hasShield": false,
+  "spells": [],
+  "spellNotes": "",
+  "glamours": [],
+  "runes": [],
+  "knack": null,
+  "startingSpellBook": "",
+  "knownSpells": [
+    {
+      "id": "llm-known-01",
+      "name": "Teleport",
+      "rank": 5,
+      "source": "mentor",
+      "learnedAt": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      }
+    }
+  ],
+  "spellStudy": {
+    "active": {
+      "id": "llm-study-01",
+      "spellName": "Polymorph",
+      "rank": 4,
+      "source": "mentor",
+      "weeksRequired": 1,
+      "goldCost": 0,
+      "startedOn": {
+        "day": 1,
+        "month": 0,
+        "year": 1
+      },
+      "startedLivedDay": 0
+    },
+    "queue": [
+      {
+        "id": "llm-study-02",
+        "spellName": "Wall of Fire",
+        "rank": 4,
+        "source": "research",
+        "weeksRequired": 8,
+        "goldCost": 4000
+      }
+    ]
+  },
+  "failedStudies": [],
+  "classTraits": "",
+  "kindredTraits": "",
+  "languages": "Woldish",
+  "combatTalents": "",
+  "otherNotes": "",
+  "retainers": [],
+  "gazeUsesRemaining": 0,
+  "currentForm": "estray",
+  "wilderUsedToday": false,
+  "madRevelryUsesRemaining": 0,
+  "trophies": [],
+  "animalCompanion": null,
+  "liegeHouse": "",
+  "selectedCombatTalents": [],
+  "holyOrder": "",
+  "symbioticFleshTraits": [],
+  "fungalSymbiosisUsesRemaining": 0,
+  "currentDate": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  },
+  "currentLocation": "",
+  "currentLocationHex": "",
+  "mapData": {
+    "pois": [],
+    "fairyDoors": [],
+    "leyLines": []
+  },
+  "journalEntries": [],
+  "npcs": [],
+  "exhaustionLevel": 0,
+  "hungerDays": 0,
+  "thirstDays": 0,
+  "rations": {
+    "fresh": 0,
+    "preserved": 0
+  },
+  "activeLightSources": [],
+  "travelDaysWithoutRest": 0,
+  "forcedMarchActive": false,
+  "travelPointsRemaining": 0,
+  "fairyVisits": [],
+  "livedTimeStart": {
+    "day": 1,
+    "month": 0,
+    "year": 1
+  }
+}

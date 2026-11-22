@@ -41,7 +41,9 @@ export const KNOWN_ISSUES: KnownIssue[] = [
     issue: 'Spells & Magic: at a 24px font and 320px, the study picker and its "What … does" button stick out of the Spell Study card.',
     checks: ['spills-card'],
     tabs: ['spells'],
-    match: /^Spell Study › /,
+    // Those two controls only (the picker, and the info button of the study it
+    // shows): the rest of the card, its hint included, is checked like any other.
+    match: /^Spell Study › (select "Spell to study"|button\[type=button\] "What .+ does \(studying\)")/,
     maxWidth: 320,
     fontSizes: [24],
   },

@@ -42,6 +42,7 @@ import {
   isSpellInAnyBook,
   isSpellOnScroll,
   isStartingBookApplied,
+  rankAboveLearnableNote,
   KNOWN_SPELL_SOURCE_LABELS,
 } from '@/lib/character-sheet';
 import {
@@ -114,17 +115,20 @@ function spellRowContexts(spellType: SpellType, names: readonly string[], label:
 // non-breaking space keeps "Level 1" and "Rank 1" together on a narrow screen.)
 function learnableRanksHint(level: number, learnableRanks: readonly number[]): string {
   const highest = learnableRanks[learnableRanks.length - 1];
+  // Defensive: no arcane class reaches this today (a breggle below Level 4
+  // doesn't render the section).
   if (!highest) return `At Level ${level} you can't learn spells yet.`;
   return highest === 1
     ? `At Level ${level} you can learn only Rank 1 spells.`
     : `At Level ${level} you can learn spells up to Rank ${highest}.`;
 }
 
-// The note on a known spell or a study of a Rank the character can't learn at
-// their Level. It's kept as it is: a Level can go down, and before this check
-// the sheet offered every Rank of the class.
-function rankAboveLearnableNote(rank: number, level: number): string {
-  return `Rank ${rank} is above what you can learn at Level ${level}.`;
+// Whether the pickers hide any Rank the class has: learnableRanksHint says
+// why. Compare the highest Rank the character can learn (0 if none) with the
+// class's highest, rather than counting the Ranks, so a table with a gap in it
+// can't produce a hint naming a Rank the character can't learn.
+function offersUnlearnableRanks(learnableRanks: readonly number[], maxRank: number): boolean {
+  return (learnableRanks[learnableRanks.length - 1] ?? 0) < maxRank;
 }
 
 export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicProps) {
@@ -840,10 +844,15 @@ function KnownSpellsBlock({
 
   // The picker offers only the Ranks the character can learn. A choice it no
   // longer offers (made before switching to a lower-Level character, say)
-  // counts as no choice.
+  // counts as no choice. Adding one by hand is held to the same rules: this is
+  // the form's default source, so exempting it would let any Rank be recorded
+  // as learned. The consequence is that a spell a Referee grants above these
+  // Ranks can't be recorded through this form.
   const addChoice = findArcaneSpell(addName);
   const addSelected = addChoice && learnableRanks.includes(addChoice.rank) ? addChoice.name : '';
-  const addHint = learnableRanks.length < maxRank ? learnableRanksHint(character.level, learnableRanks) : null;
+  const addHint = offersUnlearnableRanks(learnableRanks, maxRank)
+    ? learnableRanksHint(character.level, learnableRanks)
+    : null;
   const addDescribedBy = [
     addHint ? addHintId : null,
     getSpellSummary('arcane', addSelected) ? addSummaryId : null,
@@ -1204,7 +1213,7 @@ function SpellStudyBlock({
   // - Rewrite: spells you already know (RAW p78 — rewriting is for lost
   //   spell books, i.e. recovering spells you previously learned). That
   //   isn't learning them, so their Rank doesn't matter.
-  // - Mentor / Research: any arcane spell.
+  // - Mentor / Research: any arcane spell of a learnable Rank.
   const studyPool = useMemo(() => {
     if (draftSource === 'book') {
       const inBooks = new Map<string, number>();
@@ -1221,11 +1230,12 @@ function SpellStudyBlock({
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
     }
     if (draftSource === 'rewrite') {
-      // Once each, though a spell can be on the known list twice
+      // Once each, though a spell can be on the known list twice. Any Rank:
+      // rewriting copies a spell the character has already learned.
       const known = new Map<string, { name: string; rank: number }>();
       for (const k of character.knownSpells) {
         const key = k.name.toLowerCase();
-        if (k.rank <= maxRank && !known.has(key)) known.set(key, { name: k.name, rank: k.rank });
+        if (!known.has(key)) known.set(key, { name: k.name, rank: k.rank });
       }
       return Array.from(known.values())
         .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name));
@@ -1234,14 +1244,14 @@ function SpellStudyBlock({
     // knownNames is a memo of character.knownSpells; depending on
     // character.knownSpells alone is enough.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, learnableRanks, maxRank]);
+  }, [character.equippedItems, character.stowedItems, character.knownSpells, draftSource, learnableRanks]);
 
   // The chosen spell, while the pool still has it. Changing the source clears
   // the choice, but a Level, inventory or known spell can change under it,
   // and so can the character, with this tab left open on another one.
   const selectedName = studyPool.some((s) => s.name === draftName) ? draftName : '';
   const draftRank = studyPool.find((s) => s.name === selectedName)?.rank ?? 1;
-  const draftHint = draftSource !== 'rewrite' && learnableRanks.length < maxRank
+  const draftHint = draftSource !== 'rewrite' && offersUnlearnableRanks(learnableRanks, maxRank)
     ? learnableRanksHint(character.level, learnableRanks)
     : null;
   const draftDescribedBy = [
@@ -1323,6 +1333,10 @@ function SpellStudyBlock({
     let updatedStowed = character.stowedItems;
 
     if (passed) {
+      // Deliberately not re-gated on the current Level: this study may have
+      // started at a higher Level and the Level can go down, and refusing it
+      // would strand weeks of the player's study. The note the new known spell
+      // gets from rankAboveLearnableNote warns instead.
       // Add to known if not already present
       const exists = updatedKnown.some((k) => k.name.toLowerCase() === active.spellName.toLowerCase());
       if (!exists) {
