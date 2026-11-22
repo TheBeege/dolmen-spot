@@ -76,7 +76,7 @@ const sectionHeadingClasses =
   'text-lg font-bold text-[#c4a35a] mb-2 border-b border-[#5a3a28] pb-1';
 
 const buttonClasses =
-  'bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-sm font-semibold px-3 py-1 rounded transition-colors';
+  'bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] text-sm font-semibold px-3 py-1 rounded transition-colors';
 
 const selectClasses =
   'bg-[#1a1a2e] border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 focus:outline-none focus:border-[#c4a35a]';
@@ -581,12 +581,16 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   onUpdate: (id: string, updates: Partial<SpellSlot>) => void;
   onDelete: (id: string) => void;
 } & SpellDisclosure) {
-  // A cast spell's name and its fields are de-emphasised: they fade, and the
-  // name is struck through so the state doesn't rest on colour alone. The
-  // fade stops at 80%, the faintest that leaves real room above AA contrast
-  // for the gold rank label on the row's dark background (50% left it at
-  // 2.7:1, 75% at 4.6:1; the parchment is 9.2:1 here). Its info button,
-  // summary and delete button don't fade, so they stay readable.
+  // A cast spell's row is de-emphasised: its rank, the Prep and Cast labels
+  // and an arcane spell's name fade, and that name is struck through, so the
+  // state doesn't rest on colour alone. The fade stops at 80%, the faintest
+  // that leaves real room above AA contrast for the gold rank label on the
+  // row's dark background (50% left it at 2.7:1, 75% at 4.6:1; the parchment
+  // is 9.2:1 here). A holy spell's name is an input, where a strike-through
+  // never paints the value and a faded field dims its placeholder, so it
+  // neither fades nor strikes: its Cast box carries the state. Its info
+  // button, summary and delete button don't fade either, so they stay
+  // readable.
   const fade = spell.cast ? 'opacity-80' : '';
   const castName = spell.cast ? 'line-through' : '';
   const name = spell.name.trim();
@@ -611,7 +615,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 onChange={(e) => onUpdate(spell.id, { name: e.target.value })}
                 placeholder="Spell name"
                 aria-label={`Spell name (slot ${slotNumber})`}
-                className={`${inputClasses} flex-1 min-w-0 ${fade} ${castName}`}
+                className={`${inputClasses} flex-1 min-w-0`}
               />
               {/* The button appears once the name matches a holy spell; its
                   space is kept either way so the row doesn't shift as you type.
@@ -741,7 +745,7 @@ function InventoryScrollsList({
             <button
               type="button"
               onClick={() => castScroll(s.id)}
-              className="ml-auto bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-3 py-1 rounded shrink-0"
+              className="ml-auto bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] text-xs font-semibold px-3 py-1 rounded shrink-0"
               title="Cast from scroll (consumes it)"
             >
               Cast
@@ -2072,7 +2076,7 @@ function RuneSection({
                       updateRune(rune.id, { usesRemaining: Math.max(0, rune.usesRemaining - 1) })
                     }
                     aria-label={`Spend a use of ${rune.name} (rune ${index + 1})`}
-                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#4a2f20] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     -
                   </button>
@@ -2082,7 +2086,7 @@ function RuneSection({
                   <button
                     onClick={() => updateRune(rune.id, { usesRemaining: rune.usesRemaining + 1 })}
                     aria-label={`Regain a use of ${rune.name} (rune ${index + 1})`}
-                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#6b4a35] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
+                    className="text-[#f5e6c8] bg-[#5a3a28] hover:bg-[#4a2f20] w-6 h-6 rounded text-sm flex items-center justify-center transition-colors"
                   >
                     +
                   </button>
@@ -2331,15 +2335,15 @@ function RuneReference({ level }: { level: number }) {
               <td className="pr-2 py-0.5">2-</td>
               <td>No rune (fickle displeasure)</td>
             </tr>
-            <tr className="text-green-400/70">
+            <tr className="text-green-400">
               <td className="pr-2 py-0.5">3-7</td>
               <td>1 lesser rune (random)</td>
             </tr>
-            <tr className="text-blue-400/70">
+            <tr className="text-blue-400">
               <td className="pr-2 py-0.5">8-11</td>
               <td>1 greater rune (random)</td>
             </tr>
-            <tr className="text-purple-400/70">
+            <tr className="text-purple-400">
               <td className="pr-2 py-0.5">12+</td>
               <td>1 mighty rune (random)</td>
             </tr>
@@ -2365,19 +2369,19 @@ function RuneReference({ level }: { level: number }) {
                 </tr>
               </thead>
               <tbody>
-                <tr className="text-green-400/70">
+                <tr className="text-green-400">
                   <td className="pr-2">Lesser</td>
                   <td className="pr-2">1x/day</td>
                   <td className="pr-2">2x/day</td>
                   <td>3x/day</td>
                 </tr>
-                <tr className="text-blue-400/70">
+                <tr className="text-blue-400">
                   <td className="pr-2">Greater</td>
                   <td className="pr-2">1x/level</td>
                   <td className="pr-2">1x/week</td>
                   <td>1x/day</td>
                 </tr>
-                <tr className="text-purple-400/70">
+                <tr className="text-purple-400">
                   <td className="pr-2">Mighty</td>
                   <td className="pr-2">1x ever</td>
                   <td className="pr-2">1x ever</td>

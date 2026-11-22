@@ -663,7 +663,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   handleDeleteItem(equipped, item.id);
                 }
               }}
-              className="bg-[#5a3a28] hover:bg-[#6b4a35] text-[#f5e6c8] text-xs font-semibold px-2 py-1 rounded shrink-0"
+              className="bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] text-xs font-semibold px-2 py-1 rounded shrink-0"
               title="Use scroll (consumes it)"
               aria-label={`Use ${scrollLabel}`}
             >
