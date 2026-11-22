@@ -3,7 +3,9 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
+  POI_KINDS,
   POI_KIND_LABELS,
+  POI_KIND_NAMES,
   deleteFairyDoor,
   getPlaceNameOn,
   isPathKind,
@@ -12,10 +14,13 @@ import {
   pairableDoors,
   partnerUpdates,
   pathKindFromType,
+  poiKindOf,
+  poiLabel,
   upsertFairyDoor,
   withMapLists,
+  withPoiKind,
 } from './map-data';
-import type { FairyDoor, FairyDoorDestination } from './types';
+import type { FairyDoor, FairyDoorDestination, MapPOI, PoiKind } from './types';
 
 const wild: FairyDoorDestination = { kind: 'wild' };
 const road = (to: string, roadName = 'R'): FairyDoorDestination => ({ kind: 'roaded', pairedDoorId: to, roadName });
@@ -159,5 +164,70 @@ describe('kinds of points of interest and paths', () => {
   test('any other type makes another path, even with "ley" inside a word', () => {
     const others = ['Ancient Road', 'Ward', 'Fairy road', 'Valley road', 'Leyton road', 'Parsley path', 'Old road', '3'];
     assert.deepEqual(others.map(pathKindFromType), others.map(() => 'other'));
+  });
+});
+
+describe("a point of interest's kind", () => {
+  const poi = (patch: Partial<MapPOI> = {}): MapPOI => ({ id: 'p1', hex: '0606', name: 'Hoarblight Keep', notes: 'Cold.', ...patch });
+
+  test('all 15 kinds are offered, each once, towns first and "other" last', () => {
+    assert.equal(POI_KINDS.length, 15);
+    assert.equal(new Set(POI_KINDS).size, 15);
+    assert.ok(POI_KINDS.every(isPoiKind));
+    assert.equal(POI_KINDS[0], 'town');
+    assert.equal(POI_KINDS.at(-1), 'other');
+  });
+
+  test('every kind has a name for its marker', () => {
+    assert.deepEqual(Object.keys(POI_KIND_NAMES).sort(), [...POI_KINDS].sort());
+    for (const k of POI_KINDS) assert.ok(POI_KIND_NAMES[k].trim() !== '', k);
+  });
+
+  test("each kind's description starts with its marker's name", () => {
+    // The two 15-entry tables are kept in step by this: a renamed kind that
+    // doesn't start its description shows the mismatch here. 'other' is left
+    // out: its marker says 'Point of interest' and its picker tile 'Other', so
+    // neither can start the other.
+    for (const k of POI_KINDS) {
+      if (k === 'other') continue;
+      assert.ok(
+        POI_KIND_LABELS[k].startsWith(POI_KIND_NAMES[k]),
+        `${k}: "${POI_KIND_LABELS[k]}" doesn't start with "${POI_KIND_NAMES[k]}"`,
+      );
+    }
+  });
+
+  test("a point of interest without a kind, or one that isn't a kind, is 'other'", () => {
+    assert.equal(poiKindOf(poi()), 'other');
+    assert.equal(poiKindOf(poi({ kind: 'tower' })), 'tower');
+    assert.equal(poiKindOf(poi({ kind: 'castle' as PoiKind })), 'other');
+    assert.equal(poiKindOf(poi({ kind: '__proto__' as PoiKind })), 'other');
+  });
+
+  test("its marker's label names its kind, then it", () => {
+    assert.equal(poiLabel(poi({ kind: 'tower' })), 'Tower: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'keep' })), 'Castle: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'shrine' })), 'Church: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'barrow' })), 'Tomb: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'stones', name: 'The Weeping Stones' })), 'Standing stones: The Weeping Stones');
+    assert.equal(poiLabel(poi()), 'Point of interest: Hoarblight Keep');
+    assert.equal(poiLabel(poi({ kind: 'inn', name: '' })), 'Inn: Unnamed');
+  });
+
+  test('choosing a kind sets it; choosing "other" removes the field', () => {
+    const tower = withPoiKind(poi(), 'tower');
+    assert.deepEqual(tower, { ...poi(), kind: 'tower' });
+    assert.deepEqual(withPoiKind(tower, 'inn'), { ...poi(), kind: 'inn' });
+    const other = withPoiKind(tower, 'other');
+    assert.deepEqual(other, poi());
+    assert.equal(Object.hasOwn(other, 'kind'), false, 'no kind key, not kind: undefined');
+    assert.equal(Object.hasOwn(withPoiKind(poi(), 'other'), 'kind'), false);
+  });
+
+  test('choosing a kind keeps the rest of the point of interest, and leaves the original alone', () => {
+    const original = { ...poi({ kind: 'cave' }), extra: 'kept' } as MapPOI;
+    const changed = withPoiKind(original, 'lair');
+    assert.deepEqual(changed, { ...original, kind: 'lair' });
+    assert.equal(original.kind, 'cave');
   });
 });

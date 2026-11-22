@@ -59,3 +59,28 @@
     opacity: 1;
   }
 }
+
+/* The map's markers (src/components/MapIcons.tsx), and the shapes HexMap.tsx
+   draws by hand beside them (a combined marker's count, the "+N" overflow
+   badge and the current location's star), in forced-colours mode: there the
+   browser would otherwise paint the disc, the rim and the glyph, digit or star
+   one colour, leaving every kind of point of interest looking the same.
+   System colours are kept as they are, so the disc and the glyph's cut-outs
+   stay Canvas and the rim and the ink stay CanvasText: the drawing reads
+   against its disc. Their fill and stroke come from SVG attributes, which any
+   CSS rule overrides. */
+@media (forced-colors: active) {
+  .marker-disc {
+    fill: Canvas;
+    stroke: CanvasText;
+  }
+  .marker-glyph {
+    fill: CanvasText;
+  }
+  .marker-glyph-cut {
+    fill: Canvas;
+  }
+  .marker-ink {
+    fill: CanvasText;
+  }
+}
