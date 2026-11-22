@@ -24,10 +24,19 @@ const eslintConfig = defineConfig([
       "react-hooks/set-state-in-effect": "warn",
     },
   },
+  {
+    // Playwright hands each test fixture its value through a callback named
+    // `use`, which this rule takes for React's `use` hook.
+    files: ["e2e/**"],
+    rules: {
+      "react-hooks/rules-of-hooks": "off",
+    },
+  },
   // eslint-config-next already ignores .next/, out/, build/ and next-env.d.ts
   // (node_modules/ is ignored by ESLint itself). .claude/ holds Claude Code's
   // git worktrees, each a full copy of the repo that would otherwise be linted.
-  globalIgnores(["public/**", ".claude/**"]),
+  // The others are the browser tests' reports (see playwright.config.ts).
+  globalIgnores(["public/**", ".claude/**", "playwright-report/**", "test-results/**", "blob-report/**"]),
 ]);
 
 export default eslintConfig;

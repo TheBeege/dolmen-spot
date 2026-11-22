@@ -68,6 +68,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
+`npm test` runs the unit tests. `npm run test:e2e` builds the app and runs the browser tests: smoke, layout and accessibility checks in Chromium and WebKit (see "Browser Tests" in [AGENTS.md](AGENTS.md)).
+
 Cloud save is optional. To enable it locally, copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_GOOGLE_CLIENT_ID` and/or `NEXT_PUBLIC_MICROSOFT_CLIENT_ID`. Without them the app runs on localStorage alone.
 
 ## Project Structure
@@ -85,6 +87,7 @@ public/fonts/pdf/       # Fonts the PDF export embeds (see below)
 scripts/
   build-pdf-fonts.py    # Rebuilds the PDF fonts in public/fonts/pdf/ (see below)
   generate-icons.mjs    # Rebuilds the raster app icons from src/app/icon.svg
+e2e/                    # Browser tests (Playwright), their fixture characters and the known issues they pass over
 ```
 
 The app icon is drawn in `src/app/icon.svg`. After changing it, run `node scripts/generate-icons.mjs` to rebuild `src/app/favicon.ico` (16, 32 and 48 px) and `src/app/apple-icon.png` (180 px, for iOS home screens) from it, and commit all three. Next.js adds the `<link>` tags for them automatically.
