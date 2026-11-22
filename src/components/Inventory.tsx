@@ -666,7 +666,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   // `position` says where the item is ("equipped item 2", "item 1 in Backpack"),
-  // to give each row's name field a name of its own for screen readers.
+  // to give each row's fields a name of their own for screen readers: two items
+  // can share a name.
   const renderInventoryItem = (item: InventoryItem, equipped: boolean, position: string) => {
     if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped, position);
     if (item.kind === 'scroll') return renderScrollItem(item, equipped, position);
@@ -746,7 +747,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               min={0}
               title="Slots"
               placeholder="Sl"
-              aria-label={`${itemName} slots`}
+              aria-label={`${itemName} slots (${position})`}
               className={`${inputClasses} w-16 text-center`}
             />
           </label>
@@ -761,7 +762,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               min={0}
               title="Weight"
               placeholder="Wt"
-              aria-label={`${itemName} weight`}
+              aria-label={`${itemName} weight (${position})`}
               className={`${inputClasses} w-20 text-center`}
             />
           </label>
@@ -771,7 +772,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               value={item.notes}
               onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
               placeholder="Notes"
-              aria-label={`${itemName} notes`}
+              aria-label={`${itemName} notes (${position})`}
               fieldClassName={inputClasses}
             />
           </label>
@@ -928,8 +929,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           {/* Controls */}
           <div className="p-4 pb-0 shrink-0">
             <div className="flex items-center gap-2 text-xs mb-2">
-              <span className="text-[#f5e6c8]/50">Adding to:</span>
+              <span id="catalog-target-label" className="text-[#f5e6c8]/50">Adding to:</span>
               <select
+                aria-labelledby="catalog-target-label"
                 value={catalogTarget.section === 'equipped' ? 'equipped' : (catalogTarget.containerId ?? 'loose')}
                 onChange={(e) => {
                   const val = e.target.value;
@@ -957,6 +959,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               value={catalogSearch}
               onChange={(e) => setCatalogSearch(e.target.value)}
               placeholder="Search items..."
+              aria-label="Search items"
               autoFocus
               className={`${inputClasses} w-full mb-2`}
             />
@@ -1169,11 +1172,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
       {/* Tiny Items */}
       <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h3 className="text-[#c4a35a] text-lg font-bold mb-3">Tiny Items</h3>
+        <h3 id="tiny-items-heading" className="text-[#c4a35a] text-lg font-bold mb-3">Tiny Items</h3>
         <textarea
           value={tinyItems}
           onChange={(e) => onChange({ tinyItems: e.target.value })}
           placeholder="Miscellaneous small items..."
+          aria-labelledby="tiny-items-heading"
           rows={3}
           className={`${inputClasses} w-full resize-y`}
         />

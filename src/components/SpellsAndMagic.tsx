@@ -120,6 +120,10 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
     isBregglesPreMagic,
   } = getMagicSections(character);
 
+  // One of the two Magic Notes boxes below is drawn, never both, so they can
+  // share this.
+  const magicNotesHeadingId = useId();
+
   // ── Spell Slot Helpers ──────────────────────────────────
 
   // These two never change (onChange doesn't), so memoised spell rows that
@@ -299,11 +303,12 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
       {/* ── SPELL NOTES ── */}
       {!hasNoMagic && (
         <div className="mb-4">
-          <h3 className={sectionHeadingClasses}>Magic Notes</h3>
+          <h3 id={magicNotesHeadingId} className={sectionHeadingClasses}>Magic Notes</h3>
           <textarea
             value={character.spellNotes}
             onChange={(e) => onChange({ spellNotes: e.target.value })}
             placeholder="General magic notes, components, restrictions..."
+            aria-labelledby={magicNotesHeadingId}
             rows={3}
             className={`${inputClasses} w-full resize-y`}
           />
@@ -313,11 +318,12 @@ export default function SpellsAndMagic({ character, onChange }: SpellsAndMagicPr
       {/* Notes textarea for non-magic characters too */}
       {hasNoMagic && (
         <div className="mb-4">
-          <h3 className={sectionHeadingClasses}>Magic Notes</h3>
+          <h3 id={magicNotesHeadingId} className={sectionHeadingClasses}>Magic Notes</h3>
           <textarea
             value={character.spellNotes}
             onChange={(e) => onChange({ spellNotes: e.target.value })}
             placeholder="Notes about magical items, potions, scrolls..."
+            aria-labelledby={magicNotesHeadingId}
             rows={3}
             className={`${inputClasses} w-full resize-y`}
           />
@@ -459,6 +465,7 @@ function SpellCasterSection({
           <MemorisedSpellRow
             key={spell.id}
             spell={spell}
+            slotNumber={i + 1}
             spellType={spellType}
             context={memorisedContexts[i]}
             maxRank={maxRank}
@@ -524,6 +531,7 @@ function SpellCasterSection({
 // Memoised, so typing in one row's Notes re-renders only that row.
 const MemorisedSpellRow = memo(function MemorisedSpellRow({
   spell,
+  slotNumber,
   spellType,
   context,
   maxRank,
@@ -532,6 +540,8 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
   ...info
 }: {
   spell: SpellSlot;
+  /** Its place in the list: two slots can hold one spell, so names need it. */
+  slotNumber: number;
   spellType: SpellType;
   /** For the info button's name: see spellRowContexts. */
   context: string;
@@ -563,6 +573,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
                 value={spell.name}
                 onChange={(e) => onUpdate(spell.id, { name: e.target.value })}
                 placeholder="Spell name"
+                aria-label={`Spell name (slot ${slotNumber})`}
                 className={`${inputClasses} flex-1 min-w-0 ${fade}`}
               />
               {/* The button appears once the name matches a holy spell; its
@@ -621,6 +632,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
               value={spell.notes}
               onChange={(e) => onUpdate(spell.id, { notes: e.target.value })}
               placeholder="Notes"
+              aria-label={name ? `Notes for ${name} (slot ${slotNumber})` : `Spell notes (slot ${slotNumber})`}
               className={`${inputClasses} block w-full ${fade}`}
             />
           </span>
@@ -886,6 +898,7 @@ function KnownSpellsBlock({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search known spells..."
+          aria-label="Search known spells"
           className={`${inputClasses} flex-1 min-w-[140px] text-sm`}
         />
         <select
@@ -1612,6 +1625,7 @@ function SpellStudyBlock({
           value={draftNotes}
           onChange={(e) => setDraftNotes(e.target.value)}
           placeholder="Notes (mentor name, source book, ...)"
+          aria-label="Study notes"
           className={`${inputClasses} w-full text-sm mb-2`}
         />
         <div className="flex items-center gap-2">
@@ -1834,6 +1848,7 @@ function GlamourSection({
               value={glamour.notes}
               onChange={(e) => updateGlamour(glamour.id, { notes: e.target.value })}
               placeholder="Notes"
+              aria-label={`Notes for ${glamour.name}`}
               className={`${inputClasses} w-full mt-1 text-sm`}
             />
           </div>
@@ -1894,7 +1909,7 @@ function RuneSection({
         <p className="text-[#f5e6c8]/60 text-sm italic mb-2">No runes granted yet.</p>
       )}
 
-      {character.runes.map((rune) => {
+      {character.runes.map((rune, index) => {
         const freq = getRuneUsageFrequency(rune.magnitude, level);
         return (
           <div key={rune.id} className="bg-[#1a1a2e] p-2 rounded mb-1">
@@ -1954,6 +1969,7 @@ function RuneSection({
               value={rune.notes}
               onChange={(e) => updateRune(rune.id, { notes: e.target.value })}
               placeholder="Notes"
+              aria-label={`Notes for ${rune.name} (rune ${index + 1})`}
               className={`${inputClasses} w-full mt-1 text-sm`}
             />
           </div>
@@ -2081,6 +2097,7 @@ function KnackSection({
         value={knack.notes}
         onChange={(e) => onChange({ knack: { ...knack, notes: e.target.value } })}
         placeholder="Knack notes"
+        aria-label="Knack notes"
         className={`${inputClasses} w-full mt-2 text-sm`}
       />
     </div>

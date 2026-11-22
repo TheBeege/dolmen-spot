@@ -109,7 +109,7 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
                 value={sel.specification}
                 onChange={(e) => updateSpec(i, e.target.value)}
                 placeholder={sel.talentId === 'slayer' ? 'Creature type...' : 'Weapon type...'}
-                aria-label={sel.talentId === 'slayer' ? 'Slayer creature type' : 'Weapon specialisation weapon'}
+                aria-label={`${sel.talentId === 'slayer' ? 'Slayer creature type' : 'Weapon specialisation weapon'} (slot ${i + 1})`}
                 className={`${inputClasses} text-sm mt-1`}
               />
             )}
@@ -257,7 +257,7 @@ function HunterTrophies({ character, onChange }: TraitsAndNotesProps) {
           {character.trophies.map(t => (
             <span key={t.id} className={chipClasses}>
               {t.creatureType}
-              <button type="button" onClick={() => removeTrophy(t.id)} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
+              <button type="button" onClick={() => removeTrophy(t.id)} aria-label={`Remove ${t.creatureType}`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
             </span>
           ))}
         </div>
@@ -550,7 +550,7 @@ function MosslingFeatures({ character, onChange }: TraitsAndNotesProps) {
               return (
                 <span key={i} className={chipClasses}>
                   [{roll}] {entry?.trait ?? '???'}
-                  <button type="button" onClick={() => removeTrait(i)} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
+                  <button type="button" onClick={() => removeTrait(i)} aria-label={`Remove ${entry?.trait ?? `trait ${roll}`}`} className="ml-0.5 text-red-400 hover:text-red-300">x</button>
                 </span>
               );
             })}
