@@ -228,11 +228,15 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
             Manual override
           </summary>
+          <label htmlFor="armour-class-override" className="block text-[#f5e6c8]/50 text-xs mt-1">
+            Manual armour class
+          </label>
           <input
+            id="armour-class-override"
             type="number"
             value={character.armorClass}
             onChange={(e) => onChange({ armorClass: parseInt(e.target.value) || 10 })}
-            className={`${inputClasses} w-20 text-center mt-1`}
+            className={`${inputClasses} w-20 text-center`}
           />
         </details>
       </div>
@@ -279,11 +283,15 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
             Manual override
           </summary>
+          <label htmlFor="attack-bonus-override" className="block text-[#f5e6c8]/50 text-xs mt-1">
+            Manual attack bonus
+          </label>
           <input
+            id="attack-bonus-override"
             type="number"
             value={character.attackBonus}
             onChange={(e) => onChange({ attackBonus: parseInt(e.target.value) || 0 })}
-            className={`${inputClasses} w-20 text-center mt-1`}
+            className={`${inputClasses} w-20 text-center`}
           />
         </details>
       </div>
@@ -314,11 +322,15 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
               Manual override
             </summary>
+            <label htmlFor="magic-resistance-override" className="block text-[#f5e6c8]/50 text-xs mt-1">
+              Manual magic resistance
+            </label>
             <input
+              id="magic-resistance-override"
               type="number"
               value={character.magicResistance}
               onChange={(e) => onChange({ magicResistance: parseInt(e.target.value) || 0 })}
-              className={`${inputClasses} w-20 text-center mt-1`}
+              className={`${inputClasses} w-20 text-center`}
             />
           </details>
         </div>

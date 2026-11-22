@@ -2198,8 +2198,9 @@ function RuneReference({ level }: { level: number }) {
         <div className="mt-3 text-[#f5e6c8]/70 text-xs">
           <div id={frequencyId} className="text-[#c4a35a] font-semibold mb-1">Usage Frequency:</div>
           {/* Too wide for a narrow screen with a large font, so it scrolls
-              sideways there; focusable so the keyboard can scroll it too. */}
-          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className="overflow-x-auto">
+              sideways there; focusable so the keyboard can scroll it too, with
+              the same focus ring as the Reference panel's tables. */}
+          <div role="region" aria-labelledby={frequencyId} tabIndex={0} className="overflow-x-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#c4a35a]">
             <table className="w-full">
               <thead>
                 <tr className="text-[#f5e6c8]/60">

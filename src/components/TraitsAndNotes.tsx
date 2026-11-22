@@ -87,8 +87,9 @@ function FighterTalents({ character, onChange }: TraitsAndNotesProps) {
         return (
           <div key={i} className={cardClasses}>
             <div className="flex items-center gap-2 mb-1">
-              <span className="text-[#c4a35a] text-xs font-semibold">Slot {i + 1}</span>
+              <label htmlFor={`combat-talent-slot-${i + 1}`} className="text-[#c4a35a] text-xs font-semibold">Slot {i + 1}</label>
               <select
+                id={`combat-talent-slot-${i + 1}`}
                 value={sel.talentId}
                 onChange={(e) => updateTalent(i, e.target.value)}
                 className={`${inputClasses} max-w-xs text-sm`}
@@ -130,8 +131,9 @@ function TurningUndead() {
         {FEATURE_NOTES.turningUndead} {TURNING_UNDEAD_TABLE.frequency}.
       </p>
       <div className="flex items-center gap-2 mb-2">
-        <label className="text-[#f5e6c8]/60 text-xs">Undead HD:</label>
+        <label htmlFor="turning-undead-hd" className="text-[#f5e6c8]/60 text-xs">Undead HD:</label>
         <input
+          id="turning-undead-hd"
           type="number"
           value={undeadHD}
           onChange={(e) => setUndeadHD(e.target.value)}
@@ -200,11 +202,12 @@ function KnightLiegeHouse({ character, onChange }: TraitsAndNotesProps) {
 
   return (
     <div>
-      <label className={labelClasses}>Liege House</label>
+      <label htmlFor="knight-liege-house" className={labelClasses}>Liege House</label>
       {character.alignment && matchingHouses.length === 0 && (
         <p className="text-red-400 text-xs mb-1">No houses match your alignment ({character.alignment}).</p>
       )}
       <select
+        id="knight-liege-house"
         value={character.liegeHouse}
         onChange={(e) => onChange({ liegeHouse: e.target.value })}
         className={`${inputClasses} text-sm`}
@@ -471,7 +474,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
 
   return (
     <div>
-      <label className={labelClasses}>
+      <label htmlFor="mad-revelry-melody" className={labelClasses}>
         Mad Revelry <span className="text-[#f5e6c8]/40 font-normal">{usesLeft}/{maxUses} uses</span>
       </label>
       <div className="flex items-center gap-2 mb-2">
@@ -495,6 +498,7 @@ function MadRevelryPanel({ character, onChange }: TraitsAndNotesProps) {
         </button>
       </div>
       <select
+        id="mad-revelry-melody"
         value={selectedMelody}
         onChange={(e) => setSelectedMelody(e.target.value)}
         className={`${inputClasses} text-sm mb-1`}
@@ -669,6 +673,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
               value={r.name}
               onChange={(e) => updateRetainer(r.id, 'name', e.target.value)}
               placeholder="Name..."
+              aria-label="Retainer name"
               className={`${inputClasses} text-sm flex-1 mr-2`}
             />
             <button
@@ -698,7 +703,7 @@ function RetainersSection({ character, onChange }: TraitsAndNotesProps) {
             </div>
           </div>
           <div className="mt-1">
-            <input type="text" value={r.notes} onChange={(e) => updateRetainer(r.id, 'notes', e.target.value)} placeholder="Notes..." className={`${inputClasses} text-xs`} />
+            <input type="text" value={r.notes} onChange={(e) => updateRetainer(r.id, 'notes', e.target.value)} placeholder="Notes..." aria-label="Retainer notes" className={`${inputClasses} text-xs`} />
           </div>
         </div>
       ))}
@@ -716,6 +721,9 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
   const { langInfo, currentLangs, bonusLangs, allKnown, availableCommon, availableObscure } =
     getLanguageBreakdown(character);
   const bonusUsed = bonusLangs.length;
+  // The bonus-language picker only renders while there are slots left; while
+  // there aren't, the visible label has nothing to point at.
+  const canAddBonusLanguage = langInfo.bonusSlots > 0 && bonusUsed < langInfo.bonusSlots;
 
   const handleAddBonusLang = (lang: string) => {
     if (!lang || allKnown.has(lang)) return;
@@ -843,7 +851,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
 
           {/* Bonus Languages */}
           <div className="mb-2">
-            <label htmlFor="bonus-languages" className={labelClasses}>
+            <label htmlFor={canAddBonusLanguage ? 'bonus-languages' : undefined} className={labelClasses}>
               Bonus Languages
               <span className="text-[#f5e6c8]/40 font-normal ml-1">
                 ({bonusUsed} of {pluralize(langInfo.bonusSlots, 'slot')} used)
@@ -868,7 +876,7 @@ export default function TraitsAndNotes({ character, onChange }: TraitsAndNotesPr
               </div>
             )}
 
-            {langInfo.bonusSlots > 0 && bonusUsed < langInfo.bonusSlots && (
+            {canAddBonusLanguage && (
               <div className="flex items-center gap-2">
                 <select
                   id="bonus-languages"

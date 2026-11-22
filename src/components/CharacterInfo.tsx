@@ -354,14 +354,21 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
               onChange={(e) => onChange({ xpNextLevel: parseInt(e.target.value) || 0 })}
               placeholder="Next Level"
               className={inputClasses}
-              aria-label="Next Level XP"
+              aria-label="Next Level"
             />
           </div>
         </div>
 
         {/* XP Modifier */}
         <div>
-          <label htmlFor="character-info-xp-modifier" className={labelClasses}>XP Modifier</label>
+          {/* Calculated, the override field lives in a collapsed <details>; a
+              label pointing into it would name nothing until it is opened, so
+              the heading is plain text and the override gets its own label. */}
+          {calculated ? (
+            <span className={labelClasses}>XP Modifier</span>
+          ) : (
+            <label htmlFor="character-info-xp-modifier" className={labelClasses}>XP Modifier</label>
+          )}
           {calculated ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2 text-sm text-[#f5e6c8]">
@@ -401,12 +408,15 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
                 <summary className="text-xs text-[#f5e6c8]/40 cursor-pointer hover:text-[#f5e6c8]/60">
                   Manual override
                 </summary>
+                <label htmlFor="character-info-xp-modifier" className="block text-[#f5e6c8]/50 text-xs mt-1">
+                  Manual XP modifier
+                </label>
                 <input
                   id="character-info-xp-modifier"
                   type="number"
                   value={character.xpModifier}
                   onChange={(e) => onChange({ xpModifier: parseInt(e.target.value) || 0 })}
-                  className={`${inputClasses} mt-1`}
+                  className={inputClasses}
                 />
               </details>
             </div>
