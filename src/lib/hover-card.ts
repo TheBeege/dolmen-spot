@@ -30,18 +30,21 @@ export interface Surroundings {
    */
   keepClear?: readonly Box[];
   /**
-   * The list the anchor is in. When nothing beside the anchor, above it or
-   * below it is clear of `avoid`, the card steps just past the nearer end of
-   * this box rather than over the list, as long as that keeps it near the
-   * anchor: the rows it would otherwise cover are the buttons the pointer has
-   * to be able to reach.
+   * The list the anchor is in, which must hold it. When nothing beside the
+   * anchor, above it or below it is clear of `avoid`, the card steps just past
+   * the nearer end of this box rather than over the list, as long as that
+   * keeps it near the anchor: the rows it would otherwise cover are the
+   * buttons the pointer has to be able to reach. A list can run past both ends
+   * of the window, so the step past it is bounded.
    */
   list?: Box;
   /**
-   * A box the card keeps off entirely: a list too small or too narrow to go
-   * beside, such as the Memorise menu, whose every row is a button the pointer
-   * walks down. Nowhere clear nearer, the card goes just past it, above or
-   * below, however far that is; such a box is small by nature.
+   * A box the card keeps off entirely, which must hold the anchor: a list too
+   * small or too narrow to go beside, such as the Memorise menu, whose every
+   * row is a button the pointer walks down. Nowhere clear nearer, the card
+   * goes just past it, above or below, however far that is — such a box is
+   * short by nature (the menu is capped at 24rem), so the step is never far,
+   * and leaving a row of it covered would block a button outright.
    */
   outside?: Box;
 }
@@ -66,8 +69,15 @@ export const intersects = (a: Box, b: Box) =>
  * its right edge. It takes the first of those that covers nothing in `avoid`;
  * failing that, the first that can slide sideways clear of it, rightwards
  * for the first four and leftwards for the rest; failing that, just past the
- * nearer end of `list`, as long as that leaves it within twice its own height
- * of the anchor; failing that, the one that covers the least of it.
+ * nearer end of `outside`, however far that is, or of `list`, while that
+ * leaves it within twice its own height of the anchor; failing that, the one
+ * that covers the least of it.
+ *
+ * `outside` comes first among the escapes because the card must not cover it
+ * at all; it is a menu, short by construction, so no bound is needed. `list`
+ * is the anchor's own list, which can be longer than the window: past the far
+ * end of one of those the card would be nowhere near the spell it describes,
+ * so it covers the fewest rows there instead.
  */
 export function placeHoverCard(
   anchor: Box,
@@ -135,6 +145,8 @@ export function placeHoverCard(
   // the card must keep off (a menu), and for the anchor's own list while that
   // leaves the card near it. Past a long list's far end the card would be
   // nowhere in particular, so covering the fewest is better there.
+  // A box holds the anchor, so a card placed wholly above or below it is clear
+  // of it by construction.
   const pastEnd = (box: Box, reach: number): Point | null => {
     const ends = [
       { top: box.top - HOVER_CARD_GAP - card.height, distance: band.top - box.top + HOVER_CARD_GAP },
@@ -142,12 +154,14 @@ export function placeHoverCard(
     ].sort((a, b) => a.distance - b.distance);
     for (const end of ends) {
       const p = { left: fromLeftEdge, top: end.top };
-      if (end.distance <= reach && inArea(p) && !intersects(boxAt(p), box)) return p;
+      if (end.distance <= reach && inArea(p)) return p;
     }
     return null;
   };
-  const past = (outside && pastEnd(outside, Infinity)) || (list && pastEnd(list, 2 * card.height));
-  if (past) return past;
+  for (const [box, reach] of [[outside, Infinity], [list, 2 * card.height]] as const) {
+    const past = box && pastEnd(box, reach);
+    if (past) return past;
+  }
 
   if (places.length > 0) {
     let [best] = places[0];

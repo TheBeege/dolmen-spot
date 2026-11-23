@@ -12,6 +12,12 @@
 // from screen readers, which get the panel instead. Only one card shows at a
 // time.
 //
+// In a small window the card is capped to the room above or below its row and
+// scrolls, so it can end up with text below the fold of the card. A mouse can
+// scroll it; a card shown by keyboard focus can't (it's out of the tab order),
+// which is fine because the button's panel is the keyboard route to the same
+// text, and holds all of it.
+//
 // A <select> option can't hold a summary, so ChosenSpellSummary shows the one
 // for the spell picked in a select.
 
@@ -30,7 +36,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { findSpell, getSpellSummary } from '@/lib/gamedata';
-import { HOVER_CARD_MARGIN, intersects, placeHoverCard, roomAround, union, type Box, type Point } from '@/lib/hover-card';
+import { HOVER_CARD_MARGIN, placeHoverCard, roomAround, union, type Box } from '@/lib/hover-card';
 import type { SpellSummary, SpellType } from '@/lib/types';
 
 /** How long the pointer rests on a spell before its card appears, so a pointer passing over doesn't flash cards. */
@@ -123,14 +129,17 @@ let dismissShownCard: (() => void) | null = null;
  * ("known", "reference"), so screen readers can tell apart the buttons for the
  * same spell in different lists. Mark the element around a list of these with
  * `data-spell-list`, and the card keeps off the list's spells where it can.
- * `data-spell-list="whole"` keeps it off the whole element, for a menu: it goes
- * beside the menu where there's room, and just past its end where there isn't,
- * so the menu's rows stay reachable. Mark a row with `data-spell-row`, and the
- * card keeps clear of the row's controls whenever it has anywhere else to go.
- * Of `data-spell-list`, only the value `whole` means anything; every other
- * value gets the default. Of `data-spell-row`, only the attribute's presence
- * matters, so its value is free for the markup to name the row by
- * (`data-spell-row="known"`).
+ * Where nothing beside, above or below the anchor is clear of them, it steps
+ * just past the nearer end of the list rather than over its rows, so those
+ * spells' buttons stay reachable. `data-spell-list="whole"` keeps it off the
+ * whole element, for a menu: it goes beside the menu where there's room, and
+ * just past its end where there isn't, however far that is, because every row
+ * in a menu is a button the pointer walks down. Mark a row with
+ * `data-spell-row`, and the card keeps clear of the row's controls whenever it
+ * has anywhere else to go. Of `data-spell-list`, only the value `whole` means
+ * anything; every other value gets the default. Of `data-spell-row`, only the
+ * attribute's presence matters, so its value is free for the markup to name
+ * the row by (`data-spell-row="known"`).
  */
 export const SpellInfo = memo(function SpellInfo({
   spellType,
@@ -397,7 +406,7 @@ function HoverCard({
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
 
-  // Placed before the browser paints, and again whenever anything scrolls or
+  // Placed before the browser paints, and again whenever the page scrolls or
   // the window resizes, so it stays next to the button.
   useLayoutEffect(() => {
     const place = () => {
@@ -416,41 +425,49 @@ function HoverCard({
       if (!topmost || !anchor.contains(topmost)) return;
       const root = document.documentElement;
       const area = { left: 0, top: stickyHeaderBottom(), right: root.clientWidth, bottom: root.clientHeight };
-      const surroundings = { ...spellListObstacles(anchor), keepClear: rowControls(anchor) };
+      const keepClear = rowControls(anchor);
+      const surroundings = { ...spellListObstacles(anchor), keepClear };
+
+      // The card is capped to the room above or below its row, whichever is
+      // larger, so that it goes in that gap rather than over the row: it
+      // scrolls, so this only makes it shorter, and the row's Cast, Prep and
+      // Notes stay reachable wherever either gap is at least 8rem. Below that
+      // the card covers them, as a card too short to read would be worse.
+      //
+      // The cap depends on where the row is in the window, not on the card's
+      // own content, so it is only written when it changes. Rewriting it lays
+      // the card out again, which would throw away where a player reading it
+      // had scrolled to.
       const fullCap = Math.max(0, area.bottom - area.top - 2 * HOVER_CARD_MARGIN);
-      const sizeOf = () => ({ width: card.offsetWidth, height: card.offsetHeight });
-      const boxAt = (point: Point): Box => {
-        const size = sizeOf();
-        return { left: point.left, top: point.top, right: point.left + size.width, bottom: point.top + size.height };
-      };
-
-      card.style.maxHeight = `${fullCap}px`;
-      let point = placeHoverCard(box, sizeOf(), area, surroundings);
-
-      // A card that would cover its own row goes above or below it instead,
-      // capped to whichever of the two has more room (it scrolls, so this only
-      // makes it shorter): the row's Cast, Prep and Notes stay reachable.
-      const { keepClear = [] } = surroundings;
-      if (keepClear.some((control) => intersects(boxAt(point), control))) {
-        const room = roomAround(keepClear.reduce(union, box), area);
-        const cap = Math.min(fullCap, Math.max(room.above, room.below, MIN_CARD_HEIGHT_REM * rootFontSize()));
-        if (cap > 0 && cap < fullCap) {
-          card.style.maxHeight = `${cap}px`;
-          point = placeHoverCard(box, sizeOf(), area, surroundings);
-        }
+      const room = roomAround(keepClear.reduce(union, box), area);
+      const cap = keepClear.length > 0
+        ? `min(${fullCap}px, max(${room.above}px, ${room.below}px, ${MIN_CARD_HEIGHT_REM}rem))`
+        : `${fullCap}px`;
+      if (card.style.maxHeight !== cap) {
+        const scrolled = card.scrollTop;
+        card.style.maxHeight = cap;
+        card.scrollTop = scrolled;
       }
 
+      const size = { width: card.offsetWidth, height: card.offsetHeight };
+      const point = placeHoverCard(box, size, area, surroundings);
       card.style.left = `${point.left}px`;
       card.style.top = `${point.top}px`;
       card.style.visibility = 'visible';
       const spellBox = anchor.closest('[data-spell-info]')?.getBoundingClientRect() ?? box;
-      onPlace(union(spellBox, boxAt(point)));
+      onPlace(union(spellBox, { left: point.left, top: point.top, right: point.left + size.width, bottom: point.top + size.height }));
+    };
+    // The card scrolling within its cap moves neither the card nor its button,
+    // so it isn't a reason to place the card again (and would scroll it back).
+    const onScroll = (event: Event) => {
+      if (event.target instanceof Node && cardRef.current?.contains(event.target)) return;
+      place();
     };
     place();
-    window.addEventListener('scroll', place, true);
+    window.addEventListener('scroll', onScroll, true);
     window.addEventListener('resize', place);
     return () => {
-      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('scroll', onScroll, true);
       window.removeEventListener('resize', place);
       onPlace(null);
     };
@@ -481,11 +498,6 @@ function stickyHeaderBottom(): number {
   const { position } = getComputedStyle(header);
   if (position !== 'sticky' && position !== 'fixed') return 0;
   return Math.max(0, header.getBoundingClientRect().bottom);
-}
-
-/** The browser's default font size in px, which every rem in the sheet is a multiple of. */
-function rootFontSize(): number {
-  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
 }
 
 // What the card should keep off where it can: every spell (name and button) in
