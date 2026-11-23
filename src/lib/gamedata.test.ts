@@ -6,15 +6,19 @@ import assert from 'node:assert/strict';
 import {
   ARCANE_SPELLS,
   ARCANE_SPELL_SUMMARIES,
+  EQUIPMENT_CATALOG,
   FAIRY_RUNES,
   GLAMOURS,
   HOLY_SPELLS,
   HOLY_SPELL_SUMMARIES,
   MAGICIAN_STARTING_SPELL_BOOKS,
   MOSSLING_KNACKS,
+  RATIONS,
+  RATION_FRESHNESS,
   findSpell,
   getSpellSummary,
 } from './gamedata';
+import { rationItemFields } from './rations';
 import type { SpellSummary } from './types';
 
 const SAVE_CATEGORIES = ['Doom', 'Ray', 'Hold', 'Blast', 'Spell'];
@@ -169,6 +173,44 @@ describe('findSpell and getSpellSummary', () => {
       for (const spell of book.spells) {
         assert.ok(getSpellSummary('arcane', spell), `${book.name}: ${spell}`);
       }
+    }
+  });
+});
+
+// The equipment catalog's two ration lines are what makes adding rations from
+// the catalog a ration item rather than a plain one (Inventory.tsx reads the
+// marker), and they're built from RATIONS so the shop and the sheet can't
+// disagree. The Playwright spec covers the rest of that path.
+describe('the equipment catalog\'s rations', () => {
+  const rationLines = EQUIPMENT_CATALOG.filter((entry) => entry.ration !== undefined);
+
+  test('there is one line for each kind, and each says which kind it is', () => {
+    // A line's place in the catalog is the shop's business, so this counts them
+    // rather than fixing their order.
+    assert.equal(rationLines.length, RATION_FRESHNESS.length);
+    for (const freshness of RATION_FRESHNESS) {
+      assert.equal(rationLines.filter((entry) => entry.ration === freshness).length, 1, freshness);
+    }
+  });
+
+  test('each line is the item the sheet makes: the same name, cost, slots and weight', () => {
+    for (const freshness of RATION_FRESHNESS) {
+      const line = rationLines.find((entry) => entry.ration === freshness);
+      assert.ok(line, freshness);
+      const fields = rationItemFields(freshness);
+      assert.equal(line.name, fields.name);
+      assert.equal(line.slots, fields.slots);
+      assert.equal(line.weight, fields.weight);
+      assert.equal(line.name, RATIONS[freshness].name);
+      assert.equal(line.cost, RATIONS[freshness].cost);
+      assert.equal(line.category, 'camping');
+    }
+  });
+
+  test('no other line is marked as a ration', () => {
+    assert.equal(rationLines.length, RATION_FRESHNESS.length);
+    for (const entry of EQUIPMENT_CATALOG) {
+      if (entry.ration === undefined) assert.equal('ration' in entry, false, entry.name);
     }
   });
 });

@@ -52,6 +52,7 @@ import {
   getCoinGpEquivalent,
   getFighterTalentCount,
   getKindredClassLabel,
+  formatShortDate,
   getKindredName,
   getLearnableSpellRanks,
   getRuneUsageFrequency,
@@ -85,6 +86,8 @@ import {
   isStartingBookApplied,
   rankAboveLearnableNote,
 } from '@/lib/character-sheet';
+import { isInFairy } from '@/lib/livedTime';
+import { rationStockSummary } from '@/lib/rations';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import { castsLabel } from '@/lib/shards';
 import type { SheetFonts } from './fonts';
@@ -1610,6 +1613,7 @@ function InventorySection({ c }: { c: Character }) {
   const slotsMode = c.encumbranceMethod === 'slots';
   const { coins } = c;
   const coinCount = pluralize(enc.totalCoinCount, 'coin');
+  const food = rationStockSummary(c);
 
   return (
     <>
@@ -1632,7 +1636,27 @@ function InventorySection({ c }: { c: Character }) {
           key={container?.id ?? 'loose'}
           c={c}
           container={container}
-          lead={i === 0 ? <Text style={s.subTitle}>Stowed Items</Text> : undefined}
+          lead={i === 0 ? (
+            <>
+              <Text style={s.subTitle}>Stowed Items</Text>
+              {/* One row per day's rations can't say which of them have spoiled,
+                  and the food keeps changing, so its state has a line of its own.
+                  It's dated, because a sheet read in a week says something else;
+                  in Fairy the calendar stands on the day the character went in
+                  while the food goes on ageing, so the date says which day it is. */}
+              {food ? (
+                <Text style={s.body}>
+                  <Text style={s.bold}>Rations: </Text>
+                  {food}
+                  <Text style={s.subTitleNote}>
+                    {isInFairy(c)
+                      ? `  (as of ${formatShortDate(c.currentDate)}, the day Fairy was entered)`
+                      : `  (as of ${formatShortDate(c.currentDate)})`}
+                  </Text>
+                </Text>
+              ) : null}
+            </>
+          ) : undefined}
         />
       ))}
 

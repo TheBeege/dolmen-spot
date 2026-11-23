@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "id": "fixture-elf",
   "name": "Ilvarel of the Gloaming",
   "kindred": "elf",
@@ -227,10 +227,6 @@
   "exhaustionLevel": 0,
   "hungerDays": 0,
   "thirstDays": 0,
-  "rations": {
-    "fresh": 0,
-    "preserved": 0
-  },
   "activeLightSources": [],
   "travelDaysWithoutRest": 0,
   "forcedMarchActive": false,
@@ -251,5 +247,6 @@
     "day": 1,
     "month": 0,
     "year": 1
-  }
+  },
+  "dankConditions": false
 }

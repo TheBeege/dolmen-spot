@@ -1,7 +1,7 @@
 'use client';
 
 import { useId, useRef, useState } from 'react';
-import { Character, CharacterUpdater, ActiveLightSource, CalendarDate } from '@/lib/types';
+import { Character, CharacterUpdater, ActiveLightSource, CalendarDate, RationFreshness } from '@/lib/types';
 import {
   LATEST_DATE,
   MAX_YEAR,
@@ -28,8 +28,25 @@ import {
   isWysenday,
   getCharacterMagicProfile,
   getLearnableSpellRanks,
+  RATIONS,
+  RATION_FRESHNESS,
 } from '@/lib/gamedata';
 import { studyRankAboveLearnableNote } from '@/lib/character-sheet';
+import {
+  countRations,
+  createRationItem,
+  describeRationSpoilage,
+  findRationToSpend,
+  getRationItems,
+  getRationSpoilage,
+  rationFreshnessLabel,
+  rationShelfLifeLabel,
+  rationSlots,
+  rationWeight,
+  removeOneRation,
+  todayLivedDay,
+} from '@/lib/rations';
+import { pluralize } from '@/lib/grammar';
 import {
   getEarliestDolmenwoodDate,
   getFairyVisits,
@@ -64,6 +81,11 @@ const buttonClasses =
 
 const smallButtonClasses =
   'bg-[#2d4a2e] hover:bg-[#3d6b3e] text-[#f5e6c8] rounded px-2 py-0.5 text-sm transition-colors';
+
+// A small button the player can't use right now: there's nothing to eat. It
+// says so with a dashed outline as well as the dimmer tone.
+const smallButtonDisabledClasses =
+  'bg-[#1a1a2e] text-[#9c948b] border border-dashed border-[#5a3a28] rounded px-2 py-0.5 text-sm cursor-not-allowed';
 
 const SEASON_COLORS: Record<string, string> = {
   Winter: '#a0c4e8',
@@ -174,6 +196,30 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
   // entered: season-based results don't apply and its "today" is as they left it.
   const openFairyVisit = getOpenFairyVisit(character);
   const inFairy = openFairyVisit !== null;
+
+  // ── Rations ────────────────────────────────────────────────────────
+  // They're inventory items (src/lib/rations.ts): the counters below read and
+  // write those, so the same rations show on the Inventory tab, weigh what the
+  // rules say, and spoil by their own acquisition days.
+  const rationItems = getRationItems(character);
+  const rationCounts = countRations(rationItems);
+  const today = todayLivedDay(character);
+  const soonestSpoilage = (freshness: RationFreshness) => {
+    const soonest = findRationToSpend(character, freshness);
+    return soonest ? getRationSpoilage(character, soonest) : null;
+  };
+  // `id` and `today` are made out here so the updater below is pure: React may
+  // call it twice, and the two calls must agree.
+  const handleAddRation = (freshness: RationFreshness) => {
+    const id = newId();
+    onChange((prev) => ({
+      stowedItems: [...prev.stowedItems, createRationItem(freshness, today, id)],
+    }));
+  };
+  // Eating one takes the ration that would spoil soonest, as a player would.
+  const handleEatRation = (freshness: RationFreshness) => {
+    onChange((prev) => removeOneRation(prev.equippedItems, prev.stowedItems, freshness));
+  };
 
   // Ephemeral camping state (not persisted)
   const [campFire, setCampFire] = useState<'none' | 'campfire'>('none');
@@ -674,42 +720,79 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         </h2>
         {/* Two columns when the two cells fit side by side, and one when they
             don't: at a default font even a 320px phone fits them (2 × 7rem plus
-            the gap), and a big font on one is what doesn't. */}
+            the gap), and a big font on one is what doesn't. Each cell counts the
+            character's rations of that kind, which are inventory items: + and −
+            add and eat one day's rations, so the count, the slots they take and
+            their spoilage all come from the same items the Inventory shows. */}
         <div className="flex flex-wrap gap-3 mb-3">
-          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Fresh</div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, fresh: Math.max(0, character.rations.fresh - 1) } })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.rations.fresh}
-              </span>
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, fresh: character.rations.fresh + 1 } })}
-                className={smallButtonClasses}
-              >+</button>
-            </div>
-          </div>
-          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Preserved</div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, preserved: Math.max(0, character.rations.preserved - 1) } })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.rations.preserved}
-              </span>
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, preserved: character.rations.preserved + 1 } })}
-                className={smallButtonClasses}
-              >+</button>
-            </div>
-          </div>
+          {RATION_FRESHNESS.map((freshness) => {
+            const count = rationCounts[freshness];
+            const soonest = soonestSpoilage(freshness);
+            return (
+              <div
+                key={freshness}
+                role="group"
+                aria-label={`${rationFreshnessLabel(freshness)} rations`}
+                className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3"
+              >
+                <div className="text-[#c4a35a] text-sm font-semibold mb-2">
+                  {rationFreshnessLabel(freshness)}
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => handleEatRation(freshness)}
+                    disabled={count === 0}
+                    aria-label={`Eat a day's ${freshness} rations`}
+                    className={count === 0 ? smallButtonDisabledClasses : smallButtonClasses}
+                  >-</button>
+                  <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+                    {count}
+                  </span>
+                  <button
+                    onClick={() => handleAddRation(freshness)}
+                    aria-label={`Add a day's ${freshness} rations`}
+                    className={smallButtonClasses}
+                  >+</button>
+                </div>
+                <div className="text-[#a1988f] text-xs mt-1">
+                  {pluralize(RATIONS[freshness].slots, 'slot')} each
+                </div>
+                <div className={`text-xs mt-1 ${soonest?.spoiled ? 'text-[#ff6b4a] font-semibold' : 'text-[#a1988f]'}`}>
+                  {soonest == null
+                    ? 'Nothing kept.'
+                    : `${count > 1 ? 'Soonest: ' : ''}${describeRationSpoilage(soonest)}`}
+                </div>
+                {/* The rules' shelf life, and the shorter one in dank conditions,
+                    so the day counts above are never a number out of nowhere. */}
+                <div className="text-[#9c948b] text-xs">
+                  Keeps {rationShelfLifeLabel(freshness, false)}, or {rationShelfLifeLabel(freshness, true)} in dank
+                </div>
+              </div>
+            );
+          })}
         </div>
-        <div className="text-[#f5e6c8]/60 text-xs">
+        <div className="text-[#a1988f] text-xs mb-3">
+          {pluralize(rationItems.length, 'ration')} · {pluralize(rationSlots(rationItems), 'slot')} ·{' '}
+          {rationWeight(rationItems)} wt
+        </div>
+        <label className="flex items-start gap-2 mb-3 cursor-pointer">
+          <input
+            type="checkbox"
+            checked={character.dankConditions === true}
+            onChange={(e) => onChange({ dankConditions: e.target.checked })}
+            className="accent-[#c4a35a] mt-0.5"
+          />
+          <span className="text-[#f5e6c8] text-sm">
+            In dank conditions (dungeon, fungal forest)
+            <span className="block text-[#a1988f] text-xs">
+              Fresh rations keep {pluralize(RATIONS.fresh.keepsDaysDank, 'day')} and preserved ones{' '}
+              {pluralize(RATIONS.preserved.keepsDaysDank, 'day')}, instead of 1 week and 2 months.
+              Spoilage is worked out from where the food is kept now, so clearing this marks it
+              edible again.
+            </span>
+          </span>
+        </label>
+        <div className="text-[#a1988f] text-xs">
           {inFairy ? (
             <>
               <span className="text-[#c9b3f0]">Foraging in Fairy:</span> Fairy is timeless, so Dolmenwood&apos;s
@@ -720,7 +803,8 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
               Foraging yield ({season}): <span className="text-[#c4a35a] font-semibold">{foragingYield}</span> rations (Survival check).
             </>
           )}{' '}
-          Fresh rations spoil after 1 week without preservation.
+          A ration counts the days it has been carried, in Dolmenwood or in Fairy, so there&apos;s one
+          list of them on the Inventory tab. Spoiled ones are marked, never removed.
         </div>
       </div>
 

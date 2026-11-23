@@ -11,17 +11,20 @@ import type {
   Npc,
   NpcQuest,
   PathKind,
+  RationFreshness,
+  RationState,
   ShardState,
   SpellbookEntry,
 } from './types';
-import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, daysBetween } from './gamedata';
+import { createDefaultCharacter, LATEST_DATE, MAX_YEAR, MONTHS, RATIONS, daysBetween } from './gamedata';
 import { newId } from './ids';
-import { fitCountingStart, getLivedDayAtDolmenwoodDate } from './livedTime';
+import { fitCountingStart, getLivedDayAtDolmenwoodDate, getLivedDays } from './livedTime';
 import { HEX_GRID_META } from './hex-grid';
 import { isValidHex, pixelToHex } from './hex';
 import { DEFAULT_LEY_LINE_TYPE, LEY_LINE_COLORS, isPathKind, isPoiKind, pathKindFromType } from './map-data';
+import { createRationItem, rationItemFields } from './rations';
 
-export const CURRENT_SCHEMA_VERSION = 15;
+export const CURRENT_SCHEMA_VERSION = 16;
 
 /**
  * A saved `schemaVersion` as a number. Some old saves have it as a string of
@@ -740,6 +743,127 @@ function migrateAddNpcs(data: any): any {
 }
 
 /**
+ * The most days' rations of one kind a v15 counter is converted into. A real
+ * character carries a handful; a count in the thousands can only be a hand edit
+ * or a stuck button, and turning it into that many items would hang the load and
+ * overflow the save. Anything above this is recorded in Other Notes instead of
+ * being dropped silently (see rationCountNote).
+ */
+const MAX_CONVERTED_RATIONS = 999;
+
+/**
+ * A ration counter as a whole number of days' rations: a finite number floored
+ * (a stray 2.5 is two days' food), or a string of digits, which counts as the
+ * number it spells (a hand edit, as a saved `schemaVersion` once was). Negative
+ * counts and anything else count as none. Uncapped: the caller caps what it
+ * converts and notes the rest.
+ */
+function rationCount(value: unknown): number {
+  if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) {
+    const spelled = Number(value);
+    // Digits can spell more than a number holds (a 400-digit count): that's a
+    // count still, so it goes down the cap-and-note path rather than vanishing
+    // the way an unreadable value would.
+    return Number.isFinite(spelled) ? Math.max(0, Math.floor(spelled)) : Number.MAX_SAFE_INTEGER;
+  }
+  return wholeAtLeast(value, 0, 0);
+}
+
+/** The note Other Notes gets for the rations a counter held beyond what was converted. */
+function rationCountNote(freshness: RationFreshness, beyond: number): string {
+  return `Rations (${freshness}): ${beyond} more days' rations than the ${MAX_CONVERTED_RATIONS} the sheet turned into items.`;
+}
+
+/**
+ * v15 → v16: the `rations` counters become inventory items. Each day's rations
+ * is one item of kind 'ration' (RationState: fresh or preserved, and the lived
+ * day it was acquired on), put with the character's stowed items because rations
+ * are carried, not worn. Slots and weight come from the rules (RATIONS), so the
+ * encumbrance totals count them from then on.
+ *
+ * Every converted ration is stamped with today's lived day, so no player opens
+ * their character to find their food already spoiled by a migration: the sheet
+ * has no way to know when the rations in a counter were actually bought, and
+ * "now" is the only day it can defend. That's a deliberate fresh start, not a
+ * claim about the player's game.
+ *
+ * `dankConditions` starts off: a condition of where the food is kept right now,
+ * which nothing in an old save records.
+ *
+ * A pack may also hold a plain item the catalog made before this version, named
+ * "Rations (preserved, 1 day)" or "Rations (fresh, 1 day)". Those become ration
+ * items too, on the same terms (the rules' slots and weight, acquired today), so
+ * an old character's food spoils like the rest instead of sitting in the pack as
+ * inert gear. Only an item that is no kind of its own — no kind at all, not null
+ * or an empty string either — and whose name is one of the two, case and
+ * surrounding spaces aside, is touched: it takes the sheet's spelling of the name
+ * (so " RATIONS (FRESH, 1 DAY) " becomes "Rations (fresh, 1 day)"), the rules'
+ * slots and weight and the new state, and keeps its id, its place, its notes and
+ * its equipment.
+ *
+ * The old `rations` field is removed, as its meaning now lives on the items.
+ * A save with no rations, or with none of a kind, is left as it was apart from
+ * the new fields. Nothing here throws or hangs: a counter that isn't an object
+ * counts as no rations, a list that isn't a list is replaced before anything is
+ * added to it, and a count beyond MAX_CONVERTED_RATIONS leaves a note in Other
+ * Notes rather than thousands of items. Every count the save could hold becomes
+ * items — a number, or digits saved as text; what isn't a count at all (text
+ * that isn't digits, or a negative) never was one, so there's none to keep.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function migrateRationsToItems(data: any): any {
+  const today = livedDayNow(data);
+  const counters = isPlainObject(data.rations) ? data.rations : {};
+  if (!Array.isArray(data.stowedItems)) data.stowedItems = [];
+
+  // Ids of the items already there, so a new ration can't take one.
+  const used = new Set<string>();
+  for (const items of [data.equippedItems, data.stowedItems]) {
+    if (!Array.isArray(items)) continue;
+    for (const item of items) if (isPlainObject(item)) used.add(asText(item.id));
+  }
+
+  const states: readonly RationFreshness[] = ['fresh', 'preserved'];
+
+  // Rations the catalog made as plain items before this version (see above).
+  const byName = new Map(states.map((freshness) => [RATIONS[freshness].name.trim().toLowerCase(), freshness]));
+  for (const items of [data.equippedItems, data.stowedItems]) {
+    if (!Array.isArray(items)) continue;
+    for (const item of items) {
+      if (!isPlainObject(item)) continue;
+      // No kind at all: absent, null or an empty string, all of which mean "no kind".
+      const kind = item.kind;
+      if (kind !== undefined && kind !== null && kind !== '') continue;
+      const freshness = byName.get(asText(item.name).trim().toLowerCase());
+      if (!freshness) continue;
+      Object.assign(item, rationItemFields(freshness));
+      item.kind = 'ration';
+      item.ration = { freshness, acquiredLivedDay: today };
+    }
+  }
+
+  const beyond: string[] = [];
+  for (const freshness of states) {
+    const saved = rationCount(counters[freshness]);
+    const count = Math.min(saved, MAX_CONVERTED_RATIONS);
+    for (let i = 0; i < count; i += 1) {
+      data.stowedItems.push(createRationItem(freshness, today, uniqueIn(used, '')));
+    }
+    if (saved > count) beyond.push(rationCountNote(freshness, saved - count));
+  }
+  // A count too big to turn into items is written down rather than dropped.
+  if (beyond.length > 0) {
+    const notes = asText(data.otherNotes).trimEnd();
+    const block = beyond.join('\n');
+    data.otherNotes = notes ? `${notes}\n\n${block}` : block;
+  }
+
+  if (data.dankConditions === undefined) data.dankConditions = false;
+  delete data.rations;
+  return data;
+}
+
+/**
  * Repair journal entries on a partially-trusted save (hand-edited imports
  * skip the migration loop). Runs after the migrations on every load and
  * import, and after sanitizeCharacterDates has made the journal a list of
@@ -781,19 +905,69 @@ function sanitizeJournalEntries(data: any): void {
 }
 
 /**
- * Repair what loading checks on inventory items, equipped and stowed: for
- * now, a Dwemer shard's state (InventoryItem.shard), which every item of kind
- * 'shard' gets, so the shard's UI can rely on it. Every other item, and every
- * other field, is left as it is. Runs after the migrations on every load and
- * import.
+ * Repair what loading checks on inventory items, equipped and stowed: a Dwemer
+ * shard's state (InventoryItem.shard), which every item of kind 'shard' gets, so
+ * the shard's UI can rely on it, and a ration's (InventoryItem.ration), which
+ * every item of kind 'ration' gets. A ration's slots and weight are stamped from
+ * the rules too (RATIONS in gamedata.ts), so the encumbrance totals count it
+ * whatever a hand edit put there. Every other item, and every other field, is
+ * left as it is. Runs after the migrations on every load and import.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeInventoryItems(data: any): void {
+  // Working out the lived day walks the character's dates, Fairy visits and
+  // journal, so it's done at most once, and only when a ration has no usable
+  // acquisition day of its own.
+  let today: number | null = null;
+  const livedDay = () => (today ??= livedDayNow(data));
   for (const items of [data.equippedItems, data.stowedItems]) {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
-      if (isPlainObject(item) && item.kind === 'shard') item.shard = sanitizeShard(item.shard);
+      if (!isPlainObject(item)) continue;
+      if (item.kind === 'shard') item.shard = sanitizeShard(item.shard);
+      if (item.kind === 'ration') {
+        item.ration = sanitizeRation(item.ration, livedDay);
+        Object.assign(item, rationItemFields(item.ration.freshness));
+      }
     }
+  }
+}
+
+/**
+ * A ration's state, repaired: one of the two kinds (fresh if it doesn't say,
+ * the shorter-lived of the two), and the lived day it was acquired on. That day
+ * is what spoilage counts from, and a save with none can't mean "the start of
+ * the world" without spoiling the food at once, so it becomes today: the ration
+ * is kept and counted as fresh food, not thrown away. `todayLivedDay` is asked
+ * for only when it's needed, as working it out isn't free.
+ */
+function sanitizeRation(value: unknown, todayLivedDay: () => number): RationState {
+  const r = (isPlainObject(value) ? value : {}) as Record<string, unknown>;
+  const freshness: RationFreshness = r.freshness === 'preserved' ? 'preserved' : 'fresh';
+  const day = typeof r.acquiredLivedDay === 'number' && Number.isFinite(r.acquiredLivedDay)
+    ? Math.max(0, Math.floor(r.acquiredLivedDay))
+    : todayLivedDay();
+  return withExtraFields({ freshness, acquiredLivedDay: day }, r);
+}
+
+/**
+ * Today on the character's lived-time clock, from data that may not be repaired
+ * yet: a save being migrated from v15 has had none of the repairs that run after
+ * the migration loop, so its dates and Fairy visits are repaired here first.
+ * Never throws: a character whose clock can't be worked out counts as day 0,
+ * which is what an unrepaired save amounts to.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function livedDayNow(data: any): number {
+  try {
+    sanitizeCharacterDates(data);
+    sanitizeFairyTime(data);
+    const currentDate = isPlainObject(data.currentDate) ? data.currentDate : { ...DEFAULT_CALENDAR_DATE };
+    const fairyVisits = Array.isArray(data.fairyVisits) ? data.fairyVisits : [];
+    const day = getLivedDays({ currentDate, fairyVisits } as Parameters<typeof getLivedDays>[0]);
+    return Number.isFinite(day) ? Math.max(0, Math.floor(day)) : 0;
+  } catch {
+    return 0;
   }
 }
 
@@ -1008,6 +1182,10 @@ const migrations: Record<number, (data: any) => any> = {
   // (absent: not learned yet), a Dwemer shard's state, and the NPCs a
   // journal entry is about.
   14: (data) => migrateAddNpcs(migrateAddPathKinds(data)),
+  // v15 -> v16: Rations are items now. The fresh and preserved counters become
+  // that many days' rations among the stowed items (see migrateRationsToItems),
+  // and the field holding them goes.
+  15: migrateRationsToItems,
 };
 
 /**

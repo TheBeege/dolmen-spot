@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Character, CharacterUpdater, InventoryItem, Coins, CharacterContainer, SpellbookEntry, ShardState } from '@/lib/types';
+import { Character, CharacterUpdater, InventoryItem, Coins, CharacterContainer, SpellbookEntry, ShardState, RationFreshness } from '@/lib/types';
 import {
   getCoinGpEquivalent,
   EQUIPMENT_CATALOG,
@@ -15,6 +15,7 @@ import {
   EQUIPPED_SLOT_LIMIT,
   SPELLBOOK_CAPACITY,
   STOWED_SLOT_LIMIT,
+  RATION_FRESHNESS,
 } from '@/lib/gamedata';
 import GrowingTextarea from './GrowingTextarea';
 import {
@@ -31,6 +32,14 @@ import {
   getContainerItems,
   getContainerLoad,
 } from '@/lib/character-sheet';
+import {
+  describeRationShelfLife,
+  describeRationSpoilage,
+  getRationSpoilage,
+  rationFreshnessLabel,
+  rationItemFields,
+  todayLivedDay,
+} from '@/lib/rations';
 import { pluralize } from '@/lib/grammar';
 import { newId } from '@/lib/ids';
 import {
@@ -267,6 +276,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   }, [containerDropdownOpen]);
 
   // ── Encumbrance calculations (with coins) ──
+  // Rations are ordinary items, so their slots and weight are already in these
+  // totals (calculateEncumbrance, src/lib/character-sheet.ts): a day's rations is
+  // 1 slot and 20 coins, fresh or preserved.
   const encumbrance = calculateEncumbrance(character);
   const {
     coinWeight,
@@ -304,22 +316,32 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     }
   };
 
-  const handleAddFromCatalog = (entry: EquipmentEntry | { name: string; weight: number; slots: number; notes?: string }) => {
+  const handleAddFromCatalog = (entry: EquipmentEntry | {
+    name: string; weight: number; slots: number; notes?: string; ration?: RationFreshness;
+  }) => {
     // Auto-detect blank spell books from the catalog so they get the spellbook UI.
     // Anchored to the start of the name so unrelated items containing "spellbook"
     // (e.g. a hypothetical "Anti-Spellbook Ward") aren't misclassified.
     const isSpellbook = /^spell\s*book/i.test(entry.name);
+    // A ration from the catalog becomes a ration item, so the sheet knows its
+    // kind and when it was acquired. Its slots and weight are the rules' own
+    // (RATIONS), stamped from the kind rather than taken from the catalog line.
+    const ration = entry.ration ?? null;
+    const { slots, weight } = ration ? rationItemFields(ration) : { slots: entry.slots, weight: entry.weight };
     const newItem: InventoryItem = {
       id: newId(),
       name: entry.name,
-      slots: entry.slots,
-      weight: entry.weight,
+      slots,
+      weight,
       notes: ('notes' in entry && entry.notes) || '',
       equipped: catalogTarget.section === 'equipped',
       ...(catalogTarget.section === 'stowed' && catalogTarget.containerId
         ? { containerId: catalogTarget.containerId }
         : {}),
       ...(isSpellbook ? { kind: 'spellbook' as const, spellbookContents: [] } : {}),
+      ...(ration
+        ? { kind: 'ration' as const, ration: { freshness: ration, acquiredLivedDay: todayLivedDay(character) } }
+        : {}),
     };
 
     if (catalogTarget.section === 'equipped') {
@@ -448,6 +470,20 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     }));
   };
 
+  // Changing a ration's kind restamps the name, slots and weight the rules give
+  // it, so the shelf life and the totals follow (both kinds take 1 slot). It
+  // keeps the day it was acquired on.
+  const handleRationFreshness = (equipped: boolean, itemId: string, freshness: RationFreshness) => {
+    updateInventoryItem(equipped, itemId, (item) => ({
+      ...item,
+      ...rationItemFields(freshness),
+      ration: {
+        freshness,
+        acquiredLivedDay: item.ration?.acquiredLivedDay ?? todayLivedDay(character),
+      },
+    }));
+  };
+
   const toggleSpellbookCollapse = (id: string) => {
     setCollapsedSpellbooks((prev) => {
       const next = new Set(prev);
@@ -529,7 +565,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const containerCatalogEntries = EQUIPMENT_CATALOG.filter((e) => e.category === 'container' && e.capacity && e.capacity > 0);
 
   const getFilteredCatalog = () => {
-    const allItems: { name: string; cost: number; costUnit?: string; weight: number; slots: number; notes?: string; source: string }[] = [];
+    // `ration` is carried through for the two ration lines: adding one of those
+    // makes a ration item (with its kind and acquisition day) rather than a
+    // plain item, so dropping it here would lose the whole point of the entry.
+    const allItems: {
+      name: string; cost: number; costUnit?: string; weight: number; slots: number;
+      notes?: string; source: string; ration?: RationFreshness;
+    }[] = [];
 
     // Add armour entries
     ARMOUR_TABLE.filter(a => a.name !== 'Unarmoured').forEach((a) => {
@@ -543,7 +585,16 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
     // Add equipment catalog entries
     EQUIPMENT_CATALOG.forEach((e) => {
-      allItems.push({ name: e.name, cost: e.cost, costUnit: e.costUnit, weight: e.weight, slots: e.slots, notes: e.notes, source: e.category });
+      allItems.push({
+        name: e.name,
+        cost: e.cost,
+        costUnit: e.costUnit,
+        weight: e.weight,
+        slots: e.slots,
+        notes: e.notes,
+        source: e.category,
+        ...(e.ration ? { ration: e.ration } : {}),
+      });
     });
 
     let filtered = allItems;
@@ -1068,6 +1119,81 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
+  // A day's rations (src/lib/rations.ts). Its slots and weight come from the
+  // rules, so they're shown rather than edited, and the kind is the player's to
+  // choose. The line under the row says how long it has left and never takes it
+  // away: a spoiled ration stays until the player removes or eats it.
+  const renderRationItem = (item: InventoryItem, equipped: boolean, position: string) => {
+    const freshness: RationFreshness = item.ration?.freshness === 'preserved' ? 'preserved' : 'fresh';
+    const spoilage = getRationSpoilage(character, item);
+    const rowLabel = `${rationFreshnessLabel(freshness)} rations (${position})`;
+    // Laid out like an item row, from sm up on the columns: the kind where the
+    // name goes, then the rules' Slots and Weight, then the Notes. On phones
+    // each value keeps its little label, as the fields do.
+    const derived = (label: string, width: string, value: number) => (
+      <span className="flex flex-col gap-0.5 shrink-0">
+        {phoneLabel(label)}
+        <span
+          title={label}
+          className={`text-[#f5e6c8] text-sm text-center ${ONE_LINE_FIELD_HEIGHT} flex items-center justify-center ${width}`}
+        >
+          {/* The column headers are hidden on phones, and no field names these
+              values, so each says what it is to a screen reader. */}
+          <span className="sr-only">{`${label}: `}</span>
+          {value}
+        </span>
+      </span>
+    );
+    return (
+      <div key={item.id} className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1">
+        <div className={`flex flex-wrap items-start gap-2 ${BORDERED_ROW_PADDING}`}>
+          <span className={`flex flex-1 ${NAME_MIN_WIDTH} items-center gap-2 ${NAME_COLUMN}`}>
+            <span className="text-[#c4a35a] text-sm shrink-0" title="Rations">&#127838;</span>
+            <select
+              value={freshness}
+              onChange={(e) => handleRationFreshness(equipped, item.id, e.target.value as RationFreshness)}
+              aria-label={`Kind of ${position}`}
+              title={`${rationFreshnessLabel(freshness)} rations`}
+              className={`${inputClasses} flex-1 min-w-0 text-sm`}
+            >
+              {RATION_FRESHNESS.map((option) => (
+                <option key={option} value={option}>{`${rationFreshnessLabel(option)} rations`}</option>
+              ))}
+            </select>
+          </span>
+          {phoneControlsFor(item, equipped, rowLabel)}
+          <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
+            {derived('Slots', 'w-16', item.slots)}
+            {derived('Weight', 'w-20', item.weight)}
+            <label className="flex flex-col gap-0.5 grow basis-full min-w-0 sm:basis-0">
+              {phoneLabel('Notes')}
+              <GrowingTextarea
+                value={item.notes}
+                onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
+                placeholder="Notes"
+                aria-label={`${rowLabel} notes`}
+                fieldClassName={inputClasses}
+              />
+            </label>
+            {moveSelectFor(item, equipped, rowLabel, 'hidden sm:flex')}
+          </div>
+          {removeButtonFor(item, equipped, rowLabel, 'hidden sm:block')}
+        </div>
+        <div className="flex flex-wrap gap-x-2 border-t border-[#5a3a28]/40 px-3 py-1.5 text-xs">
+          <span className={spoilage?.spoiled ? 'text-[#ff6b4a] font-semibold' : 'text-[#a1988f]'}>
+            {spoilage ? describeRationSpoilage(spoilage) : 'No acquisition day recorded'}
+          </span>
+          {spoilage && (
+            <span className="text-[#9c948b]">
+              &middot; keeps {describeRationShelfLife(spoilage)}
+              {spoilage.dank ? ' in dank conditions' : ''}
+            </span>
+          )}
+        </div>
+      </div>
+    );
+  };
+
   // `position` says where the item is ("equipped item 2", "item 1 in Backpack"),
   // and every renderer puts it in its controls' names for screen readers: two
   // items can share a name, and so can two spell books or two untitled scrolls.
@@ -1075,6 +1201,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped, position);
     if (item.kind === 'scroll') return renderScrollItem(item, equipped, position);
     if (item.kind === 'shard') return renderShardItem(item, equipped, position);
+    if (item.kind === 'ration') return renderRationItem(item, equipped, position);
     return renderItemRow(item, equipped, position);
   };
 
