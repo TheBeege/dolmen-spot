@@ -6,6 +6,7 @@ import {
   HOVER_CARD_MARGIN as MARGIN,
   intersects,
   placeHoverCard,
+  roomAround,
   union,
   type Box,
   type Point,
@@ -141,6 +142,95 @@ describe('placeHoverCard and the controls in its own row', () => {
         }
       }
     }
+  });
+});
+
+describe('placeHoverCard and the list it is in', () => {
+  // The Memorise menu on a phone: nearly as wide as the screen, so there is no
+  // room beside it, and every row in it is a button the pointer walks down to.
+  const menu = { left: 20, top: 250, right: 292, bottom: 400 };
+  const menuCard = { width: 290, height: 100 };
+  const anchored = (top: number) => button(266, top);
+
+  test('goes just above a menu it cannot go beside, nearer its top', () => {
+    assert.deepEqual(placeHoverCard(anchored(262), menuCard, phone, { avoid: [menu], outside: menu }), {
+      left: 22,
+      top: menu.top - GAP - menuCard.height,
+    });
+  });
+  test('goes just below it when the anchor is nearer its bottom', () => {
+    assert.deepEqual(placeHoverCard(anchored(370), menuCard, phone, { avoid: [menu], outside: menu }), {
+      left: 22,
+      top: menu.bottom + GAP,
+    });
+  });
+  test('stays beside the menu where there is room, rather than past its end', () => {
+    const desktopMenu = { left: 20, top: 250, right: 272, bottom: 400 };
+    assert.deepEqual(placeHoverCard(button(240, 300), card, desktop, { avoid: [desktopMenu], outside: desktopMenu }), {
+      left: 272 + GAP,
+      top: 300,
+    });
+  });
+  test('never covers the menu while it fits past either end', () => {
+    for (let top = menu.top; top <= menu.bottom - 24; top += 17) {
+      const p = placeHoverCard(anchored(top), menuCard, phone, { avoid: [menu], outside: menu });
+      const where = `anchor at ${top}`;
+      assert.ok(!intersects(boxOf(p, menuCard), menu), `over the menu: ${where}`);
+      assert.ok(inside(p, menuCard, phone), `outside the phone: ${where}`);
+    }
+  });
+  test('covers the menu only when it fits past neither end', () => {
+    // A menu as tall as the window leaves no room above or below it.
+    const short = screen(320, 420);
+    const fullMenu = { left: 20, top: 30, right: 292, bottom: 400 };
+    const tall = { width: 290, height: 160 };
+    const p = placeHoverCard(button(266, 290), tall, short, { avoid: [fullMenu], outside: fullMenu });
+    assert.ok(inside(p, tall, short));
+    assert.ok(intersects(boxOf(p, tall), fullMenu), 'over the menu, which is all there is room for');
+  });
+});
+
+describe('placeHoverCard and the end of its own list', () => {
+  const phoneTall = screen(320, 800);
+  // A list of spells down a phone screen, with the anchor's own row for a
+  // spell near the top of it: an escaped card would sit just above the list.
+  const top = 400;
+  const list = { left: 20, top, right: 300, bottom: 2000 };
+  const rows = [0, 1, 2, 3, 4].map((n) => spell(20, top + 40 * n, 300));
+  const nearTop = button(266, top + 80);
+
+  test('steps past the near end of the list when nothing closer is clear', () => {
+    const p = placeHoverCard(nearTop, card, phoneTall, { avoid: rows, list });
+    assert.deepEqual(p, { left: 320 - MARGIN - card.width, top: top - GAP - card.height });
+    assert.ok(!intersects(boxOf(p, card), list), 'clear of the list');
+  });
+  test('covers the list instead when its end is more than two cards away', () => {
+    const deep = button(266, top + 600);
+    const p = placeHoverCard(deep, card, phoneTall, { avoid: rows.map((r) => ({ ...r, top: r.top + 560 })), list });
+    assert.ok(p.top > list.top && p.top < list.bottom, `over the list, not past its end: ${JSON.stringify(p)}`);
+  });
+});
+
+describe('roomAround', () => {
+  test('is the room a row has above and below it inside the area', () => {
+    const row = { left: 100, top: 300, right: 600, bottom: 340 };
+    assert.deepEqual(roomAround(row, desktop), {
+      above: 300 - GAP - MARGIN,
+      below: 900 - MARGIN - (340 + GAP),
+    });
+  });
+  test('is negative for a row against an edge', () => {
+    const row = { left: 0, top: 0, right: 10, bottom: 10 };
+    assert.ok(roomAround(row, desktop).above < 0);
+  });
+  test('a card capped to the larger of the two still fits, clear of its row', () => {
+    const row = { left: 100, top: 300, right: 600, bottom: 340 };
+    const shortArea = screen(1280, 420, 76);
+    const room = roomAround(row, shortArea);
+    const capped = { width: 320, height: Math.max(room.above, room.below) };
+    const p = placeHoverCard(button(444, 305), capped, shortArea, { keepClear: [row] });
+    assert.ok(!intersects(boxOf(p, capped), row), 'over its own row');
+    assert.ok(inside(p, capped, shortArea), 'outside the area');
   });
 });
 
