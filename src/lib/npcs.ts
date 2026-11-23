@@ -187,8 +187,8 @@ const formatCount = (n: number) => n.toLocaleString('en-US');
 /**
  * One line saying what the list shows, such as "3 NPCs" or "1 of 3 NPCs match
  * “ysolde”". `query` is the search as typed; one with quotes of its own is
- * shown as it is. The verb agrees with the count it follows, so a list of one
- * reads "1 of 1 NPC matches".
+ * shown as it is. The verb agrees with the number found, as the Journal's list
+ * does, so a search finding one NPC reads "1 of 3 NPCs matches".
  */
 export function describeNpcList(list: Pick<NpcList, 'matching' | 'total'>, query: string): string {
   const { matching, total } = list;
@@ -198,7 +198,8 @@ export function describeNpcList(list: Pick<NpcList, 'matching' | 'total'>, query
   if (typed === '') return npcs;
   const chars = Array.from(typed);
   const shown = chars.length > MAX_SHOWN_QUERY ? `${chars.slice(0, MAX_SHOWN_QUERY).join('')}…` : typed;
-  return `${formatCount(matching)} of ${npcs} ${total === 1 ? 'matches' : 'match'} ${DOUBLE_QUOTES.test(typed) ? shown : `“${shown}”`}`;
+  const one = matching === 1;
+  return `${formatCount(matching)} of ${npcs} ${one ? 'matches' : 'match'} ${DOUBLE_QUOTES.test(typed) ? shown : `“${shown}”`}`;
 }
 
 // ── Quests ───────────────────────────────────────────────────────────

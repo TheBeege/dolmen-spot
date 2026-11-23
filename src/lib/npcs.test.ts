@@ -224,14 +224,14 @@ describe('the list in a line', () => {
     assert.equal(describeNpcList({ matching: 0, total: 0 }, ''), 'No NPCs yet.');
     assert.equal(describeNpcList({ matching: 1, total: 1 }, ''), '1 NPC');
     assert.equal(describeNpcList({ matching: 3, total: 3 }, ''), '3 NPCs');
-    assert.equal(describeNpcList({ matching: 1, total: 2 }, 'ysolde'), '1 of 2 NPCs match “ysolde”');
-    assert.equal(describeNpcList({ matching: 1, total: 3 }, 'ysolde'), '1 of 3 NPCs match “ysolde”');
+    assert.equal(describeNpcList({ matching: 1, total: 2 }, 'ysolde'), '1 of 2 NPCs matches “ysolde”');
+    assert.equal(describeNpcList({ matching: 1, total: 3 }, 'ysolde'), '1 of 3 NPCs matches “ysolde”');
     assert.equal(describeNpcList({ matching: 0, total: 3 }, ' "a b" '), '0 of 3 NPCs match "a b"');
   });
 
   test('the verb agrees with the NPCs, so a list of one matches', () => {
     assert.equal(describeNpcList({ matching: 1, total: 1 }, 'ysolde'), '1 of 1 NPC matches “ysolde”');
-    assert.equal(describeNpcList({ matching: 0, total: 1 }, 'ysolde'), '0 of 1 NPC matches “ysolde”');
+    assert.equal(describeNpcList({ matching: 0, total: 1 }, 'ysolde'), '0 of 1 NPC match “ysolde”');
   });
 });
 

@@ -171,17 +171,14 @@ export function FairyStatusPanel({
         {/* The label mirrors the "Enter Fairy…" that got the character here, and
             is half the length of the "Return to Dolmenwood…" it replaces: at a
             24px font on a 320px phone the panel leaves the button 190px, two
-            lines rather than three. `max-w-full` still caps the button at the
-            card, and `break-words` keeps a long label inside it: "Dolmenwood…"
-            is one word, wider than the button's content box at a 24px font on a
-            phone, so the browser drew it past the button's rounded background.
-            `hyphens-auto` gives a syllable break where the browser has the
-            dictionary for it, as spell names do. */}
+            lines rather than three. Both words are short enough to fit that
+            content box, so no break inside one is needed; `max-w-full` still
+            caps the button at the card. */}
         <button
           type="button"
           ref={openerRef}
           onClick={() => setReturning(true)}
-          className={`${greenButtonClasses} max-w-full break-words hyphens-auto`}
+          className={`${greenButtonClasses} max-w-full`}
         >
           Leave Fairy&hellip;
         </button>
