@@ -96,7 +96,7 @@ test('an NPC can be added, edited, given a quest and a note, and deleted', async
   await openTab(page, NPCS_TAB);
 
   // ── Add ──
-  await page.getByRole('button', { name: 'Add NPC' }).click();
+  await page.getByRole('button', { name: 'New NPC' }).click();
   const newForm = form(page, 'New NPC');
   await newForm.getByLabel('Name').fill('Hob the Carter');
   await newForm.getByLabel('Affiliation').fill('Prigwort');
@@ -188,6 +188,10 @@ test('a note is deleted once, from either tab', async ({ page }) => {
   const shared = 'Wrote to Sister Ysolde about the reliquary, and asked whether Mother Brindle might know where it went.';
   const ysoldeNote = card(page, 'Sister Ysolde').locator('li').filter({ hasText: shared });
   await ysoldeNote.getByRole('button', { name: /^Delete note of / }).click();
+  // It was on two cards, so the tab says so: the other NPC's card loses it too.
+  await expect(status(page)).toHaveText(
+    "Sister Ysolde: note deleted. It was on 2 NPCs' cards and in the Journal.",
+  );
   await expect(card(page, 'Sister Ysolde').getByText(shared, { exact: false })).toHaveCount(0);
   // It was one of Brindle's notes too, and one of the journal's entries.
   await expect(card(page, 'Old Mother Brindle').getByText(shared, { exact: false })).toHaveCount(0);
@@ -228,6 +232,100 @@ test('the search finds an NPC by anything the card shows', async ({ page }) => {
   await expect(page.locator('main article h3')).toHaveCount(3);
 });
 
+test('the Journal says which NPCs an entry is about', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, JOURNAL_TAB);
+
+  // Three of the fixture's entries name an NPC, and those three cards say who;
+  // the entries about no one say nothing.
+  await expect(page.getByText(/^About: /)).toHaveCount(3);
+  await expect(page.getByText('About: Sister Ysolde, Old Mother Brindle', { exact: true })).toBeVisible();
+  await expect(page.getByText('About: Old Mother Brindle', { exact: true })).toBeVisible();
+  await expect(page.getByText("About: The Queen's librarian", { exact: true })).toBeVisible();
+});
+
+test('a note and a form being written survive a switch to another tab', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, NPCS_TAB);
+
+  // Half a note, and half of a new NPC's form.
+  const halfWritten = 'Half a note about the reliquary';
+  await card(page, 'Sister Ysolde').getByLabel('Write a note').fill(halfWritten);
+  await page.getByRole('button', { name: 'New NPC' }).click();
+  await form(page, 'New NPC').getByLabel('Name').fill('Hob the Carter');
+
+  // Looking at another tab unmounts this one, so both must have been kept:
+  // coming back, they are as they were left.
+  await openTab(page, JOURNAL_TAB);
+  await openTab(page, NPCS_TAB);
+  await expect(card(page, 'Sister Ysolde').getByLabel('Write a note')).toHaveValue(halfWritten);
+  const restored = form(page, 'New NPC');
+  await expect(restored.getByLabel('Name')).toHaveValue('Hob the Carter');
+
+  // Saving the form ends it, so it doesn't open again the next time.
+  await restored.getByRole('button', { name: 'Add NPC' }).click();
+  await expect(card(page, 'Hob the Carter')).toBeVisible();
+  await openTab(page, JOURNAL_TAB);
+  await openTab(page, NPCS_TAB);
+  await expect(form(page, 'New NPC')).toHaveCount(0);
+
+  // Adding the note clears what was kept of it, so the box is empty again.
+  await card(page, 'Sister Ysolde').getByRole('button', { name: 'Add note' }).click();
+  await expect(card(page, 'Sister Ysolde').getByText(halfWritten, { exact: true })).toBeVisible();
+  await openTab(page, JOURNAL_TAB);
+  await openTab(page, NPCS_TAB);
+  await expect(card(page, 'Sister Ysolde').getByLabel('Write a note')).toHaveValue('');
+});
+
+test('cancelling puts the focus back where it came from', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, NPCS_TAB);
+
+  // An edit cancelled by its button, then by Escape: the card is focused, and
+  // the form it opened has gone.
+  const ysolde = card(page, 'Sister Ysolde');
+  await ysolde.getByRole('button', { name: 'Edit' }).click();
+  await form(page, 'Edit Sister Ysolde').getByRole('button', { name: 'Cancel' }).click();
+  await expect(form(page, 'Edit Sister Ysolde')).toHaveCount(0);
+  await expect(ysolde).toBeFocused();
+  await ysolde.getByRole('button', { name: 'Edit' }).click();
+  await form(page, 'Edit Sister Ysolde').getByLabel('Name').press('Escape');
+  await expect(form(page, 'Edit Sister Ysolde')).toHaveCount(0);
+  await expect(ysolde).toBeFocused();
+
+  // A new NPC's form cancelled: the button that opens it.
+  await page.getByRole('button', { name: 'New NPC' }).click();
+  await form(page, 'New NPC').getByRole('button', { name: 'Cancel' }).click();
+  await expect(form(page, 'New NPC')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'New NPC' })).toBeFocused();
+
+  // A delete that isn't confirmed: the card whose delete it was.
+  const brindle = card(page, 'Old Mother Brindle');
+  await brindle.getByRole('button', { name: 'Delete', exact: true }).click();
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByText('Delete Old Mother Brindle?')).toHaveCount(0);
+  await expect(brindle).toBeFocused();
+});
+
+test('a new NPC with nothing typed into it saves nothing', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, NPCS_TAB);
+
+  await page.getByRole('button', { name: 'New NPC' }).click();
+  const newForm = form(page, 'New NPC');
+  const submit = newForm.getByRole('button', { name: 'Add NPC' });
+
+  // Nothing typed, nothing to add: as "Add note" and "Add quest" behave.
+  await expect(submit).toBeDisabled();
+  await expect(page.getByText('3 NPCs', { exact: true })).toBeVisible();
+  await newForm.getByLabel('Name').fill('Hob the Carter');
+  await expect(submit).toBeEnabled();
+  // A name typed and taken away again leaves nothing to save either.
+  await newForm.getByLabel('Name').fill('');
+  await expect(submit).toBeDisabled();
+  await expect(page.getByText('3 NPCs', { exact: true })).toBeVisible();
+});
+
 for (const width of CHECK_WIDTHS) {
   test(`the tab fits and passes axe at ${width}px`, async ({ page, defaultFontSize }) => {
     await page.setViewportSize(viewportAt(width));
@@ -242,7 +340,7 @@ for (const width of CHECK_WIDTHS) {
     await card(page, 'Sister Ysolde').getByRole('button', { name: 'Edit' }).click();
     await expectNoProblems(page, width, defaultFontSize);
     await page.getByRole('button', { name: 'Cancel' }).click();
-    await page.getByRole('button', { name: 'Add NPC' }).click();
+    await page.getByRole('button', { name: 'New NPC' }).click();
     await expectNoProblems(page, width, defaultFontSize);
     await page.getByRole('button', { name: 'Cancel' }).click();
 

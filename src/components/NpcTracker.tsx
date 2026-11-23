@@ -17,7 +17,13 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Character, CharacterUpdater, HexCoord, JournalEntry, Npc } from '@/lib/types';
 import { readHexInput } from '@/lib/hex';
-import { getEntryDisplayText, getJournalEntries, parseJournalQuery, type SearchTerm } from '@/lib/journal';
+import {
+  getEntryDisplayText,
+  getJournalEntries,
+  parseJournalQuery,
+  withoutEntry,
+  type SearchTerm,
+} from '@/lib/journal';
 import {
   addNpc,
   addQuest,
@@ -28,6 +34,7 @@ import {
   deleteQuest,
   describeNpcList,
   describeQuestCount,
+  entryNpcNames,
   getNpcHex,
   getNpcQuests,
   getNpcs,
@@ -37,7 +44,6 @@ import {
   npcText,
   setQuestDone,
   withNpcHex,
-  withoutEntry,
 } from '@/lib/npcs';
 import { greenButtonClasses, labelClasses, quietButtonClasses } from '@/components/FairyFields';
 import HexField from '@/components/HexField';
@@ -99,20 +105,90 @@ function fieldsOf(draft: NpcDraft): Pick<Npc, 'name' | 'affiliation' | 'location
 /** Which NPC's form is open: the one being added, or the one being edited. */
 type Editing = { kind: 'new' } | { kind: 'npc'; id: string };
 
+// ── What has been typed, kept across a tab switch ────────────────────
+//
+// Picking another tab unmounts this one (src/app/page.tsx), so a half-written
+// note or a half-filled form would go with it, silently. What has been typed
+// is kept in sessionStorage instead, under the character's id: it outlives a
+// tab switch, goes when the browser tab does, and is never shared with another
+// browser tab. It's read once, when the tab first opens, and written back as
+// more is typed; the key goes again once there is nothing left to keep.
+const DRAFTS_KEY_PREFIX = 'dolmenwood-npc-drafts:';
+
+/** What the tab keeps for a character while the player is looking at another tab. */
+interface SavedDrafts {
+  notes: Record<string, string>; // what has been typed into each NPC's note composer, by NPC id
+  editing: Editing | null;       // the form that was open...
+  form: NpcDraft | null;         // ...and what had been typed into it
+}
+
+function draftsKey(characterId: string): string {
+  return `${DRAFTS_KEY_PREFIX}${characterId}`;
+}
+
+const isText = (value: unknown): value is string => typeof value === 'string';
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+/** A saved draft, read defensively: anything that isn't one is nothing to restore. */
+function asDraft(value: unknown): NpcDraft | null {
+  if (!isRecord(value)) return null;
+  const { name, affiliation, location, goals, hex } = value;
+  if (![name, affiliation, location, goals, hex].every(isText)) return null;
+  return { name, affiliation, location, goals, hex } as NpcDraft;
+}
+
+function asEditing(value: unknown): Editing | null {
+  if (!isRecord(value)) return null;
+  if (value.kind === 'new') return { kind: 'new' };
+  return value.kind === 'npc' && isText(value.id) ? { kind: 'npc', id: value.id } : null;
+}
+
+/** What was saved for `characterId`; null when there's nothing, or it can't be read. */
+function readSavedDrafts(characterId: string): SavedDrafts | null {
+  try {
+    const raw = sessionStorage.getItem(draftsKey(characterId));
+    if (raw === null) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!isRecord(parsed)) return null;
+    const saved: SavedDrafts = { notes: {}, editing: asEditing(parsed.editing), form: asDraft(parsed.form) };
+    if (isRecord(parsed.notes)) {
+      for (const [id, text] of Object.entries(parsed.notes)) if (isText(text)) saved.notes[id] = text;
+    }
+    return saved;
+  } catch {
+    // No sessionStorage, or nothing readable in it: the tab opens empty, as it
+    // did before any of this was kept.
+    return null;
+  }
+}
+
+/** Keep `saved` for `characterId`, or forget it once there's nothing in it. */
+function saveDrafts(characterId: string, saved: SavedDrafts): void {
+  const notes = Object.fromEntries(Object.entries(saved.notes).filter(([, text]) => text !== ''));
+  const empty = Object.keys(notes).length === 0 && saved.editing === null && saved.form === null;
+  try {
+    if (empty) sessionStorage.removeItem(draftsKey(characterId));
+    else sessionStorage.setItem(draftsKey(characterId), JSON.stringify({ ...saved, notes }));
+  } catch {
+    // A browser that won't store it (private mode, no room left) loses the
+    // drafts on a tab switch, as it did before: nothing else breaks.
+  }
+}
+
 /** Everything a card can do, passed as one object so the card takes one prop for them. */
 interface NpcActions {
   edit: (id: string) => void;
   save: (id: string | null, draft: NpcDraft, hex: HexCoord | '') => void;
-  cancelEdit: () => void;
+  cancelEdit: (id: string | null) => void; // the NPC whose form was cancelled; null for a new one
   askDelete: (id: string) => void;
-  cancelDelete: () => void;
+  cancelDelete: (id: string) => void;
   confirmDelete: (npc: Npc) => void;
   addQuest: (id: string, text: string) => void;
   setQuestDone: (id: string, questId: string, done: boolean) => void;
   deleteQuest: (id: string, questId: string) => void;
   changeDraft: (id: string, text: string) => void;
   addNote: (npc: Npc) => void;
-  deleteNote: (npc: Npc, entryId: string) => void;
+  deleteNote: (npc: Npc, entry: JournalEntry) => void;
 }
 
 export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
@@ -120,13 +196,29 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
   const notes = notesByNpc(character);
 
   const [query, setQuery] = useState('');
-  const [editing, setEditing] = useState<Editing | null>(null);
+  // What was typed before the tab was switched away from, read once, before
+  // the first render (see "What has been typed" above). The tab is only ever
+  // drawn once the player picks it, so the server never renders it and there's
+  // nothing for the first client render to disagree with.
+  const [opened] = useState<SavedDrafts | null>(() =>
+    typeof window === 'undefined' ? null : readSavedDrafts(character.id),
+  );
+  const [editing, setEditing] = useState<Editing | null>(opened?.editing ?? null);
+  // What has been typed into the open form, so that it survives a tab switch
+  // with the form; null while there's no form, or nothing has been typed.
+  const [formDraft, setFormDraft] = useState<NpcDraft | null>(opened?.form ?? null);
   // The NPC whose delete is waiting to be confirmed: deleting one throws away
   // their goals and quests, so it's asked twice.
   const [confirmingDelete, setConfirmingDelete] = useState<string | null>(null);
   // What has been typed into each NPC's note composer, by NPC id: kept here so
   // that a note being written survives the list being searched or edited.
-  const [drafts, setDrafts] = useState<Record<string, string>>({});
+  const [drafts, setDrafts] = useState<Record<string, string>>(opened?.notes ?? {});
+
+  // Kept up to date as more is typed, so that it's there when the player comes
+  // back to this tab.
+  useEffect(() => {
+    saveDrafts(character.id, { notes: drafts, editing, form: formDraft });
+  }, [character.id, drafts, editing, formDraft]);
 
   // The search's terms, kept by their content, so a letter that doesn't change
   // them leaves the list as it is.
@@ -137,7 +229,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
   // can't be filtered out from under itself.
   const editingId = editing?.kind === 'npc' ? editing.id : null;
   const keep = useMemo(() => new Set<string>(editingId ? [editingId] : []), [editingId]);
-  const list = useMemo(() => listNpcs(npcs, terms, keep), [npcs, terms, keep]);
+  const list = useMemo(() => listNpcs(npcs, terms, keep, notes), [npcs, terms, keep, notes]);
   const summary = describeNpcList(list, query);
   const showSearch = npcs.length > 1;
 
@@ -189,12 +281,14 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
 
   const startNew = () => {
     setConfirmingDelete(null);
+    setFormDraft(null);
     setEditing({ kind: 'new' });
   };
 
   const save = useCallback(
     (id: string | null, draft: NpcDraft, hex: HexCoord | '') => {
       const fields = fieldsOf(draft);
+      setFormDraft(null);
       if (id === null) {
         const npc = withNpcHex({ ...createNpc(), ...fields }, hex);
         writeNpcs((saved) => addNpc(saved, npc));
@@ -215,17 +309,34 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
 
   const edit = useCallback((id: string) => {
     setConfirmingDelete(null);
+    setFormDraft(null);
     setEditing({ kind: 'npc', id });
   }, []);
 
-  const cancelEdit = useCallback(() => setEditing(null), []);
+  // Cancelling takes the control that had the focus away with it, so focus
+  // goes back to the card, or to the button that opens the new NPC's form.
+  const cancelEdit = useCallback(
+    (id: string | null) => {
+      setEditing(null);
+      setFormDraft(null);
+      moveFocusTo(id === null ? 'new' : `npc:${id}`);
+    },
+    [moveFocusTo],
+  );
 
   const askDelete = useCallback((id: string) => {
     setEditing(null);
+    setFormDraft(null);
     setConfirmingDelete(id);
   }, []);
 
-  const cancelDelete = useCallback(() => setConfirmingDelete(null), []);
+  const cancelDelete = useCallback(
+    (id: string) => {
+      setConfirmingDelete(null);
+      moveFocusTo(`npc:${id}`);
+    },
+    [moveFocusTo],
+  );
 
   // The NPC's card goes, so focus moves to the next one, or the one before it,
   // or else the heading.
@@ -273,12 +384,19 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
   );
 
   // The Journal tab's delete, entry for entry: the note is one of its entries.
+  // An entry naming several NPCs is one of each one's notes, so its delete
+  // says how many cards it leaves.
   const deleteNote = useCallback(
-    (npc: Npc, entryId: string) => {
-      writeEntries((list) => withoutEntry(list, entryId));
-      announce(`${npcLabel(npc)}: note deleted. It is gone from the Journal too.`);
+    (npc: Npc, entry: JournalEntry) => {
+      writeEntries((list) => withoutEntry(list, entry.id));
+      const onCards = entryNpcNames(entry, npcs).length;
+      announce(
+        onCards > 1
+          ? `${npcLabel(npc)}: note deleted. It was on ${onCards} NPCs' cards and in the Journal.`
+          : `${npcLabel(npc)}: note deleted. It is gone from the Journal too.`,
+      );
     },
-    [writeEntries, announce],
+    [npcs, writeEntries, announce],
   );
 
   const actions: NpcActions = {
@@ -314,8 +432,14 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
         >
           NPCs
         </h2>
-        <button type="button" onClick={startNew} disabled={editing?.kind === 'new'} className={greenButtonClasses}>
-          Add NPC
+        <button
+          type="button"
+          onClick={startNew}
+          disabled={editing?.kind === 'new'}
+          data-npc-focus="new"
+          className={greenButtonClasses}
+        >
+          New NPC
         </button>
       </div>
 
@@ -392,9 +516,10 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
           <NpcForm
             heading="New NPC"
             submitLabel="Add NPC"
-            initial={BLANK_DRAFT}
+            initial={formDraft ?? BLANK_DRAFT}
+            onDraftChange={setFormDraft}
             onSave={(draft, hex) => save(null, draft, hex)}
-            onCancel={cancelEdit}
+            onCancel={() => cancelEdit(null)}
           />
         </div>
       )}
@@ -410,6 +535,8 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
                 editing={editingId === npc.id}
                 confirmingDelete={confirmingDelete === npc.id}
                 draft={drafts[npc.id] ?? ''}
+                formDraft={editingId === npc.id ? formDraft : null}
+                onFormDraftChange={setFormDraft}
                 actions={actions}
               />
             </li>
@@ -429,6 +556,8 @@ function NpcCard({
   editing,
   confirmingDelete,
   draft,
+  formDraft,
+  onFormDraftChange,
   actions,
 }: {
   npc: Npc;
@@ -437,6 +566,8 @@ function NpcCard({
   editing: boolean;
   confirmingDelete: boolean;
   draft: string; // the note being written
+  formDraft: NpcDraft | null; // what has been typed into this NPC's form, if it's open
+  onFormDraftChange: (draft: NpcDraft) => void;
   actions: NpcActions;
 }) {
   const headingId = useId();
@@ -483,9 +614,10 @@ function NpcCard({
           <NpcForm
             heading={`Edit ${label}`}
             submitLabel="Save"
-            initial={draftOf(npc)}
+            initial={formDraft ?? draftOf(npc)}
+            onDraftChange={onFormDraftChange}
             onSave={(next, nextHex) => actions.save(npc.id, next, nextHex)}
-            onCancel={actions.cancelEdit}
+            onCancel={() => actions.cancelEdit(npc.id)}
           />
         </div>
       ) : (
@@ -526,13 +658,17 @@ function NpcCard({
                 {quests.map((quest, index) => {
                   const inputId = `${questIds}-${index}`;
                   const text = npcText(quest.text);
+                  const questName = text || 'untitled';
                   return (
                     <li key={quest.id || `quest-${index}`} className="flex items-start gap-2">
+                      {/* The name is the quest's text, which two NPCs can share,
+                          so the NPC is given as the description. */}
                       <input
                         id={inputId}
                         type="checkbox"
                         checked={quest.done === true}
                         onChange={(e) => actions.setQuestDone(npc.id, quest.id, e.target.checked)}
+                        aria-describedby={headingId}
                         className="mt-1 shrink-0 h-4 w-4 accent-[#c4a35a]"
                       />
                       <label
@@ -546,7 +682,7 @@ function NpcCard({
                       <button
                         type="button"
                         onClick={() => actions.deleteQuest(npc.id, quest.id)}
-                        aria-label={`Delete quest ${text || 'untitled'}`}
+                        aria-label={`Delete quest ${questName} for ${label}`}
                         className={`${dangerLinkClasses} text-xs shrink-0 ml-auto`}
                       >
                         Delete
@@ -588,6 +724,9 @@ function NpcCard({
               <ol role="list" className="mt-1 space-y-2">
                 {notes.map((entry) => {
                   const shown = getEntryDisplayText(entry, character);
+                  // The name says which note this is: two can share a day, and
+                  // one entry naming two NPCs is a note on both their cards.
+                  const excerpt = Array.from(shown.text.trim()).slice(0, 40).join('');
                   return (
                     <li key={entry.id} className="border border-[#5a3a28] rounded p-2">
                       <p className={`${entry.fairyDate ? 'text-[#c9b3f0]' : 'text-[#c4a35a]'} text-xs font-semibold [overflow-wrap:anywhere]`}>
@@ -606,8 +745,12 @@ function NpcCard({
                       <div className="mt-1 flex justify-end">
                         <button
                           type="button"
-                          onClick={() => actions.deleteNote(npc, entry.id)}
-                          aria-label={`Delete note of ${shown.date}`}
+                          onClick={() => actions.deleteNote(npc, entry)}
+                          aria-label={
+                            excerpt
+                              ? `Delete note of ${shown.date} for ${label}: ${excerpt}`
+                              : `Delete note of ${shown.date} for ${label}, which has no text`
+                          }
                           className={`${dangerLinkClasses} text-xs`}
                         >
                           Delete
@@ -653,18 +796,26 @@ function NpcCard({
                 <button type="button" onClick={() => actions.confirmDelete(npc)} className={`${dangerBoxClasses} text-sm font-semibold`}>
                   Delete NPC
                 </button>
-                <button type="button" onClick={actions.cancelDelete} className={quietButtonClasses} autoFocus>
+                <button type="button" onClick={() => actions.cancelDelete(npc.id)} className={quietButtonClasses} autoFocus>
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
+            // "Edit" and "Delete" are the same words on every card, so each
+            // one's description says which NPC it is: the heading. (Axe
+            // doesn't check that names differ; screen readers still read both.)
             <div className="mt-3 flex flex-wrap justify-end gap-2">
-              <button type="button" onClick={() => actions.edit(npc.id)} className={quietButtonClasses}>
+              <button
+                type="button"
+                onClick={() => actions.edit(npc.id)}
+                aria-describedby={headingId}
+                className={quietButtonClasses}
+              >
                 <span aria-hidden="true">✎ </span>
                 Edit
               </button>
-              <button type="button" onClick={() => actions.askDelete(npc.id)} className={dangerBoxClasses}>
+              <button type="button" onClick={() => actions.askDelete(npc.id)} aria-describedby={headingId} className={dangerBoxClasses}>
                 Delete
               </button>
             </div>
@@ -677,22 +828,32 @@ function NpcCard({
 
 // ── The form ─────────────────────────────────────────────────────────
 
+/** Whether anything has been typed into a draft: a form with nothing in it has nothing to save. */
+function hasAnything(draft: NpcDraft): boolean {
+  return [draft.name, draft.affiliation, draft.location, draft.goals, draft.hex].some((field) => field.trim() !== '');
+}
+
 /**
  * An NPC's fields, for adding one or editing one. A form rather than the
  * Journal's write-as-you-type cards, because the hex is checked when it's
  * saved: a hex that isn't on the map is shown as an error instead of being
  * stored, and nothing else is written until the whole form is.
+ *
+ * What's typed is reported out as it changes (onDraftChange), so that the tab
+ * can keep it while the player looks at another one.
  */
 function NpcForm({
   heading,
   submitLabel,
   initial,
+  onDraftChange,
   onSave,
   onCancel,
 }: {
   heading: string;
   submitLabel: string;
   initial: NpcDraft;
+  onDraftChange: (draft: NpcDraft) => void;
   onSave: (draft: NpcDraft, hex: HexCoord | '') => void;
   onCancel: () => void;
 }) {
@@ -704,13 +865,19 @@ function NpcForm({
   const locationId = useId();
   const goalsId = useId();
 
+  const change = (next: NpcDraft) => {
+    setDraft(next);
+    onDraftChange(next);
+  };
+
   const set = (field: keyof NpcDraft) => (e: { target: { value: string } }) => {
-    const { value } = e.target;
-    setDraft((d) => ({ ...d, [field]: value }));
+    change({ ...draft, [field]: e.target.value });
   };
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
+    // A form with nothing in it saves nothing: there is no NPC to make.
+    if (!hasAnything(draft)) return;
     const reading = readHexInput(draft.hex);
     if (reading.error !== undefined) {
       setHexError(reading.error);
@@ -785,7 +952,7 @@ function NpcForm({
         labelClassName="text-[#c4a35a] text-sm font-semibold"
         value={draft.hex}
         onChange={(value) => {
-          setDraft((d) => ({ ...d, hex: value }));
+          change({ ...draft, hex: value });
           setHexError(null);
         }}
         error={hexError}
@@ -807,7 +974,9 @@ function NpcForm({
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
-        <button type="submit" className={greenButtonClasses}>
+        {/* As "Add note" and "Add quest" are: nothing to save until something
+            has been typed. */}
+        <button type="submit" className={greenButtonClasses} disabled={!hasAnything(draft)}>
           {submitLabel}
         </button>
         <button type="button" onClick={onCancel} className={quietButtonClasses}>

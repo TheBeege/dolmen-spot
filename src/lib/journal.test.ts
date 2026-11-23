@@ -31,6 +31,7 @@ import {
   sortJournalNewestFirst,
   toJournalHexFilter,
   withEntryHex,
+  withoutEntry,
   type TextRange,
 } from './journal';
 import type { CalendarDate, Character, CharacterMapData, HexCoord, JournalEntry } from './types';
@@ -446,6 +447,16 @@ describe('the hex an entry is written in', () => {
     assert.deepEqual(withEntryHex(withEntryHex(e, '0303'), '1001'), { ...e, hex: '1001' });
     assert.deepEqual(withEntryHex(withEntryHex(e, '0303'), ''), e);
     assert.equal('hex' in withEntryHex({ ...e, hex: '0303' }, ''), false);
+  });
+
+  // The one delete an entry has: the Journal tab's, and the NPCs tab's, where
+  // the same entry is one of an NPC's notes.
+  test('withoutEntry takes that one entry out, leaving the rest as they were', () => {
+    const c = write(write(character(), 'One'), 'Two');
+    const [one, two] = c.journalEntries;
+    assert.deepEqual(withoutEntry(c.journalEntries, one.id).map((e) => e.id), [two.id]);
+    assert.deepEqual(withoutEntry(c.journalEntries, 'gone').map((e) => e.id), [one.id, two.id], 'an id that is gone deletes nothing');
+    assert.deepEqual(c.journalEntries.map((e) => e.id), [one.id, two.id], 'the saved list is not changed in place');
   });
 });
 

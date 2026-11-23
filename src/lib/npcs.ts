@@ -11,7 +11,8 @@
 //     an entry naming an id whose NPC is gone is kept by the load repair
 //     (sanitizeJournalEntries) as it names no one;
 //   - a note is deleted exactly as the Journal tab deletes one, by id, from
-//     the character's journalEntries, so the two are the same delete.
+//     the character's journalEntries: both call withoutEntry (journal.ts), so
+//     the two really are the same delete.
 
 import type { Character, HexCoord, JournalEntry, Npc, NpcQuest } from './types';
 import { isValidHex } from './hex';
@@ -124,13 +125,21 @@ export function sortNpcs(npcs: readonly Npc[]): Npc[] {
 // ── Search ───────────────────────────────────────────────────────────
 //
 // An NPC is searched by everything the tab shows for them: their name, their
-// affiliation, where they are, their hex ("Hex 0606"), their goals and their
-// quests. The terms are the Journal's (parseJournalQuery), so a search means
-// the same thing in both tabs: words, "a phrase in quotes", accents and case
-// folded, a number matched whole. Every term has to be somewhere in the NPC.
+// affiliation, where they are, their hex ("Hex 0606"), their goals, their
+// quests, and the text of the notes written about them (the entries shown on
+// their card). The terms are the Journal's (parseJournalQuery), so a search
+// means the same thing in both tabs: words, "a phrase in quotes", accents and
+// case folded, a number matched whole. Every term has to be somewhere in the
+// NPC.
 
-/** The text an NPC is searched by (see "Search" above), one part a line. */
-export function npcSearchText(npc: Npc): string {
+const NO_NOTES: readonly JournalEntry[] = [];
+
+/**
+ * The text an NPC is searched by (see "Search" above), one part a line.
+ * `notes` are their notes (notesByNpc), so that they're found by what was
+ * written about them: an entry's text, which is what its card shows.
+ */
+export function npcSearchText(npc: Npc, notes: readonly JournalEntry[] = NO_NOTES): string {
   const hex = getNpcHex(npc);
   return [
     npcText(npc.name),
@@ -139,15 +148,20 @@ export function npcSearchText(npc: Npc): string {
     hex ? `Hex ${hex}` : '',
     npcText(npc.goals),
     ...getNpcQuests(npc).map((quest) => npcText(quest.text)),
+    ...notes.map((entry) => npcText(entry.text)),
   ]
     .filter(Boolean)
     .join('\n');
 }
 
-/** Whether every term of a search (parseJournalQuery) is somewhere in the NPC. */
-export function matchesNpcSearch(npc: Npc, terms: readonly SearchTerm[]): boolean {
+/** Whether every term of a search (parseJournalQuery) is somewhere in the NPC or their notes. */
+export function matchesNpcSearch(
+  npc: Npc,
+  terms: readonly SearchTerm[],
+  notes: readonly JournalEntry[] = NO_NOTES,
+): boolean {
   if (terms.length === 0) return true;
-  const text = npcSearchText(npc);
+  const text = npcSearchText(npc, notes);
   return terms.every((term) => findMatchRanges(text, [term]).length > 0);
 }
 
@@ -158,17 +172,24 @@ export interface NpcList {
 }
 
 const NO_KEPT: ReadonlySet<string> = new Set();
+const NO_NOTES_BY_NPC: ReadonlyMap<string, readonly JournalEntry[]> = new Map();
 
 /**
  * The NPCs to list, in order: those that match every term of the search, plus
  * those in `keep` (an NPC being edited, which mustn't vanish from under the
- * form while the search changes).
+ * form while the search changes). `notes` is notesByNpc, so a note's text
+ * finds the NPC it's about.
  */
-export function listNpcs(npcs: readonly Npc[], terms: readonly SearchTerm[], keep: ReadonlySet<string> = NO_KEPT): NpcList {
+export function listNpcs(
+  npcs: readonly Npc[],
+  terms: readonly SearchTerm[],
+  keep: ReadonlySet<string> = NO_KEPT,
+  notes: ReadonlyMap<string, readonly JournalEntry[]> = NO_NOTES_BY_NPC,
+): NpcList {
   const items: Npc[] = [];
   let matching = 0;
   for (const npc of sortNpcs(npcs)) {
-    const matches = matchesNpcSearch(npc, terms);
+    const matches = matchesNpcSearch(npc, terms, notes.get(npc.id) ?? NO_NOTES);
     if (matches) matching += 1;
     if (matches || keep.has(npc.id)) items.push(npc);
   }
@@ -291,10 +312,27 @@ export function createNpcNote(
   return { ...createJournalEntry(character), text, npcIds: [npcId] };
 }
 
+// ── An entry's NPCs ──────────────────────────────────────────────────
+
 /**
- * `entries` without the entry `entryId`: the one delete an entry has, which
- * the Journal tab's Delete and the NPC tab's both are.
+ * The NPCs the entry is about, by name, as the Journal's entry card shows
+ * them: the entry's npcIds that name an NPC that is still there, in the order
+ * the entry names them. An entry naming a deleted NPC names only the rest
+ * (the load repair keeps the gone id, as naming no one).
  */
-export function withoutEntry(entries: readonly JournalEntry[], entryId: string): JournalEntry[] {
-  return entries.filter((entry) => entry.id !== entryId);
+export function entryNpcNames(entry: JournalEntry, npcs: readonly Npc[]): string[] {
+  const ids = Array.isArray(entry.npcIds) ? entry.npcIds : [];
+  if (ids.length === 0) return [];
+  const byId = new Map(npcs.map((npc) => [npc.id, npcLabel(npc)]));
+  const names: string[] = [];
+  for (const raw of new Set(ids)) {
+    const name = byId.get(npcText(raw));
+    if (name !== undefined) names.push(name);
+  }
+  return names;
+}
+
+/** Who an entry is about, as the Journal shows it after "About:"; '' if it's about no one. */
+export function describeEntryNpcs(entry: JournalEntry, npcs: readonly Npc[]): string {
+  return entryNpcNames(entry, npcs).join(', ');
 }

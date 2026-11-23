@@ -4,7 +4,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultCharacter } from './gamedata';
-import { createJournalEntry, parseJournalQuery, sortJournalNewestFirst } from './journal';
+import { createJournalEntry, parseJournalQuery, sortJournalNewestFirst, withoutEntry } from './journal';
 import { enterFairy } from './livedTime';
 import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
 import {
@@ -18,6 +18,8 @@ import {
   deleteQuest,
   describeNpcList,
   describeQuestCount,
+  entryNpcNames,
+  describeEntryNpcs,
   getNpcHex,
   getNpcNotes,
   getNpcQuests,
@@ -30,7 +32,6 @@ import {
   notesByNpc,
   setQuestDone,
   sortNpcs,
-  withoutEntry,
   withNpcHex,
 } from './npcs';
 import type { CalendarDate, Character, JournalEntry, Npc } from './types';
@@ -135,7 +136,8 @@ describe('the order NPCs are listed in', () => {
 // ── Search ───────────────────────────────────────────────────────────
 
 describe('search', () => {
-  const matches = (n: Npc, query: string) => matchesNpcSearch(n, parseJournalQuery(query));
+  const matches = (n: Npc, query: string, notes: JournalEntry[] = []) =>
+    matchesNpcSearch(n, parseJournalQuery(query), notes);
 
   test('finds an NPC by their name, whatever the case', () => {
     assert.ok(matches(npc(), 'ysolde'));
@@ -175,6 +177,24 @@ describe('search', () => {
     for (const part of ['Sister Ysolde', 'The Church of Lankshorn', 'Lankshorn', 'Hex 1106', 'Find the lost reliquary.', 'Find the bell']) {
       assert.ok(text.includes(part), `“${part}” is searched`);
     }
+  });
+
+  test('finds them by what was written about them: the notes their card shows', () => {
+    const c = character();
+    const withNote = write(c, note(c, ['n1'], 'She asked after the bell of St Clewd.'));
+    const about = getNpcNotes(withNote, 'n1');
+    assert.ok(matches(npc(), 'clewd', about));
+    assert.ok(matches(npc(), '"bell of St Clewd"', about), 'with the Journal’s phrases');
+    assert.ok(!matches(npc(), 'clewd'), 'and not without the note');
+  });
+
+  test('a note finds the NPC it is about, and not one whose card it is not on', () => {
+    const c = character({ npcs: [npc({ id: 'a' }), npc({ id: 'b', name: 'Old Mother Brindle' })] });
+    const withNotes = write(c, note(c, ['a'], 'She asked after the bell of St Clewd.'));
+    const notes = notesByNpc(withNotes);
+    const list = listNpcs(withNotes.npcs, parseJournalQuery('clewd'), new Set(), notes);
+    assert.deepEqual(list.items.map((n) => n.id), ['a']);
+    assert.deepEqual({ matching: list.matching, total: list.total }, { matching: 1, total: 2 });
   });
 
   test('no search lists every NPC, in order', () => {
@@ -413,6 +433,43 @@ describe('notes, which are journal entries', () => {
     const left = withoutEntry(withNotes.journalEntries, newest.id);
     assert.deepEqual(left.map((e) => e.id), [oldest.id]);
     assert.deepEqual(getNpcNotes({ ...withNotes, journalEntries: left }, 'n1').map((e) => e.text), ['One']);
+  });
+});
+
+// ── Who an entry is about (the Journal shows it) ──────────────────────
+
+describe('the NPCs an entry is about', () => {
+  const npcs: Npc[] = [npc({ id: 'n1' }), npc({ id: 'n2', name: 'Old Mother Brindle' })];
+
+  test('are named in the order the entry names them', () => {
+    const c = character();
+    const entry = note(c, ['n2', 'n1'], 'Both of them argued.');
+    assert.deepEqual(entryNpcNames(entry, npcs), ['Old Mother Brindle', 'Sister Ysolde']);
+    assert.equal(describeEntryNpcs(entry, npcs), 'Old Mother Brindle, Sister Ysolde');
+  });
+
+  test('an NPC with no name yet is named as one in a sentence', () => {
+    const c = character();
+    assert.equal(describeEntryNpcs(note(c, ['n1'], 'Someone.'), [npc({ id: 'n1', name: '' })]), 'Unnamed NPC');
+  });
+
+  test('is no one when the entry names no one', () => {
+    const c = character();
+    const plain = { ...createJournalEntry(c), text: 'A day of walking.' };
+    assert.deepEqual(entryNpcNames(plain, npcs), []);
+    assert.equal(describeEntryNpcs(plain, npcs), '');
+  });
+
+  test('leaves out an NPC who is gone: the entry still names them, but names no one', () => {
+    const c = character();
+    const entry = note(c, ['gone'], 'About someone who has since been deleted.');
+    assert.deepEqual(entryNpcNames(entry, npcs), []);
+    assert.equal(describeEntryNpcs(entry, npcs), '');
+  });
+
+  test('names an NPC once, however many times the entry names them', () => {
+    const c = character();
+    assert.deepEqual(entryNpcNames(note(c, ['n1', 'n1'], 'Again.'), npcs), ['Sister Ysolde']);
   });
 });
 

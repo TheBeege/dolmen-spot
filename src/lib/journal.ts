@@ -55,6 +55,15 @@ export function withEntryHex(entry: JournalEntry, hex: HexCoord | ''): JournalEn
   return hex ? { ...rest, hex } : rest;
 }
 
+/**
+ * `entries` without the entry `entryId`: the one delete an entry has, whether
+ * it's made from the Journal tab's Delete or from the NPCs tab, where the
+ * same entry is one of an NPC's notes.
+ */
+export function withoutEntry(entries: readonly JournalEntry[], entryId: string): JournalEntry[] {
+  return entries.filter((entry) => entry.id !== entryId);
+}
+
 // A text field read defensively: strings as is, finite numbers as text,
 // anything else (only a hand edit could put it there) as ''.
 function asText(value: unknown): string {
