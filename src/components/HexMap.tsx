@@ -56,7 +56,9 @@ import {
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
 import { newId } from '@/lib/ids';
+import type { MapSearchHit } from '@/lib/map-search';
 import { FOCUS_RING } from '@/components/focus-ring';
+import MapSearch from '@/components/MapSearch';
 import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './MapIcons';
 
 interface HexMapProps {
@@ -443,6 +445,22 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
     const c = hexCenterOf(hex);
     if (!c) return;
     setView((v) => ({ ...v, x: c.x - v.w / 2, y: c.y - v.h / 2 }));
+  };
+
+  // A result of the search box: the map recentres on the item's hex, selects it
+  // and moves focus to the item — in the hex inspector for a point of interest
+  // or a fairy door, and in the Ley Lines panel for a path, whose editor isn't
+  // in the inspector. Focus goes to the editor rather than its name field, as
+  // for a tap on a marker, so that a phone doesn't raise its keyboard on the
+  // way (the search box, being a field, had it up).
+  const goToSearchHit = (hit: MapSearchHit) => {
+    if (hit.hex) recenterOnHex(hit.hex);
+    if (hit.type === 'path') {
+      selectLeyLine(hit.id);
+      moveFocusTo(`ley-line:${hit.id}`);
+    } else if (hit.hex) {
+      selectHex(hit.hex, hit.id, 'item');
+    }
   };
 
   const handleHexClick = (hex: HexCoord) => {
@@ -1106,6 +1124,10 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-sm">
+          {/* Not while a ley line is being drawn: a hex picked then joins the
+              line instead of opening in the inspector, which is what the
+              "Go to hex" field beside this already does. */}
+          {!draft && <MapSearch pois={pois} fairyDoors={doors} leyLines={leyLines} onSelect={goToSearchHit} />}
           {!draft ? (
             <button
               type="button"
