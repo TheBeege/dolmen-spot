@@ -18,6 +18,7 @@ import {
 } from '@/lib/gamedata';
 import GrowingTextarea from './GrowingTextarea';
 import {
+  SPELL_PANEL_CLASSES,
   SpellInfo,
   SpellSummaryPanel,
   spellRowContexts,
@@ -71,11 +72,6 @@ const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
 const SPELL_BOOK_CONTEXT = 'in a spell book';
 const SCROLL_CONTEXT = 'scroll';
 
-// A spell's summary panel in a spell book's or a scroll's row: it comes
-// straight after the info button in the page, so a screen reader reaches it
-// next, but shows on a line of its own below the rest of the row.
-const SPELL_PANEL_CLASSES = 'basis-full order-last';
-
 // The name a spell book's row goes by in the disclosure state. Its spells have
 // no ids of their own, so it's the book's id and the spell's place in it.
 const bookSpellKey = (itemId: string, index: number) => `${itemId}-${index}`;
@@ -126,17 +122,21 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   // for the books' spells and one for the scrolls.
   const bookSpellInfo = useSpellDisclosures();
   const scrollSpellInfo = useSpellDisclosures();
-  // The rows in the order the page shows them (the equipped items, then the
-  // stowed ones container by container), so that a spell held in more than one
-  // book is numbered down the page: "in a spell book, 2 of 2". Without that,
-  // two books holding the same spell would have two buttons with one name.
+  // The rows whose spells have a button, in the order the page shows them: the
+  // equipped items, then the stowed ones container by container, leaving out
+  // the rows a collapsed container or spell book hides. A spell held in more
+  // than one book is then numbered down the page ("in a spell book, 2 of 2"),
+  // rather than against a row the player can't see; and without the numbering,
+  // two books holding one spell would have two buttons with a single name.
   const stowedInRowOrder = [
-    ...containers.flatMap((container) => getContainerItems(stowedItems, container.id)),
+    ...containers.flatMap((container) =>
+      collapsedContainers.has(container.id) ? [] : getContainerItems(stowedItems, container.id),
+    ),
     ...getContainerItems(stowedItems, undefined),
   ];
   const rowsInRowOrder = [...equippedItems, ...stowedInRowOrder];
   const bookSpellRows = rowsInRowOrder.flatMap((item) =>
-    item.kind === 'spellbook'
+    item.kind === 'spellbook' && !collapsedSpellbooks.has(item.id)
       ? (item.spellbookContents ?? []).map((entry, index) => ({
           key: bookSpellKey(item.id, index),
           name: entry.name,

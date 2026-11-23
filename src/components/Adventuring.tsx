@@ -39,7 +39,12 @@ import {
 import { getJournalEntries } from '@/lib/journal';
 import { newId } from '@/lib/ids';
 import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
-import { SpellInfo, SpellSummaryPanel, useSpellDisclosures } from '@/components/SpellInfo';
+import {
+  SPELL_PANEL_CLASSES,
+  SpellInfo,
+  SpellSummaryPanel,
+  useSpellDisclosures,
+} from '@/components/SpellInfo';
 import { errorClasses, formatYearNumber, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 
@@ -614,7 +619,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
                     spellType="arcane"
                     name={active.spellName}
                     {...studyInfo(active.id)}
-                    className="basis-full order-last"
+                    className={SPELL_PANEL_CLASSES}
                   />
                 </div>
                 {rankNote && (

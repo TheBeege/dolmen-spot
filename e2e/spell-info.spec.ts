@@ -10,7 +10,7 @@ import { newProblems } from './known-issues';
 import { findA11yProblems } from './support/a11y';
 import { FIXTURES, openApp, openTab, settle, TABS } from './support/app';
 import { findLayoutProblems } from './support/layout';
-import { A11Y_FONT_SIZE, A11Y_WIDTHS, expect, test, viewportAt } from './support/test';
+import { A11Y_FONT_SIZE, expect, test, viewportAt, WIDTHS } from './support/test';
 
 const INVENTORY_TAB = TABS.find((tab) => tab.id === 'inventory')!;
 const CALENDAR_TAB = TABS.find((tab) => tab.id === 'calendar')!;
@@ -38,6 +38,9 @@ async function expectOpensSummary(button: Locator, spell: string): Promise<Locat
   expect(summary, `${spell} has a summary to show`).toBeDefined();
   const panel = await panelOf(button);
 
+  // toBeHidden also passes for a locator that matches nothing, so the panel
+  // has to be there first for its being closed to mean anything.
+  await expect(panel, 'the button’s panel is on the page').toHaveCount(1);
   await expect(button).toHaveAttribute('aria-expanded', 'false');
   await expect(panel).toBeHidden();
   await button.click();
@@ -64,6 +67,8 @@ test.describe('on the Inventory tab', () => {
     const names = await buttons.evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
     expect(names, 'every info button is named').not.toContain(null);
     expect(new Set(names).size, 'no two buttons share a name').toBe(names.length);
+    // One list per spell book, which is what the summary card keeps off.
+    await expect(page.locator('[data-spell-list]')).toHaveCount(4);
 
     // A spell on a scroll, in the scroll's own row, opens that spell's summary.
     const fireball = page.getByRole('button', { name: 'What Fireball does (scroll)' });
@@ -97,6 +102,29 @@ test.describe('on the Inventory tab', () => {
     await expect(
       page.getByRole('button', { name: 'What Crystal Resonance does (in a spell book, 2 of 2)' }),
     ).toBeVisible();
+
+    // Collapsing a book takes its spells' buttons with it, and the copy left in
+    // the other book is numbered against the rows that are left: one, so no
+    // number at all.
+    await page.getByRole('button', { name: /^Collapse Oliphan's Folio/ }).click();
+    await settle(page);
+    await expect(infoButtons(page)).toHaveCount(10);
+    await expect(
+      page.getByRole('button', { name: 'What Crystal Resonance does (in a spell book)' }),
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: /^What Crystal Resonance does \(in a spell book, / }),
+    ).toHaveCount(0);
+
+    // A row whose picker names no spell gets no button, and the button count
+    // follows: clearing one leaves none behind.
+    const grimoireRow = page.locator('[data-spell-row="spell-book"]').filter({
+      has: page.getByLabel(/^Spell 1 in The Grimoire of Hidden Doors/),
+    });
+    await grimoireRow.getByRole('combobox').selectOption('');
+    await settle(page);
+    await expect(infoButtons(page)).toHaveCount(9);
+    await expect(grimoireRow.getByRole('button', { name: /^What / }), 'an empty picker has no info button').toHaveCount(0);
   });
 
   test('resting on the button shows the same summary in a card', async ({ page }) => {
@@ -138,7 +166,7 @@ test.describe('on the Adventuring tab', () => {
   });
 });
 
-for (const width of A11Y_WIDTHS) {
+for (const width of WIDTHS) {
   test.describe(`with a spell's summary open at ${width}px`, () => {
     test.use({ viewport: viewportAt(width) });
 
@@ -151,9 +179,10 @@ for (const width of A11Y_WIDTHS) {
       await settle(page);
       const inventory = { tab: 'inventory' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), inventory), 'layout problems with a spell book’s summary open').toEqual([]);
-      // The layout check runs at every font size. axe runs at the matrix's
-      // smallest only, as playwright.config.ts keeps a11y.spec.ts out of the
-      // other projects: its findings barely change with the font size.
+      // The layout check runs at every width and every font size. axe runs at
+      // the matrix's smallest font size only, as playwright.config.ts keeps
+      // a11y.spec.ts out of the other projects: its findings barely change
+      // with the font size.
       if (defaultFontSize === A11Y_FONT_SIZE) {
         expect.soft(newProblems(await findA11yProblems(page), inventory), 'accessibility problems with a spell book’s summary open').toEqual([]);
       }
