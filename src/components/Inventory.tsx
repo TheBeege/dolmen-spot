@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Character, CharacterUpdater, InventoryItem, Coins, CharacterContainer, SpellbookEntry } from '@/lib/types';
+import { Character, CharacterUpdater, InventoryItem, Coins, CharacterContainer, SpellbookEntry, ShardState } from '@/lib/types';
 import {
   getCoinGpEquivalent,
   EQUIPMENT_CATALOG,
@@ -24,6 +24,14 @@ import {
 } from '@/lib/character-sheet';
 import { pluralize } from '@/lib/grammar';
 import { newId } from '@/lib/ids';
+import {
+  castsLabel,
+  newShardState,
+  shardLeyLineLabel,
+  spendCast,
+  withCastsPerCharge,
+  SHARD_LINE_DELETED,
+} from '@/lib/shards';
 
 interface InventoryProps {
   character: Character;
@@ -52,7 +60,7 @@ const BORDERED_ROW_PADDING = 'py-2 px-[calc(0.5rem-1px)]';
 // make it narrower than this; then they wrap below it. In rem, so it grows with
 // the default font size (6rem is 96px at 16px, 144px at 24px), but never wider
 // than the row. A spell book's title cell adds room for its toggle and icon
-// (3rem), a scroll's spell cell for its icon (1.5rem).
+// (3rem), a scroll's spell cell and a shard's name cell for their icon (1.5rem).
 const NAME_MIN_WIDTH = 'min-w-[min(6rem,100%)]';
 const SPELL_BOOK_TITLE_MIN_WIDTH = 'min-w-[min(9rem,100%)]';
 const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
@@ -219,11 +227,42 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     setMagicalDropdownFor(null);
   };
 
+  // A Dwemer shard is a house feature, so it arrives uncharged and holding no
+  // known spell (see lib/shards.ts): the player sets the spell and the line
+  // it was charged on, or charges it on the map.
+  const handleAddShard = (equipped: boolean, containerId?: string) => {
+    const newItem: InventoryItem = {
+      id: newId(),
+      name: 'Dwemer shard',
+      slots: 0,
+      weight: 1,
+      notes: '',
+      equipped,
+      kind: 'shard',
+      shard: newShardState(),
+      ...(equipped ? {} : { containerId }),
+    };
+    if (equipped) onChange({ equippedItems: [...equippedItems, newItem] });
+    else onChange({ stowedItems: [...stowedItems, newItem] });
+    setMagicalDropdownFor(null);
+  };
+
   const updateInventoryItem = (equipped: boolean, itemId: string, mutator: (item: InventoryItem) => InventoryItem) => {
     const items = equipped ? equippedItems : stowedItems;
     const updated = items.map((item) => (item.id === itemId ? mutator(item) : item));
     if (equipped) onChange({ equippedItems: updated });
     else onChange({ stowedItems: updated });
+  };
+
+  const handleShardUpdate = (
+    equipped: boolean,
+    itemId: string,
+    updater: (shard: ShardState) => ShardState,
+  ) => {
+    updateInventoryItem(equipped, itemId, (item) => ({
+      ...item,
+      shard: updater(item.shard ?? newShardState()),
+    }));
   };
 
   const handleSpellbookAddEntry = (equipped: boolean, itemId: string) => {
@@ -385,6 +424,14 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     return filtered;
   };
 
+  // A label for a control that sits off the columns, so has no column header
+  // above it: shown at every width. `aria-hidden`, as the control names itself.
+  const stateLabel = (text: string) => (
+    <span aria-hidden="true" className="text-[10px] uppercase tracking-wide text-[#f5e6c8]/70">
+      {text}
+    </span>
+  );
+
   // ── Render helpers ──
   // Phones hide the column headers, so each field gets a short visible label there.
   const phoneLabel = (text: string) => (
@@ -450,6 +497,17 @@ export default function Inventory({ character, onChange }: InventoryProps) {
       {removeButtonFor(item, equipped, label, '')}
     </div>
   );
+
+  // The arcane spells, grouped by rank: the options a spell book's entry, a
+  // scroll's spell and a shard's spell all choose from.
+  const spellOptions = () =>
+    [1, 2, 3, 4, 5, 6].map((rank) => (
+      <optgroup key={rank} label={`Rank ${rank}`}>
+        {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+          <option key={s.name} value={s.name}>{s.name}</option>
+        ))}
+      </optgroup>
+    ));
 
   const renderSpellbookItem = (item: InventoryItem, equipped: boolean, position: string) => {
     const contents = item.spellbookContents ?? [];
@@ -548,13 +606,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                   className={`${inputClasses} flex-1 min-w-[160px] text-sm`}
                 >
                   <option value="">-- Select spell --</option>
-                  {[1, 2, 3, 4, 5, 6].map((rank) => (
-                    <optgroup key={rank} label={`Rank ${rank}`}>
-                      {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
-                        <option key={s.name} value={s.name}>{s.name}</option>
-                      ))}
-                    </optgroup>
-                  ))}
+                  {spellOptions()}
                 </select>
                 {entry.name && (
                   <span className="text-[#c4a35a] text-xs shrink-0">R{entry.rank}</span>
@@ -628,13 +680,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             className={`${inputClasses} flex-1 min-w-0 text-sm`}
           >
             <option value="">-- Select spell --</option>
-            {[1, 2, 3, 4, 5, 6].map((rank) => (
-              <optgroup key={rank} label={`Rank ${rank}`}>
-                {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
-                  <option key={s.name} value={s.name}>{s.name}</option>
-                ))}
-              </optgroup>
-            ))}
+            {spellOptions()}
           </select>
         </span>
         {phoneControlsFor(item, equipped, scrollLabel)}
@@ -677,12 +723,166 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     );
   };
 
+  // The lines a shard's row can name: the character's own, so a line deleted
+  // since still reads as deleted rather than as nothing.
+  const leyLines = character.mapData?.leyLines ?? [];
+
+  // The Dwemer shard (a house feature, not the Player's Book's). Its own
+  // fields — name, Slots, Weight — are laid out like any item row's; the spell
+  // it holds and everything about charging it are on a line of their own
+  // beneath, where they have room to wrap on a phone.
+  const renderShardItem = (item: InventoryItem, equipped: boolean, position: string) => {
+    const shard = item.shard ?? newShardState();
+    const shardName = item.name.trim() || 'Dwemer shard';
+    const shardLabel = `${shardName} (${position})`;
+    const spellName = shard.spell?.name ?? '';
+    const lineLabel = shardLeyLineLabel(shard, leyLines);
+    const spent = shard.castsLeft <= 0;
+    return (
+      <div
+        key={item.id}
+        role="group"
+        aria-label={shardLabel}
+        className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1"
+      >
+        <div className={`flex flex-wrap items-start gap-2 ${BORDERED_ROW_PADDING}`}>
+          <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
+            <span className="text-[#c4a35a] text-sm shrink-0" title="Dwemer shard">💎</span>
+            <GrowingTextarea
+              value={item.name}
+              onValueChange={(name) => handleUpdateItem(equipped, item.id, 'name', name)}
+              singleLine
+              onEnter={focusSlots(item.id)}
+              enterKeyHint="next"
+              placeholder="Dwemer shard"
+              aria-label={`Name of ${position}`}
+              className="flex-1 min-w-0"
+              fieldClassName={inputClasses}
+            />
+          </span>
+          {phoneControlsFor(item, equipped, shardLabel)}
+          <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
+            <label className="flex flex-col gap-0.5">
+              {phoneLabel('Slots')}
+              <input
+                id={slotsFieldId(item.id)}
+                type="number"
+                value={item.slots}
+                onChange={(e) => handleUpdateItem(equipped, item.id, 'slots', parseInt(e.target.value) || 0)}
+                min={0}
+                title="Slots"
+                aria-label={`${shardLabel} slots`}
+                className={`${inputClasses} w-16 text-center`}
+              />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              {phoneLabel('Weight')}
+              <input
+                type="number"
+                value={item.weight}
+                onChange={(e) => handleUpdateItem(equipped, item.id, 'weight', parseInt(e.target.value) || 0)}
+                min={0}
+                title="Weight"
+                aria-label={`${shardLabel} weight`}
+                className={`${inputClasses} w-20 text-center`}
+              />
+            </label>
+            {moveSelectFor(item, equipped, shardLabel, 'hidden sm:flex')}
+          </div>
+          {removeButtonFor(item, equipped, shardLabel, 'hidden sm:block')}
+        </div>
+
+        {/* The shard itself: the spell it holds, how many casts are left and
+            spending one, what a charge gives, and the line it was last
+            charged on. */}
+        <div className="border-t border-[#5a3a28]/40 px-3 py-2 flex flex-wrap items-end gap-x-4 gap-y-2">
+          <label className="flex flex-col gap-0.5 flex-1 basis-40 min-w-0">
+            {stateLabel('Spell')}
+            <select
+              value={spellName}
+              onChange={(e) => {
+                const value = e.target.value;
+                const matched = findArcaneSpell(value);
+                handleShardUpdate(equipped, item.id, (s) => {
+                  if (!value) {
+                    // Leaving the spell unset drops it: the type has it absent
+                    // until the player learns which spell the shard holds.
+                    const { spell: _drop, ...rest } = s;
+                    return rest;
+                  }
+                  return { ...s, spell: { name: value, rank: matched?.rank ?? s.spell?.rank ?? 1 } };
+                });
+              }}
+              aria-label={`Spell held by ${shardLabel}`}
+              className={`${inputClasses} w-full text-sm`}
+            >
+              <option value="">-- No spell --</option>
+              {spellOptions()}
+            </select>
+          </label>
+          <div className="flex flex-wrap items-center gap-2">
+            {stateLabel('Casts')}
+            {/* Announced when a cast is spent, since the button keeps focus. */}
+            <span aria-live="polite" className="text-[#f5e6c8] text-sm tabular-nums">{castsLabel(shard)}</span>
+            <button
+              type="button"
+              onClick={() => handleShardUpdate(equipped, item.id, spendCast)}
+              disabled={spent}
+              aria-label={
+                spent ? `Cast the spell from ${shardLabel}: no casts left` : `Cast the spell from ${shardLabel}`
+              }
+              title={spent ? 'No casts left: charge it on a ley line' : 'Cast the spell, spending one cast'}
+              className={`text-xs font-semibold px-2 py-1 rounded shrink-0 ${
+                spent
+                  ? 'bg-[#1a1a2e] text-[#9c948b] border border-dashed border-[#5a3a28]/70 cursor-not-allowed'
+                  : 'bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8]'
+              }`}
+            >
+              Cast
+            </button>
+          </div>
+          <label className="flex flex-col gap-0.5">
+            {stateLabel('Per charge')}
+            <input
+              type="number"
+              value={shard.castsPerCharge}
+              onChange={(e) => handleShardUpdate(equipped, item.id, (s) => withCastsPerCharge(s, parseInt(e.target.value)))}
+              min={1}
+              title="Casts one charge gives"
+              aria-label={`Casts one charge gives ${shardLabel}`}
+              className={`${inputClasses} w-20 text-center`}
+            />
+          </label>
+          <span className="text-[#a1988f] text-xs">
+            {lineLabel === null ? (
+              'Not charged on a ley line yet'
+            ) : (
+              <>
+                Charged on{' '}
+                <span className={lineLabel === SHARD_LINE_DELETED ? 'italic' : 'text-[#f5e6c8]'}>{lineLabel}</span>
+              </>
+            )}
+          </span>
+          <GrowingTextarea
+            value={item.notes}
+            onValueChange={(notes) => handleUpdateItem(equipped, item.id, 'notes', notes)}
+            placeholder="Notes"
+            aria-label={`${shardLabel} notes`}
+            className="w-full"
+            fieldClassName={`${inputClasses} text-xs`}
+          />
+        </div>
+      </div>
+    );
+  };
+
   // `position` says where the item is ("equipped item 2", "item 1 in Backpack"),
   // and every renderer puts it in its controls' names for screen readers: two
   // items can share a name, and so can two spell books or two untitled scrolls.
   const renderInventoryItem = (item: InventoryItem, equipped: boolean, position: string) => {
     if (item.kind === 'spellbook') return renderSpellbookItem(item, equipped, position);
     if (item.kind === 'scroll') return renderScrollItem(item, equipped, position);
+    if (item.kind === 'shard') return renderShardItem(item, equipped, position);
     return renderItemRow(item, equipped, position);
   };
 
@@ -712,9 +912,16 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             <button
               type="button"
               onClick={() => handleAddScroll(equipped, containerId)}
-              className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e]"
+              className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e] border-b border-[#5a3a28]/30"
             >
               📜 Scroll
+            </button>
+            <button
+              type="button"
+              onClick={() => handleAddShard(equipped, containerId)}
+              className="block w-full text-left px-3 py-2 text-sm text-[#f5e6c8] hover:bg-[#3a3a5e]"
+            >
+              💎 Dwemer Shard
             </button>
           </div>
         )}

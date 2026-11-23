@@ -12,6 +12,7 @@ import type {
   LeyLineDraft,
   MapPOI,
   PoiKind,
+  SpellbookEntry,
 } from '@/lib/types';
 import { ALL_HEXES, HEX_CELLS, HEX_GRID_META } from '@/lib/hex-grid';
 import {
@@ -55,6 +56,8 @@ import {
   withPoiKind,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
+import { ARCANE_SPELLS, findArcaneSpell } from '@/lib/gamedata';
+import { chargeShardOnLine, shardRefs, type ShardRef } from '@/lib/shards';
 import { newId } from '@/lib/ids';
 import { FOCUS_RING } from '@/components/focus-ring';
 import { DOOR_FILL, DoorIcon, GOLD, MarkerShape, NIGHT, PARCHMENT, PoiIcon, markerLook } from './MapIcons';
@@ -123,6 +126,9 @@ const INPUT_BASE =
   'border border-[#5a3a28] text-[#f5e6c8] rounded px-2 py-1 text-base md:text-sm focus:outline-none focus:border-[#c4a35a] placeholder:text-[#9c948b]';
 const INPUT_ON_CARD = `bg-[#1a1a2e] ${INPUT_BASE}`; // on a #2a2a3e card
 const INPUT_ON_ITEM = `bg-[#2a2a3e] ${INPUT_BASE}`; // inside a #1a1a2e item box
+
+// A ley line's charge button: the tabs' brown button, on an item box.
+const CHARGE_BUTTON = 'bg-[#5a3a28] hover:bg-[#4a2f20] text-[#f5e6c8] font-semibold transition-colors';
 
 // An editor row's name keeps this floor, so the controls beside it (Edit,
 // Delete, a destination) wrap below the field instead of squeezing it to a
@@ -412,6 +418,17 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
     },
     [onChange],
   );
+
+  // Charging a Dwemer shard on a line: the shard gets a full charge and the
+  // line's spell, and a line that holds no spell yet learns it here, in the
+  // same write (lib/shards.ts).
+  const chargeShard = useCallback(
+    (shard: ShardRef, lineId: string, recordedSpell: SpellbookEntry) => {
+      onChange(chargeShardOnLine(shard, lineId, recordedSpell));
+    },
+    [onChange],
+  );
+  const shards = useMemo(() => shardRefs(character), [character]);
 
   const setDraftLeyLine = useCallback(
     (next: LeyLineDraft | null | ((prev: LeyLineDraft | null) => LeyLineDraft | null)) => {
@@ -1246,6 +1263,8 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
           selectedLeyLine={selectedLeyLine}
           onToggleSelected={(id) => (selectedLeyLine === id ? clearSelection() : selectLeyLine(id))}
           moveFocusTo={moveFocusTo}
+          shards={shards}
+          onCharge={chargeShard}
         />
       </div>
     </div>
@@ -1906,12 +1925,16 @@ function LeyLinesPanel({
   selectedLeyLine,
   onToggleSelected,
   moveFocusTo,
+  shards,
+  onCharge,
 }: {
   leyLines: LeyLine[];
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
   selectedLeyLine: string | null;
   onToggleSelected: (id: string) => void;
   moveFocusTo: (key: string) => void;
+  shards: ShardRef[];
+  onCharge: (shard: ShardRef, lineId: string, recordedSpell: SpellbookEntry) => void;
 }) {
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
@@ -1941,6 +1964,8 @@ function LeyLinesPanel({
                 const next = leyLines[i + 1];
                 moveFocusTo(next ? `ley-line:${next.id}` : 'ley-lines-title');
               }}
+              shards={shards}
+              onCharge={(shard, recordedSpell) => onCharge(shard, ll.id, recordedSpell)}
             />
           ))}
         </div>
@@ -1955,14 +1980,46 @@ function LeyLineEditor({
   onSelect,
   onSave,
   onDelete,
+  shards,
+  onCharge,
 }: {
   leyLine: LeyLine;
   selected: boolean;
   onSelect: () => void;
   onSave: (patch: Partial<LeyLine>) => void;
   onDelete: () => void;
+  shards: ShardRef[];
+  onCharge: (shard: ShardRef, recordedSpell: SpellbookEntry) => void;
 }) {
   const label = leyLine.name || 'unnamed ley line';
+  // A shard is recharged here. Where the line already knows its spell that is
+  // one press; where it doesn't, the player names the spell first, since a
+  // line learns its spell by having a shard charged on it. `pending` is the
+  // shard whose picker is open.
+  const [pending, setPending] = useState<string | null>(null);
+  const [chosen, setChosen] = useState('');
+  const [status, setStatus] = useState('');
+  const spellPicker = useRef<HTMLSelectElement | null>(null);
+  useEffect(() => {
+    if (pending) spellPicker.current?.focus();
+  }, [pending]);
+
+  const charge = (shard: ShardRef, spell: SpellbookEntry) => {
+    onCharge(shard, spell);
+    setPending(null);
+    setChosen('');
+    setStatus(`Charged ${shard.label} on ${label}.`);
+  };
+
+  const pressCharge = (shard: ShardRef) => {
+    setStatus('');
+    if (leyLine.spell) charge(shard, leyLine.spell);
+    else {
+      setChosen('');
+      setPending(shard.item.id);
+    }
+  };
+
   return (
     <div
       role="group"
@@ -2015,6 +2072,77 @@ function LeyLineEditor({
         <input value={leyLine.notes} onChange={(e) => onSave({ notes: e.target.value })} placeholder="Notes" aria-label={`Notes for ${label}`} className={INPUT_ON_ITEM} />
       </div>
       <div className="text-[10px] text-[#9c948b] truncate">{leyLine.hexes.join(' → ')}</div>
+
+      {/* Dwemer shards: a house feature, so nothing shows when the character
+          carries none. */}
+      {shards.length > 0 && (
+        <div className="border-t border-[#5a3a28]/40 pt-1 space-y-1">
+          <div className="text-[10px] text-[#a1988f]">
+            {leyLine.spell
+              ? `Holds ${leyLine.spell.name} (Rank ${leyLine.spell.rank})`
+              : 'Holds no spell yet'}
+          </div>
+          <div className="flex flex-wrap items-center gap-1">
+            {shards.map((shard) => (
+              <button
+                key={`${shard.equipped ? 'eq' : 'st'}:${shard.item.id}`}
+                type="button"
+                onClick={() => pressCharge(shard)}
+                aria-label={`Charge ${shard.label} on ${label}`}
+                className={`${CHARGE_BUTTON} text-xs px-2 py-1 rounded`}
+              >
+                Charge {shard.label}
+              </button>
+            ))}
+          </div>
+          {pending !== null && (
+            <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`Spell ${label} holds`}>
+              <select
+                ref={spellPicker}
+                value={chosen}
+                onChange={(e) => setChosen(e.target.value)}
+                aria-label={`Spell that charging a shard on ${label} teaches`}
+                className={`${INPUT_ON_ITEM} flex-1 min-w-[8rem] text-xs`}
+              >
+                <option value="">-- Spell this line holds --</option>
+                {[1, 2, 3, 4, 5, 6].map((rank) => (
+                  <optgroup key={rank} label={`Rank ${rank}`}>
+                    {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                      <option key={s.name} value={s.name}>{s.name}</option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+              <button
+                type="button"
+                disabled={!chosen}
+                onClick={() => {
+                  const shard = shards.find((s) => s.item.id === pending);
+                  if (shard) charge(shard, { name: chosen, rank: findArcaneSpell(chosen)?.rank ?? 1 });
+                }}
+                aria-label={`Record & charge: ${chosen || 'the spell'} on ${
+                  shards.find((s) => s.item.id === pending)?.label ?? 'the shard'
+                }`}
+                className={`${CHARGE_BUTTON} text-xs px-2 py-1 rounded disabled:opacity-40`}
+              >
+                Record &amp; charge
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setPending(null);
+                  setChosen('');
+                }}
+                aria-label={`Cancel charging on ${label}`}
+                className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] px-1"
+              >
+                Cancel
+              </button>
+            </div>
+          )}
+          <span role="status" className="block text-[10px] text-[#a1988f]">{status}</span>
+        </div>
+      )}
     </div>
   );
 }
