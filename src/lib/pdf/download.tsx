@@ -7,10 +7,11 @@
  */
 import { pdf } from '@react-pdf/renderer';
 import type { Character } from '@/lib/types';
-import { CharacterSheetDocument, sheetText } from './CharacterSheetDocument';
+import { CharacterSheetDocument } from './CharacterSheetDocument';
 import { pdfFileName } from './filename';
 import { loadSheetFonts } from './fonts';
 import { browserPageSize } from './page-size';
+import { sheetText } from './sheet-text';
 
 // The object URL of the last PDF saved. It is released when the next PDF is
 // saved or the page is left (pagehide), never on a timer: Safari on iOS asks

@@ -88,6 +88,7 @@ import {
 } from '@/lib/character-sheet';
 import { rationStockSummary } from '@/lib/rations';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
+import { castsLabel } from '@/lib/shards';
 import type { SheetFonts } from './fonts';
 import { breakName, hasCjk } from './line-breaks';
 import type { PdfPageSize } from './page-size';
@@ -1526,6 +1527,13 @@ function itemName(item: InventoryItem): string {
     const spell = item.scrollSpell;
     return spell?.name ? `Scroll: ${spell.name} (R${spell.rank})` : 'Scroll (no spell chosen)';
   }
+  if (item.kind === 'shard') {
+    // A shard is its spell, as a scroll is: the tab shows the spell in the row
+    // and the charges beneath it, so the sheet names both.
+    const spell = item.shard?.spell;
+    const name = oneLine(item.name ?? '') || 'Dwemer shard';
+    return spell?.name ? `${name}: ${spell.name} (R${spell.rank})` : `${name} (no spell recorded)`;
+  }
   // The Inventory tab shows an item's (or spell book's) name on one line, even
   // one saved with a line break, so the sheet does too.
   return oneLine(item.name ?? '');
@@ -1545,6 +1553,9 @@ function ItemCell({ item }: { item: InventoryItem }) {
               : ': no spells recorded'
           }`}
         </Text>
+      ) : null}
+      {item.kind === 'shard' && item.shard ? (
+        <Text style={s.cellSub}>{`Casts: ${castsLabel(item.shard)}`}</Text>
       ) : null}
     </View>
   );
@@ -1698,30 +1709,6 @@ function InventorySection({ c }: { c: Character }) {
 }
 
 // ── Document ─────────────────────────────────────────────────
-
-// Fields the sheet leaves out: the Combat, Magic and Other notes, spell
-// study, the journal, the NPCs, the party's location and the map. Typed as
-// Character's keys, so that renaming or removing one of them fails the
-// typecheck.
-const UNPRINTED_FIELDS: ReadonlySet<string> = new Set<keyof Character>([
-  'combatTalents',
-  'otherNotes',
-  'spellNotes',
-  'spellStudy',
-  'failedStudies',
-  'journalEntries',
-  'npcs',
-  'currentLocation',
-  'currentLocationHex',
-  'mapData',
-]);
-
-/** All the character's text the sheet may print, for choosing which fonts to load. */
-export function sheetText(c: Character): string {
-  // Known spells print without their notes.
-  const printed = { ...c, knownSpells: c.knownSpells.map((spell) => spell.name) };
-  return JSON.stringify(printed, (key, value) => (UNPRINTED_FIELDS.has(key) ? undefined : value));
-}
 
 interface CharacterSheetDocumentProps {
   character: Character;

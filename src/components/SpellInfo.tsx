@@ -41,6 +41,13 @@ const HIDE_DELAY_MS = 150;
 const summaryTextClasses = 'text-xs leading-snug text-[#f5e6c8]/90 border-l-2 border-[#c4a35a]/60 pl-2';
 
 /**
+ * A spell's summary panel in a flex-wrap row of spells: it comes straight
+ * after the info button in the page, so a screen reader reaches it next, but
+ * shows on a line of its own below the rest of the row.
+ */
+export const SPELL_PANEL_CLASSES = 'basis-full order-last';
+
+/**
  * One spell's summary panel within a list, as props for its SpellInfo and
  * SpellSummaryPanel: spread the same object into both.
  */
@@ -75,6 +82,25 @@ export function useSpellDisclosures(): (key: string) => SpellDisclosure {
     panelId: `${baseId}spell-${key.replace(/\s/g, '_')}`,
     toggleKey: key,
     onToggle,
+  });
+}
+
+/**
+ * What to put in brackets after each info button's name in a list of spells
+ * ("What Fireball does (memorised)"): `label`, numbered where the same spell
+ * is in the list more than once ("memorised, 2 of 2"), so that every row's
+ * button has a name of its own.
+ */
+export function spellRowContexts(spellType: SpellType, names: readonly string[], label: string): string[] {
+  const keys = names.map((name) => findSpell(spellType, name)?.name ?? name.trim().toLowerCase());
+  const totals = new Map<string, number>();
+  for (const key of keys) totals.set(key, (totals.get(key) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return keys.map((key) => {
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    const total = totals.get(key) ?? 1;
+    return total > 1 ? `${label}, ${n} of ${total}` : label;
   });
 }
 

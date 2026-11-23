@@ -29,7 +29,6 @@ import {
   SPELLBOOK_CAPACITY,
   FEATURE_NOTES,
   findArcaneSpell,
-  findSpell,
   getLearnableSpellRanks,
   getSpellSummary,
   getStudyConfig,
@@ -57,8 +56,10 @@ import {
 import { newId } from '@/lib/ids';
 import {
   ChosenSpellSummary,
+  SPELL_PANEL_CLASSES,
   SpellInfo,
   SpellSummaryPanel,
+  spellRowContexts,
   useSpellDisclosures,
   type SpellDisclosure,
 } from '@/components/SpellInfo';
@@ -90,27 +91,6 @@ const rowNameClasses = 'flex flex-auto min-w-0 items-center gap-2';
 // The rest of such a row: kept to the right, and wrapping onto further lines
 // itself only if it can't fit on one.
 const rowControlsClasses = 'ml-auto flex flex-wrap items-center justify-end gap-2 min-w-0';
-// A spell's summary panel in such a row. It comes straight after the info
-// button in the page, so a screen reader reaches it next, but shows on a line
-// of its own below the rest of the row.
-const rowPanelClasses = 'basis-full order-last';
-
-// What to put in brackets after each info button's name in a list of spells
-// ("What Fireball does (memorised)"): `label`, numbered where the same spell
-// is in the list more than once ("memorised, 2 of 2"), so that every row's
-// button has a name of its own.
-function spellRowContexts(spellType: SpellType, names: readonly string[], label: string): string[] {
-  const keys = names.map((name) => findSpell(spellType, name)?.name ?? name.trim().toLowerCase());
-  const totals = new Map<string, number>();
-  for (const key of keys) totals.set(key, (totals.get(key) ?? 0) + 1);
-  const seen = new Map<string, number>();
-  return keys.map((key) => {
-    const n = (seen.get(key) ?? 0) + 1;
-    seen.set(key, n);
-    const total = totals.get(key) ?? 1;
-    return total > 1 ? `${label}, ${n} of ${total}` : label;
-  });
-}
 
 // Spells can only be learned of a Rank the character can memorise at their
 // Level (Player's Book p78), so the pickers for learning one offer only those
@@ -625,7 +605,7 @@ const MemorisedSpellRow = memo(function MemorisedSpellRow({
             </>
           )}
         </div>
-        <SpellSummaryPanel spellType={spellType} name={spell.name} {...info} className={rowPanelClasses} />
+        <SpellSummaryPanel spellType={spellType} name={spell.name} {...info} className={SPELL_PANEL_CLASSES} />
         {spellType === 'holy' && (
           <input
             type="number"
@@ -741,7 +721,7 @@ function InventoryScrollsList({
                 </SpellInfo>
               </span>
             </span>
-            <SpellSummaryPanel spellType="arcane" name={s.scrollSpell!.name} {...info} className={rowPanelClasses} />
+            <SpellSummaryPanel spellType="arcane" name={s.scrollSpell!.name} {...info} className={SPELL_PANEL_CLASSES} />
             <button
               type="button"
               onClick={() => castScroll(s.id)}
@@ -1188,7 +1168,7 @@ const KnownSpellRow = memo(function KnownSpellRow({
           <SpellInfo spellType="arcane" name={spell.name} context={context} {...info}>{spell.name}</SpellInfo>
         </span>
       </span>
-      <SpellSummaryPanel spellType="arcane" name={spell.name} {...info} className={`${rowPanelClasses} mb-1`} />
+      <SpellSummaryPanel spellType="arcane" name={spell.name} {...info} className={`${SPELL_PANEL_CLASSES} mb-1`} />
       <span className={rowControlsClasses}>
         <span
           className="text-[#f5e6c8]/60 text-xs"
@@ -1500,7 +1480,7 @@ function SpellStudyBlock({
               spellType="arcane"
               name={active.spellName}
               {...spellInfo(active.id)}
-              className={rowPanelClasses}
+              className={SPELL_PANEL_CLASSES}
             />
             <span className="text-[#f5e6c8]/60 text-xs">({active.source})</span>
             <span className="ml-auto text-[#f5e6c8]/60 text-xs">
@@ -1627,7 +1607,7 @@ function SpellStudyBlock({
                         <SpellInfo spellType="arcane" name={q.spellName} context={context} {...info}>{q.spellName}</SpellInfo>
                       </span>
                     </span>
-                    <SpellSummaryPanel spellType="arcane" name={q.spellName} {...info} className={rowPanelClasses} />
+                    <SpellSummaryPanel spellType="arcane" name={q.spellName} {...info} className={SPELL_PANEL_CLASSES} />
                     <span className={rowControlsClasses}>
                       <span className="text-[#f5e6c8]/60 text-xs">{q.source} · {q.weeksRequired}w</span>
                       <button
