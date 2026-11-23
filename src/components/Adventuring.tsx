@@ -812,16 +812,18 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
                   burnedOut ? 'bg-red-900/30 border border-red-400/30' : 'bg-[#1a1a2e]'
                 }`}
               >
-                {/* The light and its time stay together, and the four time
-                    buttons move to their own line when the row can't hold them
-                    beside it (a big font on a phone). Neither span has a fixed
-                    width: `w-16` is 4rem, which at a 24px font is 96px, so the
-                    pair needed 204px of a 197px row and split. */}
+                {/* The light and its time wrap together onto their own line,
+                    splitting only if the pair outgrows it, and the four time
+                    buttons take the line below when the row can't hold them
+                    both (a big font on a phone). Neither span has a fixed
+                    width: `w-16` is 4rem, so at a 24px font each span was 96px
+                    whatever its label, and the pair came to the row's whole
+                    204px of content, which split it. */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-sm font-semibold w-auto ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
+                  <span className={`text-sm font-semibold ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
                     {LIGHT_SOURCE_TYPES[source.type].label}
                   </span>
-                  <span className={`text-sm font-bold w-auto ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
+                  <span className={`text-sm font-bold ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
                     {source.minutesRemaining} min
                   </span>
                 </div>

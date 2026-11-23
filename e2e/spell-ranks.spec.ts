@@ -7,8 +7,10 @@
 import type { Locator, Page } from '@playwright/test';
 import { rankAboveLearnableNote } from '../src/lib/character-sheet';
 import { getCharacterMagicProfile, getLearnableSpellRanks } from '../src/lib/gamedata';
-import { FIXTURES, openApp, openTab, TABS } from './support/app';
-import { expect, test } from './support/test';
+import { newProblems } from './known-issues';
+import { FIXTURES, openApp, openTab, settle, TABS } from './support/app';
+import { findLayoutProblems } from './support/layout';
+import { expect, test, viewportAt, WIDTHS } from './support/test';
 
 const SPELLS_TAB = TABS.find((tab) => tab.id === 'spells')!;
 const CALENDAR_TAB = TABS.find((tab) => tab.id === 'calendar')!;
@@ -135,3 +137,23 @@ test('known spells and studies above those Ranks say so', async ({ page }) => {
   await openTab(page, CALENDAR_TAB);
   await expect(page.getByText(rankAboveLearnableNote(4, character.level), { exact: true })).toHaveCount(1);
 });
+
+// The layout tests check each tab as it first opens, so the panel that adds a
+// known spell by hand — open only once a player opens it — went unchecked, and
+// a picker that could shrink to nothing at a narrow width passed the suite.
+// This opens it at every width of the layout matrix and checks it, as
+// e2e/map-picker.spec.ts does for the map's kind picker.
+for (const width of WIDTHS) {
+  test.describe(`with the add panel open at ${width}px`, () => {
+    test.use({ viewport: viewportAt(width) });
+
+    test('nothing spills out of the Known Spells card', async ({ page, defaultFontSize }) => {
+      await openApp(page, FIXTURES.lowLevelMagician);
+      await openTab(page, SPELLS_TAB);
+      await page.getByRole('button', { name: '+ Add known spell (manual)' }).click();
+      await settle(page);
+      const where = { tab: 'spells' as const, width, fontSize: defaultFontSize };
+      expect.soft(newProblems(await findLayoutProblems(page), where), 'layout problems with the add panel open').toEqual([]);
+    });
+  });
+}
