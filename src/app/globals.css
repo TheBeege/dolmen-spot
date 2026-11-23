@@ -44,6 +44,15 @@
        parchment faint   #9c948b  4.68 / 5.70   for parchment/20-/40 and
                                                  every field's placeholder
        gold faded        #b0955c  4.87 / 5.93   for gold/30-/70
+       destructive       #ff9a85  6.81 / 8.30   what removes something: a
+                                                 Delete button's label, whose
+                                                 hover is #ffd0c4 (10.05 / 12.24)
+
+     --color-blood (#8b2500) and --color-blood-light (#b33a1a) are fills and
+     borders only, never text: on the sheet's dark surfaces they are 1.58 / 1.92
+     and 2.36 / 2.87, far below AA. A label that removes something is the
+     destructive tone above instead, which is why the map's editors, the
+     character switcher and the cloud-save list all use it.
 
      Unavailable text keeps a cue other than its colour, since AA ruled out
      fading it: a dashed border on a boxed control, italics on an inline one.

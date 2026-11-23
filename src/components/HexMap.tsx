@@ -124,6 +124,14 @@ const INPUT_BASE =
 const INPUT_ON_CARD = `bg-[#1a1a2e] ${INPUT_BASE}`; // on a #2a2a3e card
 const INPUT_ON_ITEM = `bg-[#2a2a3e] ${INPUT_BASE}`; // inside a #1a1a2e item box
 
+// An editor row's name keeps this floor, so the controls beside it (Edit,
+// Delete, a destination) wrap below the field instead of squeezing it to a
+// sliver. In rem, so it grows with the default font size, but never wider than
+// the row: Inventory.tsx's NAME_MIN_WIDTH.
+const NAME_MIN_WIDTH = 'min-w-[min(6rem,100%)]';
+// The destructive text tone tagged in globals.css, for a remove button.
+const DELETE_BUTTON = 'text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors';
+
 type View = { x: number; y: number; w: number; h: number };
 type Point = { x: number; y: number };
 
@@ -1631,7 +1639,7 @@ function POIEditor({
           value={poi.name}
           onChange={(e) => onSave({ name: e.target.value })}
           aria-label="Point of interest name"
-          className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
+          className={`flex-1 ${NAME_MIN_WIDTH} bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]`}
         />
         <button
           type="button"
@@ -1646,7 +1654,7 @@ function POIEditor({
           type="button"
           onClick={onDelete}
           aria-label={`Delete POI ${label}`}
-          className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors whitespace-nowrap"
+          className={DELETE_BUTTON}
         >
           Delete
         </button>
@@ -1810,7 +1818,7 @@ function DoorEditor({
           value={door.name}
           onChange={(e) => onSaveText({ name: e.target.value })}
           aria-label="Fairy door name"
-          className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
+          className={`flex-1 ${NAME_MIN_WIDTH} bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]`}
         />
         <span className="text-xs text-[#9c948b]">{door.destination.kind === 'wild' ? 'wild' : `→ ${partner?.hex ?? '?'}`}</span>
         <button
@@ -1826,7 +1834,7 @@ function DoorEditor({
           type="button"
           onClick={onDelete}
           aria-label={`Delete fairy door ${label}`}
-          className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors whitespace-nowrap"
+          className={DELETE_BUTTON}
         >
           Delete
         </button>
@@ -1976,7 +1984,7 @@ function LeyLineEditor({
           value={leyLine.name}
           onChange={(e) => onSave({ name: e.target.value })}
           aria-label="Ley line name"
-          className="flex-1 min-w-0 bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]"
+          className={`flex-1 ${NAME_MIN_WIDTH} bg-transparent text-[#f5e6c8] text-base md:text-sm focus:outline-none border-b border-transparent focus:border-[#c4a35a]`}
         />
         <span className="text-xs text-[#9c948b]">
           {leyLine.hexes.length} hex{leyLine.hexes.length === 1 ? '' : 'es'}
@@ -1985,7 +1993,7 @@ function LeyLineEditor({
           type="button"
           onClick={onDelete}
           aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`}
-          className="text-xs text-[#ff9a85] hover:text-[#ffd0c4] transition-colors whitespace-nowrap"
+          className={DELETE_BUTTON}
         >
           Delete
         </button>
