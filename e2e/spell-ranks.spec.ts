@@ -8,9 +8,10 @@ import type { Locator, Page } from '@playwright/test';
 import { rankAboveLearnableNote } from '../src/lib/character-sheet';
 import { getCharacterMagicProfile, getLearnableSpellRanks } from '../src/lib/gamedata';
 import { newProblems } from './known-issues';
+import { findA11yProblems } from './support/a11y';
 import { FIXTURES, openApp, openTab, settle, TABS } from './support/app';
 import { findLayoutProblems } from './support/layout';
-import { expect, test, viewportAt, WIDTHS } from './support/test';
+import { A11Y_FONT_SIZE, expect, test, viewportAt, WIDTHS } from './support/test';
 
 const SPELLS_TAB = TABS.find((tab) => tab.id === 'spells')!;
 const CALENDAR_TAB = TABS.find((tab) => tab.id === 'calendar')!;
@@ -138,11 +139,11 @@ test('known spells and studies above those Ranks say so', async ({ page }) => {
   await expect(page.getByText(rankAboveLearnableNote(4, character.level), { exact: true })).toHaveCount(1);
 });
 
-// The layout tests check each tab as it first opens, so the panel that adds a
-// known spell by hand — open only once a player opens it — went unchecked, and
-// a picker that could shrink to nearly nothing at a narrow width passed the
-// suite. This opens it at every width of the layout matrix and checks it, as
-// e2e/map-picker.spec.ts does for the map's kind picker.
+// The layout and accessibility tests check each tab as it first opens, so the
+// panel that adds a known spell by hand — open only once a player opens it —
+// went unchecked, and a picker that could shrink to nearly nothing at a narrow
+// width passed the suite. This opens it at every width of the layout matrix and
+// checks it, as e2e/map-picker.spec.ts does for the map's kind picker.
 for (const width of WIDTHS) {
   test.describe(`with the add panel open at ${width}px`, () => {
     test.use({ viewport: viewportAt(width) });
@@ -155,6 +156,12 @@ for (const width of WIDTHS) {
 
       const where = { tab: 'spells' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), where), 'layout problems with the add panel open').toEqual([]);
+      // The panel's hint is the target of the pickers' `aria-describedby`, so it
+      // only exists (and axe can only judge it) while the block is open. axe
+      // runs at the matrix's smallest font size only, as playwright.config.ts
+      // keeps a11y.spec.ts out of the other projects.
+      if (defaultFontSize !== A11Y_FONT_SIZE) return;
+      expect.soft(newProblems(await findA11yProblems(page), where), 'accessibility problems with the add panel open').toEqual([]);
 
       // The layout check looks for a control with no width left at all; the bug
       // this closes left the picker 38.5px wide at 320px and a default font,
