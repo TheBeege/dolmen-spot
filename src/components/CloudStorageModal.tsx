@@ -356,7 +356,7 @@ export default function CloudStorageModal({
                             title={`Delete ${file.name.replace('.dolmenwood.json', '')}`}
                             className="text-[#ff9a85] hover:text-[#ffd0c4] disabled:opacity-50 text-xs transition-colors"
                           >
-                            Del
+                            Delete
                           </button>
                         </div>
                       </div>

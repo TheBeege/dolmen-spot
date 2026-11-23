@@ -273,7 +273,7 @@ export default function Home() {
                         title="Delete character"
                         aria-label={`Delete ${c.name || 'this character'}`}
                       >
-                        Del
+                        Delete
                       </button>
                     )}
                   </div>
