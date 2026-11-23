@@ -454,11 +454,20 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
   // for a tap on a marker, so that a phone doesn't raise its keyboard on the
   // way (the search box, being a field, had it up).
   const goToSearchHit = (hit: MapSearchHit) => {
-    if (hit.hex) recenterOnHex(hit.hex);
+    if (!hit.hex) {
+      // A path recorded on no hex yet: there's nowhere to go, so it's only
+      // taken up, the way its own row in the panel reads.
+      if (hit.type === 'path') {
+        selectLeyLine(hit.id);
+        moveFocusTo(`ley-line:${hit.id}`);
+      }
+      return;
+    }
+    recenterOnHex(hit.hex);
     if (hit.type === 'path') {
       selectLeyLine(hit.id);
       moveFocusTo(`ley-line:${hit.id}`);
-    } else if (hit.hex) {
+    } else {
       selectHex(hit.hex, hit.id, 'item');
     }
   };
@@ -1124,10 +1133,17 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap text-sm">
-          {/* Not while a ley line is being drawn: a hex picked then joins the
-              line instead of opening in the inspector, which is what the
-              "Go to hex" field beside this already does. */}
-          {!draft && <MapSearch pois={pois} fairyDoors={doors} leyLines={leyLines} onSelect={goToSearchHit} />}
+          {/* Sits out a ley line being drawn — disabled, not removed, so that
+              whatever was typed in it survives the draft. A hex picked then
+              joins the line instead of opening in the inspector, which is what
+              the "Go to hex" field beside this already does. */}
+          <MapSearch
+            pois={pois}
+            fairyDoors={doors}
+            leyLines={leyLines}
+            onSelect={goToSearchHit}
+            disabled={draft !== null}
+          />
           {!draft ? (
             <button
               type="button"

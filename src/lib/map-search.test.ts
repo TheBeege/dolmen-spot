@@ -26,9 +26,10 @@ const find = (md: Partial<CharacterMapData>, query: string, limit?: number) =>
 
 const names = (results: { hits: MapSearchHit[] }) => results.hits.map((hit) => hit.name);
 
-// The map the kitchen-sink fixture saves: a town, a ring of stones, a tomb, an
-// inn, a nameless kind of point of interest, three fairy doors (two of them on
-// one fairy road) and three paths.
+// A map like the kitchen-sink fixture's, with a keep added and a second town: a
+// town, a ring of stones, a tomb, another town, an inn, the castle, a nameless
+// point of interest, three fairy doors (two of them on one fairy road) and
+// three paths.
 const md = mapOf({
   pois: [
     poi('p1', '1106', 'Lankshorn', 'town'),
@@ -124,6 +125,15 @@ describe('what the search finds', () => {
     assert.deepEqual(find(bare, 'unplotted').hits, [{ type: 'path', id: 'b1', name: 'Unplotted Ley', kindLabel: 'Ley line', hex: '' }]);
   });
 
+  test('a path goes to its first hex that is on the map', () => {
+    // A save can hold a hex the manifest doesn't have (the map changed under
+    // it): the first one that is on the map is the one to go to.
+    const odd = mapOf({ leyLines: [path('b3', ['9999', '', '1106', '0909'], 'Odd Road', 'Ancient road', 'other')] });
+    assert.deepEqual(find(odd, 'odd road').hits[0].hex, '1106');
+    const none = mapOf({ leyLines: [path('b4', ['9999'], 'Lost Road', 'Ancient road', 'other')] });
+    assert.deepEqual(find(none, 'lost road').hits[0].hex, '');
+  });
+
   test('a blank type is searched and shown as a ley line', () => {
     const blank = mapOf({ leyLines: [path('b2', ['0303'], 'Nameless Type', '')] });
     assert.deepEqual(find(blank, 'ley line').hits[0].kindLabel, 'Ley line');
@@ -212,6 +222,29 @@ describe('names the search makes its own', () => {
       pois: [poi('a', '0303', 'Waystone', 'stones'), poi('b', '0304', 'Waystone', 'stones')],
     });
     assert.deepEqual(names(find(pair, 'waystone')), ['Waystone', 'Waystone']);
+  });
+
+  test('a number a real name already has is skipped, so no two results read alike', () => {
+    // Three places called Waystone on one hex, and one really called
+    // "Waystone (2)": the duplicates must not take that name.
+    const crowd = mapOf({
+      pois: [
+        poi('a', '0303', 'Waystone', 'stones'),
+        poi('b', '0303', 'Waystone', 'stones'),
+        poi('c', '0303', 'Waystone', 'stones'),
+        poi('d', '0303', 'Waystone (2)', 'stones'),
+      ],
+    });
+    const results = find(crowd, 'waystone');
+    assert.deepEqual(names(results), ['Waystone', 'Waystone (3)', 'Waystone (4)', 'Waystone (2)']);
+    assert.equal(new Set(results.hits.map((hit) => `${hit.kindLabel} ${hit.name} ${hit.hex}`)).size, 4);
+  });
+
+  test('names that differ only in case keep a fixed order', () => {
+    // The matcher folds case and so does the sort, so these two are left to the
+    // hex they're on, in either map order — no locale can reorder them.
+    const cases = mapOf({ pois: [poi('b', '0304', 'antler camp', 'camp'), poi('a', '0303', 'Antler camp', 'camp')] });
+    assert.deepEqual(find(cases, 'camp').hits.map((hit) => hit.hex), ['0303', '0304']);
   });
 });
 

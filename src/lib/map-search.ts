@@ -150,8 +150,16 @@ interface Match {
   rank: number;
 }
 
-/** Text order, for names that rank the same. */
-const byText = (a: string, b: string) => a.localeCompare(b, 'en', { sensitivity: 'base' });
+/**
+ * Text order, for names that rank the same: by code unit, with the case folded
+ * as the matcher folds it. Accents are left alone, here as there — a locale
+ * collation would fold them, and then two names the search can't tell apart
+ * could still be ordered differently from run to run by locale.
+ */
+const byText = (a: string, b: string) => {
+  const [folded, other] = [a.toLowerCase(), b.toLowerCase()];
+  return folded < other ? -1 : folded > other ? 1 : 0;
+};
 
 /** Best match first: by rank, then by name, then by where the item is, so that the order never wobbles. */
 function compareMatches(a: Match, b: Match): number {
@@ -165,18 +173,32 @@ function compareMatches(a: Match, b: Match): number {
   );
 }
 
+/** What a result reads as, for telling two of them apart: what it is, its name, and its hex. */
+const readingOf = (hit: MapSearchHit, name = hit.name) => [hit.kindLabel, name, hit.hex].join('\u0000');
+
 /**
  * The matches with a name each: two items of the same kind, with the same name,
  * on the same hex (which one search can find) get " (2)", " (3)"… after the
- * first, so that no two results are announced the same way.
+ * first, so that no two results are announced the same way. A number already
+ * taken by an item that is really called that — "Waystone (2)" — is skipped, so
+ * a generated name can never be the same as one of the results' own.
  */
 function withUniqueNames(hits: readonly MapSearchHit[]): MapSearchHit[] {
-  const seen = new Map<string, number>();
+  const own = new Set(hits.map((hit) => readingOf(hit)));
+  const used = new Set<string>();
   return hits.map((hit) => {
-    const key = [hit.kindLabel, hit.name, hit.hex].join('\u0000');
-    const nth = (seen.get(key) ?? 0) + 1;
-    seen.set(key, nth);
-    return nth === 1 ? hit : { ...hit, name: `${hit.name} (${nth})` };
+    let named = hit;
+    if (used.has(readingOf(hit))) {
+      for (let nth = 2; ; nth++) {
+        const candidate = { ...hit, name: `${hit.name} (${nth})` };
+        const reading = readingOf(candidate);
+        if (used.has(reading) || own.has(reading)) continue;
+        named = candidate;
+        break;
+      }
+    }
+    used.add(readingOf(named));
+    return named;
   });
 }
 

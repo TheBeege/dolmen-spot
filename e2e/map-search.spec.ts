@@ -20,6 +20,7 @@ const TOWN_HEX = '1106';
 const INN = 'ks-poi-06'; // The Blue Heron, an inn on 1106 too
 const ROAD = 'ks-ley-02'; // Old Drune Road, a path of type "Ancient road"
 const ROAD_HEX = '0606';
+const SPARE_HEX = '0101'; // a hex the fixture marks nothing on, for adding places to
 const DOORS = ['ks-door-02', 'ks-door-01']; // Hollow Oak, then The Thornhole, on the Silver Way
 const DOOR_HEXES = { 'ks-door-01': '1007', 'ks-door-02': '1404' };
 // Matches more items than the box lists (the kitchen-sink map has 10 names,
@@ -142,13 +143,23 @@ test.describe('at 1280px', () => {
     await page.getByRole('button', { name: 'Clear the search' }).click();
     await expect(results(page)).toHaveCount(0);
     await expect(search).toHaveValue('');
+
+    // A press elsewhere shuts the list and leaves the query alone; coming back
+    // to the box brings the list back.
+    await search.fill('silver');
+    await expect(result(page, first)).toBeVisible();
+    await page.getByRole('heading', { name: 'Dolmenwood Map' }).click();
+    await expect(results(page)).toHaveCount(0);
+    await expect(search).toHaveValue('silver');
+    await search.click();
+    await expect(result(page, first)).toBeVisible();
   });
 
   test('a query that matches nothing says so, and lists nothing', async ({ page }) => {
     const search = await openSearch(page);
     await search.fill('xyzzy');
     await settle(page);
-    await expect(status(page)).toHaveText('No matches for “xyzzy”');
+    await expect(status(page)).toHaveText('No matches');
     await expect(results(page)).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(status(page)).toHaveText('');
@@ -176,12 +187,32 @@ test.describe('at 1280px', () => {
     await settle(page);
     await expect(results(page)).toHaveCount(LISTED);
     await expect(status(page)).toHaveText(`${MANY_MATCHES} matches · ${MANY_MATCHES - LISTED} more not listed`);
+  });
 
-    // No two results read the same way, so each is its own item to a screen reader.
+  test('two places of one name on one hex are told apart, so no two results read alike', async ({ page }) => {
+    const search = await openSearch(page);
+    // Add the same place twice on a hex of its own, as a player would: two rows
+    // that would otherwise read identically.
+    await page.getByLabel('Jump to a hex by typing its 4-digit coordinate').fill(SPARE_HEX);
+    await page.keyboard.press('Enter');
+    for (let added = 0; added < 2; added++) {
+      await page.getByRole('button', { name: '+ POI' }).click();
+      // The form's field comes before any editor's, so the first is its own.
+      await page.getByLabel('Point of interest name').first().fill('Waystone');
+      await page.getByRole('button', { name: 'Add' }).click();
+    }
+    await expect(page.getByRole('heading', { name: `Hex ${SPARE_HEX}` })).toBeVisible();
+
+    await search.fill('waystone');
+    await settle(page);
+    await expect(results(page)).toHaveCount(2);
+    await expect(status(page)).toHaveText('2 matches');
     const labels = await results(page).evaluateAll((els) =>
       els.map((el) => (el as HTMLElement).innerText.replace(/\s+/g, ' ').trim()));
-    expect(labels).toHaveLength(LISTED);
-    expect(new Set(labels).size, `unique names: ${labels.join(' / ')}`).toBe(LISTED);
+    expect(labels).toHaveLength(2);
+    expect(new Set(labels).size, `unique names: ${labels.join(' / ')}`).toBe(2);
+    // One keeps the name, the other says it's the second of them.
+    expect(labels.filter((label) => label.includes('Waystone (2)'))).toHaveLength(1);
   });
 });
 
@@ -191,6 +222,7 @@ test.describe('at 320px', () => {
   test('a chosen item is scrolled into view, not hidden below the map', async ({ page }) => {
     const search = await openSearch(page);
     await search.fill('blue heron');
+    await settle(page);
     await page.keyboard.press('Enter');
     const item = page.locator(`[data-focus-key="item:${INN}"]`);
     await expect(item).toBeFocused();
