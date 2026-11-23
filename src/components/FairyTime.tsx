@@ -168,11 +168,17 @@ export function FairyStatusPanel({
       </div>
 
       <div className="text-center">
+        {/* `max-w-full` caps the button at the card, and `whitespace-normal`
+            plus `break-words` keep the label inside it: "Dolmenwood…" is one
+            word, wider than the button's content box at a 24px font on a
+            phone, so the browser drew it past the button's rounded background.
+            `hyphens-auto` gives a syllable break where the browser has the
+            dictionary for it, as spell names do. */}
         <button
           type="button"
           ref={openerRef}
           onClick={() => setReturning(true)}
-          className={`${greenButtonClasses} max-w-full whitespace-normal`}
+          className={`${greenButtonClasses} max-w-full whitespace-normal break-words hyphens-auto`}
         >
           Return to Dolmenwood&hellip;
         </button>

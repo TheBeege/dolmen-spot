@@ -1074,12 +1074,18 @@ function KnownSpellsBlock({
           </button>
         ) : (
           <div className="flex flex-wrap items-center gap-2 bg-[#2a2a3e]/60 p-2 rounded">
+            {/* `grow basis-40` rather than a bare `flex-1`: the source picker
+                and the Add button beside it can't shrink below their content,
+                so at a big font on a phone a `flex-1` picker was left the few
+                pixels they spare it and collapsed to nothing. Given a basis,
+                it takes a line of its own instead, and grows to the row's
+                width when they wrap (min-w-0 lets it fit that line). */}
             <select
               value={addSelected}
               onChange={(e) => setAddName(e.target.value)}
               aria-label="Known spell to add"
               aria-describedby={addDescribedBy || undefined}
-              className={`${selectClasses} min-w-0 flex-1 text-sm`}
+              className={`${selectClasses} min-w-0 grow basis-40 text-sm`}
             >
               <option value="">-- Select spell --</option>
               {learnableRanks.map((rank) => (

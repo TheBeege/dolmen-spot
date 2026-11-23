@@ -91,10 +91,15 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           </div>
         </div>
 
-        {/* Large HP Display with +/- Buttons. The numbers shrink a step and the
-            row may wrap, so a phone at a big font keeps both buttons beside
-            them instead of off the card. */}
-        <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mb-4">
+        {/* Large HP Display with +/- Buttons. The caption sits on a line of its
+            own (`basis-full`) rather than in the item with the numbers: at a
+            24px font it is 174px wide, wider than the 133px of numbers, so it
+            set that item's width and pushed a button onto a line by itself. The
+            numbers also step down and the gaps close up below 15rem across — a
+            big default font on a phone (320px is 13.3rem at 24px), and nothing
+            else — so 35 + 12 + 116 + 12 + 47 = 221px fits the 228px card there,
+            where the full-size row needs 251px. */}
+        <div className="flex flex-wrap items-center justify-center gap-x-3 max-[15rem]:gap-x-2 gap-y-2 mb-4">
           <button
             type="button"
             onClick={() => adjustHp(-1)}
@@ -103,10 +108,10 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             -
           </button>
 
-          <div className="min-w-0 text-center">
+          <div className="min-w-0">
             <div className="flex flex-wrap items-baseline justify-center gap-2">
               <span
-                className={`text-2xl sm:text-3xl font-bold ${
+                className={`text-2xl max-[15rem]:text-xl sm:text-3xl font-bold ${
                   character.currentHp <= 0
                     ? 'text-red-400'
                     : hpPercentage <= 25
@@ -116,12 +121,11 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
               >
                 {character.currentHp}
               </span>
-              <span className="text-[#a1988f] text-lg sm:text-xl">/</span>
-              <span className="text-2xl sm:text-3xl font-bold text-[#f5e6c8]">
+              <span className="text-[#a1988f] text-lg max-[15rem]:text-base sm:text-xl">/</span>
+              <span className="text-2xl max-[15rem]:text-xl sm:text-3xl font-bold text-[#f5e6c8]">
                 {character.maxHp}
               </span>
             </div>
-            <span className="text-[#a1988f] text-xs">Current / Maximum</span>
           </div>
 
           <button
@@ -131,6 +135,7 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
           >
             +
           </button>
+          <span className="basis-full text-center text-[#a1988f] text-xs">Current / Maximum</span>
         </div>
 
         {/* HP Number Inputs */}

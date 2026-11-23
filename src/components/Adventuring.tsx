@@ -644,10 +644,11 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Rations
         </h2>
-        {/* One column when a cell can't hold its − count + row (a big font on a
-            phone), two when it can. */}
+        {/* Two columns when the two cells fit side by side, and one when they
+            don't: at a default font even a 320px phone fits them (2 × 7rem plus
+            the gap), and a big font on one is what doesn't. */}
         <div className="flex flex-wrap gap-3 mb-3">
-          <div className="min-w-0 grow basis-32 bg-[#1a1a2e] rounded p-3">
+          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
             <div className="text-[#c4a35a] text-sm font-semibold mb-2">Fresh</div>
             <div className="flex items-center gap-2">
               <button
@@ -663,7 +664,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
               >+</button>
             </div>
           </div>
-          <div className="min-w-0 grow basis-32 bg-[#1a1a2e] rounded p-3">
+          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
             <div className="text-[#c4a35a] text-sm font-semibold mb-2">Preserved</div>
             <div className="flex items-center gap-2">
               <button
@@ -813,12 +814,14 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
               >
                 {/* The light and its time stay together, and the four time
                     buttons move to their own line when the row can't hold them
-                    beside it (a big font on a phone). */}
+                    beside it (a big font on a phone). Neither span has a fixed
+                    width: `w-16` is 4rem, which at a 24px font is 96px, so the
+                    pair needed 204px of a 197px row and split. */}
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-sm font-semibold w-16 ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
+                  <span className={`text-sm font-semibold w-auto ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
                     {LIGHT_SOURCE_TYPES[source.type].label}
                   </span>
-                  <span className={`text-sm font-bold w-16 text-center ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
+                  <span className={`text-sm font-bold w-auto ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
                     {source.minutesRemaining} min
                   </span>
                 </div>
