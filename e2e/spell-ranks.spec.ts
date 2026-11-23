@@ -140,20 +140,34 @@ test('known spells and studies above those Ranks say so', async ({ page }) => {
 
 // The layout tests check each tab as it first opens, so the panel that adds a
 // known spell by hand — open only once a player opens it — went unchecked, and
-// a picker that could shrink to nothing at a narrow width passed the suite.
-// This opens it at every width of the layout matrix and checks it, as
+// a picker that could shrink to nearly nothing at a narrow width passed the
+// suite. This opens it at every width of the layout matrix and checks it, as
 // e2e/map-picker.spec.ts does for the map's kind picker.
 for (const width of WIDTHS) {
   test.describe(`with the add panel open at ${width}px`, () => {
     test.use({ viewport: viewportAt(width) });
 
-    test('nothing spills out of the Known Spells card', async ({ page, defaultFontSize }) => {
+    test('the picker keeps a usable width, and nothing spills', async ({ page, defaultFontSize }) => {
       await openApp(page, FIXTURES.lowLevelMagician);
       await openTab(page, SPELLS_TAB);
       await page.getByRole('button', { name: '+ Add known spell (manual)' }).click();
       await settle(page);
+
       const where = { tab: 'spells' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), where), 'layout problems with the add panel open').toEqual([]);
+
+      // The layout check looks for a control with no width left at all; the bug
+      // this closes left the picker 38.5px wide at 320px and a default font,
+      // which it passed over. `grow basis-40` is what keeps that from coming
+      // back: the picker wraps onto a line of its own rather than taking only
+      // what the source picker and Add leave, so it is never the narrowest
+      // control in its row — measured 214px against 109px there, and 166px
+      // against 152px at a 24px font.
+      const picker = await page.getByLabel('Known spell to add').boundingBox();
+      const source = await page.getByLabel('How was this spell learned?').boundingBox();
+      expect
+        .soft(picker?.width, 'the picker, no narrower than the other picker in its row')
+        .toBeGreaterThanOrEqual(source!.width);
     });
   });
 }
