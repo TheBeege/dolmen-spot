@@ -236,7 +236,7 @@ test('the search finds an NPC by anything the card shows', async ({ page }) => {
   const search = page.getByRole('searchbox', { name: 'Search' });
   await search.fill('barrow');
   await expect(page.locator('main article h3')).toHaveText(['Sister Ysolde']);
-  await expect(page.getByText('1 of 3 NPCs match “barrow”', { exact: true })).toBeVisible();
+  await expect(page.getByText('1 of 3 NPCs matches “barrow”', { exact: true })).toBeVisible();
 
   // A hex, and a phrase in quotes, as the Journal's search takes them.
   await search.fill('"locks of hair"');
