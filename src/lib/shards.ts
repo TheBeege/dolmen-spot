@@ -32,32 +32,37 @@ export function spendCast(shard: ShardState): ShardState {
 
 /**
  * `castsPerCharge` as a whole number of at least one: a charge that gave no
- * casts would be no charge at all. `castsLeft` is left alone, even where the
- * player lowers this below it: loading tolerates a shard with more casts left
- * than a charge gives, and so does this.
+ * casts would be no charge at all. The casts left come down with it, so a
+ * shard never shows more left than a charge gives: lowering what a charge
+ * gives is not a way to keep casts the player has already spent a charge on.
+ * (Loading still tolerates more left than a charge gives, for a save written
+ * before this clamped and for one written by a newer release.)
  */
 export function withCastsPerCharge(shard: ShardState, value: number): ShardState {
-  return { ...shard, castsPerCharge: Math.max(1, Math.floor(value) || 1) };
+  const castsPerCharge = Math.max(1, Math.floor(value) || 1);
+  return {
+    ...shard,
+    castsPerCharge,
+    castsLeft: Math.min(shard.castsLeft, castsPerCharge),
+  };
 }
 
 /**
- * The shard recharged on `line`: a full charge of casts, the line it was
- * charged on, and the line's spell.
+ * The shard recharged on the ley line `leyLineId`: a full charge of casts, the
+ * line it was charged on, and `spell`, the spell that line holds.
  *
- * The line's spell is the shard's, and the shard's is the line's: the line
- * learns its spell by charging a shard on it (types.ts, LeyLine.spell). So the
- * spell to use is the line's if it has one, and otherwise the one the caller
- * recorded for the line first (the map asks the player, and saves it on the
- * line, before calling this). A charge on a line that still holds no spell
- * keeps whatever spell the shard last held.
+ * The spell is resolved by the caller, not here. The line's spell is the
+ * shard's and the shard's is the line's — a line learns its spell by charging
+ * a shard on it (types.ts, LeyLine.spell) — so a charge always sets a spell:
+ * the line's if it has one, and otherwise the one the player recorded for it
+ * first (see `chargeShardOnLine`).
  */
-export function chargeShard(shard: ShardState, line: Pick<LeyLine, 'id' | 'spell'>): ShardState {
-  const spell = line.spell ?? shard.spell;
+export function chargeShard(shard: ShardState, leyLineId: string, spell: SpellbookEntry): ShardState {
   return {
     ...shard,
-    ...(spell ? { spell } : {}),
+    spell,
     castsLeft: Math.max(1, Math.floor(shard.castsPerCharge) || 1),
-    leyLineId: line.id,
+    leyLineId,
   };
 }
 
@@ -85,32 +90,31 @@ export function shardLeyLineLabel(shard: ShardState, leyLines: readonly LeyLine[
   return line.name.trim() || 'an unnamed ley line';
 }
 
-/** A shard in the character's inventory: which list it's in, and the item. */
+/** A shard in the character's inventory: which list it's in, the item, and what to call it. */
 export interface ShardRef {
   equipped: boolean;
   item: InventoryItem;
-  /** What the item is called, for naming controls: its name, or "Dwemer shard". */
-  name: string;
-  /** `name`, with its place among the shards added if two shards share a name. */
+  /** The item's name, or "Dwemer shard" when it has none; two that share one say which they are. */
   label: string;
 }
 
 /** Every Dwemer shard the character carries, equipped ones first, in order. */
 export function shardRefs(character: Character): ShardRef[] {
-  const inList = (equipped: boolean) => (items: InventoryItem[] | undefined): ShardRef[] =>
-    (items ?? [])
-      .filter((item) => item.kind === 'shard')
-      .map((item) => ({ equipped, item, name: item.name.trim() || 'Dwemer shard', label: '' }));
+  const inList = (equipped: boolean) =>
+    (items: InventoryItem[] | undefined): { equipped: boolean; item: InventoryItem; name: string }[] =>
+      (items ?? [])
+        .filter((item) => item.kind === 'shard')
+        .map((item) => ({ equipped, item, name: item.name.trim() || 'Dwemer shard' }));
   const refs = [...inList(true)(character.equippedItems), ...inList(false)(character.stowedItems)];
-  // Two shards can share a name, so a shared one says which it is.
+  // A label reads alone ("Charge Dwemer shard on The Antler Line"), so two
+  // shards that share a name say which they are.
   const totals = new Map<string, number>();
   for (const ref of refs) totals.set(ref.name, (totals.get(ref.name) ?? 0) + 1);
   const seen = new Map<string, number>();
-  return refs.map((ref) => {
-    if ((totals.get(ref.name) ?? 0) < 2) return { ...ref, label: ref.name };
-    const n = (seen.get(ref.name) ?? 0) + 1;
-    seen.set(ref.name, n);
-    return { ...ref, label: `${ref.name} ${n}` };
+  return refs.map(({ equipped, item, name }) => {
+    const n = (seen.get(name) ?? 0) + 1;
+    seen.set(name, n);
+    return { equipped, item, label: (totals.get(name) ?? 0) > 1 ? `${name} ${n}` : name };
   });
 }
 
@@ -139,7 +143,10 @@ export function chargeShardOnLine(
     const item = (list ?? []).find((i) => i.id === shard.item.id);
     if (!item) return {};
     const spell = line.spell ?? recordedSpell;
-    const charged: InventoryItem = { ...item, shard: chargeShard(item.shard ?? newShardState(), { id: line.id, spell }) };
+    const charged: InventoryItem = {
+      ...item,
+      shard: chargeShard(item.shard ?? newShardState(), line.id, spell),
+    };
     const replace = (items: InventoryItem[] | undefined) =>
       (items ?? []).map((i) => (i.id === charged.id ? charged : i));
     return {

@@ -98,43 +98,39 @@ describe('withCastsPerCharge', () => {
     assert.equal(withCastsPerCharge(shard(), Number.NaN).castsPerCharge, 1);
   });
 
-  test('leaves casts left alone, even below it: loading tolerates more left than a charge gives', () => {
-    assert.equal(withCastsPerCharge(shard({ castsLeft: 5, castsPerCharge: 5 }), 2).castsLeft, 5);
+  test('brings the casts left down with it, so a shard never shows more than a charge gives', () => {
+    const lowered = withCastsPerCharge(shard({ castsLeft: 5, castsPerCharge: 5 }), 2);
+    assert.equal(lowered.castsPerCharge, 2);
+    assert.equal(lowered.castsLeft, 2);
+  });
+
+  test('leaves the casts left alone when they already fit the new charge', () => {
+    assert.equal(withCastsPerCharge(shard({ castsLeft: 1, castsPerCharge: 5 }), 3).castsLeft, 1);
   });
 });
 
 describe('chargeShard', () => {
-  test('a charge fills the casts and records the line', () => {
-    const charged = chargeShard(shard({ castsPerCharge: 3 }), line({ spell: DWEO }));
+  test('a charge fills the casts, records the line and sets the spell', () => {
+    const charged = chargeShard(shard({ castsPerCharge: 3 }), 'line-1', DWEO);
     assert.equal(charged.castsLeft, 3, 'castsLeft = castsPerCharge');
     assert.equal(charged.leyLineId, 'line-1');
-    assert.deepEqual(charged.spell, DWEO, "the line's spell is the shard's");
-  });
-
-  test('a charge with one cast per charge leaves exactly one', () => {
-    assert.equal(chargeShard(shard({ castsPerCharge: 1 }), line({ spell: DWEO })).castsLeft, 1);
-  });
-
-  test('recharging a spent shard fills it again', () => {
-    const spent = shard({ castsLeft: 0, castsPerCharge: 2, spell: FIREBALL, leyLineId: 'gone' });
-    assert.equal(chargeShard(spent, line({ spell: DWEO })).castsLeft, 2);
-  });
-
-  test('a line that holds a spell of its own keeps it: the shard takes the line’s', () => {
-    const charged = chargeShard(shard({ spell: FIREBALL }), line({ spell: DWEO }));
     assert.deepEqual(charged.spell, DWEO);
   });
 
-  test('a line that holds none keeps the spell the shard last held', () => {
-    const charged = chargeShard(shard({ spell: FIREBALL }), line());
-    assert.deepEqual(charged.spell, FIREBALL, 'the charge still records the line');
+  test('a charge with one cast per charge leaves exactly one', () => {
+    assert.equal(chargeShard(shard({ castsPerCharge: 1 }), 'line-1', DWEO).castsLeft, 1);
+  });
+
+  test('recharging a spent shard fills it again, and replaces the spell it held', () => {
+    const spent = shard({ castsLeft: 0, castsPerCharge: 2, spell: FIREBALL, leyLineId: 'gone' });
+    const charged = chargeShard(spent, 'line-1', DWEO);
+    assert.equal(charged.castsLeft, 2);
+    assert.deepEqual(charged.spell, DWEO, 'the spell resolved for this charge, not the last one');
     assert.equal(charged.leyLineId, 'line-1');
   });
 
-  test('a shard left unable to say what it holds stays without a spell', () => {
-    const charged = chargeShard(shard(), line());
-    assert.equal(charged.spell, undefined);
-    assert.equal(charged.leyLineId, 'line-1');
+  test('a charge of a shard saved with no charge per charge gives one', () => {
+    assert.equal(chargeShard(shard({ castsPerCharge: 0 }), 'line-1', DWEO).castsLeft, 1);
   });
 });
 
@@ -193,7 +189,6 @@ describe('shardRefs', () => {
 
   test('a shard with no name still has one to name its controls with', () => {
     const c: Character = { ...createDefaultCharacter(), equippedItems: [shardItem({ name: '  ' })] };
-    assert.equal(shardRefs(c)[0].name, 'Dwemer shard');
     assert.equal(shardRefs(c)[0].label, 'Dwemer shard');
   });
 

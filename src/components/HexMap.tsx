@@ -56,7 +56,7 @@ import {
   withPoiKind,
 } from '@/lib/map-data';
 import { countEntriesByHex, getJournalEntries } from '@/lib/journal';
-import { ARCANE_SPELLS, findArcaneSpell } from '@/lib/gamedata';
+import { ARCANE_SPELLS } from '@/lib/gamedata';
 import { chargeShardOnLine, shardRefs, type ShardRef } from '@/lib/shards';
 import { newId } from '@/lib/ids';
 import { FOCUS_RING } from '@/components/focus-ring';
@@ -1265,6 +1265,7 @@ export default function HexMap({ character, onChange, onOpenJournal }: HexMapPro
           moveFocusTo={moveFocusTo}
           shards={shards}
           onCharge={chargeShard}
+          currentHex={currentHex}
         />
       </div>
     </div>
@@ -1919,6 +1920,25 @@ function DoorEditor({
 }
 
 // --- Ley lines list panel ---
+/**
+ * What each line is called wherever a control names it: its name, with which of
+ * its kind it is when two lines share one, since "Charge the shard on the Old
+ * Road" would otherwise name two lines.
+ */
+function leyLineLabels(leyLines: LeyLine[]): string[] {
+  const nameOf = (ll: LeyLine) => ll.name.trim() || 'unnamed ley line';
+  const totals = new Map<string, number>();
+  for (const ll of leyLines) totals.set(nameOf(ll), (totals.get(nameOf(ll)) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return leyLines.map((ll) => {
+    const name = nameOf(ll);
+    const total = totals.get(name) ?? 0;
+    const n = (seen.get(name) ?? 0) + 1;
+    seen.set(name, n);
+    return total > 1 ? `${name} (${n} of ${total})` : name;
+  });
+}
+
 function LeyLinesPanel({
   leyLines,
   updateMap,
@@ -1927,6 +1947,7 @@ function LeyLinesPanel({
   moveFocusTo,
   shards,
   onCharge,
+  currentHex,
 }: {
   leyLines: LeyLine[];
   updateMap: (fn: (md: CharacterMapData) => CharacterMapData) => void;
@@ -1935,7 +1956,9 @@ function LeyLinesPanel({
   moveFocusTo: (key: string) => void;
   shards: ShardRef[];
   onCharge: (shard: ShardRef, lineId: string, recordedSpell: SpellbookEntry) => void;
+  currentHex: HexCoord | '';
 }) {
+  const labels = leyLineLabels(leyLines);
   return (
     <div className="bg-[#2a2a3e] rounded-lg p-4">
       <h3
@@ -1953,6 +1976,8 @@ function LeyLinesPanel({
             <LeyLineEditor
               key={ll.id}
               leyLine={ll}
+              label={labels[i]}
+              onLine={currentHex !== '' && ll.hexes.includes(currentHex)}
               selected={selectedLeyLine === ll.id}
               onSelect={() => onToggleSelected(ll.id)}
               onSave={(patch) =>
@@ -1966,6 +1991,7 @@ function LeyLinesPanel({
               }}
               shards={shards}
               onCharge={(shard, recordedSpell) => onCharge(shard, ll.id, recordedSpell)}
+              moveFocusTo={moveFocusTo}
             />
           ))}
         </div>
@@ -1976,46 +2002,73 @@ function LeyLinesPanel({
 
 function LeyLineEditor({
   leyLine,
+  label,
+  onLine,
   selected,
   onSelect,
   onSave,
   onDelete,
   shards,
   onCharge,
+  moveFocusTo,
 }: {
   leyLine: LeyLine;
+  /** What this line is called in the controls below: its name, and which of its kind it is if shared. */
+  label: string;
+  /** Whether the party is on a hex of this line, which is where a shard is charged. */
+  onLine: boolean;
   selected: boolean;
   onSelect: () => void;
   onSave: (patch: Partial<LeyLine>) => void;
   onDelete: () => void;
   shards: ShardRef[];
   onCharge: (shard: ShardRef, recordedSpell: SpellbookEntry) => void;
+  moveFocusTo: (key: string) => void;
 }) {
-  const label = leyLine.name || 'unnamed ley line';
   // A shard is recharged here. Where the line already knows its spell that is
   // one press; where it doesn't, the player names the spell first, since a
   // line learns its spell by having a shard charged on it. `pending` is the
   // shard whose picker is open.
   const [pending, setPending] = useState<string | null>(null);
-  const [chosen, setChosen] = useState('');
+  const [chosen, setChosen] = useState<SpellbookEntry | null>(null);
   const [status, setStatus] = useState('');
   const spellPicker = useRef<HTMLSelectElement | null>(null);
   useEffect(() => {
-    if (pending) spellPicker.current?.focus();
+    if (pending !== null) spellPicker.current?.focus();
   }, [pending]);
+  // A picker left open for a shard that has since gone (deleted on the
+  // Inventory tab) has nothing to charge: it shows nothing rather than a
+  // chooser for a shard that is not there.
+  const pendingShard = pending === null ? null : shards.find((s) => s.item.id === pending) ?? null;
+
+  // Both closing the picker and charging through it remove the control the
+  // player is on, so focus goes back to that shard's Charge button.
+  // The focus key names the line as well as the shard: every line draws a
+  // Charge button for every shard, so the shard's id alone matches the first
+  // line's button — which, on a line the party is not standing on, is disabled
+  // and takes no focus at all.
+  const focusKeyFor = (shardId: string) => `charge:${leyLine.id}:${shardId}`;
+  const closePicker = () => {
+    const id = pending;
+    setPending(null);
+    setChosen(null);
+    if (id !== null) moveFocusTo(focusKeyFor(id));
+  };
 
   const charge = (shard: ShardRef, spell: SpellbookEntry) => {
+    const fromPicker = pending !== null;
     onCharge(shard, spell);
     setPending(null);
-    setChosen('');
+    setChosen(null);
     setStatus(`Charged ${shard.label} on ${label}.`);
+    if (fromPicker) moveFocusTo(focusKeyFor(shard.item.id));
   };
 
   const pressCharge = (shard: ShardRef) => {
     setStatus('');
     if (leyLine.spell) charge(shard, leyLine.spell);
     else {
-      setChosen('');
+      setChosen(null);
       setPending(shard.item.id);
     }
   };
@@ -2077,30 +2130,75 @@ function LeyLineEditor({
           carries none. */}
       {shards.length > 0 && (
         <div className="border-t border-[#5a3a28]/40 pt-1 space-y-1">
-          <div className="text-[10px] text-[#a1988f]">
-            {leyLine.spell
-              ? `Holds ${leyLine.spell.name} (Rank ${leyLine.spell.rank})`
-              : 'Holds no spell yet'}
+          <div className="flex flex-wrap items-center gap-1">
+            <span aria-hidden="true" className="text-[10px] text-[#a1988f]">Holds</span>
+            {/* The line's own spell, learned by charging a shard on it.
+                Editable, so one recorded wrongly (or recorded on the wrong
+                line) can be put right: every charge copies it to the shard, so
+                it is the copy that matters. Clearing it asks for a spell again
+                on the next charge. */}
+            <select
+              value={leyLine.spell?.name ?? ''}
+              onChange={(e) => {
+                const spell = ARCANE_SPELLS.find((s) => s.name === e.target.value);
+                onSave({ spell: spell ? { name: spell.name, rank: spell.rank } : undefined });
+              }}
+              aria-label={`Spell held by ${label}`}
+              className={`${INPUT_ON_ITEM} min-w-[8rem] max-w-full flex-1 text-xs`}
+            >
+              <option value="">-- No spell --</option>
+              {/* Arcane spells only, as the scroll and spell book pickers offer. */}
+              {[1, 2, 3, 4, 5, 6].map((rank) => (
+                <optgroup key={rank} label={`Rank ${rank}`}>
+                  {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                    <option key={s.name} value={s.name}>{s.name}</option>
+                  ))}
+                </optgroup>
+              ))}
+            </select>
+            {leyLine.spell && (
+              <span className="text-[10px] text-[#c4a35a] shrink-0">Rank {leyLine.spell.rank}</span>
+            )}
           </div>
+          {!onLine && (
+            <div className="text-[10px] text-[#a1988f] italic">
+              The party is not on this line: move it to one of its hexes to charge a shard here.
+            </div>
+          )}
           <div className="flex flex-wrap items-center gap-1">
             {shards.map((shard) => (
               <button
                 key={`${shard.equipped ? 'eq' : 'st'}:${shard.item.id}`}
                 type="button"
                 onClick={() => pressCharge(shard)}
+                disabled={!onLine}
+                data-focus-key={focusKeyFor(shard.item.id)}
                 aria-label={`Charge ${shard.label} on ${label}`}
-                className={`${CHARGE_BUTTON} text-xs px-2 py-1 rounded`}
+                title={onLine ? undefined : `Move the party to a hex of ${label} to charge a shard`}
+                className={`${CHARGE_BUTTON} max-w-full break-words hyphens-auto text-left text-xs px-2 py-1 rounded disabled:opacity-40`}
               >
                 Charge {shard.label}
               </button>
             ))}
           </div>
-          {pending !== null && (
-            <div className="flex flex-wrap items-center gap-1" role="group" aria-label={`Spell ${label} holds`}>
+          {pendingShard && (
+            <div
+              className="flex flex-wrap items-center gap-1"
+              role="group"
+              aria-label={`Spell ${label} holds`}
+              onKeyDown={(e) => {
+                if (e.key !== 'Escape') return;
+                e.stopPropagation();
+                closePicker();
+              }}
+            >
               <select
                 ref={spellPicker}
-                value={chosen}
-                onChange={(e) => setChosen(e.target.value)}
+                value={chosen?.name ?? ''}
+                onChange={(e) => {
+                  const spell = ARCANE_SPELLS.find((s) => s.name === e.target.value);
+                  setChosen(spell ? { name: spell.name, rank: spell.rank } : null);
+                }}
                 aria-label={`Spell that charging a shard on ${label} teaches`}
                 className={`${INPUT_ON_ITEM} flex-1 min-w-[8rem] text-xs`}
               >
@@ -2117,22 +2215,16 @@ function LeyLineEditor({
                 type="button"
                 disabled={!chosen}
                 onClick={() => {
-                  const shard = shards.find((s) => s.item.id === pending);
-                  if (shard) charge(shard, { name: chosen, rank: findArcaneSpell(chosen)?.rank ?? 1 });
+                  if (chosen) charge(pendingShard, chosen);
                 }}
-                aria-label={`Record & charge: ${chosen || 'the spell'} on ${
-                  shards.find((s) => s.item.id === pending)?.label ?? 'the shard'
-                }`}
+                aria-label={`Record & charge: ${chosen?.name ?? 'the spell'} on ${pendingShard.label}`}
                 className={`${CHARGE_BUTTON} text-xs px-2 py-1 rounded disabled:opacity-40`}
               >
                 Record &amp; charge
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setPending(null);
-                  setChosen('');
-                }}
+                onClick={closePicker}
                 aria-label={`Cancel charging on ${label}`}
                 className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] px-1"
               >

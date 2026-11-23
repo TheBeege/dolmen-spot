@@ -45,15 +45,19 @@ function characterWithShard(): Character {
 }
 
 describe('sheetText', () => {
-  test('a shard’s spell is not text the sheet prints', () => {
+  test('a shard’s spell and its casts are text the sheet prints', () => {
     const c = characterWithShard();
-    // The spell is really on the character, so its absence below means something.
+    // The spell is really on the character, so its presence below means something.
     assert.equal(c.equippedItems[0].shard!.spell!.name, SHARD_SPELL.name);
-    assert.ok(!sheetText(createDefaultCharacter()).includes(SHARD_SPELL.name), 'nothing else holds the name');
     const text = sheetText(c);
-    assert.ok(!text.includes(SHARD_SPELL.name), 'the shard’s spell is a reference, not printed text');
-    assert.ok(!text.includes('leyLineId'), 'nor the line it was charged on');
-    assert.ok(!text.includes(SHARD_LINE.name), 'nor the line’s name');
+    assert.ok(text.includes(SHARD_SPELL.name), 'the sheet prints the spell a shard holds');
+    assert.ok(text.includes('"castsLeft":2'), 'and the casts left on its charge');
+    assert.ok(text.includes('"castsPerCharge":3'), 'and what a charge gives');
+  });
+
+  test('the line a shard was charged on is not: the sheet leaves the map out', () => {
+    const text = sheetText(characterWithShard());
+    assert.ok(!text.includes('leyLineId'), 'the line is a reference into the map, which is unprinted');
   });
 
   test('what the sheet does print about the item is still there', () => {
@@ -64,14 +68,6 @@ describe('sheetText', () => {
 
   test('a scroll’s spell still counts: it prints on the sheet', () => {
     assert.ok(sheetText(characterWithShard()).includes('Dweomerlight'), 'the scroll’s spell name is text the sheet prints');
-  });
-
-  test('a field that is merely called shard is left alone', () => {
-    // The guard is on a shard's state, not on the word: a future field of that
-    // name without castsLeft/castsPerCharge is text the sheet may print.
-    const c: Character = { ...createDefaultCharacter(), equippedItems: [] };
-    const withLookalike = { ...c, shard: { note: 'a shard of flint' } } as unknown as Character;
-    assert.ok(sheetText(withLookalike).includes('a shard of flint'));
   });
 
   test('the notes, the journal, the NPCs and the map are still left out', () => {

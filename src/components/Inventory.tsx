@@ -60,10 +60,51 @@ const BORDERED_ROW_PADDING = 'py-2 px-[calc(0.5rem-1px)]';
 // make it narrower than this; then they wrap below it. In rem, so it grows with
 // the default font size (6rem is 96px at 16px, 144px at 24px), but never wider
 // than the row. A spell book's title cell adds room for its toggle and icon
-// (3rem), a scroll's spell cell and a shard's name cell for their icon (1.5rem).
+// (3rem); a cell that holds an icon beside its field (a scroll's spell, a
+// shard's name) adds room for that icon (1.5rem).
 const NAME_MIN_WIDTH = 'min-w-[min(6rem,100%)]';
 const SPELL_BOOK_TITLE_MIN_WIDTH = 'min-w-[min(9rem,100%)]';
-const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
+const ICON_CELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
+
+/**
+ * A whole-number field that keeps the text the player is typing until they
+ * leave it. Bound straight to a clamped value, `<input type="number">` fights
+ * them: clearing it to type a new number snaps back to the least allowed, so
+ * choosing 3 gives 13. Enter leaves the field, so the keyboard can move on.
+ */
+function WholeNumberField({
+  value,
+  onCommit,
+  ariaLabel,
+  title,
+  className,
+}: {
+  value: number;
+  onCommit: (value: number) => void;
+  ariaLabel: string;
+  title: string;
+  className: string;
+}) {
+  const [text, setText] = useState<string | null>(null);
+  return (
+    <input
+      type="number"
+      value={text ?? String(value)}
+      min={1}
+      onChange={(e) => setText(e.target.value)}
+      onBlur={() => {
+        if (text !== null) onCommit(text.trim() === '' ? 0 : Number(text));
+        setText(null);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur();
+      }}
+      title={title}
+      aria-label={ariaLabel}
+      className={className}
+    />
+  );
+}
 
 type CatalogTarget = { section: 'equipped' } | { section: 'stowed'; containerId?: string };
 
@@ -254,15 +295,21 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     else onChange({ stowedItems: updated });
   };
 
+  // Through the functional form of onChange, like the map's own writes: several
+  // shard writes in one event tick (a cast and a change of charge) compose
+  // rather than the last one winning from a stale list.
   const handleShardUpdate = (
     equipped: boolean,
     itemId: string,
     updater: (shard: ShardState) => ShardState,
   ) => {
-    updateInventoryItem(equipped, itemId, (item) => ({
-      ...item,
-      shard: updater(item.shard ?? newShardState()),
-    }));
+    onChange((prev) => {
+      const items = (equipped ? prev.equippedItems : prev.stowedItems) ?? [];
+      const updated = items.map((item) =>
+        item.id === itemId ? { ...item, shard: updater(item.shard ?? newShardState()) } : item,
+      );
+      return equipped ? { equippedItems: updated } : { stowedItems: updated };
+    });
   };
 
   const handleSpellbookAddEntry = (equipped: boolean, itemId: string) => {
@@ -664,7 +711,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     const scrollLabel = `${scrollName} (${position})`;
     return (
       <div key={item.id} className={`flex flex-wrap items-start gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1 ${BORDERED_ROW_PADDING}`}>
-        <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
+        <span className={`flex flex-1 ${ICON_CELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
           <span className="text-[#c4a35a] text-sm shrink-0" title="Scroll">📜</span>
           <select
             value={scroll.name}
@@ -746,7 +793,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1"
       >
         <div className={`flex flex-wrap items-start gap-2 ${BORDERED_ROW_PADDING}`}>
-          <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
+          <span className={`flex flex-1 ${ICON_CELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
             <span className="text-[#c4a35a] text-sm shrink-0" title="Dwemer shard">💎</span>
             <GrowingTextarea
               value={item.name}
@@ -822,8 +869,16 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           </label>
           <div className="flex flex-wrap items-center gap-2">
             {stateLabel('Casts')}
-            {/* Announced when a cast is spent, since the button keeps focus. */}
-            <span aria-live="polite" className="text-[#f5e6c8] text-sm tabular-nums">{castsLabel(shard)}</span>
+            {/* Announced when a cast is spent, since the button keeps focus. The
+                name is there because a shard's row reads "2 of 3" on its own,
+                which says nothing about what is being counted. */}
+            <span
+              aria-live="polite"
+              aria-label={`Casts left on ${shardLabel}: ${castsLabel(shard)}`}
+              className="text-[#f5e6c8] text-sm tabular-nums"
+            >
+              {castsLabel(shard)}
+            </span>
             <button
               type="button"
               onClick={() => handleShardUpdate(equipped, item.id, spendCast)}
@@ -843,17 +898,19 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           </div>
           <label className="flex flex-col gap-0.5">
             {stateLabel('Per charge')}
-            <input
-              type="number"
+            <WholeNumberField
               value={shard.castsPerCharge}
-              onChange={(e) => handleShardUpdate(equipped, item.id, (s) => withCastsPerCharge(s, parseInt(e.target.value)))}
-              min={1}
+              onCommit={(castsPerCharge) =>
+                handleShardUpdate(equipped, item.id, (s) => withCastsPerCharge(s, castsPerCharge))
+              }
+              ariaLabel={`Casts per charge for ${shardLabel}`}
               title="Casts one charge gives"
-              aria-label={`Casts one charge gives ${shardLabel}`}
               className={`${inputClasses} w-20 text-center`}
             />
           </label>
-          <span className="text-[#a1988f] text-xs">
+          {/* min-w-0 and break-words: a line's name is the player's own text and
+              can be one word wider than the row. */}
+          <span className="min-w-0 break-words text-[#a1988f] text-xs">
             {lineLabel === null ? (
               'Not charged on a ley line yet'
             ) : (
