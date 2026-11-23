@@ -41,10 +41,9 @@ const HIDE_DELAY_MS = 150;
 const summaryTextClasses = 'text-xs leading-snug text-[#f5e6c8]/90 border-l-2 border-[#c4a35a]/60 pl-2';
 
 /**
- * A spell's summary panel in a flex-wrap row of spells (a prepared spell, a
- * scroll, a spell book's spell): it comes straight after the info button in
- * the page, so a screen reader reaches it next, but shows on a line of its own
- * below the rest of the row.
+ * A spell's summary panel in a flex-wrap row of spells: it comes straight
+ * after the info button in the page, so a screen reader reaches it next, but
+ * shows on a line of its own below the rest of the row.
  */
 export const SPELL_PANEL_CLASSES = 'basis-full order-last';
 

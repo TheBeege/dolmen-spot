@@ -72,6 +72,12 @@ const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
 const SPELL_BOOK_CONTEXT = 'in a spell book';
 const SCROLL_CONTEXT = 'scroll';
 
+// A spell book's list of spells is marked data-spell-list, so the summary card
+// keeps off the spells in that book. A scroll's row has no list to mark: its
+// row sits among ordinary items in the equipped or stowed list, so there's no
+// element holding the scrolls alone. Its own row is marked data-spell-row
+// instead, which keeps the card off that row's picker, rank and Use button.
+
 // The name a spell book's row goes by in the disclosure state. Its spells have
 // no ids of their own, so it's the book's id and the spell's place in it.
 const bookSpellKey = (itemId: string, index: number) => `${itemId}-${index}`;
@@ -122,12 +128,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   // for the books' spells and one for the scrolls.
   const bookSpellInfo = useSpellDisclosures();
   const scrollSpellInfo = useSpellDisclosures();
-  // The rows whose spells have a button, in the order the page shows them: the
-  // equipped items, then the stowed ones container by container, leaving out
-  // the rows a collapsed container or spell book hides. A spell held in more
-  // than one book is then numbered down the page ("in a spell book, 2 of 2"),
-  // rather than against a row the player can't see; and without the numbering,
-  // two books holding one spell would have two buttons with a single name.
+  // The rows the page shows, in the order it shows them: the equipped items,
+  // then the stowed ones container by container, then the loose ones. A
+  // collapsed container's items are left out, since it hides them.
   const stowedInRowOrder = [
     ...containers.flatMap((container) =>
       collapsedContainers.has(container.id) ? [] : getContainerItems(stowedItems, container.id),
@@ -135,6 +138,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     ...getContainerItems(stowedItems, undefined),
   ];
   const rowsInRowOrder = [...equippedItems, ...stowedInRowOrder];
+  // The spell book rows those items show, a collapsed book's left out: one per
+  // spell in a book, named or not yet, since a spell picked there takes its
+  // place among them.
   const bookSpellRows = rowsInRowOrder.flatMap((item) =>
     item.kind === 'spellbook' && !collapsedSpellbooks.has(item.id)
       ? (item.spellbookContents ?? []).map((entry, index) => ({
@@ -143,6 +149,11 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         }))
       : [],
   );
+  // What each button's name says about which copy it is: a spell held in more
+  // than one book is numbered down the page ("in a spell book, 2 of 2") against
+  // the rows above, never against one the player can't see; and without the
+  // numbering, two books holding one spell would have two buttons with a
+  // single name.
   const bookContextByKey = new Map<string, string>(
     spellRowContexts('arcane', bookSpellRows.map((row) => row.name), SPELL_BOOK_CONTEXT).map(
       (context, i): [string, string] => [bookSpellRows[i].key, context],

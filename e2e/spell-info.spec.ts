@@ -124,7 +124,49 @@ test.describe('on the Inventory tab', () => {
     await grimoireRow.getByRole('combobox').selectOption('');
     await settle(page);
     await expect(infoButtons(page)).toHaveCount(9);
+    // The row is still there, with no button and no bare <span data-spell-info>
+    // either: SpellInfo renders that span whenever it's mounted, so the guard
+    // has to keep it from mounting at all, or the hover card would take it for
+    // a spell and keep off a box the player can't see.
+    await expect(grimoireRow, 'the row outlives its button').toHaveCount(1);
+    await expect(grimoireRow.locator('[data-spell-info]'), 'an empty picker has no spell, so no slot for one').toHaveCount(0);
     await expect(grimoireRow.getByRole('button', { name: /^What / }), 'an empty picker has no info button').toHaveCount(0);
+
+    // A container's books number the same way: give one of the Sack's spells a
+    // spell the Backpack's books already hold, and both say which copy they are.
+    await page.getByLabel(/^Spell 1 in A Treatise on Unmaking/).selectOption('Wall of Fire');
+    await settle(page);
+    await expect(
+      page.getByRole('button', { name: 'What Wall of Fire does (in a spell book, 1 of 2)' }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole('button', { name: 'What Wall of Fire does (in a spell book, 2 of 2)' }),
+    ).toBeVisible();
+
+    // Collapsing the container takes its books' and scrolls' buttons with it,
+    // and the copy left in the other container is numbered against the rows
+    // that are left: one, so no number at all. The header that collapses it is
+    // a clickable div with no role of its own, and the × at its end would
+    // delete the container, so click its name.
+    const backpackHeader = page.locator('div.cursor-pointer').filter({ hasText: 'Backpack' });
+    await backpackHeader.getByText('Backpack').click();
+    await settle(page);
+    await expect(infoButtons(page)).toHaveCount(3);
+    await expect(
+      page.getByRole('button', { name: 'What Web does (scroll)' }),
+      'the collapsed Backpack took its scroll',
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'What Wall of Fire does (in a spell book)' }),
+      'the Sack’s copy is numbered against the rows still shown',
+    ).toHaveCount(1);
+    await expect(
+      page.getByRole('button', { name: /^What Wall of Fire does \(in a spell book, / }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByRole('button', { name: 'What Project Image does (in a spell book)' }),
+      'the Sack’s book keeps its own',
+    ).toHaveCount(1);
   });
 
   test('resting on the button shows the same summary in a card', async ({ page }) => {
@@ -175,7 +217,10 @@ for (const width of WIDTHS) {
 
       // A spell book's summary, open in its row.
       await openTab(page, INVENTORY_TAB);
-      await page.getByRole('button', { name: 'What Shield of Force does (in a spell book)' }).click();
+      await expectOpensSummary(
+        page.getByRole('button', { name: 'What Shield of Force does (in a spell book)' }),
+        'Shield of Force',
+      );
       await settle(page);
       const inventory = { tab: 'inventory' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), inventory), 'layout problems with a spell book’s summary open').toEqual([]);
@@ -189,7 +234,7 @@ for (const width of WIDTHS) {
 
       // The Spell Study card's summary, open on Adventuring.
       await openTab(page, CALENDAR_TAB);
-      await page.getByRole('button', { name: 'What Paralysation does (studying)' }).click();
+      await expectOpensSummary(page.getByRole('button', { name: 'What Paralysation does (studying)' }), 'Paralysation');
       await settle(page);
       const calendar = { tab: 'calendar' as const, width, fontSize: defaultFontSize };
       expect.soft(newProblems(await findLayoutProblems(page), calendar), 'layout problems with a study’s summary open').toEqual([]);
