@@ -27,8 +27,8 @@ const find = (md: Partial<CharacterMapData>, query: string, limit?: number) =>
 const names = (results: { hits: MapSearchHit[] }) => results.hits.map((hit) => hit.name);
 
 // A map like the kitchen-sink fixture's, with a keep added and a second town: a
-// town, a ring of stones, a tomb, another town, an inn, the castle, a nameless
-// point of interest, three fairy doors (two of them on one fairy road) and
+// town, a ring of stones, a tomb, another town, an inn, the castle, a point of
+// interest with no kind, three fairy doors (two of them on one fairy road) and
 // three paths.
 const md = mapOf({
   pois: [

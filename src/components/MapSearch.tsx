@@ -128,10 +128,11 @@ export default function MapSearch({ pois, fairyDoors, leyLines, onSelect, disabl
   };
 
   // From a result: the arrow keys move on to the next one, or back into the
-  // box at either end, so the keys never trap the focus in the list.
+  // box at either end, so the keys never trap the focus in the list. (No
+  // isComposing guard here as the box's own has: a button can't be composed
+  // into, so its keys are never an input method's.)
   const onHitKeyDown = (e: React.KeyboardEvent<HTMLButtonElement>, at: number) => {
     if (e.key === 'Escape') {
-      if (e.nativeEvent.isComposing) return;
       e.preventDefault();
       clear();
       return;

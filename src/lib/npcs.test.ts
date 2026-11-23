@@ -224,8 +224,14 @@ describe('the list in a line', () => {
     assert.equal(describeNpcList({ matching: 0, total: 0 }, ''), 'No NPCs yet.');
     assert.equal(describeNpcList({ matching: 1, total: 1 }, ''), '1 NPC');
     assert.equal(describeNpcList({ matching: 3, total: 3 }, ''), '3 NPCs');
+    assert.equal(describeNpcList({ matching: 1, total: 2 }, 'ysolde'), '1 of 2 NPCs match “ysolde”');
     assert.equal(describeNpcList({ matching: 1, total: 3 }, 'ysolde'), '1 of 3 NPCs match “ysolde”');
     assert.equal(describeNpcList({ matching: 0, total: 3 }, ' "a b" '), '0 of 3 NPCs match "a b"');
+  });
+
+  test('the verb agrees with the NPCs, so a list of one matches', () => {
+    assert.equal(describeNpcList({ matching: 1, total: 1 }, 'ysolde'), '1 of 1 NPC matches “ysolde”');
+    assert.equal(describeNpcList({ matching: 0, total: 1 }, 'ysolde'), '0 of 1 NPC matches “ysolde”');
   });
 });
 
@@ -291,28 +297,34 @@ describe('an NPC’s hex', () => {
 // ── Quests ───────────────────────────────────────────────────────────
 
 describe('the quest checklist', () => {
-  test('a new quest is not done yet, and has an id of its own', () => {
-    const a = addQuest(npc(), 'Find the bell');
-    const b = addQuest(a, 'Return it');
+  test('a new quest is not done yet, and carries the id it was given', () => {
+    const a = addQuest(npc(), 'Find the bell', 'q1');
+    const b = addQuest(a, 'Return it', 'q2');
     assert.deepEqual(getNpcQuests(a).map((q) => ({ text: q.text, done: q.done })), [{ text: 'Find the bell', done: false }]);
-    const ids = getNpcQuests(b).map((q) => q.id);
-    assert.equal(ids.length, 2);
-    assert.notEqual(ids[0], ids[1]);
-    assert.ok(ids.every((id) => id !== ''));
+    assert.deepEqual(getNpcQuests(b).map((q) => q.id), ['q1', 'q2']);
+  });
+
+  test('the id is the caller’s, so running the same update twice adds the same quest', () => {
+    // The tab mints the id in its handler and passes it in (as it does for a
+    // note): an id minted in here would make the repeated run a different
+    // quest, which is what a state update run twice must never do.
+    const once = addQuest(npc(), 'Find the bell', 'q1');
+    assert.deepEqual(addQuest(npc(), 'Find the bell', 'q1'), once, 'the same update run twice');
+    assert.notDeepEqual(addQuest(npc(), 'Find the bell', 'q2'), once);
   });
 
   test('a quest with nothing but spaces in it is not added', () => {
     const before = npc();
-    assert.equal(addQuest(before, '   '), before);
-    assert.deepEqual(getNpcQuests(addQuest(before, '')).length, 0);
+    assert.equal(addQuest(before, '   ', 'q1'), before);
+    assert.deepEqual(getNpcQuests(addQuest(before, '', 'q1')).length, 0);
   });
 
   test('a quest is added with its text trimmed', () => {
-    assert.deepEqual(getNpcQuests(addQuest(npc(), '  Find the bell  ')).map((q) => q.text), ['Find the bell']);
+    assert.deepEqual(getNpcQuests(addQuest(npc(), '  Find the bell  ', 'q1')).map((q) => q.text), ['Find the bell']);
   });
 
   test('a quest is ticked done, and unticked again, without touching the others', () => {
-    let n = addQuest(addQuest(npc(), 'One'), 'Two');
+    let n = addQuest(addQuest(npc(), 'One', 'q1'), 'Two', 'q2');
     const [first, second] = getNpcQuests(n);
     n = setQuestDone(n, second.id, true);
     assert.deepEqual(getNpcQuests(n).map((q) => [q.text, q.done]), [['One', false], ['Two', true]]);
@@ -322,7 +334,7 @@ describe('the quest checklist', () => {
   });
 
   test('a quest is deleted, the rest keeping their places', () => {
-    let n = addQuest(addQuest(npc(), 'One'), 'Two');
+    let n = addQuest(addQuest(npc(), 'One', 'q1'), 'Two', 'q2');
     const [first, second] = getNpcQuests(n);
     n = deleteQuest(n, first.id);
     assert.deepEqual(getNpcQuests(n).map((q) => q.id), [second.id]);
@@ -332,11 +344,11 @@ describe('the quest checklist', () => {
     let n = npc();
     assert.deepEqual(countQuests(n), { done: 0, total: 0 });
     assert.equal(describeQuestCount(n), 'No quests yet');
-    n = addQuest(n, 'One');
+    n = addQuest(n, 'One', 'q1');
     assert.equal(describeQuestCount(n), '0 of 1 quest done');
     n = setQuestDone(n, getNpcQuests(n)[0].id, true);
     assert.equal(describeQuestCount(n), '1 of 1 quest done');
-    n = addQuest(addQuest(n, 'Two'), 'Three');
+    n = addQuest(addQuest(n, 'Two', 'q2'), 'Three', 'q3');
     n = setQuestDone(n, getNpcQuests(n)[1].id, true);
     assert.deepEqual(countQuests(n), { done: 2, total: 3 });
     assert.equal(describeQuestCount(n), '2 of 3 quests done');
@@ -482,7 +494,7 @@ describe('saved data', () => {
     const c = character({ currentDate: date(7, 3, 2), currentLocation: 'Lankshorn', currentLocationHex: '1106' });
     const withNpc: Character = {
       ...c,
-      npcs: addNpc(getNpcs(c), withNpcHex(addQuest(addQuest(createNpc(), 'Find the bell'), 'Return it'), '0606')),
+      npcs: addNpc(getNpcs(c), withNpcHex(addQuest(addQuest(createNpc(), 'Find the bell', 'q1'), 'Return it', 'q2'), '0606')),
     };
     const target = getNpcs(withNpc)[0];
     const edited: Character = {

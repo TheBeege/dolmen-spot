@@ -308,11 +308,14 @@ test('a note and a form being written survive a switch to another tab', async ({
 
   // And what's kept no longer holds it: a form draft without the form to open
   // it is invisible on screen, so this is read where it lives. The note draft
-  // is still there, which is what keeps the key alive.
+  // is still there, which is what keeps the key alive. (By name: the saved
+  // list's order is the order they were added, not one this test should rely
+  // on.)
+  const ysoldeId = character.npcs.find((npc) => npc.name === 'Sister Ysolde')!.id;
   const kept = await keptDrafts(page, character);
   expect(kept?.form).toBeNull();
   expect(kept?.editing).toBeNull();
-  expect(kept?.notes[character.npcs[0].id]).toBe(halfWritten);
+  expect(kept?.notes[ysoldeId]).toBe(halfWritten);
 
   // Adding the note clears what was kept of it, so the box is empty again.
   await card(page, 'Sister Ysolde').getByRole('button', { name: 'Add note' }).click();
@@ -453,6 +456,27 @@ test('the search box stays while it is still filtering, and goes once it is not'
   // focus falls back to the heading rather than out of the tab.
   await page.getByRole('button', { name: 'Clear search' }).click();
   await expect(search).toHaveCount(0);
+  await expect(page.getByRole('heading', { level: 2, name: 'NPCs' })).toBeFocused();
+});
+
+test('deleting the last NPC takes the search with it', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, NPCS_TAB);
+
+  const search = page.getByRole('searchbox', { name: 'Search' });
+  await search.fill('the');
+  await expect(page.locator('main article h3')).toHaveCount(3);
+
+  // All three go, the last of them under a search still filtering: an empty
+  // list has nothing for a search to search, so the box and what was typed in
+  // it go too, rather than a filter sitting over an empty tab.
+  for (const name of ['Old Mother Brindle', "The Queen's librarian", 'Sister Ysolde']) {
+    await card(page, name).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete NPC' }).click();
+    await expect(card(page, name)).toHaveCount(0);
+  }
+  await expect(search).toHaveCount(0);
+  await expect(page.getByText('No NPCs yet.', { exact: true })).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'NPCs' })).toBeFocused();
 });
 

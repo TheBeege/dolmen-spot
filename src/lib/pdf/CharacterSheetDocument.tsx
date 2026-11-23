@@ -97,7 +97,11 @@ import { createPdfText } from './text';
 const COLOR = {
   ink: '#1f1a16',
   muted: '#6b6157',
-  faint: '#9a8f84',
+  // Dimmed text only — spells already cast, a knack's tiers not reached yet —
+  // and light enough to read as dim beside the ink: 4.83:1 on the paper
+  // (#fcfaf4), and 5.04:1 on the white page. It was #9a8f84, about 3:1, which
+  // is under AA for text; borders and rules don't use it.
+  faint: '#786d63',
   gold: '#c4a35a',
   goldTint: '#f8f2e4',
   brown: '#5a3a28',

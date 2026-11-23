@@ -14,9 +14,10 @@
 // The list's order, its search, the quest count and the notes grouping live in
 // src/lib/npcs.ts, where they're tested.
 
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
 import type { Character, CharacterUpdater, HexCoord, JournalEntry, Npc } from '@/lib/types';
 import { readHexInput } from '@/lib/hex';
+import { newId } from '@/lib/ids';
 import {
   getEntryDisplayText,
   getJournalEntries,
@@ -113,9 +114,13 @@ interface NpcActions {
   setQuestDone: (id: string, questId: string, done: boolean) => void;
   deleteQuest: (id: string, questId: string) => void;
   changeDraft: (id: string, text: string) => void;
-  addNote: (npc: Npc) => void;
+  addNote: (npc: Npc, text: string) => void;
   deleteNote: (npc: Npc, entry: JournalEntry) => void;
 }
+
+// An NPC with no notes gets the same empty list every render, so that a card
+// without notes isn't re-rendered just because an empty array was made again.
+const NO_NOTES: readonly JournalEntry[] = [];
 
 export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
   const npcs = getNpcs(character);
@@ -284,17 +289,22 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
         delete rest[npc.id];
         return rest;
       });
+      // The last one gone leaves nothing to search, so what was typed goes with
+      // it rather than leaving a box over "No NPCs yet."
+      if (npcs.length === 1) setQuery('');
       moveFocusTo(next ? `npc:${next.id}` : 'heading');
       announce(`${npcLabel(npc)} deleted. Their notes stay in the Journal.`);
     },
-    [list.items, writeNpcs, moveFocusTo, announce],
+    [list.items, npcs.length, writeNpcs, moveFocusTo, announce],
   );
 
   // Adding one empties the field, which disables the button that had the
   // focus: it goes back to the field, ready for the next quest.
   const questAdded = useCallback(
     (id: string, text: string) => {
-      writeNpcs((list) => changeNpc(list, id, (npc) => addQuest(npc, text)));
+      // Made out here, so a repeated run of the updater adds the same quest.
+      const questId = newId();
+      writeNpcs((list) => changeNpc(list, id, (npc) => addQuest(npc, text, questId)));
       moveFocusTo(`quest:${id}`);
     },
     [writeNpcs, moveFocusTo],
@@ -325,11 +335,11 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
   }, [moveFocusTo]);
 
   const addNote = useCallback(
-    (npc: Npc) => {
-      const text = (drafts[npc.id] ?? '').trim();
-      if (text === '') return;
+    (npc: Npc, text: string) => {
+      const trimmed = text.trim();
+      if (trimmed === '') return;
       // Made out here, so a repeated run of the updater adds the same entry.
-      const entry = createNpcNote(character, npc.id, text);
+      const entry = createNpcNote(character, npc.id, trimmed);
       writeEntries((list) => [...list, entry]);
       setDrafts((d) => ({ ...d, [npc.id]: '' }));
       // The box empties, which disables the button that had the focus: a
@@ -338,7 +348,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
       moveFocusTo(`note:${npc.id}`);
       announce(`Note added to ${npcLabel(npc)}. It is in the Journal too.`);
     },
-    [character, drafts, writeEntries, moveFocusTo, announce],
+    [character, writeEntries, moveFocusTo, announce],
   );
 
   // The Journal tab's delete, entry for entry: the note is one of its entries.
@@ -359,20 +369,39 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
     [npcs, writeEntries, moveFocusTo, announce],
   );
 
-  const actions: NpcActions = {
-    edit,
-    save,
-    cancelEdit,
-    askDelete,
-    cancelDelete,
-    confirmDelete,
-    addQuest: questAdded,
-    setQuestDone: questTicked,
-    deleteQuest: questDeleted,
-    changeDraft,
-    addNote,
-    deleteNote,
-  };
+  // Kept as one object across renders, so that the memoised cards below don't
+  // re-render whenever the tab does: every way of changing an NPC is called
+  // already, and none of them changes with what has been typed into a card.
+  const actions = useMemo<NpcActions>(
+    () => ({
+      edit,
+      save,
+      cancelEdit,
+      askDelete,
+      cancelDelete,
+      confirmDelete,
+      addQuest: questAdded,
+      setQuestDone: questTicked,
+      deleteQuest: questDeleted,
+      changeDraft,
+      addNote,
+      deleteNote,
+    }),
+    [
+      edit,
+      save,
+      cancelEdit,
+      askDelete,
+      cancelDelete,
+      confirmDelete,
+      questAdded,
+      questTicked,
+      questDeleted,
+      changeDraft,
+      addNote,
+      deleteNote,
+    ],
+  );
 
   return (
     // The page's scroll padding keeps an element focus moves to clear of the
@@ -419,6 +448,11 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
                 if (e.key !== 'Escape') return;
                 // While an input method is composing, Escape is its own (to
                 // cancel what's being composed): the search stays.
+                // preventDefault is what keeps it staying, since a native search
+                // field clears itself on Escape. The NPCs form's own Escape
+                // handler (NpcForm, below) is the other way round on purpose: a
+                // form has no default action to stop, so while an IME composes
+                // it simply does nothing.
                 if (e.nativeEvent.isComposing) e.preventDefault();
                 else if (query !== '') {
                   e.preventDefault();
@@ -491,7 +525,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
             <li key={npc.id}>
               <NpcCard
                 npc={npc}
-                notes={notes.get(npc.id) ?? []}
+                notes={notes.get(npc.id) ?? NO_NOTES}
                 character={character}
                 editing={editingId === npc.id}
                 confirmingDelete={confirmingDelete === npc.id}
@@ -510,7 +544,11 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
 
 // ── One NPC ──────────────────────────────────────────────────────────
 
-function NpcCard({
+// Memoised, so that typing a note into one card re-renders only that card: the
+// tab hands every card the same memoised actions, the same character and the
+// same notes, and the draft is a string, so only the card being typed into
+// gets a prop that changed.
+const NpcCard = memo(function NpcCard({
   npc,
   notes,
   character,
@@ -553,7 +591,7 @@ function NpcCard({
 
   const addNote = (e: FormEvent) => {
     e.preventDefault();
-    actions.addNote(npc);
+    actions.addNote(npc, draft);
   };
 
   return (
@@ -800,7 +838,7 @@ function NpcCard({
       )}
     </article>
   );
-}
+});
 
 // ── The form ─────────────────────────────────────────────────────────
 
