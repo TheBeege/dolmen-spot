@@ -816,9 +816,10 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
                     splitting only if the pair outgrows it, and the four time
                     buttons take the line below when the row can't hold them
                     both (a big font on a phone). Neither span has a fixed
-                    width: `w-16` is 4rem, so at a 24px font each span was 96px
-                    whatever its label, and the pair came to the row's whole
-                    204px of content, which split it. */}
+                    width: `w-16` is 4rem, so at a 24px font each span took 96px
+                    whatever its label, and the pair filled the row's whole
+                    204px of content. Taking their text's width instead,
+                    "Lantern 240 min" is about 199px of it. */}
                 <div className="flex flex-wrap items-center gap-2">
                   <span className={`text-sm font-semibold ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
                     {LIGHT_SOURCE_TYPES[source.type].label}

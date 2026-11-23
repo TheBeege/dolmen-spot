@@ -93,12 +93,21 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
 
         {/* Large HP Display with +/- Buttons. The caption sits on a line of its
             own (`basis-full`) rather than in the item with the numbers: at a
-            24px font it is 174px wide, wider than the 133px of numbers, so it
-            set that item's width and pushed a button onto a line by itself. The
-            numbers also step down and the gaps close up below 15rem across — a
-            big default font on a phone (320px is 13.3rem at 24px), and nothing
-            else — so 35 + 12 + 116 + 12 + 47 = 222px fits the 228px card there
-            (221.4px measured), where the full-size row needs 251px. */}
+            24px font it is 174px wide, wider than the 133px of `text-2xl`
+            numbers, so it set that item's width and pushed a button onto a line
+            by itself. A line of its own costs a few pixels of height, not a line
+            — 4px more at 320px and a default font, 6px at 768px and 24px,
+            nothing on a wide screen.
+
+            The sizes step down twice, both times for phones. Below `sm` (40rem,
+            so 640px at a default font but 960px at 24px) the buttons are
+            `px-2 text-lg` and the digits `text-2xl`: that is what every phone
+            gets at either font size, and 768px at 24px. Below 15rem across
+            (320px at 24px, and nothing else) the digits step down again to
+            `text-xl` and the gaps close, so 35 + 12 + 116 + 12 + 47 = 222px
+            fits the 228px card there (221.4px measured). A 320px phone at a
+            default font is 20rem, so it keeps `text-2xl` and needs
+            24 + 12 + 89 + 12 + 31 = 168px of 256px. */}
         <div className="flex flex-wrap items-center justify-center gap-x-3 max-[15rem]:gap-x-2 gap-y-2 mb-4">
           <button
             type="button"
