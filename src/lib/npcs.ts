@@ -17,7 +17,7 @@
 import type { Character, HexCoord, JournalEntry, Npc, NpcQuest } from './types';
 import { isValidHex } from './hex';
 import { newId } from './ids';
-import { entryNpcNames, npcLabel, npcText } from './npc-names';
+import { npcText } from './npc-names';
 import {
   createJournalEntry,
   foldForSearch,
@@ -32,7 +32,7 @@ type WithNotes = Pick<Character, 'journalEntries' | 'fairyVisits'>;
 
 // How an NPC is named in text, which the Journal needs too (npc-names.ts),
 // re-exported so that the NPCs tab's callers have one place to import from.
-export { entryNpcNames, npcLabel, npcText };
+export { entryNpcNames, npcLabel, npcText } from './npc-names';
 
 // ── NPCs ─────────────────────────────────────────────────────────────
 
@@ -110,13 +110,13 @@ export function sortNpcs(npcs: readonly Npc[]): Npc[] {
 
 // ── Search ───────────────────────────────────────────────────────────
 //
-// An NPC is searched by everything the tab shows for them: their name, their
-// affiliation, where they are, their hex ("Hex 0606"), their goals, their
-// quests, and the text of the notes written about them (the entries shown on
-// their card). The terms are the Journal's (parseJournalQuery), so a search
-// means the same thing in both tabs: words, "a phrase in quotes", accents and
-// case folded, a number matched whole. Every term has to be somewhere in the
-// NPC.
+// An NPC is searched by their name, their affiliation, where they are, their
+// hex ("Hex 0606"), their goals, their quests and the text of the notes
+// written about them. The notes' own dates and places are not searched: they
+// are the entries', and the Journal searches those. The terms are the
+// Journal's (parseJournalQuery), so a search means the same thing in both
+// tabs: words, "a phrase in quotes", accents and case folded, a number matched
+// whole. Every term has to be somewhere in the NPC.
 
 const NO_NOTES: readonly JournalEntry[] = [];
 

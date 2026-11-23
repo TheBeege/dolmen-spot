@@ -45,7 +45,7 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 ### NPCs
 - The people your character has met: name, affiliation, where they are (and the map hex when it is known), goals, and a checklist of the quests they have given you with a count of how many are done
 - Notes about an NPC are journal entries that name them, so they keep the date and place they were written, show in the Journal too, and are deleted once from either tab
-- The list is sorted by name and searched by anything on a card, the words of their notes included
+- The list is sorted by name and searched by their name, affiliation, place, hex, goals, quests and the words of their notes
 - A note being written, or a half-filled form, is kept while you look at another tab
 
 ### Interactive Hex Map

@@ -290,7 +290,15 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
     [list.items, writeNpcs, moveFocusTo, announce],
   );
 
-  const questAdded = useCallback((id: string, text: string) => writeNpcs((list) => changeNpc(list, id, (npc) => addQuest(npc, text))), [writeNpcs]);
+  // Adding one empties the field, which disables the button that had the
+  // focus: it goes back to the field, ready for the next quest.
+  const questAdded = useCallback(
+    (id: string, text: string) => {
+      writeNpcs((list) => changeNpc(list, id, (npc) => addQuest(npc, text)));
+      moveFocusTo(`quest:${id}`);
+    },
+    [writeNpcs, moveFocusTo],
+  );
   const questTicked = useCallback(
     (id: string, questId: string, done: boolean) =>
       writeNpcs((list) => changeNpc(list, id, (npc) => setQuestDone(npc, questId, done))),
@@ -307,6 +315,15 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
 
   const changeDraft = useCallback((id: string, text: string) => setDrafts((d) => ({ ...d, [id]: text })), []);
 
+  // Every way of clearing the search takes away the control that had the
+  // focus: the ✕ that clears it, the no-match panel's button, or the box
+  // itself when a single NPC is left and there is nothing to search. So focus
+  // goes back to the search, or — the box having gone — to the heading.
+  const clearSearch = useCallback(() => {
+    setQuery('');
+    moveFocusTo('search');
+  }, [moveFocusTo]);
+
   const addNote = useCallback(
     (npc: Npc) => {
       const text = (drafts[npc.id] ?? '').trim();
@@ -315,9 +332,13 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
       const entry = createNpcNote(character, npc.id, text);
       writeEntries((list) => [...list, entry]);
       setDrafts((d) => ({ ...d, [npc.id]: '' }));
+      // The box empties, which disables the button that had the focus: a
+      // textarea can't be submitted with Enter, so without this a keyboard
+      // user is thrown out of the tab by every note they add.
+      moveFocusTo(`note:${npc.id}`);
       announce(`Note added to ${npcLabel(npc)}. It is in the Journal too.`);
     },
-    [character, drafts, writeEntries, announce],
+    [character, drafts, writeEntries, moveFocusTo, announce],
   );
 
   // The Journal tab's delete, entry for entry: the note is one of its entries.
@@ -391,6 +412,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
             <input
               id={searchId}
               type="search"
+              data-npc-focus="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               onKeyDown={(e) => {
@@ -400,7 +422,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
                 if (e.nativeEvent.isComposing) e.preventDefault();
                 else if (query !== '') {
                   e.preventDefault();
-                  setQuery('');
+                  clearSearch();
                 }
               }}
               placeholder="Name, place, goal, quest or note"
@@ -412,7 +434,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
             {query !== '' && (
               <button
                 type="button"
-                onClick={() => setQuery('')}
+                onClick={clearSearch}
                 aria-label="Clear search"
                 title="Clear search"
                 className="absolute inset-y-0 right-0 w-9 flex items-center justify-center text-[#a1988f] hover:text-[#f5e6c8] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]/60"
@@ -446,7 +468,7 @@ export default function NpcTracker({ character, onChange }: NpcTrackerProps) {
 
       {npcs.length > 0 && list.items.length === 0 && (
         <div className={`${cardClasses} text-sm ${fadedText}`}>
-          No NPCs match. <button type="button" onClick={() => setQuery('')} className={linkClasses}>Clear search</button>
+          No NPCs match. <button type="button" onClick={clearSearch} className={linkClasses}>Clear search</button>
         </div>
       )}
 
@@ -641,6 +663,7 @@ function NpcCard({
                 <input
                   id={`${questIds}-new`}
                   type="text"
+                  data-npc-focus={`quest:${npc.id}`}
                   value={newQuest}
                   onChange={(e) => setNewQuest(e.target.value)}
                   placeholder="A quest they gave you"
@@ -667,10 +690,12 @@ function NpcCard({
             </h4>
             {notes.length > 0 ? (
               <ol role="list" className="mt-1 space-y-2">
-                {notes.map((entry) => {
+                {notes.map((entry, index) => {
                   const shown = getEntryDisplayText(entry, character);
-                  // The name says which note this is: two can share a day, and
-                  // one entry naming two NPCs is a note on both their cards.
+                  // The name says which note this is: two can share a day, or
+                  // start the same way, and one entry naming two NPCs is a note
+                  // on both their cards. Its place on the card (newest first)
+                  // tells apart the ones the rest of the name can't.
                   const excerpt = Array.from(shown.text.trim()).slice(0, 40).join('');
                   return (
                     <li key={entry.id} className="border border-[#5a3a28] rounded p-2">
@@ -693,8 +718,8 @@ function NpcCard({
                           onClick={() => actions.deleteNote(npc, entry)}
                           aria-label={
                             excerpt
-                              ? `Delete note of ${shown.date} for ${label}: ${excerpt}`
-                              : `Delete note of ${shown.date} for ${label}, which has no text`
+                              ? `Delete note ${index + 1} of ${shown.date} for ${label}: ${excerpt}`
+                              : `Delete note ${index + 1} of ${shown.date} for ${label}, which has no text`
                           }
                           className={`${dangerLinkClasses} text-xs`}
                         >
@@ -714,6 +739,7 @@ function NpcCard({
               </label>
               <textarea
                 id={composerId}
+                data-npc-focus={`note:${npc.id}`}
                 value={draft}
                 onChange={(e) => actions.changeDraft(npc.id, e.target.value)}
                 placeholder={`What happened with ${label}?`}

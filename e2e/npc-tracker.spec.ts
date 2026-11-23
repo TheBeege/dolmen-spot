@@ -10,6 +10,7 @@
 // Ysolde and Brindle together.
 import type { Locator, Page } from '@playwright/test';
 import { formatCalendarDate } from '../src/lib/gamedata';
+import type { Character } from '../src/lib/types';
 import { FIXTURES, openApp, openTab, settle, TABS } from './support/app';
 import { findA11yProblems } from './support/a11y';
 import { findLayoutProblems } from './support/layout';
@@ -37,6 +38,20 @@ async function journalTexts(page: Page): Promise<string[]> {
   return page
     .locator('main textarea')
     .evaluateAll((areas) => areas.map((area) => (area as HTMLTextAreaElement).value));
+}
+
+/** What the NPCs tab has kept of what was typed, outside the saved data (src/lib/npc-drafts.ts). */
+interface KeptDrafts {
+  notes: Record<string, string>;
+  editing: unknown;
+  form: unknown;
+}
+
+async function keptDrafts(page: Page, character: Character): Promise<KeptDrafts | null> {
+  return page.evaluate(
+    (id) => JSON.parse(sessionStorage.getItem(`dolmenwood-npc-drafts:${id}`) ?? 'null'),
+    character.id,
+  );
 }
 
 /** The NPCs tab's live region: what it last said. */
@@ -147,6 +162,9 @@ test('an NPC can be added, edited, given a quest and a note, and deleted', async
   await questInput.fill('Carry the crate to Prigwort');
   await hob.getByRole('button', { name: 'Add quest' }).click();
   await expect(questInput).toHaveValue('');
+  // The button disables itself as the field empties, so focus goes back to
+  // the field rather than falling out of the tab.
+  await expect(questInput).toBeFocused();
   const quest = hob.getByRole('checkbox', { name: 'Carry the crate to Prigwort' });
   await expect(quest).not.toBeChecked();
   await expect(hob.getByText('0 of 1 quest done', { exact: true })).toBeVisible();
@@ -162,6 +180,9 @@ test('an NPC can be added, edited, given a quest and a note, and deleted', async
   await hob.getByLabel('Write a note for Hob the Carter').fill(noteText);
   await hob.getByRole('button', { name: 'Add note' }).click();
   await expect(hob.getByText(noteText, { exact: true })).toBeVisible();
+  // A textarea can't be submitted with Enter, so without this every note a
+  // keyboard user adds would throw them out of the tab.
+  await expect(hob.getByLabel('Write a note for Hob the Carter')).toBeFocused();
   await expect(hob.getByText(today, { exact: true })).toBeVisible();
   await expect(hob.getByLabel('Write a note for Hob the Carter')).toHaveValue('');
   await openTab(page, JOURNAL_TAB);
@@ -187,7 +208,7 @@ test('a note is deleted once, from either tab', async ({ page }) => {
   // The one note about Ysolde and Brindle together.
   const shared = 'Wrote to Sister Ysolde about the reliquary, and asked whether Mother Brindle might know where it went.';
   const ysoldeNote = card(page, 'Sister Ysolde').locator('li').filter({ hasText: shared });
-  await ysoldeNote.getByRole('button', { name: /^Delete note of / }).click();
+  await ysoldeNote.getByRole('button', { name: /^Delete note \d+ of / }).click();
   // It was on two cards, so the tab says so: the other NPC's card loses it too.
   await expect(status(page)).toHaveText(
     "Sister Ysolde: note deleted. It was on 2 NPCs' cards and in the Journal.",
@@ -251,7 +272,7 @@ test('the Journal says which NPCs an entry is about', async ({ page }) => {
 });
 
 test('a note and a form being written survive a switch to another tab', async ({ page }) => {
-  await openApp(page, FIXTURES.kitchenSink);
+  const character = await openApp(page, FIXTURES.kitchenSink);
   await openTab(page, NPCS_TAB);
 
   // Half a note, and half of a new NPC's form.
@@ -284,6 +305,14 @@ test('a note and a form being written survive a switch to another tab', async ({
   await openTab(page, NPCS_TAB);
   await expect(form(page, 'New NPC')).toHaveCount(0);
   await expect(page.getByText('Nobody In Particular')).toHaveCount(0);
+
+  // And what's kept no longer holds it: a form draft without the form to open
+  // it is invisible on screen, so this is read where it lives. The note draft
+  // is still there, which is what keeps the key alive.
+  const kept = await keptDrafts(page, character);
+  expect(kept?.form).toBeNull();
+  expect(kept?.editing).toBeNull();
+  expect(kept?.notes[character.npcs[0].id]).toBe(halfWritten);
 
   // Adding the note clears what was kept of it, so the box is empty again.
   await card(page, 'Sister Ysolde').getByRole('button', { name: 'Add note' }).click();
@@ -335,7 +364,7 @@ test('deleting a quest or a note leaves the focus on the card', async ({ page })
 
   // And a note's with the note.
   const brindle = card(page, 'Old Mother Brindle');
-  await brindle.getByRole('button', { name: /^Delete note of .* for Old Mother Brindle: Old Mother Brindle taught me Glyph/ }).click();
+  await brindle.getByRole('button', { name: /^Delete note \d+ of .* for Old Mother Brindle: Old Mother Brindle taught me Glyph/ }).click();
   await expect(brindle.getByText('Glyph of Locking', { exact: false })).toHaveCount(0);
   await expect(brindle).toBeFocused();
 });
@@ -370,6 +399,60 @@ test('the focus goes to the heading when the saved NPC leaves the list', async (
   await form(page, 'Edit Old Mother Brindle').getByRole('button', { name: 'Cancel' }).click();
   await expect(card(page, 'Old Mother Brindle')).toHaveCount(0);
   await expect(card(page, 'Sister Ysolde')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 2, name: 'NPCs' })).toBeFocused();
+});
+
+test('clearing the search keeps the focus in the tab', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, NPCS_TAB);
+
+  const search = page.getByRole('searchbox', { name: 'Search' });
+
+  // The ✕ goes with the search it clears: focus goes back to the field.
+  await search.fill('ysolde');
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+
+  // Escape never leaves the field, so it stays there.
+  await search.fill('ysolde');
+  await search.press('Escape');
+  await expect(search).toHaveValue('');
+  await expect(search).toBeFocused();
+
+  // The no-match panel's own button goes with the panel.
+  await search.fill('wossname');
+  const panel = page.getByText('No NPCs match.', { exact: false });
+  await expect(panel).toBeVisible();
+  await panel.getByRole('button', { name: 'Clear search' }).click();
+  await expect(panel).toHaveCount(0);
+  await expect(page.locator('main article h3')).toHaveCount(3);
+  await expect(search).toBeFocused();
+});
+
+test('the search box stays while it is still filtering, and goes once it is not', async ({ page }) => {
+  await openApp(page, FIXTURES.kitchenSink);
+  await openTab(page, NPCS_TAB);
+
+  const search = page.getByRole('searchbox', { name: 'Search' });
+  await expect(search).toBeVisible();
+
+  // A search all three match, then two of them deleted: one NPC is left, and
+  // the box has to stay, because it is what the list is being filtered by.
+  await search.fill('the');
+  await expect(page.locator('main article h3')).toHaveCount(3);
+  for (const name of ['Old Mother Brindle', "The Queen's librarian"]) {
+    await card(page, name).getByRole('button', { name: 'Delete', exact: true }).click();
+    await page.getByRole('button', { name: 'Delete NPC' }).click();
+    await expect(card(page, name)).toHaveCount(0);
+  }
+  await expect(page.locator('main article h3')).toHaveText(['Sister Ysolde']);
+  await expect(search).toBeVisible();
+
+  // Cleared, with one NPC left, there is nothing to search: the box goes, and
+  // focus falls back to the heading rather than out of the tab.
+  await page.getByRole('button', { name: 'Clear search' }).click();
+  await expect(search).toHaveCount(0);
   await expect(page.getByRole('heading', { level: 2, name: 'NPCs' })).toBeFocused();
 });
 
