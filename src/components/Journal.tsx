@@ -6,7 +6,7 @@
 // when the character enters or leaves Fairy (src/lib/livedTime.ts).
 
 import { memo, useCallback, useDeferredValue, useEffect, useId, useMemo, useRef, useState, type FormEvent } from 'react';
-import type { Character, CharacterUpdater, HexCoord, JournalEntry, Npc } from '@/lib/types';
+import type { Character, CharacterUpdater, HexCoord, JournalEntry } from '@/lib/types';
 import { readHexInput } from '@/lib/hex';
 import {
   createJournalEntry,
@@ -30,7 +30,7 @@ import {
   type TextRange,
 } from '@/lib/journal';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
-import { describeEntryNpcs, getNpcs } from '@/lib/npcs';
+import { getNpcs } from '@/lib/npcs';
 import { labelClasses } from '@/components/FairyFields';
 import HexField from '@/components/HexField';
 
@@ -79,7 +79,7 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   const visits = character.fairyVisits;
   // The NPCs, for saying which of them an entry is about. The array is the
   // same object from one render to the next unless an NPC changes, so the
-  // cards that don't change aren't drawn again.
+  // entries that don't change aren't worked out again.
   const npcs = getNpcs(character);
 
   const [query, setQuery] = useState('');
@@ -100,8 +100,8 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   const termsKey = useMemo(() => JSON.stringify(parseJournalQuery(searched)), [searched]);
   const terms = useMemo(() => JSON.parse(termsKey) as SearchTerm[], [termsKey]);
   const list = useMemo(
-    () => listJournal(entries, { fairyVisits: visits }, hexFilter, terms, kept),
-    [entries, visits, hexFilter, terms, kept],
+    () => listJournal(entries, { fairyVisits: visits, npcs }, hexFilter, terms, kept),
+    [entries, visits, npcs, hexFilter, terms, kept],
   );
   // The first `limit` entries, and any being worked on further down.
   const shownItems = useMemo(
@@ -396,9 +396,8 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
               <JournalEntryCard
                 entry={entry}
                 shown={shown}
-                ranges={getEntryMatches(entry, { fairyVisits: visits }, terms)}
+                ranges={getEntryMatches(entry, { fairyVisits: visits, npcs }, terms)}
                 matches={matches}
-                npcs={npcs}
                 onTextChange={setText}
                 onHexChange={setHex}
                 onDelete={deleteEntry}
@@ -441,7 +440,6 @@ const JournalEntryCard = memo(function JournalEntryCard({
   shown,
   ranges,
   matches,
-  npcs,
   onTextChange,
   onHexChange,
   onDelete,
@@ -450,16 +448,12 @@ const JournalEntryCard = memo(function JournalEntryCard({
   shown: JournalEntryText;
   ranges: JournalEntryMatches;
   matches: boolean;
-  npcs: readonly Npc[];
   onTextChange: (id: string, text: string) => void;
   onHexChange: (id: string, hex: HexCoord | '') => void;
   onDelete: (id: string) => void;
 }) {
   const headingId = useId();
   const hex = getEntryHex(entry);
-  // Who it's about: the NPCs named in npcIds, which are the ones whose card
-  // in the NPCs tab shows it as one of their notes.
-  const about = useMemo(() => describeEntryNpcs(entry, npcs), [entry, npcs]);
   const [editingHex, setEditingHex] = useState(false);
   const hexButtonRef = useRef<HTMLButtonElement>(null);
   const focusAfterRender = useFocusAfterRender();
@@ -507,11 +501,15 @@ const JournalEntryCard = memo(function JournalEntryCard({
         </button>
       </div>
 
-      {about && (
-        // Who the entry is about, so that the link to the NPCs tab is visible
-        // from where the entry is written. Read-only: the NPCs tab is where
-        // notes are attached to people.
-        <p className="mt-1 text-xs text-[#f5e6c8]/80 [overflow-wrap:anywhere]">About: {about}</p>
+      {shown.npcs && (
+        // Who the entry is about: the NPCs it names, whose cards in the NPCs
+        // tab show it as one of their notes, so the link between the two is
+        // visible from where entries are written. It's searched like the rest
+        // of the entry (that is one of search's parts), so a name typed here
+        // is marked. Read-only: the NPCs tab is where notes are attached.
+        <p className="mt-1 text-xs text-[#f5e6c8]/80 [overflow-wrap:anywhere]">
+          About: <Highlighted text={shown.npcs} ranges={ranges.npcs} />
+        </p>
       )}
 
       {editingHex && (

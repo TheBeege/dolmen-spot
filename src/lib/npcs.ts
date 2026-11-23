@@ -17,11 +17,12 @@
 import type { Character, HexCoord, JournalEntry, Npc, NpcQuest } from './types';
 import { isValidHex } from './hex';
 import { newId } from './ids';
+import { entryNpcNames, npcLabel, npcText } from './npc-names';
 import {
   createJournalEntry,
-  findMatchRanges,
   foldForSearch,
   getJournalEntries,
+  matchesEveryTerm,
   sortJournalNewestFirst,
   type SearchTerm,
 } from './journal';
@@ -29,24 +30,9 @@ import {
 type WithNpcs = Pick<Character, 'npcs'>;
 type WithNotes = Pick<Character, 'journalEntries' | 'fairyVisits'>;
 
-// ── Text ─────────────────────────────────────────────────────────────
-
-/**
- * A text field read defensively: strings as they are, finite numbers as text,
- * anything else as ''. Loading repairs an NPC's fields into strings
- * (sanitizeNpcs), so this only matters for data written since, but a field
- * that held a number would otherwise be drawn as one.
- */
-export function npcText(value: unknown): string {
-  if (typeof value === 'string') return value;
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
-  return '';
-}
-
-/** What to call an NPC in a sentence: their name, or "Unnamed NPC" while they have none. */
-export function npcLabel(npc: Npc): string {
-  return npcText(npc.name).trim() || 'Unnamed NPC';
-}
+// How an NPC is named in text, which the Journal needs too (npc-names.ts),
+// re-exported so that the NPCs tab's callers have one place to import from.
+export { entryNpcNames, npcLabel, npcText };
 
 // ── NPCs ─────────────────────────────────────────────────────────────
 
@@ -160,9 +146,7 @@ export function matchesNpcSearch(
   terms: readonly SearchTerm[],
   notes: readonly JournalEntry[] = NO_NOTES,
 ): boolean {
-  if (terms.length === 0) return true;
-  const text = npcSearchText(npc, notes);
-  return terms.every((term) => findMatchRanges(text, [term]).length > 0);
+  return matchesEveryTerm(npcSearchText(npc, notes), terms);
 }
 
 export interface NpcList {
@@ -263,11 +247,6 @@ export function describeQuestCount(npc: Npc): string {
 
 // ── Notes, which are journal entries ─────────────────────────────────
 
-/** The journal entries that name `npcId` (JournalEntry.npcIds), newest first. */
-export function getNpcNotes(character: WithNotes, npcId: string): JournalEntry[] {
-  return notesByNpc(character).get(npcId) ?? [];
-}
-
 // Every NPC's notes, grouped once per list of entries and set of visits, as
 // the Journal tab caches its sorted list: the tab asks for one or two per NPC,
 // and sorting the whole journal again for each would be wasted work whenever
@@ -310,29 +289,4 @@ export function createNpcNote(
   text: string,
 ): JournalEntry {
   return { ...createJournalEntry(character), text, npcIds: [npcId] };
-}
-
-// ── An entry's NPCs ──────────────────────────────────────────────────
-
-/**
- * The NPCs the entry is about, by name, as the Journal's entry card shows
- * them: the entry's npcIds that name an NPC that is still there, in the order
- * the entry names them. An entry naming a deleted NPC names only the rest
- * (the load repair keeps the gone id, as naming no one).
- */
-export function entryNpcNames(entry: JournalEntry, npcs: readonly Npc[]): string[] {
-  const ids = Array.isArray(entry.npcIds) ? entry.npcIds : [];
-  if (ids.length === 0) return [];
-  const byId = new Map(npcs.map((npc) => [npc.id, npcLabel(npc)]));
-  const names: string[] = [];
-  for (const raw of new Set(ids)) {
-    const name = byId.get(npcText(raw));
-    if (name !== undefined) names.push(name);
-  }
-  return names;
-}
-
-/** Who an entry is about, as the Journal shows it after "About:"; '' if it's about no one. */
-export function describeEntryNpcs(entry: JournalEntry, npcs: readonly Npc[]): string {
-  return entryNpcNames(entry, npcs).join(', ');
 }

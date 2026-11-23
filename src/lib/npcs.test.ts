@@ -5,6 +5,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createDefaultCharacter } from './gamedata';
 import { createJournalEntry, parseJournalQuery, sortJournalNewestFirst, withoutEntry } from './journal';
+import { describeEntryNpcs, entryNpcNames } from './npc-names';
 import { enterFairy } from './livedTime';
 import { CURRENT_SCHEMA_VERSION, migrateCharacter } from './migrations';
 import {
@@ -18,10 +19,7 @@ import {
   deleteQuest,
   describeNpcList,
   describeQuestCount,
-  entryNpcNames,
-  describeEntryNpcs,
   getNpcHex,
-  getNpcNotes,
   getNpcQuests,
   getNpcs,
   listNpcs,
@@ -59,6 +57,9 @@ function npc(fields: Partial<Npc> = {}): Npc {
 function note(c: Character, ids: string[], text: string, on: CalendarDate = c.currentDate): JournalEntry {
   return { ...createJournalEntry({ ...c, currentDate: on }), text, npcIds: ids };
 }
+
+/** An NPC's notes, as the tab groups them (notesByNpc). */
+const notesOf = (c: Character, id: string) => notesByNpc(c).get(id) ?? [];
 
 /** `c` with an entry added at the end, as the journal's Add Entry does. */
 function write(c: Character, entry: JournalEntry): Character {
@@ -182,7 +183,7 @@ describe('search', () => {
   test('finds them by what was written about them: the notes their card shows', () => {
     const c = character();
     const withNote = write(c, note(c, ['n1'], 'She asked after the bell of St Clewd.'));
-    const about = getNpcNotes(withNote, 'n1');
+    const about = notesOf(withNote, 'n1');
     assert.ok(matches(npc(), 'clewd', about));
     assert.ok(matches(npc(), '"bell of St Clewd"', about), 'with the Journal’s phrases');
     assert.ok(!matches(npc(), 'clewd'), 'and not without the note');
@@ -375,16 +376,16 @@ describe('notes, which are journal entries', () => {
     const c = character();
     const withNotes = [note(c, ['n1'], 'About Ysolde.'), { ...createJournalEntry(c), text: 'No one in particular.' }, note(c, ['n2'], 'About Brindle.')]
       .reduce(write, c);
-    assert.deepEqual(getNpcNotes(withNotes, 'n1').map((e) => e.text), ['About Ysolde.']);
-    assert.deepEqual(getNpcNotes(withNotes, 'n2').map((e) => e.text), ['About Brindle.']);
-    assert.deepEqual(getNpcNotes(withNotes, 'n3'), []);
+    assert.deepEqual(notesOf(withNotes, 'n1').map((e) => e.text), ['About Ysolde.']);
+    assert.deepEqual(notesOf(withNotes, 'n2').map((e) => e.text), ['About Brindle.']);
+    assert.deepEqual(notesOf(withNotes, 'n3'), []);
   });
 
   test('an entry about two NPCs is one of each one’s notes', () => {
     const c = character();
     const withNote = write(c, note(c, ['n1', 'n2'], 'Both of them argued.'));
-    assert.equal(getNpcNotes(withNote, 'n1').length, 1);
-    assert.equal(getNpcNotes(withNote, 'n2').length, 1);
+    assert.equal(notesOf(withNote, 'n1').length, 1);
+    assert.equal(notesOf(withNote, 'n2').length, 1);
   });
 
   test('newest first, as the character lived them, not as the dates run', () => {
@@ -392,9 +393,9 @@ describe('notes, which are journal entries', () => {
     let withNotes = write(c, note(c, ['n1'], 'First', date(1, 0, 1)));
     withNotes = write(withNotes, note(c, ['n1'], 'Second', date(10, 0, 1)));
     withNotes = write(withNotes, note(c, ['n1'], 'Third', date(5, 0, 1)));
-    assert.deepEqual(getNpcNotes(withNotes, 'n1').map((e) => e.text), ['Second', 'Third', 'First']);
+    assert.deepEqual(notesOf(withNotes, 'n1').map((e) => e.text), ['Second', 'Third', 'First']);
     assert.deepEqual(
-      getNpcNotes(withNotes, 'n1').map((e) => e.id),
+      notesOf(withNotes, 'n1').map((e) => e.id),
       sortJournalNewestFirst(withNotes.journalEntries, withNotes).map((e) => e.id),
       'the journal’s own order',
     );
@@ -408,7 +409,7 @@ describe('notes, which are journal entries', () => {
     // Home again, three Dolmenwood days later, on a date that has gone backwards.
     c = { ...c, fairyVisits: c.fairyVisits.map((v) => ({ ...v, returnedOn: date(2, 0, 1) })) };
     c = write(c, { ...note(c, ['n1'], 'After Fairy', date(2, 0, 1)), sinceReturnFrom: c.fairyVisits[0].id });
-    assert.deepEqual(getNpcNotes(c, 'n1').map((e) => e.text), ['After Fairy', 'Before Fairy']);
+    assert.deepEqual(notesOf(c, 'n1').map((e) => e.text), ['After Fairy', 'Before Fairy']);
   });
 
   test('every NPC’s notes are grouped by the NPC, in one pass', () => {
@@ -429,10 +430,10 @@ describe('notes, which are journal entries', () => {
   test('deleting a note is the one delete: the entry is gone from the journal too', () => {
     const c = character();
     const withNotes = [note(c, ['n1'], 'One'), note(c, ['n1'], 'Two')].reduce(write, c);
-    const [newest, oldest] = getNpcNotes(withNotes, 'n1');
+    const [newest, oldest] = notesOf(withNotes, 'n1');
     const left = withoutEntry(withNotes.journalEntries, newest.id);
     assert.deepEqual(left.map((e) => e.id), [oldest.id]);
-    assert.deepEqual(getNpcNotes({ ...withNotes, journalEntries: left }, 'n1').map((e) => e.text), ['One']);
+    assert.deepEqual(notesOf({ ...withNotes, journalEntries: left }, 'n1').map((e) => e.text), ['One']);
   });
 });
 
@@ -506,7 +507,7 @@ describe('saved data', () => {
     assert.equal(loaded.npcs[0].quests.length, 2);
     assert.equal(loaded.npcs[0].quests[0].done, true);
     assert.deepEqual(loaded.journalEntries[0].npcIds, [loaded.npcs[0].id]);
-    assert.deepEqual(getNpcNotes(loaded, loaded.npcs[0].id).map((e) => e.text), ['He wants the bell of St Clewd.']);
+    assert.deepEqual(notesOf(loaded, loaded.npcs[0].id).map((e) => e.text), ['He wants the bell of St Clewd.']);
   });
 
   test('clearing an NPC’s hex loads back with no hex, not an empty one', () => {

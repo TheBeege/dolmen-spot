@@ -2,10 +2,11 @@
 // so that it can be tested: new entries, the order entries are listed in,
 // search, and the hex filter.
 
-import type { CalendarDate, Character, FairyVisit, HexCoord, JournalEntry } from './types';
+import type { CalendarDate, Character, FairyVisit, HexCoord, JournalEntry, Npc } from './types';
 import { getAbsoluteDay } from './gamedata';
 import { isValidHex } from './hex';
 import { newId } from './ids';
+import { describeEntryNpcs } from './npc-names';
 import {
   LIVED_TIME_EPOCH,
   formatRecordDate,
@@ -16,6 +17,9 @@ import {
 } from './livedTime';
 
 type WithVisits = Pick<Character, 'fairyVisits'>;
+// What an entry's display text needs beyond its date's visits: the character's
+// NPCs, which say who it is about (JournalEntry.npcIds).
+type EntryContext = Pick<Character, 'fairyVisits' | 'npcs'>;
 
 // ── Entries ──────────────────────────────────────────────────────────
 
@@ -280,9 +284,11 @@ export function hexFilterOptions(entries: readonly JournalEntry[], selected: Jou
 
 // ── Search ───────────────────────────────────────────────────────────
 //
-// What's searched: an entry's text, location, hex ("Hex 0606") and date as
-// the list shows it ("3 Grimvold (Hayme), Year 1", or "Fairy visit 1, day 5
-// (entered 3 Grimvold, Year 2)").
+// What's searched: an entry's text, location, hex ("Hex 0606"), the NPCs it is
+// about ("Sister Ysolde, Old Mother Brindle": its npcIds, which is what the
+// NPCs tab shows on their cards) and its date as the list shows it ("3
+// Grimvold (Hayme), Year 1", or "Fairy visit 1, day 5 (entered 3 Grimvold,
+// Year 2)").
 //
 // Case and accents don't matter: text is compared after folding, which
 // splits accented letters into letter and accent (NFKD), drops the accent,
@@ -583,46 +589,63 @@ export function findMatchRanges(text: string, terms: readonly SearchTerm[]): Tex
   return findMatchRangesIn(text, foldText(text), terms);
 }
 
+/**
+ * Whether every term of a search (parseJournalQuery) is somewhere in `text`,
+ * which is folded once rather than once per term: for a text searched as a
+ * whole rather than in parts, as the NPCs tab searches an NPC's card and notes
+ * (npcSearchText there).
+ */
+export function matchesEveryTerm(text: string, terms: readonly SearchTerm[]): boolean {
+  if (terms.length === 0) return true;
+  if (text === '') return false;
+  const { folded } = foldText(text);
+  return terms.every((term) => findTerm(folded, term, 0) !== null);
+}
+
 /** The text of an entry that search looks in, as the list shows it. */
 export interface JournalEntryText {
   date: string;
   location: string;
-  hex: string; // "Hex 0606", or '' for none
+  hex: string;  // "Hex 0606", or '' for none
+  npcs: string; // the NPCs it is about, by name, or '' for an entry about no one
   text: string;
 }
 
 /** Where a search matched in each part of an entry. */
 export type JournalEntryMatches = { [K in keyof JournalEntryText]: TextRange[] };
 
-const NO_MATCHES: JournalEntryMatches = Object.freeze({ date: [], location: [], hex: [], text: [] });
-const PARTS = ['text', 'location', 'hex', 'date'] as const;
+const NO_MATCHES: JournalEntryMatches = Object.freeze({ date: [], location: [], hex: [], npcs: [], text: [] });
+const PARTS = ['text', 'location', 'hex', 'npcs', 'date'] as const;
 
 // What's worked out about an entry for the list, kept for as long as the
-// entry and the character's Fairy visits (which its date reads from) are
-// the same objects. Entries are never changed in place: an edit makes a new
-// object. So a letter typed into the search, or into one entry, doesn't fold
-// every entry's text again, and each entry's card gets the same props, and
-// isn't drawn again, unless something about it changed.
+// entry and the character's Fairy visits (which its date reads from) and NPCs
+// (which the "About" line reads from) are the same objects. Entries are never
+// changed in place: an edit makes a new object. So a letter typed into the
+// search, or into one entry, doesn't fold every entry's text again, and each
+// entry's card gets the same props, and isn't drawn again, unless something
+// about it changed.
 interface EntryFacts {
   visits: unknown;
+  npcs: readonly Npc[];
   shown: JournalEntryText;
   folded?: { [K in keyof JournalEntryText]: FoldedText };
   matches?: { terms: readonly SearchTerm[]; ranges: JournalEntryMatches };
 }
 const entryFacts = new WeakMap<JournalEntry, EntryFacts>();
 
-function factsOf(entry: JournalEntry, character: WithVisits): EntryFacts {
-  const visits = character.fairyVisits;
+function factsOf(entry: JournalEntry, character: EntryContext): EntryFacts {
+  const { fairyVisits: visits, npcs } = character;
   let facts = entryFacts.get(entry);
-  if (!facts || facts.visits !== visits) {
+  if (!facts || facts.visits !== visits || facts.npcs !== npcs) {
     const hex = getEntryHex(entry);
     const shown = {
       date: formatRecordDate(character, entry.date, entry.fairyDate),
       location: asText(entry.location),
       hex: hex ? `Hex ${hex}` : '',
+      npcs: describeEntryNpcs(entry, npcs),
       text: asText(entry.text),
     };
-    facts = { visits, shown };
+    facts = { visits, npcs, shown };
     entryFacts.set(entry, facts);
   }
   return facts;
@@ -634,17 +657,18 @@ function foldedOf(facts: EntryFacts): NonNullable<EntryFacts['folded']> {
     date: foldText(shown.date),
     location: foldText(shown.location),
     hex: foldText(shown.hex),
+    npcs: foldText(shown.npcs),
     text: foldText(shown.text),
   };
   return facts.folded;
 }
 
-export function getEntryDisplayText(entry: JournalEntry, character: WithVisits): JournalEntryText {
+export function getEntryDisplayText(entry: JournalEntry, character: EntryContext): JournalEntryText {
   return factsOf(entry, character).shown;
 }
 
 /** Whether every term of a search (parseJournalQuery) is somewhere in the entry. */
-export function matchesSearch(entry: JournalEntry, character: WithVisits, terms: readonly SearchTerm[]): boolean {
+export function matchesSearch(entry: JournalEntry, character: EntryContext, terms: readonly SearchTerm[]): boolean {
   if (terms.length === 0) return true;
   const folded = foldedOf(factsOf(entry, character));
   return terms.every((term) => PARTS.some((part) => findTerm(folded[part].folded, term, 0) !== null));
@@ -656,7 +680,7 @@ export function matchesSearch(entry: JournalEntry, character: WithVisits, terms:
  */
 export function getEntryMatches(
   entry: JournalEntry,
-  character: WithVisits,
+  character: EntryContext,
   terms: readonly SearchTerm[],
 ): JournalEntryMatches {
   if (terms.length === 0) return NO_MATCHES;
@@ -668,6 +692,7 @@ export function getEntryMatches(
     date: findMatchRangesIn(shown.date, folded.date, terms),
     location: findMatchRangesIn(shown.location, folded.location, terms),
     hex: findMatchRangesIn(shown.hex, folded.hex, terms),
+    npcs: findMatchRangesIn(shown.npcs, folded.npcs, terms),
     text: findMatchRangesIn(shown.text, folded.text, terms),
   };
   facts.matches = { terms, ranges };
@@ -838,7 +863,7 @@ export interface JournalList {
 // again.
 const sortedJournals = new WeakMap<readonly JournalEntry[], { visits: unknown; sorted: JournalEntry[] }>();
 
-function sortedJournal(entries: readonly JournalEntry[], character: WithVisits): JournalEntry[] {
+function sortedJournal(entries: readonly JournalEntry[], character: EntryContext): JournalEntry[] {
   const cached = sortedJournals.get(entries);
   if (cached && cached.visits === character.fairyVisits) return cached.sorted;
   const sorted = sortJournalNewestFirst(entries, character);
@@ -855,7 +880,7 @@ function sortedJournal(entries: readonly JournalEntry[], character: WithVisits):
  */
 export function listJournal(
   entries: readonly JournalEntry[],
-  character: WithVisits,
+  character: EntryContext,
   filter: JournalHexFilter,
   terms: readonly SearchTerm[],
   keep: ReadonlySet<string> = new Set(),

@@ -34,7 +34,7 @@ import {
   withoutEntry,
   type TextRange,
 } from './journal';
-import type { CalendarDate, Character, CharacterMapData, HexCoord, JournalEntry } from './types';
+import type { CalendarDate, Character, CharacterMapData, HexCoord, JournalEntry, Npc } from './types';
 
 const date = (day: number, month: number, year: number): CalendarDate => ({ day, month, year });
 
@@ -448,9 +448,11 @@ describe('the hex an entry is written in', () => {
     assert.deepEqual(withEntryHex(withEntryHex(e, '0303'), ''), e);
     assert.equal('hex' in withEntryHex({ ...e, hex: '0303' }, ''), false);
   });
+});
 
-  // The one delete an entry has: the Journal tab's, and the NPCs tab's, where
-  // the same entry is one of an NPC's notes.
+// The one delete an entry has: the Journal tab's, and the NPCs tab's, where
+// the same entry is one of an NPC's notes.
+describe('deleting an entry', () => {
   test('withoutEntry takes that one entry out, leaving the rest as they were', () => {
     const c = write(write(character(), 'One'), 'Two');
     const [one, two] = c.journalEntries;
@@ -590,11 +592,12 @@ describe('search', () => {
   const shown = getEntryDisplayText(entry, c);
   const finds = (query: string) => matchesSearch(entry, c, parseJournalQuery(query));
 
-  test('what is searched: the text, location, hex and date as listed', () => {
+  test('what is searched: the text, location, hex, NPCs and date as listed', () => {
     assert.deepEqual(shown, {
       date: '3 Grimvold (Hayme), Year 1',
       location: 'Hag’s Addle',
       hex: 'Hex 0606',
+      npcs: '',
       text: 'Met the goblin king at the Café',
     });
     for (const q of ['goblin', "hag's", 'addle', '0606', 'hex 0606', 'grimvold', 'hayme', 'year 1', '3 grimvold', '3 Grimvold, Year 1', '(Hayme)']) {
@@ -695,6 +698,36 @@ describe('search', () => {
     assert.ok(matchesSearch(e, f, parseJournalQuery('3 Grimvold, Year 2')), "the app's short date, as written");
   });
 
+  test('an entry is found by the NPCs it is about, as its card says', () => {
+    const npcs: Npc[] = [
+      { id: 'n1', name: 'Sister Ysolde', affiliation: '', location: '', goals: '', quests: [] },
+      { id: 'n2', name: 'Old Mother Brindle', affiliation: '', location: '', goals: '', quests: [] },
+    ];
+    const bare: Character = { ...character({ npcs }), journalEntries: [] };
+    const plain: JournalEntry = { ...createJournalEntry(bare), text: 'A quiet day.' };
+    const aboutTwo: JournalEntry = { ...createJournalEntry(bare), text: 'Both of them argued.', npcIds: ['n1', 'n2'] };
+    const c: Character = { ...bare, journalEntries: [plain, aboutTwo] };
+
+    // As the card shows it, and as the NPCs tab names them on their cards.
+    assert.equal(getEntryDisplayText(aboutTwo, c).npcs, 'Sister Ysolde, Old Mother Brindle');
+    assert.ok(matchesSearch(aboutTwo, c, parseJournalQuery('ysolde')), 'by one of their names');
+    assert.ok(matchesSearch(aboutTwo, c, parseJournalQuery('brindle argued')), 'and with the rest of the entry');
+    assert.ok(!matchesSearch(plain, c, parseJournalQuery('ysolde')), 'not by an entry about no one');
+
+    // The names are marked like any other part of the entry.
+    const ranges = getEntryMatches(aboutTwo, c, parseJournalQuery('brindle'));
+    const shown = getEntryDisplayText(aboutTwo, c).npcs;
+    assert.deepEqual(ranges.npcs.map((r) => shown.slice(r.start, r.end)), ['Brindle']);
+
+    // An entry naming an NPC who has since been deleted is about no one, and
+    // found by no one's name: the same entry, with the NPC gone.
+    const gone: Character = { ...c, npcs: npcs.slice(0, 1) };
+    assert.equal(getEntryDisplayText(aboutTwo, gone).npcs, 'Sister Ysolde');
+    assert.ok(!matchesSearch(aboutTwo, gone, parseJournalQuery('brindle')));
+    const orphan: Character = { ...c, npcs: [] };
+    assert.equal(getEntryDisplayText(aboutTwo, orphan).npcs, '');
+  });
+
   test('no search matches everything', () => {
     assert.ok(matchesSearch(entry, c, []));
   });
@@ -709,7 +742,7 @@ describe('search', () => {
     assert.deepEqual(markedIn('date'), ['Grimvold']);
     assert.equal(getEntryMatches(entry, c, terms), matches);
     assert.notEqual(getEntryMatches(entry, c, parseJournalQuery('goblin 0606 hag’s grimvold')), matches, 'new terms, worked out again');
-    assert.deepEqual(getEntryMatches(entry, c, []), { date: [], location: [], hex: [], text: [] });
+    assert.deepEqual(getEntryMatches(entry, c, []), { date: [], location: [], hex: [], npcs: [], text: [] });
   });
 
   test("an entry's date is read again when the Fairy visits change", () => {

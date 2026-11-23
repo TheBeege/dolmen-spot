@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Character, CharacterUpdater } from '@/lib/types';
 import { downloadFile, localFileStamp } from '@/lib/download';
 import { characterFileJson, createNewAdventurer, getCharacterStore, ImportError, parseImportedCharacters } from '@/lib/storage';
+import { forgetNpcDrafts } from '@/lib/npc-drafts';
 
 interface CharacterSession {
   characters: Character[];
@@ -64,6 +65,9 @@ export function useCharacter() {
   const deleteCharacter = useCallback((id: string) => {
     // Made out here so a repeated call of the updater gives the same result.
     const replacement = createNewAdventurer();
+    // What the NPCs tab was keeping for this character goes with it, so its
+    // sessionStorage key is not left behind (src/lib/npc-drafts.ts).
+    forgetNpcDrafts(id);
     setSession(prev => {
       const remaining = prev.characters.filter(c => c.id !== id);
       const next = remaining.length > 0 ? remaining : [replacement];
