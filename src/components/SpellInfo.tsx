@@ -78,6 +78,25 @@ export function useSpellDisclosures(): (key: string) => SpellDisclosure {
   });
 }
 
+/**
+ * What to put in brackets after each info button's name in a list of spells
+ * ("What Fireball does (memorised)"): `label`, numbered where the same spell
+ * is in the list more than once ("memorised, 2 of 2"), so that every row's
+ * button has a name of its own.
+ */
+export function spellRowContexts(spellType: SpellType, names: readonly string[], label: string): string[] {
+  const keys = names.map((name) => findSpell(spellType, name)?.name ?? name.trim().toLowerCase());
+  const totals = new Map<string, number>();
+  for (const key of keys) totals.set(key, (totals.get(key) ?? 0) + 1);
+  const seen = new Map<string, number>();
+  return keys.map((key) => {
+    const n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+    const total = totals.get(key) ?? 1;
+    return total > 1 ? `${label}, ${n} of ${total}` : label;
+  });
+}
+
 // The card showing now, if any. Showing another dismisses it, so a card from
 // keyboard focus and one from the mouse never show together.
 let dismissShownCard: (() => void) | null = null;

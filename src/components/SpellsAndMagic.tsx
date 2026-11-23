@@ -29,7 +29,6 @@ import {
   SPELLBOOK_CAPACITY,
   FEATURE_NOTES,
   findArcaneSpell,
-  findSpell,
   getLearnableSpellRanks,
   getSpellSummary,
   getStudyConfig,
@@ -59,6 +58,7 @@ import {
   ChosenSpellSummary,
   SpellInfo,
   SpellSummaryPanel,
+  spellRowContexts,
   useSpellDisclosures,
   type SpellDisclosure,
 } from '@/components/SpellInfo';
@@ -94,23 +94,6 @@ const rowControlsClasses = 'ml-auto flex flex-wrap items-center justify-end gap-
 // button in the page, so a screen reader reaches it next, but shows on a line
 // of its own below the rest of the row.
 const rowPanelClasses = 'basis-full order-last';
-
-// What to put in brackets after each info button's name in a list of spells
-// ("What Fireball does (memorised)"): `label`, numbered where the same spell
-// is in the list more than once ("memorised, 2 of 2"), so that every row's
-// button has a name of its own.
-function spellRowContexts(spellType: SpellType, names: readonly string[], label: string): string[] {
-  const keys = names.map((name) => findSpell(spellType, name)?.name ?? name.trim().toLowerCase());
-  const totals = new Map<string, number>();
-  for (const key of keys) totals.set(key, (totals.get(key) ?? 0) + 1);
-  const seen = new Map<string, number>();
-  return keys.map((key) => {
-    const n = (seen.get(key) ?? 0) + 1;
-    seen.set(key, n);
-    const total = totals.get(key) ?? 1;
-    return total > 1 ? `${label}, ${n} of ${total}` : label;
-  });
-}
 
 // Spells can only be learned of a Rank the character can memorise at their
 // Level (Player's Book p78), so the pickers for learning one offer only those

@@ -39,6 +39,7 @@ import {
 import { getJournalEntries } from '@/lib/journal';
 import { newId } from '@/lib/ids';
 import { FairyStatusPanel, LivedTimePanel } from '@/components/FairyTime';
+import { SpellInfo, SpellSummaryPanel, useSpellDisclosures } from '@/components/SpellInfo';
 import { errorClasses, formatYearNumber, inputClass, readWholeNumber, type NumberField } from '@/components/FairyFields';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
 
@@ -183,6 +184,10 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
   const dolmenwoodDateRef = useRef<HTMLDivElement>(null);
   const focusAfterRender = useFocusAfterRender();
   const dateFieldsId = useId();
+
+  // The Spell Study card's info button, which says what the spell under study
+  // does. The study is the only spell this tab shows.
+  const studyInfo = useSpellDisclosures();
 
   // ── Calendar Handlers ──────────────────────────────────────────────
 
@@ -591,8 +596,26 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             return (
               <div className={`bg-[#1a1a2e] rounded p-3 ${ready ? 'ring-1 ring-[#c4a35a]' : ''}`}>
                 <div className="text-[#c4a35a] text-sm font-semibold mb-2">🪄 Spell Study</div>
-                <div className="text-[#f5e6c8] text-sm font-bold">
-                  R{active.rank} {active.spellName}
+                <div className="flex flex-wrap items-center gap-2 text-[#f5e6c8] text-sm font-bold">
+                  <span className="text-[#c4a35a] shrink-0">R{active.rank}</span>
+                  {/* min-w-0, so a long spell name at a big font wraps inside
+                      the card instead of pushing its info button off it. */}
+                  <span className="min-w-0">
+                    <SpellInfo
+                      spellType="arcane"
+                      name={active.spellName}
+                      context="studying"
+                      {...studyInfo(active.id)}
+                    >
+                      {active.spellName}
+                    </SpellInfo>
+                  </span>
+                  <SpellSummaryPanel
+                    spellType="arcane"
+                    name={active.spellName}
+                    {...studyInfo(active.id)}
+                    className="basis-full order-last"
+                  />
                 </div>
                 {rankNote && (
                   <div className="text-red-400 text-xs">{rankNote}</div>

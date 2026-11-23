@@ -10,12 +10,20 @@ import {
   WEAPONS_TABLE,
   ARCANE_SPELLS,
   findArcaneSpell,
+  getSpellSummary,
   EquipmentEntry,
   EQUIPPED_SLOT_LIMIT,
   SPELLBOOK_CAPACITY,
   STOWED_SLOT_LIMIT,
 } from '@/lib/gamedata';
 import GrowingTextarea from './GrowingTextarea';
+import {
+  SpellInfo,
+  SpellSummaryPanel,
+  spellRowContexts,
+  useSpellDisclosures,
+  type SpellDisclosure,
+} from '@/components/SpellInfo';
 import {
   calculateEncumbrance,
   getOverloadNote,
@@ -57,6 +65,38 @@ const NAME_MIN_WIDTH = 'min-w-[min(6rem,100%)]';
 const SPELL_BOOK_TITLE_MIN_WIDTH = 'min-w-[min(9rem,100%)]';
 const SCROLL_SPELL_MIN_WIDTH = 'min-w-[min(7.5rem,100%)]';
 
+// What goes in brackets after each info button's name, so a screen reader can
+// tell one spell's button from another's: where that spell is (see
+// spellRowContexts).
+const SPELL_BOOK_CONTEXT = 'in a spell book';
+const SCROLL_CONTEXT = 'scroll';
+
+// A spell's summary panel in a spell book's or a scroll's row: it comes
+// straight after the info button in the page, so a screen reader reaches it
+// next, but shows on a line of its own below the rest of the row.
+const SPELL_PANEL_CLASSES = 'basis-full order-last';
+
+// The name a spell book's row goes by in the disclosure state. Its spells have
+// no ids of their own, so it's the book's id and the spell's place in it.
+const bookSpellKey = (itemId: string, index: number) => `${itemId}-${index}`;
+
+// Whether the app can say what the spell named here does (it can't for a name
+// it doesn't know), and so whether the row gets an info button.
+const hasSpellSummary = (name: string) => getSpellSummary('arcane', name) !== undefined;
+
+/**
+ * The info button for the spell a row's picker names, or nothing while it
+ * names none or one the app doesn't know. Only the button shows the summary
+ * card: a card over the picker would get in the way of choosing the spell.
+ * Its panel is the SpellSummaryPanel beside it.
+ */
+function SpellPickerInfo({ name, context, info }: { name: string; context: string; info: SpellDisclosure }) {
+  if (!name || !hasSpellSummary(name)) return null;
+  return (
+    <SpellInfo spellType="arcane" name={name} context={context} {...info} className="w-6 h-6 shrink-0" />
+  );
+}
+
 type CatalogTarget = { section: 'equipped' } | { section: 'stowed'; containerId?: string };
 
 export default function Inventory({ character, onChange }: InventoryProps) {
@@ -79,6 +119,41 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   // Magical-item dropdown ("+ Spellbook" / "+ Scroll") per add-context
   const [magicalDropdownFor, setMagicalDropdownFor] = useState<string | null>(null);
+
+  // A spell book's spells and a scroll's spell are picked in a <select>, whose
+  // options can't hold an info button or a summary, so each of those rows has
+  // the button (SpellInfo) beside its picker instead. One set of disclosures
+  // for the books' spells and one for the scrolls.
+  const bookSpellInfo = useSpellDisclosures();
+  const scrollSpellInfo = useSpellDisclosures();
+  // The rows in the order the page shows them (the equipped items, then the
+  // stowed ones container by container), so that a spell held in more than one
+  // book is numbered down the page: "in a spell book, 2 of 2". Without that,
+  // two books holding the same spell would have two buttons with one name.
+  const stowedInRowOrder = [
+    ...containers.flatMap((container) => getContainerItems(stowedItems, container.id)),
+    ...getContainerItems(stowedItems, undefined),
+  ];
+  const rowsInRowOrder = [...equippedItems, ...stowedInRowOrder];
+  const bookSpellRows = rowsInRowOrder.flatMap((item) =>
+    item.kind === 'spellbook'
+      ? (item.spellbookContents ?? []).map((entry, index) => ({
+          key: bookSpellKey(item.id, index),
+          name: entry.name,
+        }))
+      : [],
+  );
+  const bookContextByKey = new Map<string, string>(
+    spellRowContexts('arcane', bookSpellRows.map((row) => row.name), SPELL_BOOK_CONTEXT).map(
+      (context, i): [string, string] => [bookSpellRows[i].key, context],
+    ),
+  );
+  const scrollRows = rowsInRowOrder.filter((item) => item.kind === 'scroll');
+  const scrollContextById = new Map<string, string>(
+    spellRowContexts('arcane', scrollRows.map((item) => item.scrollSpell?.name ?? ''), SCROLL_CONTEXT).map(
+      (context, i): [string, string] => [scrollRows[i].id, context],
+    ),
+  );
 
   // Escape key + body scroll lock for catalog modal
   useEffect(() => {
@@ -528,12 +603,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
         {/* Spell list */}
         {!isCollapsed && (
-          <div className="border-t border-[#5a3a28]/40 px-3 py-2 space-y-1">
+          <div className="border-t border-[#5a3a28]/40 px-3 py-2 space-y-1" data-spell-list="">
             {contents.length === 0 && (
               <div className="text-[#9c948b] text-xs italic">No spells recorded. Up to 3.</div>
             )}
             {contents.map((entry, index) => (
-              <div key={index} className="flex flex-wrap items-center gap-2">
+              <div key={index} className="flex flex-wrap items-center gap-2" data-spell-row="spell-book">
                 <select
                   value={entry.name}
                   onChange={(e) => {
@@ -556,6 +631,17 @@ export default function Inventory({ character, onChange }: InventoryProps) {
                     </optgroup>
                   ))}
                 </select>
+                <SpellPickerInfo
+                  name={entry.name}
+                  context={bookContextByKey.get(bookSpellKey(item.id, index)) ?? SPELL_BOOK_CONTEXT}
+                  info={bookSpellInfo(bookSpellKey(item.id, index))}
+                />
+                <SpellSummaryPanel
+                  spellType="arcane"
+                  name={entry.name}
+                  {...bookSpellInfo(bookSpellKey(item.id, index))}
+                  className={SPELL_PANEL_CLASSES}
+                />
                 {entry.name && (
                   <span className="text-[#c4a35a] text-xs shrink-0">R{entry.rank}</span>
                 )}
@@ -611,7 +697,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     const scrollName = scroll.name ? `scroll of ${scroll.name}` : 'scroll';
     const scrollLabel = `${scrollName} (${position})`;
     return (
-      <div key={item.id} className={`flex flex-wrap items-start gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1 ${BORDERED_ROW_PADDING}`}>
+      <div key={item.id} data-spell-row="scroll" className={`flex flex-wrap items-start gap-2 bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1 ${BORDERED_ROW_PADDING}`}>
         <span className={`flex flex-1 ${SCROLL_SPELL_MIN_WIDTH} items-center gap-2 ${ONE_LINE_FIELD_HEIGHT} ${NAME_COLUMN}`}>
           <span className="text-[#c4a35a] text-sm shrink-0" title="Scroll">📜</span>
           <select
@@ -636,7 +722,18 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               </optgroup>
             ))}
           </select>
+          <SpellPickerInfo
+            name={scroll.name}
+            context={scrollContextById.get(item.id) ?? SCROLL_CONTEXT}
+            info={scrollSpellInfo(item.id)}
+          />
         </span>
+        <SpellSummaryPanel
+          spellType="arcane"
+          name={scroll.name}
+          {...scrollSpellInfo(item.id)}
+          className={SPELL_PANEL_CLASSES}
+        />
         {phoneControlsFor(item, equipped, scrollLabel)}
         <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
           <span className="hidden sm:block w-16 shrink-0" />
