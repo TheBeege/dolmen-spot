@@ -370,7 +370,8 @@ export default function CharacterInfo({ character, onChange }: CharacterInfoProp
           )}
           {calculated ? (
             <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-[#f5e6c8]">
+              {/* Wraps, so the total never runs off a phone at a big font. */}
+              <div className="flex flex-wrap items-center gap-2 text-sm text-[#f5e6c8]">
                 <span className="bg-[#1a1a2e] border border-[#5a3a28] rounded px-2 py-1">
                   Prime: {formatXpPercent(calculated.primeBonus)}
                 </span>

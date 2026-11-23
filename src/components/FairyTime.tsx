@@ -108,7 +108,7 @@ export function FairyStatusPanel({
           In Fairy &mdash; day {visit.daysInFairy + 1}
         </h3>
         <p className="text-[#f5e6c8]/80 text-sm mt-1">
-          <span className="whitespace-nowrap">entered {formatShortDate(visit.enteredOn)}</span> &middot;{' '}
+          entered {formatShortDate(visit.enteredOn)} &middot;{' '}
           <span className="whitespace-nowrap">visit {visitNumber}</span>
         </p>
       </div>
@@ -168,7 +168,18 @@ export function FairyStatusPanel({
       </div>
 
       <div className="text-center">
-        <button type="button" ref={openerRef} onClick={() => setReturning(true)} className={greenButtonClasses}>
+        {/* `max-w-full` caps the button at the card, and `break-words` keeps the
+            label inside it: "Dolmenwood…" is one word, wider than the button's
+            content box at a 24px font on a phone, so the browser drew it past
+            the button's rounded background. `hyphens-auto` gives a syllable
+            break where the browser has the dictionary for it, as spell names
+            do. */}
+        <button
+          type="button"
+          ref={openerRef}
+          onClick={() => setReturning(true)}
+          className={`${greenButtonClasses} max-w-full break-words hyphens-auto`}
+        >
           Return to Dolmenwood&hellip;
         </button>
         <p className="text-[#f5e6c8]/80 text-xs mt-2">

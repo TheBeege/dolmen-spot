@@ -644,8 +644,11 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Rations
         </h2>
-        <div className="grid grid-cols-2 gap-3 mb-3">
-          <div className="bg-[#1a1a2e] rounded p-3">
+        {/* Two columns when the two cells fit side by side, and one when they
+            don't: at a default font even a 320px phone fits them (2 × 7rem plus
+            the gap), and a big font on one is what doesn't. */}
+        <div className="flex flex-wrap gap-3 mb-3">
+          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
             <div className="text-[#c4a35a] text-sm font-semibold mb-2">Fresh</div>
             <div className="flex items-center gap-2">
               <button
@@ -661,7 +664,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
               >+</button>
             </div>
           </div>
-          <div className="bg-[#1a1a2e] rounded p-3">
+          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
             <div className="text-[#c4a35a] text-sm font-semibold mb-2">Preserved</div>
             <div className="flex items-center gap-2">
               <button
@@ -698,18 +701,21 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Travel Points
         </h2>
-        <div className="flex items-center gap-3 mb-3">
-          <button
-            onClick={() => onChange({ travelPointsRemaining: Math.max(0, character.travelPointsRemaining - 1) })}
-            className={smallButtonClasses}
-          >-</button>
-          <span className="text-[#f5e6c8] text-2xl font-bold w-12 text-center">
-            {character.travelPointsRemaining}
-          </span>
-          <button
-            onClick={() => onChange({ travelPointsRemaining: character.travelPointsRemaining + 1 })}
-            className={smallButtonClasses}
-          >+</button>
+        {/* The − count + group stays together; the label and Reset wrap after it. */}
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => onChange({ travelPointsRemaining: Math.max(0, character.travelPointsRemaining - 1) })}
+              className={smallButtonClasses}
+            >-</button>
+            <span className="text-[#f5e6c8] text-2xl font-bold w-12 text-center">
+              {character.travelPointsRemaining}
+            </span>
+            <button
+              onClick={() => onChange({ travelPointsRemaining: character.travelPointsRemaining + 1 })}
+              className={smallButtonClasses}
+            >+</button>
+          </div>
           <span className="text-[#f5e6c8]/60 text-sm">TP remaining</span>
           <button
             onClick={() => onChange({
@@ -780,7 +786,7 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
         <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
           Light Sources
         </h2>
-        <div className="flex gap-2 mb-3">
+        <div className="flex flex-wrap gap-2 mb-3">
           <button onClick={() => handleAddLightSource('torch')} className={buttonClasses}>
             + Torch
           </button>
@@ -802,32 +808,44 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             return (
               <div
                 key={source.id}
-                className={`flex items-center gap-2 p-2 rounded ${
+                className={`flex flex-wrap items-center gap-2 p-2 rounded ${
                   burnedOut ? 'bg-red-900/30 border border-red-400/30' : 'bg-[#1a1a2e]'
                 }`}
               >
-                <span className={`text-sm font-semibold w-16 ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
-                  {LIGHT_SOURCE_TYPES[source.type].label}
-                </span>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 10)}
-                  className={smallButtonClasses}
-                >-10</button>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 1)}
-                  className={smallButtonClasses}
-                >-1</button>
-                <span className={`text-sm font-bold w-16 text-center ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
-                  {source.minutesRemaining} min
-                </span>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 1)}
-                  className={smallButtonClasses}
-                >+1</button>
-                <button
-                  onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 10)}
-                  className={smallButtonClasses}
-                >+10</button>
+                {/* The light and its time wrap together onto their own line,
+                    splitting only if the pair outgrows it, and the four time
+                    buttons take the line below when the row can't hold them
+                    both (a big font on a phone). Neither span has a fixed
+                    width: `w-16` is 4rem, so at a 24px font each span took 96px
+                    whatever its label, and the pair filled the row's whole
+                    204px of content. Taking their text's width instead,
+                    "Lantern 240 min" is about 199px of it. */}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`text-sm font-semibold ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
+                    {LIGHT_SOURCE_TYPES[source.type].label}
+                  </span>
+                  <span className={`text-sm font-bold ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
+                    {source.minutesRemaining} min
+                  </span>
+                </div>
+                <div className="flex flex-wrap items-center gap-1">
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 10)}
+                    className={smallButtonClasses}
+                  >-10</button>
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 1)}
+                    className={smallButtonClasses}
+                  >-1</button>
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 1)}
+                    className={smallButtonClasses}
+                  >+1</button>
+                  <button
+                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 10)}
+                    className={smallButtonClasses}
+                  >+10</button>
+                </div>
                 <button
                   onClick={() => handleRemoveLightSource(source.id)}
                   className="text-red-400 hover:text-red-300 text-sm ml-auto px-1"

@@ -38,42 +38,7 @@ export interface KnownIssue {
 
 export type BrowserName = 'chromium' | 'webkit';
 
-export const KNOWN_ISSUES: KnownIssue[] = [
-  // ── Layout ───────────────────────────────────────────────────────────
-  {
-    issue: "Adventuring doesn't fit phones: the light tracker's rows stick out of their card at 320 and 375px, and at a 24px font so do its add buttons, the rations and travel points cards and the In Fairy card.",
-    checks: ['page-overflow', 'spills-card'],
-    tabs: ['calendar'],
-    match: /^(Rations › button "\+"|Light Sources › (button "(Remove|\+10|\+1|-1|\+ Candle)"|span "\d+ min")|Travel Points › button "Reset"|In Fairy — day \d+ › (button\[type=button\] "Return to Dolmenwood…"|span "entered ))/,
-    maxWidth: 375,
-  },
-  {
-    issue: 'Spells & Magic: at a 24px font and 320px, the study picker and its "What … does" button stick out of the Spell Study card.',
-    checks: ['spills-card'],
-    tabs: ['spells'],
-    // Those two controls only (the picker, and the info button of the study it
-    // shows): the rest of the card, its hint included, is checked like any other.
-    match: /^Spell Study › (select "Spell to study"|button\[type=button\] "What .+ does \(studying\)")/,
-    maxWidth: 320,
-    fontSizes: [24],
-  },
-  {
-    issue: 'Combat: at a 24px font and 320px, the hit point − and + buttons stick out of their card.',
-    checks: ['page-overflow', 'spills-card'],
-    tabs: ['combat'],
-    match: /^Hit Points › /,
-    maxWidth: 320,
-    fontSizes: [24],
-  },
-  {
-    issue: "Character: at a 24px font, the XP modifier's total (e.g. \"+20%\") runs off the screen at 320 and 375px.",
-    checks: ['page-overflow'],
-    tabs: ['character'],
-    match: /^Character Info › span /,
-    maxWidth: 375,
-    fontSizes: [24],
-  },
-];
+export const KNOWN_ISSUES: KnownIssue[] = [];
 
 export interface Problem {
   check: string;

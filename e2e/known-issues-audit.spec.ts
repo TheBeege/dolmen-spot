@@ -35,6 +35,10 @@ import { A11Y_FONT_SIZE, A11Y_WIDTHS, expectMatrixSettings, FONT_SIZES, viewport
 const A11Y_STATES = new Set<number>(A11Y_WIDTHS);
 
 test('every known issue still matches a problem', async ({ browser, browserName, baseURL }, testInfo) => {
+  // With no entries there is nothing to walk the matrix for, and nothing the walk
+  // could report: an empty array can't fail to match. It returns with the first
+  // entry, the day the app has a problem worth tolerating again.
+  test.skip(KNOWN_ISSUES.length === 0, 'no known-issue entries to audit');
   // One process has to see the whole matrix, so this is one long test: it gets
   // its own timeout rather than the suite's 30s, and the CI job's timeout is
   // longer still, so this one reports first.
