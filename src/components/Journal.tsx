@@ -21,6 +21,7 @@ import {
   parseJournalQuery,
   toJournalHexFilter,
   withEntryHex,
+  withoutEntry,
   type JournalEntryMatches,
   type JournalEntryText,
   type JournalHexFilter,
@@ -29,6 +30,7 @@ import {
   type TextRange,
 } from '@/lib/journal';
 import { useFocusAfterRender } from '@/hooks/useFocusAfterRender';
+import { getNpcs } from '@/lib/npcs';
 import { labelClasses } from '@/components/FairyFields';
 import HexField from '@/components/HexField';
 
@@ -75,6 +77,10 @@ const formatCount = (n: number) => n.toLocaleString('en-US');
 export default function Journal({ character, onChange, opening, onOpened }: JournalProps) {
   const entries = getJournalEntries(character);
   const visits = character.fairyVisits;
+  // The NPCs, for saying which of them an entry is about. The array is the
+  // same object from one render to the next unless an NPC changes, so the
+  // entries that don't change aren't worked out again.
+  const npcs = getNpcs(character);
 
   const [query, setQuery] = useState('');
   const [hexFilter, setHexFilter] = useState<JournalHexFilter>(() => opening?.hex ?? 'all');
@@ -94,8 +100,8 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
   const termsKey = useMemo(() => JSON.stringify(parseJournalQuery(searched)), [searched]);
   const terms = useMemo(() => JSON.parse(termsKey) as SearchTerm[], [termsKey]);
   const list = useMemo(
-    () => listJournal(entries, { fairyVisits: visits }, hexFilter, terms, kept),
-    [entries, visits, hexFilter, terms, kept],
+    () => listJournal(entries, { fairyVisits: visits, npcs }, hexFilter, terms, kept),
+    [entries, visits, npcs, hexFilter, terms, kept],
   );
   // The first `limit` entries, and any being worked on further down.
   const shownItems = useMemo(
@@ -253,7 +259,7 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
       let next: JournalListItem | undefined;
       for (let j = i + 1; i !== -1 && j < items.length && !next; j += 1) if (drawn(j - 1, items[j])) next = items[j];
       for (let j = i - 1; j >= 0 && !next; j -= 1) if (drawn(j, items[j])) next = items[j];
-      updateEntries((all) => all.filter((e) => e.id !== id));
+      updateEntries((all) => withoutEntry(all, id));
       moveFocusTo(next ? `entry:${next.entry.id}` : 'heading');
       announce('Entry deleted.');
     },
@@ -390,7 +396,7 @@ export default function Journal({ character, onChange, opening, onOpened }: Jour
               <JournalEntryCard
                 entry={entry}
                 shown={shown}
-                ranges={getEntryMatches(entry, { fairyVisits: visits }, terms)}
+                ranges={getEntryMatches(entry, { fairyVisits: visits, npcs }, terms)}
                 matches={matches}
                 onTextChange={setText}
                 onHexChange={setHex}
@@ -494,6 +500,17 @@ const JournalEntryCard = memo(function JournalEntryCard({
           {hex ? 'Change hex' : 'Set hex'}
         </button>
       </div>
+
+      {shown.npcs && (
+        // Who the entry is about: the NPCs it names, whose cards in the NPCs
+        // tab show it as one of their notes, so the link between the two is
+        // visible from where entries are written. It's searched like the rest
+        // of the entry (that is one of search's parts), so a name typed here
+        // is marked. Read-only: the NPCs tab is where notes are attached.
+        <p className="mt-1 text-xs text-[#f5e6c8]/80 [overflow-wrap:anywhere]">
+          About: <Highlighted text={shown.npcs} ranges={ranges.npcs} />
+        </p>
+      )}
 
       {editingHex && (
         <HexEditor

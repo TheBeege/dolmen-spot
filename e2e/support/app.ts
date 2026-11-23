@@ -49,6 +49,7 @@ export const TABS = [
   { id: 'traits', label: 'Traits & Notes' },
   { id: 'calendar', label: 'Adventuring' },
   { id: 'journal', label: 'Journal' },
+  { id: 'npcs', label: 'NPCs' },
   { id: 'map', label: 'Map' },
   { id: 'reference', label: 'Reference' },
 ] as const;
