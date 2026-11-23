@@ -40,7 +40,7 @@ A digital character sheet for the [Dolmenwood](https://necroticgnome.com/collect
 - Entries stamped with the date (a Fairy day while in Fairy) and the map hex the party is in; coming back from Fairy asks which hex, and sets the party's location to where they came back
 - Listed newest first, in the order your character lived them
 - Search by text, place, hex, date or the NPCs an entry is about (quotes for an exact phrase; numbers match whole, so 606 finds hex 0606), filter by hex, and open a hex's entries from the map
-- Each entry says which NPCs it is about, where the NPCs tab keeps it as one of their notes
+- Each entry says which NPCs it is about, and the NPCs tab keeps it as one of their notes
 
 ### NPCs
 - The people your character has met: name, affiliation, where they are (and the map hex when it is known), goals, and a checklist of the quests they have given you with a count of how many are done

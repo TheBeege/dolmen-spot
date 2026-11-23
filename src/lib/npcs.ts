@@ -149,7 +149,7 @@ export function matchesNpcSearch(
   return matchesEveryTerm(npcSearchText(npc, notes), terms);
 }
 
-export interface NpcList {
+interface NpcList {
   items: Npc[];     // in the order the tab lists them
   matching: number; // NPCs that pass the search
   total: number;
@@ -187,7 +187,8 @@ const formatCount = (n: number) => n.toLocaleString('en-US');
 /**
  * One line saying what the list shows, such as "3 NPCs" or "1 of 3 NPCs match
  * “ysolde”". `query` is the search as typed; one with quotes of its own is
- * shown as it is.
+ * shown as it is. The verb agrees with the number found, as the Journal's list
+ * does, so a search finding one NPC reads "1 of 3 NPCs matches".
  */
 export function describeNpcList(list: Pick<NpcList, 'matching' | 'total'>, query: string): string {
   const { matching, total } = list;
@@ -197,24 +198,27 @@ export function describeNpcList(list: Pick<NpcList, 'matching' | 'total'>, query
   if (typed === '') return npcs;
   const chars = Array.from(typed);
   const shown = chars.length > MAX_SHOWN_QUERY ? `${chars.slice(0, MAX_SHOWN_QUERY).join('')}…` : typed;
-  return `${formatCount(matching)} of ${npcs} match ${DOUBLE_QUOTES.test(typed) ? shown : `“${shown}”`}`;
+  const one = matching === 1;
+  return `${formatCount(matching)} of ${npcs} ${one ? 'matches' : 'match'} ${DOUBLE_QUOTES.test(typed) ? shown : `“${shown}”`}`;
 }
 
 // ── Quests ───────────────────────────────────────────────────────────
 
-/** A new quest for `text`, not done yet. */
-export function createQuest(text: string): NpcQuest {
-  return { id: newId(), text, done: false };
+/** A new quest for `text`, not done yet, with the id its caller minted for it. */
+function createQuest(id: string, text: string): NpcQuest {
+  return { id, text, done: false };
 }
 
 /**
- * `npc` with a quest added, or `npc` itself when the text holds nothing but
- * spaces: an empty quest is nothing to tick off or delete.
+ * `npc` with a quest added for `text`, as `id`, or `npc` itself when the text
+ * holds nothing but spaces: an empty quest is nothing to tick off or delete.
+ * The id comes from the caller, minted outside the state update that adds the
+ * quest, so that running that update twice adds the same quest.
  */
-export function addQuest(npc: Npc, text: string): Npc {
+export function addQuest(npc: Npc, text: string, id: string): Npc {
   const trimmed = text.trim();
   if (trimmed === '') return npc;
-  return { ...npc, quests: [...getNpcQuests(npc), createQuest(trimmed)] };
+  return { ...npc, quests: [...getNpcQuests(npc), createQuest(id, trimmed)] };
 }
 
 /** `npc` with the quest `questId` ticked off, or unticked. */
@@ -227,7 +231,7 @@ export function deleteQuest(npc: Npc, questId: string): Npc {
   return { ...npc, quests: getNpcQuests(npc).filter((quest) => quest.id !== questId) };
 }
 
-export interface QuestCount {
+interface QuestCount {
   done: number;
   total: number;
 }

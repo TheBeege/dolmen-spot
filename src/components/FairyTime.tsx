@@ -168,19 +168,19 @@ export function FairyStatusPanel({
       </div>
 
       <div className="text-center">
-        {/* `max-w-full` caps the button at the card, and `break-words` keeps the
-            label inside it: "Dolmenwood…" is one word, wider than the button's
-            content box at a 24px font on a phone, so the browser drew it past
-            the button's rounded background. `hyphens-auto` gives a syllable
-            break where the browser has the dictionary for it, as spell names
-            do. */}
+        {/* The label mirrors the "Enter Fairy…" that got the character here, and
+            is half the length of the "Return to Dolmenwood…" it replaces: at a
+            24px font on a 320px phone the panel leaves the button 190px, two
+            lines rather than three. Both words are short enough to fit that
+            content box, so no break inside one is needed; `max-w-full` still
+            caps the button at the card. */}
         <button
           type="button"
           ref={openerRef}
           onClick={() => setReturning(true)}
-          className={`${greenButtonClasses} max-w-full break-words hyphens-auto`}
+          className={`${greenButtonClasses} max-w-full`}
         >
-          Return to Dolmenwood&hellip;
+          Leave Fairy&hellip;
         </button>
         <p className="text-[#f5e6c8]/80 text-xs mt-2">
           Fairy is timeless. Dolmenwood&apos;s calendar waits on the day you entered, and these buttons count the

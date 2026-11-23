@@ -6,6 +6,7 @@
 import type { Locator, Page } from '@playwright/test';
 import { findA11yProblems } from './support/a11y';
 import { openApp, openTab, settle, TABS } from './support/app';
+import { MAP_SEARCH_LIMIT } from '../src/lib/map-search';
 import { hexCenterOf } from '../src/lib/hex';
 import { findLayoutProblems } from './support/layout';
 import { A11Y_FONT_SIZE, expect, test, viewportAt, WIDTHS } from './support/test';
@@ -24,11 +25,11 @@ const SPARE_HEX = '0101'; // a hex the fixture marks nothing on, for adding plac
 const DOORS = ['ks-door-02', 'ks-door-01']; // Hollow Oak, then The Thornhole, on the Silver Way
 const DOOR_HEXES = { 'ks-door-01': '1007', 'ks-door-02': '1404' };
 // Matches more items than the box lists (the kitchen-sink map has 10 names,
-// kinds and types with an "r" in them), so the list shows its full 8 and says
+// kinds and types with an "r" in them), so the list shows its full cap and says
 // how many it left out.
 const MANY = 'r';
 const MANY_MATCHES = 10;
-const LISTED = 8;
+const LISTED = MAP_SEARCH_LIMIT;
 
 /** Open the map and return its search box. */
 async function openSearch(page: Page): Promise<Locator> {

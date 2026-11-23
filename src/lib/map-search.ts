@@ -174,7 +174,7 @@ function compareMatches(a: Match, b: Match): number {
 }
 
 /** What a result reads as, for telling two of them apart: what it is, its name, and its hex. */
-const readingOf = (hit: MapSearchHit, name = hit.name) => [hit.kindLabel, name, hit.hex].join('\u0000');
+const readingOf = (hit: MapSearchHit) => [hit.kindLabel, hit.name, hit.hex].join('\u0000');
 
 /**
  * The matches with a name each: two items of the same kind, with the same name,
