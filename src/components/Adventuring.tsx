@@ -1,6 +1,6 @@
 'use client';
 
-import { useId, useRef, useState } from 'react';
+import { useId, useRef, useState, type ReactNode } from 'react';
 import { Character, CharacterUpdater, ActiveLightSource, CalendarDate } from '@/lib/types';
 import {
   LATEST_DATE,
@@ -165,6 +165,29 @@ function CalendarNumberInput({
   );
 }
 
+// A chapter of the Adventuring tab: its name, a line saying what the chapter is
+// for, and the cards it holds. The tab is long, so it reads as five chapters —
+// the journey, camp, the days that pass, the character, and reference — rather
+// than as one list of cards. Nothing is collapsed: every control and value is
+// still found by scrolling, as before.
+function Chapter({ title, intro, children }: { title: string; intro: string; children: ReactNode }) {
+  const headingId = useId();
+  return (
+    <section
+      aria-labelledby={headingId}
+      className="space-y-4 border-t border-[#5a3a28] pt-5 first:border-t-0 first:pt-0"
+    >
+      <div>
+        <h2 id={headingId} className="text-[#c4a35a] text-2xl font-bold">
+          {title}
+        </h2>
+        <p className="text-[#f5e6c8]/80 text-sm mt-1">{intro}</p>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export default function Adventuring({ character, onChange, onOpenJournal }: AdventuringProps) {
   const { currentDate, currentLocation } = character;
   const currentMonth = MONTHS[currentDate.month];
@@ -308,902 +331,937 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
   const journalCount = getJournalEntries(character).length;
 
   return (
-    <div className="space-y-4">
-      {/* ── 5a. Calendar (existing) ──────────────────────────────── */}
-      {/* Keyed by character, so a half-typed field, an open editor or an
-          error message never carries over to another character. */}
-      <div key={character.id} className="bg-[#2a2a3e] rounded-lg p-4">
-        <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
-          Calendar
-        </h2>
-
-        {/* In Fairy: status, day controls, and the way back */}
-        {openFairyVisit && (
-          <FairyStatusPanel
-            key={openFairyVisit.id}
-            character={character}
-            onChange={onChange}
-            statusRef={fairyStatusRef}
-            onReturned={() => focusAfterRender(dolmenwoodDateRef)}
+    <div className="space-y-6">
+      <Chapter
+        title="Travelling"
+        intro="Where the party is, the season it is travelling through, the travel points a day's march gives, and the days of rest the road has run up."
+      >
+        {/* ── Travelling: where the party is ──────────────────────── */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <label htmlFor="current-location" className={labelClasses}>Current Location</label>
+          <input
+            id="current-location"
+            type="text"
+            value={currentLocation}
+            onChange={(e) => onChange({ currentLocation: e.target.value })}
+            placeholder="Where is the party?"
+            className={`${inputClasses} w-full`}
           />
-        )}
+        </div>
 
-        {/* Festival alert */}
-        {todaysFestivals.length > 0 && (
-          <div className="bg-[#c4a35a]/15 border border-[#c4a35a]/40 rounded-lg p-3 mb-4 text-center">
-            {todaysFestivals.map((f) => {
-              const descKey = Object.keys(FESTIVAL_DESCRIPTIONS).find(
-                (k) => f.name.includes(k) || k.includes(f.name.split(' / ')[0])
-              );
-              return (
-                <div key={f.name}>
-                  <div className="text-[#c4a35a] font-bold text-lg">{f.name}</div>
-                  {descKey && (
-                    <div className="text-[#f5e6c8]/70 text-sm mt-1">{FESTIVAL_DESCRIPTIONS[descKey]}</div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Celestial event alert */}
-        {todaysCelestial.length > 0 && (
-          <div className="bg-[#a0c4e8]/15 border border-[#a0c4e8]/40 rounded-lg p-3 mb-4 text-center">
-            {todaysCelestial.map((e) => (
-              <div key={e.name} className="text-[#a0c4e8] font-bold">{e.name}</div>
+        {/* Season Display */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Season
+            {inFairy && (
+              <span className="block text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mt-0.5">
+                Dolmenwood, as you left it
+              </span>
+            )}
+          </h3>
+          {/* Two even columns rather than one row: at a big font on a phone the four
+              names don't fit across, and equal widths keep the last one from
+              stretching over the whole card on a line of its own. */}
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
+              <div
+                key={s}
+                className={`text-center rounded py-2 text-sm font-semibold transition-colors ${
+                  currentMonth.season === s ? 'ring-2 ring-[#c4a35a]' : ''
+                }`}
+                style={{
+                  backgroundColor: currentMonth.season === s
+                    ? SEASON_COLORS[s]
+                    : `${SEASON_COLORS[s]}33`,
+                  color: currentMonth.season === s ? '#1a1a2e' : SEASON_COLORS[s],
+                }}
+              >
+                {s}
+              </div>
             ))}
           </div>
-        )}
-
-        {/* In Fairy this is Dolmenwood as the character left it: boxed and
-            labelled rather than dimmed, so the text keeps its contrast. */}
-        <div className={`text-center mb-4 ${inFairy ? 'border border-dashed border-[#8a6fb0]/70 rounded-lg p-3' : ''}`}>
-          {inFairy && (
-            <div className="text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mb-1">
-              Dolmenwood, as you left it
-            </div>
-          )}
-          <div
-            ref={dolmenwoodDateRef}
-            tabIndex={-1}
-            className="text-2xl font-bold text-[#c4a35a] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]/60"
-          >
-            {formatCalendarDate(currentDate)}
-          </div>
-          <div className="text-[#f5e6c8]/70 text-sm mt-1">
-            {currentMonth.description}
-          </div>
-          <div className="mt-1" style={{ color: seasonColor }}>
-            {currentMonth.season}
-          </div>
-          {/* Moon info */}
-          <div className="text-[#f5e6c8]/70 text-sm mt-1">
-            {moonName} &middot; {moonPhaseLabel}
-          </div>
-          {/* Wysenday badge */}
-          {!inFairy && todayIsWysenday && (
-            <span className="inline-block mt-2 bg-[#c4a35a]/20 text-[#c4a35a] text-xs font-semibold px-3 py-1 rounded-full border border-[#c4a35a]/40">
-              Wysenday
-            </span>
-          )}
         </div>
 
-        {/* Dolmenwood's date controls. In Fairy the date is frozen and the
-            Fairy panel above counts days instead. */}
-        {!inFairy && (
-          <>
-            <div className="flex items-center justify-center gap-3 mb-4">
+        {/* ── Travelling: travel points and the forced march ───────── */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Travel Points
+          </h3>
+          {/* The − count + group stays together; the label and Reset wrap after it. */}
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <div className="flex items-center gap-3">
               <button
-                onClick={handlePreviousDay}
-                // aria-disabled rather than disabled, so the button keeps focus when it
-                // reaches the limit; the handler does nothing there.
-                aria-disabled={isAtEarliestDate}
-                aria-describedby={isAtEarliestDate ? `${dateFieldsId}-first-note` : undefined}
-                title={
-                  !isAtEarliestDate ? '' : earliestIsReturn ? 'You came back from Fairy on this day' : 'Already at Year 1, day 1'
-                }
-                className={`${buttonClasses} ${isAtEarliestDate ? 'cursor-not-allowed outline-1 outline-dashed outline-[#9c948b]' : ''}`}
-              >
-                Previous Day
-              </button>
-              <button
-                onClick={handleNextDay}
-                aria-disabled={isAtLatestDate}
-                aria-describedby={isAtLatestDate ? `${dateFieldsId}-last-note` : undefined}
-                title={isAtLatestDate ? "The calendar's last day" : ''}
-                className={`${buttonClasses} ${isAtLatestDate ? 'cursor-not-allowed outline-1 outline-dashed outline-[#9c948b]' : ''}`}
-              >
-                Next Day
-              </button>
-            </div>
-            {/* Why a button stopped, announced as it appears. At Year 1, day 1 the
-                date already says it, so that note is for screen readers only. */}
-            <div aria-live="polite">
-              {isAtEarliestDate &&
-                (earliestIsReturn ? (
-                  <p id={`${dateFieldsId}-first-note`} className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
-                    You came back from Fairy on this day, so the calendar can&apos;t go earlier. To change when you came
-                    back, use Edit return date under Fairy visits below.
-                  </p>
-                ) : (
-                  <p id={`${dateFieldsId}-first-note`} className="sr-only">
-                    {formatShortDate(earliestDate)} is the calendar&apos;s first day, so Previous Day stops here.
-                  </p>
-                ))}
-              {isAtLatestDate && (
-                <p id={`${dateFieldsId}-last-note`} className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
-                  {formatShortDate(LATEST_DATE)} is the calendar&apos;s last day, so Next Day stops here.
-                </p>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-              {/* Below sm, Month gets the full row so long month names fit. */}
-              <div className="col-span-2 sm:col-span-1">
-                <label htmlFor={`${dateFieldsId}-month`} className={labelClasses}>Month</label>
-                <select
-                  id={`${dateFieldsId}-month`}
-                  value={currentDate.month}
-                  onChange={(e) => handleMonthChange(parseInt(e.target.value))}
-                  aria-describedby={monthMessage ? `${dateFieldsId}-month-problem` : undefined}
-                  className={`${inputClasses} w-full`}
-                >
-                  {MONTHS.map((m, i) => (
-                    <option key={i} value={i}>
-                      {m.name}
-                    </option>
-                  ))}
-                </select>
-                <div aria-live="polite">
-                  {monthMessage && (
-                    <p id={`${dateFieldsId}-month-problem`} className={errorClasses}>
-                      {monthMessage}
-                    </p>
-                  )}
-                </div>
-              </div>
-              <div>
-                <label htmlFor={`${dateFieldsId}-day`} className={labelClasses}>Day</label>
-                <CalendarNumberInput
-                  id={`${dateFieldsId}-day`}
-                  label="Day"
-                  value={currentDate.day}
-                  min={1}
-                  max={currentMonth.days}
-                  problemWith={dayProblem}
-                  onValid={(day) => {
-                    if (day !== currentDate.day) onChange({ currentDate: { ...currentDate, day } });
-                  }}
-                />
-              </div>
-              <div>
-                <label htmlFor={`${dateFieldsId}-year`} className={labelClasses}>Year</label>
-                <CalendarNumberInput
-                  id={`${dateFieldsId}-year`}
-                  label="Year"
-                  value={currentDate.year}
-                  min={1}
-                  max={MAX_YEAR}
-                  formatLimit={formatYearNumber}
-                  problemWith={yearProblem}
-                  onValid={(year) => {
-                    if (year !== currentDate.year) onChange({ currentDate: { ...currentDate, year } });
-                  }}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {/* Days lived, Fairy visits, and the way into Fairy */}
-        <LivedTimePanel
-          key={character.id}
-          character={character}
-          onChange={onChange}
-          onEntered={() => focusAfterRender(fairyStatusRef)}
-        />
-      </div>
-
-      {/* ── 5b. Current Location (existing) ──────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <label htmlFor="current-location" className={labelClasses}>Current Location</label>
-        <input
-          id="current-location"
-          type="text"
-          value={currentLocation}
-          onChange={(e) => onChange({ currentLocation: e.target.value })}
-          placeholder="Where is the party?"
-          className={`${inputClasses} w-full`}
-        />
-      </div>
-
-      {/* ── 5c. Condition Trackers ───────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
-          Conditions
-        </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Exhaustion */}
-          <div className="bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Exhaustion</div>
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                onClick={() => onChange({ exhaustionLevel: Math.max(0, character.exhaustionLevel - 1) })}
+                onClick={() => onChange({ travelPointsRemaining: Math.max(0, character.travelPointsRemaining - 1) })}
                 className={smallButtonClasses}
               >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.exhaustionLevel}
+              <span className="text-[#f5e6c8] text-2xl font-bold w-12 text-center">
+                {character.travelPointsRemaining}
               </span>
               <button
-                onClick={() => onChange({ exhaustionLevel: Math.min(4, character.exhaustionLevel + 1) })}
-                className={smallButtonClasses}
-              >+</button>
-              <span className="text-[#f5e6c8]/60 text-xs">/4</span>
-            </div>
-            <div className="text-[#f5e6c8]/60 text-xs">{exhaustionText}</div>
-          </div>
-
-          {/* Hunger Days */}
-          <div className="bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Hunger (days)</div>
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                onClick={() => onChange({ hungerDays: Math.max(0, character.hungerDays - 1) })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.hungerDays}
-              </span>
-              <button
-                onClick={() => onChange({ hungerDays: character.hungerDays + 1 })}
+                onClick={() => onChange({ travelPointsRemaining: character.travelPointsRemaining + 1 })}
                 className={smallButtonClasses}
               >+</button>
             </div>
-            <div className="text-[#f5e6c8]/60 text-xs">{hungerText}</div>
-          </div>
-
-          {/* Thirst Days */}
-          <div className="bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Thirst (days)</div>
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                onClick={() => onChange({ thirstDays: Math.max(0, character.thirstDays - 1) })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.thirstDays}
-              </span>
-              <button
-                onClick={() => onChange({ thirstDays: character.thirstDays + 1 })}
-                className={smallButtonClasses}
-              >+</button>
-            </div>
-            <div className="text-[#f5e6c8]/60 text-xs">{thirstText}</div>
-          </div>
-
-          {/* Spell Study (only visible when active) */}
-          {character.spellStudy?.active && (() => {
-            const active = character.spellStudy.active;
-            // Shared with the Spells tab: counts days lived, Fairy included.
-            const progress = getStudyProgress(character);
-            const remaining = progress?.weeksRemaining ?? active.weeksRequired;
-            const ready = progress?.ready ?? false;
-            // The same note the Spells tab's study card shows, from the same
-            // place, so finishing a study that adds a spell above the Ranks the
-            // character can learn doesn't surprise anyone reading this panel.
-            const profile = getCharacterMagicProfile(character.kindred, character.class, character.level);
-            const rankNote = studyRankAboveLearnableNote(
-              active,
-              character,
-              getLearnableSpellRanks(profile),
-            );
-            return (
-              <div className={`bg-[#1a1a2e] rounded p-3 ${ready ? 'ring-1 ring-[#c4a35a]' : ''}`}>
-                <div className="text-[#c4a35a] text-sm font-semibold mb-2">🪄 Spell Study</div>
-                <div className="flex flex-wrap items-center gap-2 text-[#f5e6c8] text-sm font-bold">
-                  <span className="text-[#c4a35a] shrink-0">R{active.rank}</span>
-                  {/* min-w-0, so a long spell name at a big font wraps inside
-                      the card instead of pushing its info button off it. */}
-                  <span className="min-w-0">
-                    <SpellInfo
-                      spellType="arcane"
-                      name={active.spellName}
-                      context="studying"
-                      {...studyInfo(active.id)}
-                    >
-                      {active.spellName}
-                    </SpellInfo>
-                  </span>
-                  <SpellSummaryPanel
-                    spellType="arcane"
-                    name={active.spellName}
-                    {...studyInfo(active.id)}
-                    className={SPELL_PANEL_CLASSES}
-                  />
-                </div>
-                {rankNote && (
-                  <div className="text-red-400 text-xs">{rankNote}</div>
-                )}
-                <div className="text-[#f5e6c8]/60 text-xs">
-                  {ready
-                    ? 'Ready to complete (see Spells tab)'
-                    : `${remaining} week${remaining === 1 ? '' : 's'} remaining`}
-                </div>
-                <div className="text-[#9c948b] text-xs italic mt-1">
-                  via {active.source}
-                </div>
-              </div>
-            );
-          })()}
-
-          {/* Travel Days Without Rest */}
-          <div className="bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Travel Days w/o Rest</div>
-            <div className="flex items-center gap-2 mb-1">
-              <button
-                onClick={() => onChange({ travelDaysWithoutRest: Math.max(0, character.travelDaysWithoutRest - 1) })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.travelDaysWithoutRest}
-              </span>
-              <button
-                onClick={() => onChange({ travelDaysWithoutRest: Math.min(6, character.travelDaysWithoutRest + 1) })}
-                className={smallButtonClasses}
-              >+</button>
-              <span className="text-[#f5e6c8]/60 text-xs">/6</span>
-            </div>
-            {character.travelDaysWithoutRest >= 6 && (
-              <div className="text-red-400 text-xs font-semibold">Must rest or gain exhaustion!</div>
-            )}
+            <span className="text-[#f5e6c8]/60 text-sm">TP remaining</span>
             <button
-              onClick={() => onChange({ travelDaysWithoutRest: 0 })}
-              className={`${smallButtonClasses} mt-1`}
+              onClick={() => onChange({
+                travelPointsRemaining: character.forcedMarchActive
+                  ? forcedMarchTp
+                  : character.travelPointsPerDay,
+              })}
+              className={buttonClasses}
             >
-              Rest Day
+              Reset
             </button>
           </div>
-        </div>
-      </div>
 
-      {/* ── 5d. Rations ─────────────────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
-          Rations
-        </h2>
-        {/* Two columns when the two cells fit side by side, and one when they
-            don't: at a default font even a 320px phone fits them (2 × 7rem plus
-            the gap), and a big font on one is what doesn't. */}
-        <div className="flex flex-wrap gap-3 mb-3">
-          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Fresh</div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, fresh: Math.max(0, character.rations.fresh - 1) } })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.rations.fresh}
-              </span>
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, fresh: character.rations.fresh + 1 } })}
-                className={smallButtonClasses}
-              >+</button>
-            </div>
+          <div className="flex items-center gap-2 mb-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={character.forcedMarchActive}
+                onChange={(e) => onChange({ forcedMarchActive: e.target.checked })}
+                className="accent-[#c4a35a]"
+              />
+              <span className="text-[#f5e6c8] text-sm">Forced March</span>
+            </label>
+            <span className="text-[#f5e6c8]/60 text-xs">
+              ({character.travelPointsPerDay} TP normal, {forcedMarchTp} TP forced)
+            </span>
           </div>
-          <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-2">Preserved</div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, preserved: Math.max(0, character.rations.preserved - 1) } })}
-                className={smallButtonClasses}
-              >-</button>
-              <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
-                {character.rations.preserved}
-              </span>
-              <button
-                onClick={() => onChange({ rations: { ...character.rations, preserved: character.rations.preserved + 1 } })}
-                className={smallButtonClasses}
-              >+</button>
+          {character.forcedMarchActive && (
+            <div className="text-[#e8a765] text-xs mb-3">
+              Must rest a full day after forced march or gain exhaustion.
             </div>
-          </div>
-        </div>
-        <div className="text-[#f5e6c8]/60 text-xs">
-          {inFairy ? (
-            <>
-              <span className="text-[#c9b3f0]">Foraging in Fairy:</span> Fairy is timeless, so Dolmenwood&apos;s
-              seasons don&apos;t set the yield. The Referee rules on what you find.
-            </>
-          ) : (
-            <>
-              Foraging yield ({season}): <span className="text-[#c4a35a] font-semibold">{foragingYield}</span> rations (Survival check).
-            </>
-          )}{' '}
-          Fresh rations spoil after 1 week without preservation.
-        </div>
-      </div>
+          )}
 
-      {/* ── 5e. Travel Points ────────────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
-          Travel Points
-        </h2>
-        {/* The − count + group stays together; the label and Reset wrap after it. */}
-        <div className="flex flex-wrap items-center gap-3 mb-3">
-          <div className="flex items-center gap-3">
+          <button
+            onClick={() => setShowTerrainTable(!showTerrainTable)}
+            className="text-[#c4a35a] text-sm hover:underline"
+          >
+            {showTerrainTable ? 'Hide' : 'Show'} Terrain Costs
+          </button>
+          {showTerrainTable && (
+            <div className="mt-2 overflow-x-auto">
+              <table className="w-full text-xs text-[#f5e6c8]">
+                <thead>
+                  <tr className="border-b border-[#5a3a28]">
+                    <th className="text-left py-1 pr-2 text-[#c4a35a]">Terrain</th>
+                    <th className="text-center py-1 px-2 text-[#c4a35a]">TP</th>
+                    <th className="text-center py-1 px-2 text-[#c4a35a]">Lost</th>
+                    <th className="text-left py-1 pl-2 text-[#c4a35a]">Mounts/Vehicles</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {TERRAIN_TABLE.map((row) => (
+                    <tr key={row.terrain} className="border-b border-[#5a3a28]/50">
+                      <td className="py-1 pr-2">{row.terrain}</td>
+                      <td className="text-center py-1 px-2">{row.tpCost}</td>
+                      <td className="text-center py-1 px-2">{row.lostChance}</td>
+                      <td className="py-1 pl-2 text-[#f5e6c8]/60">{row.mountsVehicles}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Travel Days Without Rest
+          </h3>
+          <p className="text-[#f5e6c8]/80 text-sm mb-3">
+            Each day of travel without a full day of rest counts toward the sixth, when the party must rest or gain exhaustion.
+          </p>
+          <div className="flex items-center gap-2 mb-1">
             <button
-              onClick={() => onChange({ travelPointsRemaining: Math.max(0, character.travelPointsRemaining - 1) })}
+              onClick={() => onChange({ travelDaysWithoutRest: Math.max(0, character.travelDaysWithoutRest - 1) })}
               className={smallButtonClasses}
             >-</button>
-            <span className="text-[#f5e6c8] text-2xl font-bold w-12 text-center">
-              {character.travelPointsRemaining}
+            <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+              {character.travelDaysWithoutRest}
             </span>
             <button
-              onClick={() => onChange({ travelPointsRemaining: character.travelPointsRemaining + 1 })}
+              onClick={() => onChange({ travelDaysWithoutRest: Math.min(6, character.travelDaysWithoutRest + 1) })}
               className={smallButtonClasses}
             >+</button>
+            <span className="text-[#f5e6c8]/60 text-xs">/6</span>
           </div>
-          <span className="text-[#f5e6c8]/60 text-sm">TP remaining</span>
+          {character.travelDaysWithoutRest >= 6 && (
+            <div className="text-red-400 text-xs font-semibold">Must rest or gain exhaustion!</div>
+          )}
           <button
-            onClick={() => onChange({
-              travelPointsRemaining: character.forcedMarchActive
-                ? forcedMarchTp
-                : character.travelPointsPerDay,
-            })}
-            className={buttonClasses}
+            onClick={() => onChange({ travelDaysWithoutRest: 0 })}
+            className={`${smallButtonClasses} mt-1`}
           >
-            Reset
+            Rest Day
           </button>
         </div>
+      </Chapter>
 
-        <div className="flex items-center gap-2 mb-3">
-          <label className="flex items-center gap-2 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={character.forcedMarchActive}
-              onChange={(e) => onChange({ forcedMarchActive: e.target.checked })}
-              className="accent-[#c4a35a]"
-            />
-            <span className="text-[#f5e6c8] text-sm">Forced March</span>
-          </label>
-          <span className="text-[#f5e6c8]/60 text-xs">
-            ({character.travelPointsPerDay} TP normal, {forcedMarchTp} TP forced)
-          </span>
-        </div>
-        {character.forcedMarchActive && (
-          <div className="text-[#e8a765] text-xs mb-3">
-            Must rest a full day after forced march or gain exhaustion.
-          </div>
-        )}
+      <Chapter
+        title="At camp"
+        intro="Fire and bedding set the night's sleep check, a torch or lantern burns as the hours pass, and the rations come out of the pack."
+      >
+        {/* ── At camp: the night's sleep check ─────────────────────── */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Camping
+          </h3>
 
-        <button
-          onClick={() => setShowTerrainTable(!showTerrainTable)}
-          className="text-[#c4a35a] text-sm hover:underline"
-        >
-          {showTerrainTable ? 'Hide' : 'Show'} Terrain Costs
-        </button>
-        {showTerrainTable && (
-          <div className="mt-2 overflow-x-auto">
-            <table className="w-full text-xs text-[#f5e6c8]">
-              <thead>
-                <tr className="border-b border-[#5a3a28]">
-                  <th className="text-left py-1 pr-2 text-[#c4a35a]">Terrain</th>
-                  <th className="text-center py-1 px-2 text-[#c4a35a]">TP</th>
-                  <th className="text-center py-1 px-2 text-[#c4a35a]">Lost</th>
-                  <th className="text-left py-1 pl-2 text-[#c4a35a]">Mounts/Vehicles</th>
-                </tr>
-              </thead>
-              <tbody>
-                {TERRAIN_TABLE.map((row) => (
-                  <tr key={row.terrain} className="border-b border-[#5a3a28]/50">
-                    <td className="py-1 pr-2">{row.terrain}</td>
-                    <td className="text-center py-1 px-2">{row.tpCost}</td>
-                    <td className="text-center py-1 px-2">{row.lostChance}</td>
-                    <td className="py-1 pl-2 text-[#f5e6c8]/60">{row.mountsVehicles}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+          {/* Fire and bedding only feed the seasonal sleep result, so not in Fairy. */}
+          {!inFairy && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+              <div>
+                <div className={labelClasses}>Fire</div>
+                <div className="flex gap-2">
+                  {([['none', 'No Fire'], ['campfire', 'Campfire']] as const).map(([val, label]) => (
+                    <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="campFire"
+                        checked={campFire === val}
+                        onChange={() => setCampFire(val)}
+                        className="accent-[#c4a35a]"
+                      />
+                      <span className="text-[#f5e6c8] text-sm">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <div className={labelClasses}>Bedding</div>
+                <div className="flex flex-col gap-1">
+                  {([['none', 'None'], ['bedrollOrTent', 'Bedroll or Tent'], ['bedrollAndTent', 'Bedroll + Tent']] as const).map(([val, label]) => (
+                    <label key={val} className="flex items-center gap-1.5 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="campBedding"
+                        checked={campBedding === val}
+                        onChange={() => setCampBedding(val)}
+                        className="accent-[#c4a35a]"
+                      />
+                      <span className="text-[#f5e6c8] text-sm">{label}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+          )}
 
-      {/* ── 5f. Light Sources ────────────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
-          Light Sources
-        </h2>
-        <div className="flex flex-wrap gap-2 mb-3">
-          <button onClick={() => handleAddLightSource('torch')} className={buttonClasses}>
-            + Torch
-          </button>
-          <button onClick={() => handleAddLightSource('lantern')} className={buttonClasses}>
-            + Lantern
-          </button>
-          <button onClick={() => handleAddLightSource('candle')} className={buttonClasses}>
-            + Candle
-          </button>
-        </div>
-
-        {character.activeLightSources.length === 0 && (
-          <div className="text-[#9c948b] text-sm italic">No active light sources.</div>
-        )}
-
-        <div className="space-y-2">
-          {character.activeLightSources.map((source) => {
-            const burnedOut = source.minutesRemaining <= 0;
-            return (
+          {inFairy ? (
+            <div className="text-center mb-4 border border-[#8a6fb0]/60 bg-[#8a6fb0]/10 rounded p-3">
+              <div className="text-[#c9b3f0] text-sm font-semibold mb-1">Sleeping in Fairy</div>
+              <div className="text-[#f5e6c8]/80 text-sm">
+                Fairy is timeless, so the seasonal sleep table doesn&apos;t apply. The Referee rules on how well you rest.
+              </div>
+            </div>
+          ) : (
+            <div className="text-center mb-4">
+              <div className="text-[#f5e6c8]/60 text-sm mb-1">
+                Sleep Difficulty ({season})
+              </div>
               <div
-                key={source.id}
-                className={`flex flex-wrap items-center gap-2 p-2 rounded ${
-                  burnedOut ? 'bg-red-900/30 border border-red-400/30' : 'bg-[#1a1a2e]'
-                }`}
+                className="text-2xl font-bold capitalize"
+                style={{ color: SLEEP_DIFFICULTY_COLORS[sleepDifficulty] }}
               >
-                {/* The light and its time wrap together onto their own line,
-                    splitting only if the pair outgrows it, and the four time
-                    buttons take the line below when the row can't hold them
-                    both (a big font on a phone). Neither span has a fixed
-                    width: `w-16` is 4rem, so at a 24px font each span took 96px
-                    whatever its label, and the pair filled the row's whole
-                    204px of content. Taking their text's width instead,
-                    "Lantern 240 min" is about 199px of it. */}
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`text-sm font-semibold ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
-                    {LIGHT_SOURCE_TYPES[source.type].label}
-                  </span>
-                  <span className={`text-sm font-bold ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
-                    {source.minutesRemaining} min
-                  </span>
+                {sleepDifficulty}
+              </div>
+              <div className="text-[#f5e6c8]/60 text-sm mt-1">
+                {SLEEP_DIFFICULTY_DESCRIPTION[sleepDifficulty]}
+              </div>
+            </div>
+          )}
+
+          <div className="bg-[#1a1a2e] rounded p-3 mb-3">
+            <div className="text-[#c4a35a] text-sm font-semibold mb-1">Camp Activities</div>
+            <div className="text-[#f5e6c8]/60 text-xs space-y-1">
+              <div><span className="text-[#f5e6c8]">Cooking</span> (WIS Check): +1 to sleep check. Nat 1 = Save vs Doom or food ruined.</div>
+              <div><span className="text-[#f5e6c8]">Camaraderie</span> (CHA Check): +1 to sleep check. Nat 1 = Save vs Doom or ridicule (-1).</div>
+            </div>
+          </div>
+
+          {/* The full matrix is seasonal too, so it is not offered in Fairy. */}
+          {!inFairy && (
+            <>
+              <button
+                onClick={() => setShowSleepMatrix(!showSleepMatrix)}
+                className="text-[#c4a35a] text-sm hover:underline"
+              >
+                {showSleepMatrix ? 'Hide' : 'Show'} Full Sleep Matrix
+              </button>
+              {showSleepMatrix && (
+                <div className="mt-2 overflow-x-auto">
+                  <table className="w-full text-xs text-[#f5e6c8]">
+                    <thead>
+                      <tr className="border-b border-[#5a3a28]">
+                        <th className="text-left py-1 pr-2 text-[#c4a35a]">Fire</th>
+                        <th className="text-left py-1 pr-2 text-[#c4a35a]">Bedding</th>
+                        {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
+                          <th key={s} className="text-center py-1 px-1 text-[#c4a35a]">{s}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(['none', 'campfire'] as const).map((fire) =>
+                        (['none', 'bedrollOrTent', 'bedrollAndTent'] as const).map((bedding) => (
+                          <tr key={`${fire}-${bedding}`} className="border-b border-[#5a3a28]/50">
+                            <td className="py-1 pr-2">{fire === 'none' ? 'No fire' : 'Campfire'}</td>
+                            <td className="py-1 pr-2">
+                              {bedding === 'none' ? 'None' : bedding === 'bedrollOrTent' ? 'Bedroll/Tent' : 'Both'}
+                            </td>
+                            {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => {
+                              const diff = SLEEP_MATRIX[fire][bedding][s];
+                              return (
+                                <td
+                                  key={s}
+                                  className="text-center py-1 px-1 capitalize"
+                                  style={{ color: SLEEP_DIFFICULTY_COLORS[diff] }}
+                                >
+                                  {diff}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
-                <div className="flex flex-wrap items-center gap-1">
-                  <button
-                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 10)}
-                    className={smallButtonClasses}
-                  >-10</button>
-                  <button
-                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 1)}
-                    className={smallButtonClasses}
-                  >-1</button>
-                  <button
-                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 1)}
-                    className={smallButtonClasses}
-                  >+1</button>
-                  <button
-                    onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 10)}
-                    className={smallButtonClasses}
-                  >+10</button>
-                </div>
-                <button
-                  onClick={() => handleRemoveLightSource(source.id)}
-                  className="text-red-400 hover:text-red-300 text-sm ml-auto px-1"
-                  title="Remove"
+              )}
+            </>
+          )}
+        </div>
+
+        {/* ── At camp: what is burning ─────────────────────────────── */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Light Sources
+          </h3>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <button onClick={() => handleAddLightSource('torch')} className={buttonClasses}>
+              + Torch
+            </button>
+            <button onClick={() => handleAddLightSource('lantern')} className={buttonClasses}>
+              + Lantern
+            </button>
+            <button onClick={() => handleAddLightSource('candle')} className={buttonClasses}>
+              + Candle
+            </button>
+          </div>
+
+          {character.activeLightSources.length === 0 && (
+            <div className="text-[#9c948b] text-sm italic">No active light sources.</div>
+          )}
+
+          <div className="space-y-2">
+            {character.activeLightSources.map((source) => {
+              const burnedOut = source.minutesRemaining <= 0;
+              return (
+                <div
+                  key={source.id}
+                  className={`flex flex-wrap items-center gap-2 p-2 rounded ${
+                    burnedOut ? 'bg-red-900/30 border border-red-400/30' : 'bg-[#1a1a2e]'
+                  }`}
                 >
-                  X
+                  {/* The light and its time wrap together onto their own line,
+                      splitting only if the pair outgrows it, and the four time
+                      buttons take the line below when the row can't hold them
+                      both (a big font on a phone). Neither span has a fixed
+                      width: `w-16` is 4rem, so at a 24px font each span took 96px
+                      whatever its label, and the pair filled the row's whole
+                      204px of content. Taking their text's width instead,
+                      "Lantern 240 min" is about 199px of it. */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`text-sm font-semibold ${burnedOut ? 'text-red-400' : 'text-[#c4a35a]'}`}>
+                      {LIGHT_SOURCE_TYPES[source.type].label}
+                    </span>
+                    <span className={`text-sm font-bold ${burnedOut ? 'text-red-400' : 'text-[#f5e6c8]'}`}>
+                      {source.minutesRemaining} min
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <button
+                      onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 10)}
+                      className={smallButtonClasses}
+                    >-10</button>
+                    <button
+                      onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining - 1)}
+                      className={smallButtonClasses}
+                    >-1</button>
+                    <button
+                      onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 1)}
+                      className={smallButtonClasses}
+                    >+1</button>
+                    <button
+                      onClick={() => handleUpdateLightSource(source.id, source.minutesRemaining + 10)}
+                      className={smallButtonClasses}
+                    >+10</button>
+                  </div>
+                  <button
+                    onClick={() => handleRemoveLightSource(source.id)}
+                    className="text-red-400 hover:text-red-300 text-sm ml-auto px-1"
+                    title="Remove"
+                  >
+                    X
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ── At camp: what is eaten, and what foraging finds ──────── */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Rations
+          </h3>
+          {/* Two columns when the two cells fit side by side, and one when they
+              don't: at a default font even a 320px phone fits them (2 × 7rem plus
+              the gap), and a big font on one is what doesn't. */}
+          <div className="flex flex-wrap gap-3 mb-3">
+            <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-2">Fresh</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onChange({ rations: { ...character.rations, fresh: Math.max(0, character.rations.fresh - 1) } })}
+                  className={smallButtonClasses}
+                >-</button>
+                <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+                  {character.rations.fresh}
+                </span>
+                <button
+                  onClick={() => onChange({ rations: { ...character.rations, fresh: character.rations.fresh + 1 } })}
+                  className={smallButtonClasses}
+                >+</button>
+              </div>
+            </div>
+            <div className="min-w-0 grow basis-28 bg-[#1a1a2e] rounded p-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-2">Preserved</div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => onChange({ rations: { ...character.rations, preserved: Math.max(0, character.rations.preserved - 1) } })}
+                  className={smallButtonClasses}
+                >-</button>
+                <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+                  {character.rations.preserved}
+                </span>
+                <button
+                  onClick={() => onChange({ rations: { ...character.rations, preserved: character.rations.preserved + 1 } })}
+                  className={smallButtonClasses}
+                >+</button>
+              </div>
+            </div>
+          </div>
+          <div className="text-[#f5e6c8]/60 text-xs">
+            {inFairy ? (
+              <>
+                <span className="text-[#c9b3f0]">Foraging in Fairy:</span> Fairy is timeless, so Dolmenwood&apos;s
+                seasons don&apos;t set the yield. The Referee rules on what you find.
+              </>
+            ) : (
+              <>
+                Foraging yield ({season}): <span className="text-[#c4a35a] font-semibold">{foragingYield}</span> rations (Survival check).
+              </>
+            )}{' '}
+            Fresh rations spoil after 1 week without preservation.
+          </div>
+        </div>
+      </Chapter>
+
+      <Chapter
+        title="Days pass"
+        intro="Advance the Dolmenwood calendar, read the month's moons and holy days, count the days lived (Fairy time included), and see how a study is faring."
+      >
+        {/* ── Days pass: today, the day controls, and days lived ────── */}
+        {/* Keyed by character, so a half-typed field, an open editor or an
+            error message never carries over to another character. */}
+        <div key={character.id} className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Calendar
+          </h3>
+
+          {/* In Fairy: status, day controls, and the way back */}
+          {openFairyVisit && (
+            <FairyStatusPanel
+              key={openFairyVisit.id}
+              character={character}
+              onChange={onChange}
+              statusRef={fairyStatusRef}
+              onReturned={() => focusAfterRender(dolmenwoodDateRef)}
+            />
+          )}
+
+          {/* Festival alert */}
+          {todaysFestivals.length > 0 && (
+            <div className="bg-[#c4a35a]/15 border border-[#c4a35a]/40 rounded-lg p-3 mb-4 text-center">
+              {todaysFestivals.map((f) => {
+                const descKey = Object.keys(FESTIVAL_DESCRIPTIONS).find(
+                  (k) => f.name.includes(k) || k.includes(f.name.split(' / ')[0])
+                );
+                return (
+                  <div key={f.name}>
+                    <div className="text-[#c4a35a] font-bold text-lg">{f.name}</div>
+                    {descKey && (
+                      <div className="text-[#f5e6c8]/70 text-sm mt-1">{FESTIVAL_DESCRIPTIONS[descKey]}</div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Celestial event alert */}
+          {todaysCelestial.length > 0 && (
+            <div className="bg-[#a0c4e8]/15 border border-[#a0c4e8]/40 rounded-lg p-3 mb-4 text-center">
+              {todaysCelestial.map((e) => (
+                <div key={e.name} className="text-[#a0c4e8] font-bold">{e.name}</div>
+              ))}
+            </div>
+          )}
+
+          {/* In Fairy this is Dolmenwood as the character left it: boxed and
+              labelled rather than dimmed, so the text keeps its contrast. */}
+          <div className={`text-center mb-4 ${inFairy ? 'border border-dashed border-[#8a6fb0]/70 rounded-lg p-3' : ''}`}>
+            {inFairy && (
+              <div className="text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mb-1">
+                Dolmenwood, as you left it
+              </div>
+            )}
+            <div
+              ref={dolmenwoodDateRef}
+              tabIndex={-1}
+              className="text-2xl font-bold text-[#c4a35a] rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-[#c4a35a]/60"
+            >
+              {formatCalendarDate(currentDate)}
+            </div>
+            <div className="text-[#f5e6c8]/70 text-sm mt-1">
+              {currentMonth.description}
+            </div>
+            <div className="mt-1" style={{ color: seasonColor }}>
+              {currentMonth.season}
+            </div>
+            {/* Moon info */}
+            <div className="text-[#f5e6c8]/70 text-sm mt-1">
+              {moonName} &middot; {moonPhaseLabel}
+            </div>
+            {/* Wysenday badge */}
+            {!inFairy && todayIsWysenday && (
+              <span className="inline-block mt-2 bg-[#c4a35a]/20 text-[#c4a35a] text-xs font-semibold px-3 py-1 rounded-full border border-[#c4a35a]/40">
+                Wysenday
+              </span>
+            )}
+          </div>
+
+          {/* Dolmenwood's date controls. In Fairy the date is frozen and the
+              Fairy panel above counts days instead. */}
+          {!inFairy && (
+            <>
+              <div className="flex items-center justify-center gap-3 mb-4">
+                <button
+                  onClick={handlePreviousDay}
+                  // aria-disabled rather than disabled, so the button keeps focus when it
+                  // reaches the limit; the handler does nothing there.
+                  aria-disabled={isAtEarliestDate}
+                  aria-describedby={isAtEarliestDate ? `${dateFieldsId}-first-note` : undefined}
+                  title={
+                    !isAtEarliestDate ? '' : earliestIsReturn ? 'You came back from Fairy on this day' : 'Already at Year 1, day 1'
+                  }
+                  className={`${buttonClasses} ${isAtEarliestDate ? 'cursor-not-allowed outline-1 outline-dashed outline-[#9c948b]' : ''}`}
+                >
+                  Previous Day
+                </button>
+                <button
+                  onClick={handleNextDay}
+                  aria-disabled={isAtLatestDate}
+                  aria-describedby={isAtLatestDate ? `${dateFieldsId}-last-note` : undefined}
+                  title={isAtLatestDate ? "The calendar's last day" : ''}
+                  className={`${buttonClasses} ${isAtLatestDate ? 'cursor-not-allowed outline-1 outline-dashed outline-[#9c948b]' : ''}`}
+                >
+                  Next Day
                 </button>
               </div>
-            );
-          })}
+              {/* Why a button stopped, announced as it appears. At Year 1, day 1 the
+                  date already says it, so that note is for screen readers only. */}
+              <div aria-live="polite">
+                {isAtEarliestDate &&
+                  (earliestIsReturn ? (
+                    <p id={`${dateFieldsId}-first-note`} className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
+                      You came back from Fairy on this day, so the calendar can&apos;t go earlier. To change when you came
+                      back, use Edit return date under Fairy visits below.
+                    </p>
+                  ) : (
+                    <p id={`${dateFieldsId}-first-note`} className="sr-only">
+                      {formatShortDate(earliestDate)} is the calendar&apos;s first day, so Previous Day stops here.
+                    </p>
+                  ))}
+                {isAtLatestDate && (
+                  <p id={`${dateFieldsId}-last-note`} className="text-[#f5e6c8]/80 text-xs text-center -mt-2 mb-4">
+                    {formatShortDate(LATEST_DATE)} is the calendar&apos;s last day, so Next Day stops here.
+                  </p>
+                )}
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {/* Below sm, Month gets the full row so long month names fit. */}
+                <div className="col-span-2 sm:col-span-1">
+                  <label htmlFor={`${dateFieldsId}-month`} className={labelClasses}>Month</label>
+                  <select
+                    id={`${dateFieldsId}-month`}
+                    value={currentDate.month}
+                    onChange={(e) => handleMonthChange(parseInt(e.target.value))}
+                    aria-describedby={monthMessage ? `${dateFieldsId}-month-problem` : undefined}
+                    className={`${inputClasses} w-full`}
+                  >
+                    {MONTHS.map((m, i) => (
+                      <option key={i} value={i}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                  <div aria-live="polite">
+                    {monthMessage && (
+                      <p id={`${dateFieldsId}-month-problem`} className={errorClasses}>
+                        {monthMessage}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label htmlFor={`${dateFieldsId}-day`} className={labelClasses}>Day</label>
+                  <CalendarNumberInput
+                    id={`${dateFieldsId}-day`}
+                    label="Day"
+                    value={currentDate.day}
+                    min={1}
+                    max={currentMonth.days}
+                    problemWith={dayProblem}
+                    onValid={(day) => {
+                      if (day !== currentDate.day) onChange({ currentDate: { ...currentDate, day } });
+                    }}
+                  />
+                </div>
+                <div>
+                  <label htmlFor={`${dateFieldsId}-year`} className={labelClasses}>Year</label>
+                  <CalendarNumberInput
+                    id={`${dateFieldsId}-year`}
+                    label="Year"
+                    value={currentDate.year}
+                    min={1}
+                    max={MAX_YEAR}
+                    formatLimit={formatYearNumber}
+                    problemWith={yearProblem}
+                    onValid={(year) => {
+                      if (year !== currentDate.year) onChange({ currentDate: { ...currentDate, year } });
+                    }}
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Days lived, Fairy visits, and the way into Fairy */}
+          <LivedTimePanel
+            key={character.id}
+            character={character}
+            onChange={onChange}
+            onEntered={() => focusAfterRender(fairyStatusRef)}
+          />
         </div>
-      </div>
 
-      {/* ── 5g. Camping Calculator ───────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h2 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
-          Camping
-        </h2>
-
-        {/* Fire and bedding only feed the seasonal sleep result, so not in Fairy. */}
-        {!inFairy && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        {/* ── Days pass: the month's moons, festivals and holy days ── */}
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            {currentMonth.name} — {currentMonth.season}
+            {inFairy && (
+              <span className="block text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mt-0.5">
+                Dolmenwood, as you left it
+              </span>
+            )}
+          </h3>
+          <div className="text-[#f5e6c8] text-sm mb-2">
+            {currentMonth.days} days &middot; {currentMonth.description}
+          </div>
+          {/* Lines may break before "(new …)" and between Wysendays, never inside them. */}
+          <div className="text-[#f5e6c8]/60 text-sm mb-2">
             <div>
-              <div className={labelClasses}>Fire</div>
-              <div className="flex gap-2">
-                {([['none', 'No Fire'], ['campfire', 'Campfire']] as const).map(([val, label]) => (
-                  <label key={val} className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="campFire"
-                      checked={campFire === val}
-                      onChange={() => setCampFire(val)}
-                      className="accent-[#c4a35a]"
-                    />
-                    <span className="text-[#f5e6c8] text-sm">{label}</span>
-                  </label>
+              Moon: {currentMonth.moonName}{' '}
+              <span className="whitespace-nowrap">
+                (new {ordinal(currentMonth.newMoon)}, full {ordinal(currentMonth.fullMoon)})
+              </span>
+            </div>
+            {currentMonth.wysendays.length > 0 && (
+              <div>
+                Wysendays:{' '}
+                {currentMonth.wysendays.map((w, i) => (
+                  <span key={w}>
+                    {i > 0 && ', '}
+                    <span className="whitespace-nowrap">{w}</span>
+                  </span>
                 ))}
               </div>
-            </div>
-            <div>
-              <div className={labelClasses}>Bedding</div>
-              <div className="flex flex-col gap-1">
-                {([['none', 'None'], ['bedrollOrTent', 'Bedroll or Tent'], ['bedrollAndTent', 'Bedroll + Tent']] as const).map(([val, label]) => (
-                  <label key={val} className="flex items-center gap-1.5 cursor-pointer">
-                    <input
-                      type="radio"
-                      name="campBedding"
-                      checked={campBedding === val}
-                      onChange={() => setCampBedding(val)}
-                      className="accent-[#c4a35a]"
-                    />
-                    <span className="text-[#f5e6c8] text-sm">{label}</span>
-                  </label>
+            )}
+          </div>
+
+          {festivalsThisMonth.length > 0 && (
+            <div className="mt-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-1">Festivals</div>
+              <ul className="space-y-1">
+                {festivalsThisMonth.map((f) => (
+                  <li key={`${f.day}-${f.name}`} className="text-[#c4a35a] italic text-sm">
+                    Day {f.day} — {f.name}
+                  </li>
                 ))}
+              </ul>
+            </div>
+          )}
+
+          {celestialThisMonth.length > 0 && (
+            <div className="mt-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-1">Celestial Events</div>
+              <ul className="space-y-1">
+                {celestialThisMonth.map((e) => (
+                  <li key={`${e.day}-${e.name}`} className="text-[#c4a35a] italic text-sm">
+                    Day {e.day} — {e.name}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {festivalsThisMonth.length === 0 && celestialThisMonth.length === 0 && (
+            <div className="text-[#9c948b] text-sm italic mt-2">
+              No festivals or celestial events this month.
+            </div>
+          )}
+        </div>
+
+        {/* Spell Study (only visible when active) */}
+        {character.spellStudy?.active && (() => {
+          const active = character.spellStudy.active;
+          // Shared with the Spells tab: counts days lived, Fairy included.
+          const progress = getStudyProgress(character);
+          const remaining = progress?.weeksRemaining ?? active.weeksRequired;
+          const ready = progress?.ready ?? false;
+          // The same note the Spells tab's study card shows, from the same
+          // place, so finishing a study that adds a spell above the Ranks the
+          // character can learn doesn't surprise anyone reading this panel.
+          const profile = getCharacterMagicProfile(character.kindred, character.class, character.level);
+          const rankNote = studyRankAboveLearnableNote(
+            active,
+            character,
+            getLearnableSpellRanks(profile),
+          );
+          return (
+            <div className={`bg-[#2a2a3e] rounded-lg p-4 ${ready ? 'ring-1 ring-[#c4a35a]' : ''}`}>
+              <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">🪄 Spell Study</h3>
+              <p className="text-[#f5e6c8]/80 text-sm mb-3">
+                Its weeks remaining count down with the days you have lived, so the calendar above is what
+                moves it on.
+              </p>
+              <div className="flex flex-wrap items-center gap-2 text-[#f5e6c8] text-sm font-bold">
+                <span className="text-[#c4a35a] shrink-0">R{active.rank}</span>
+                {/* min-w-0, so a long spell name at a big font wraps inside
+                    the card instead of pushing its info button off it. */}
+                <span className="min-w-0">
+                  <SpellInfo
+                    spellType="arcane"
+                    name={active.spellName}
+                    context="studying"
+                    {...studyInfo(active.id)}
+                  >
+                    {active.spellName}
+                  </SpellInfo>
+                </span>
+                <SpellSummaryPanel
+                  spellType="arcane"
+                  name={active.spellName}
+                  {...studyInfo(active.id)}
+                  className={SPELL_PANEL_CLASSES}
+                />
+              </div>
+              {rankNote && (
+                <div className="text-red-400 text-xs">{rankNote}</div>
+              )}
+              <div className="text-[#f5e6c8]/60 text-xs">
+                {ready
+                  ? 'Ready to complete (see Spells tab)'
+                  : `${remaining} week${remaining === 1 ? '' : 's'} remaining`}
+              </div>
+              <div className="text-[#9c948b] text-xs italic mt-1">
+                via {active.source}
               </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
+      </Chapter>
 
-        {inFairy ? (
-          <div className="text-center mb-4 border border-[#8a6fb0]/60 bg-[#8a6fb0]/10 rounded p-3">
-            <div className="text-[#c9b3f0] text-sm font-semibold mb-1">Sleeping in Fairy</div>
-            <div className="text-[#f5e6c8]/80 text-sm">
-              Fairy is timeless, so the seasonal sleep table doesn&apos;t apply. The Referee rules on how well you rest.
+      <Chapter
+        title="The character"
+        intro="The state carried into the next day. Exhaustion, hunger and thirst each stack a penalty, so the tables that spell them out sit with the counters."
+      >
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Conditions
+          </h3>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Exhaustion */}
+            <div className="bg-[#1a1a2e] rounded p-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-2">Exhaustion</div>
+              <div className="flex items-center gap-2 mb-1">
+                <button
+                  onClick={() => onChange({ exhaustionLevel: Math.max(0, character.exhaustionLevel - 1) })}
+                  className={smallButtonClasses}
+                >-</button>
+                <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+                  {character.exhaustionLevel}
+                </span>
+                <button
+                  onClick={() => onChange({ exhaustionLevel: Math.min(4, character.exhaustionLevel + 1) })}
+                  className={smallButtonClasses}
+                >+</button>
+                <span className="text-[#f5e6c8]/60 text-xs">/4</span>
+              </div>
+              <div className="text-[#f5e6c8]/60 text-xs">{exhaustionText}</div>
             </div>
-          </div>
-        ) : (
-          <div className="text-center mb-4">
-            <div className="text-[#f5e6c8]/60 text-sm mb-1">
-              Sleep Difficulty ({season})
-            </div>
-            <div
-              className="text-2xl font-bold capitalize"
-              style={{ color: SLEEP_DIFFICULTY_COLORS[sleepDifficulty] }}
-            >
-              {sleepDifficulty}
-            </div>
-            <div className="text-[#f5e6c8]/60 text-sm mt-1">
-              {SLEEP_DIFFICULTY_DESCRIPTION[sleepDifficulty]}
-            </div>
-          </div>
-        )}
 
-        <div className="bg-[#1a1a2e] rounded p-3 mb-3">
-          <div className="text-[#c4a35a] text-sm font-semibold mb-1">Camp Activities</div>
-          <div className="text-[#f5e6c8]/60 text-xs space-y-1">
-            <div><span className="text-[#f5e6c8]">Cooking</span> (WIS Check): +1 to sleep check. Nat 1 = Save vs Doom or food ruined.</div>
-            <div><span className="text-[#f5e6c8]">Camaraderie</span> (CHA Check): +1 to sleep check. Nat 1 = Save vs Doom or ridicule (-1).</div>
+            {/* Hunger Days */}
+            <div className="bg-[#1a1a2e] rounded p-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-2">Hunger (days)</div>
+              <div className="flex items-center gap-2 mb-1">
+                <button
+                  onClick={() => onChange({ hungerDays: Math.max(0, character.hungerDays - 1) })}
+                  className={smallButtonClasses}
+                >-</button>
+                <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+                  {character.hungerDays}
+                </span>
+                <button
+                  onClick={() => onChange({ hungerDays: character.hungerDays + 1 })}
+                  className={smallButtonClasses}
+                >+</button>
+              </div>
+              <div className="text-[#f5e6c8]/60 text-xs">{hungerText}</div>
+            </div>
+
+            {/* Thirst Days */}
+            <div className="bg-[#1a1a2e] rounded p-3">
+              <div className="text-[#c4a35a] text-sm font-semibold mb-2">Thirst (days)</div>
+              <div className="flex items-center gap-2 mb-1">
+                <button
+                  onClick={() => onChange({ thirstDays: Math.max(0, character.thirstDays - 1) })}
+                  className={smallButtonClasses}
+                >-</button>
+                <span className="text-[#f5e6c8] text-lg font-bold w-8 text-center">
+                  {character.thirstDays}
+                </span>
+                <button
+                  onClick={() => onChange({ thirstDays: character.thirstDays + 1 })}
+                  className={smallButtonClasses}
+                >+</button>
+              </div>
+              <div className="text-[#f5e6c8]/60 text-xs">{thirstText}</div>
+            </div>
           </div>
         </div>
 
-        {/* The full matrix is seasonal too, so it is not offered in Fairy. */}
-        {!inFairy && (
-          <>
-            <button
-              onClick={() => setShowSleepMatrix(!showSleepMatrix)}
-              className="text-[#c4a35a] text-sm hover:underline"
-            >
-              {showSleepMatrix ? 'Hide' : 'Show'} Full Sleep Matrix
-            </button>
-            {showSleepMatrix && (
-              <div className="mt-2 overflow-x-auto">
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Hunger &amp; Thirst
+          </h3>
+          {/* Hunger/Thirst Effects */}
+          <button
+            onClick={() => setShowHungerTables(!showHungerTables)}
+            className="text-[#c4a35a] text-sm hover:underline"
+          >
+            {showHungerTables ? 'Hide' : 'Show'} Hunger & Thirst Effects
+          </button>
+          {showHungerTables && (
+            <div className="space-y-3">
+              <div>
+                <div className="text-[#c4a35a] text-sm font-semibold mb-1">Mortal / Demi-Fey Hunger</div>
                 <table className="w-full text-xs text-[#f5e6c8]">
                   <thead>
                     <tr className="border-b border-[#5a3a28]">
-                      <th className="text-left py-1 pr-2 text-[#c4a35a]">Fire</th>
-                      <th className="text-left py-1 pr-2 text-[#c4a35a]">Bedding</th>
-                      {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
-                        <th key={s} className="text-center py-1 px-1 text-[#c4a35a]">{s}</th>
-                      ))}
+                      <th className="text-left py-1 pr-2 text-[#c4a35a]">Days</th>
+                      <th className="text-left py-1 text-[#c4a35a]">Effect</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {(['none', 'campfire'] as const).map((fire) =>
-                      (['none', 'bedrollOrTent', 'bedrollAndTent'] as const).map((bedding) => (
-                        <tr key={`${fire}-${bedding}`} className="border-b border-[#5a3a28]/50">
-                          <td className="py-1 pr-2">{fire === 'none' ? 'No fire' : 'Campfire'}</td>
-                          <td className="py-1 pr-2">
-                            {bedding === 'none' ? 'None' : bedding === 'bedrollOrTent' ? 'Bedroll/Tent' : 'Both'}
-                          </td>
-                          {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => {
-                            const diff = SLEEP_MATRIX[fire][bedding][s];
-                            return (
-                              <td
-                                key={s}
-                                className="text-center py-1 px-1 capitalize"
-                                style={{ color: SLEEP_DIFFICULTY_COLORS[diff] }}
-                              >
-                                {diff}
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))
-                    )}
+                    {HUNGER_EFFECTS_MORTAL.map((row) => (
+                      <tr key={row.days} className="border-b border-[#5a3a28]/50">
+                        <td className="py-1 pr-2">{row.days}</td>
+                        <td className="py-1">{row.effect}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
-            )}
-          </>
-        )}
-      </div>
+              <div>
+                <div className="text-[#c4a35a] text-sm font-semibold mb-1">Fairy Hunger (Elf, Grimalkin)</div>
+                <table className="w-full text-xs text-[#f5e6c8]">
+                  <thead>
+                    <tr className="border-b border-[#5a3a28]">
+                      <th className="text-left py-1 pr-2 text-[#c4a35a]">Days</th>
+                      <th className="text-left py-1 text-[#c4a35a]">Effect</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {HUNGER_EFFECTS_FAIRY.map((row) => (
+                      <tr key={row.days} className="border-b border-[#5a3a28]/50">
+                        <td className="py-1 pr-2">{row.days}</td>
+                        <td className="py-1">{row.effect}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="text-[#f5e6c8]/60 text-xs">
+                Thirst: Same as hunger effects PLUS -3 CON per day. Death at 0 CON. Speed never below 10.
+              </div>
+            </div>
+          )}
+        </div>
+      </Chapter>
 
-      {/* ── 5h. Reference Tables ─────────────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4 space-y-3">
-        <h2 className="text-[#c4a35a] text-xl font-bold border-b border-[#5a3a28] pb-2">
-          Reference
-        </h2>
-
-        {/* Healing */}
-        <button
-          onClick={() => setShowHealingTable(!showHealingTable)}
-          className="text-[#c4a35a] text-sm hover:underline"
-        >
-          {showHealingTable ? 'Hide' : 'Show'} Healing Rates
-        </button>
-        {showHealingTable && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs text-[#f5e6c8]">
-              <thead>
-                <tr className="border-b border-[#5a3a28]">
-                  <th className="text-left py-1 pr-2 text-[#c4a35a]">Method</th>
-                  <th className="text-left py-1 text-[#c4a35a]">HP Restored</th>
-                </tr>
-              </thead>
-              <tbody>
-                {HEALING_RATES.map((row) => (
-                  <tr key={row.method} className="border-b border-[#5a3a28]/50">
-                    <td className="py-1 pr-2">{row.method}</td>
-                    <td className="py-1">{row.amount}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-
-        {/* Hunger/Thirst Effects */}
-        <button
-          onClick={() => setShowHungerTables(!showHungerTables)}
-          className="text-[#c4a35a] text-sm hover:underline"
-        >
-          {showHungerTables ? 'Hide' : 'Show'} Hunger & Thirst Effects
-        </button>
-        {showHungerTables && (
-          <div className="space-y-3">
-            <div>
-              <div className="text-[#c4a35a] text-sm font-semibold mb-1">Mortal / Demi-Fey Hunger</div>
+      <Chapter
+        title="Reference"
+        intro="The look-up you open on its own: how much a night's rest, a day in a settlement or a healing spell gives back."
+      >
+        <div className="bg-[#2a2a3e] rounded-lg p-4">
+          <h3 className="text-[#c4a35a] text-xl font-bold mb-4 border-b border-[#5a3a28] pb-2">
+            Healing
+          </h3>
+          {/* Healing */}
+          <button
+            onClick={() => setShowHealingTable(!showHealingTable)}
+            className="text-[#c4a35a] text-sm hover:underline"
+          >
+            {showHealingTable ? 'Hide' : 'Show'} Healing Rates
+          </button>
+          {showHealingTable && (
+            <div className="overflow-x-auto">
               <table className="w-full text-xs text-[#f5e6c8]">
                 <thead>
                   <tr className="border-b border-[#5a3a28]">
-                    <th className="text-left py-1 pr-2 text-[#c4a35a]">Days</th>
-                    <th className="text-left py-1 text-[#c4a35a]">Effect</th>
+                    <th className="text-left py-1 pr-2 text-[#c4a35a]">Method</th>
+                    <th className="text-left py-1 text-[#c4a35a]">HP Restored</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {HUNGER_EFFECTS_MORTAL.map((row) => (
-                    <tr key={row.days} className="border-b border-[#5a3a28]/50">
-                      <td className="py-1 pr-2">{row.days}</td>
-                      <td className="py-1">{row.effect}</td>
+                  {HEALING_RATES.map((row) => (
+                    <tr key={row.method} className="border-b border-[#5a3a28]/50">
+                      <td className="py-1 pr-2">{row.method}</td>
+                      <td className="py-1">{row.amount}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
-            <div>
-              <div className="text-[#c4a35a] text-sm font-semibold mb-1">Fairy Hunger (Elf, Grimalkin)</div>
-              <table className="w-full text-xs text-[#f5e6c8]">
-                <thead>
-                  <tr className="border-b border-[#5a3a28]">
-                    <th className="text-left py-1 pr-2 text-[#c4a35a]">Days</th>
-                    <th className="text-left py-1 text-[#c4a35a]">Effect</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {HUNGER_EFFECTS_FAIRY.map((row) => (
-                    <tr key={row.days} className="border-b border-[#5a3a28]/50">
-                      <td className="py-1 pr-2">{row.days}</td>
-                      <td className="py-1">{row.effect}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <div className="text-[#f5e6c8]/60 text-xs">
-              Thirst: Same as hunger effects PLUS -3 CON per day. Death at 0 CON. Speed never below 10.
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* ── 5i. Calendar Info + Season ──────────────────────────── */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
-          {currentMonth.name} — {currentMonth.season}
-          {inFairy && (
-            <span className="block text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mt-0.5">
-              Dolmenwood, as you left it
-            </span>
-          )}
-        </h3>
-        <div className="text-[#f5e6c8] text-sm mb-2">
-          {currentMonth.days} days &middot; {currentMonth.description}
-        </div>
-        {/* Lines may break before "(new …)" and between Wysendays, never inside them. */}
-        <div className="text-[#f5e6c8]/60 text-sm mb-2">
-          <div>
-            Moon: {currentMonth.moonName}{' '}
-            <span className="whitespace-nowrap">
-              (new {ordinal(currentMonth.newMoon)}, full {ordinal(currentMonth.fullMoon)})
-            </span>
-          </div>
-          {currentMonth.wysendays.length > 0 && (
-            <div>
-              Wysendays:{' '}
-              {currentMonth.wysendays.map((w, i) => (
-                <span key={w}>
-                  {i > 0 && ', '}
-                  <span className="whitespace-nowrap">{w}</span>
-                </span>
-              ))}
-            </div>
           )}
         </div>
-
-        {festivalsThisMonth.length > 0 && (
-          <div className="mt-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-1">Festivals</div>
-            <ul className="space-y-1">
-              {festivalsThisMonth.map((f) => (
-                <li key={`${f.day}-${f.name}`} className="text-[#c4a35a] italic text-sm">
-                  Day {f.day} — {f.name}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {celestialThisMonth.length > 0 && (
-          <div className="mt-3">
-            <div className="text-[#c4a35a] text-sm font-semibold mb-1">Celestial Events</div>
-            <ul className="space-y-1">
-              {celestialThisMonth.map((e) => (
-                <li key={`${e.day}-${e.name}`} className="text-[#c4a35a] italic text-sm">
-                  Day {e.day} — {e.name}
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-
-        {festivalsThisMonth.length === 0 && celestialThisMonth.length === 0 && (
-          <div className="text-[#9c948b] text-sm italic mt-2">
-            No festivals or celestial events this month.
-          </div>
-        )}
-      </div>
-
-      {/* Season Display */}
-      <div className="bg-[#2a2a3e] rounded-lg p-4">
-        <h3 className="text-[#c4a35a] text-lg font-bold mb-3">
-          Season
-          {inFairy && (
-            <span className="block text-[#f5e6c8]/80 text-xs font-semibold uppercase tracking-wider mt-0.5">
-              Dolmenwood, as you left it
-            </span>
-          )}
-        </h3>
-        {/* Two even columns rather than one row: at a big font on a phone the four
-            names don't fit across, and equal widths keep the last one from
-            stretching over the whole card on a line of its own. */}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(['Winter', 'Spring', 'Summer', 'Autumn'] as const).map((s) => (
-            <div
-              key={s}
-              className={`text-center rounded py-2 text-sm font-semibold transition-colors ${
-                currentMonth.season === s ? 'ring-2 ring-[#c4a35a]' : ''
-              }`}
-              style={{
-                backgroundColor: currentMonth.season === s
-                  ? SEASON_COLORS[s]
-                  : `${SEASON_COLORS[s]}33`,
-                color: currentMonth.season === s ? '#1a1a2e' : SEASON_COLORS[s],
-              }}
-            >
-              {s}
-            </div>
-          ))}
-        </div>
-      </div>
+      </Chapter>
 
       {/* The journal has its own tab; this points the way there. */}
       <div className="bg-[#2a2a3e] rounded-lg p-4 flex flex-wrap items-center justify-between gap-3">
