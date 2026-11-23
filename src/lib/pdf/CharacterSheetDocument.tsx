@@ -86,6 +86,7 @@ import {
   isStartingBookApplied,
   rankAboveLearnableNote,
 } from '@/lib/character-sheet';
+import { isInFairy } from '@/lib/livedTime';
 import { rationStockSummary } from '@/lib/rations';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import { castsLabel } from '@/lib/shards';
@@ -1639,12 +1640,19 @@ function InventorySection({ c }: { c: Character }) {
             <>
               <Text style={s.subTitle}>Stowed Items</Text>
               {/* One row per day's rations can't say which of them have spoiled,
-                  and the food keeps changing, so its state has a line of its own,
-                  as it stood on the date the character's calendar is on. */}
+                  and the food keeps changing, so its state has a line of its own.
+                  It's dated, because a sheet read in a week says something else;
+                  in Fairy the calendar stands on the day the character went in
+                  while the food goes on ageing, so the date says which day it is. */}
               {food ? (
                 <Text style={s.body}>
                   <Text style={s.bold}>Rations: </Text>
-                  {food} <Text style={s.caption}>{`(as of ${formatShortDate(c.currentDate)})`}</Text>
+                  {food}
+                  <Text style={s.subTitleNote}>
+                    {isInFairy(c)
+                      ? `  (as of ${formatShortDate(c.currentDate)}, the day Fairy was entered)`
+                      : `  (as of ${formatShortDate(c.currentDate)})`}
+                  </Text>
                 </Text>
               ) : null}
             </>

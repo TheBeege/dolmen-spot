@@ -55,7 +55,7 @@ function wholeDay(value: unknown): number {
 }
 
 /** Whether an item is a ration: of kind 'ration' and with a state to read. */
-export function isRationItem(item: InventoryItem): boolean {
+function isRationItem(item: InventoryItem): boolean {
   return item.kind === 'ration' && item.ration != null;
 }
 
@@ -116,6 +116,10 @@ export interface RationSpoilage {
  * length left, and one exactly `keepsDays` old is spoiled — a week's rations a
  * week old have spoiled. An acquisition after "today", which a date rewound
  * behind it leaves behind, counts as brand new rather than as a negative age.
+ *
+ * Exported for the tests, which pin those boundaries (and a month and a year
+ * crossing) on the arithmetic itself; the sheet reads it through
+ * getRationSpoilage, which supplies the character's clock and conditions.
  */
 export function rationSpoilage(
   freshness: RationFreshness,

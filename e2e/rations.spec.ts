@@ -1,6 +1,6 @@
 // Rations: the Adventuring tab's counter card and the Inventory tab's rows take
 // the same inventory items (src/lib/rations.ts). A day's rations is one item,
-// fresh (1 slot) or preserved (2 slots, both weighing 20 coins), and it carries
+// fresh (1 slot) or preserved (1 slot, both weighing 20 coins), and it carries
 // the lived day it was acquired on, which is what its spoilage counts from. The
 // rules: fresh keeps 1 week, preserved 2 months, or 1 day and 1 week in dank
 // conditions (Player's Book p117, p163).
@@ -32,7 +32,7 @@ function rationCell(page: Page, kind: 'Fresh' | 'Preserved') {
   return page.getByRole('group', { name: `${kind} rations` });
 }
 
-/** The total line under the two cells: "7 rations · 12 slots · 140 wt". */
+/** The total line under the two cells: "7 rations · 7 slots · 140 wt". */
 function rationTotals(page: Page) {
   return page.getByText(/^\d+ rations? · \d+ slots? · \d+ wt$/);
 }

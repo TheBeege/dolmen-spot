@@ -17,7 +17,6 @@ import {
   findRationToSpend,
   getRationItems,
   getRationSpoilage,
-  isRationItem,
   rationItemFields,
   rationSlots,
   rationSpoilage,
@@ -71,9 +70,12 @@ describe('a day\'s rations is an item with the rules\' slots and weight', () => 
       kind: 'ration',
       ration: { freshness: 'preserved', acquiredLivedDay: 12 },
     });
-    assert.ok(isRationItem(item));
-    assert.equal(isRationItem({ ...item, kind: undefined }), false);
-    assert.equal(isRationItem({ ...item, ration: undefined }), false);
+    // Only an item of kind 'ration' with a state to read counts as one.
+    const asRations = (items: InventoryItem[]) => getRationItems({ equippedItems: [], stowedItems: items }).length;
+    assert.equal(asRations([item]), 1);
+    assert.equal(asRations([{ ...item, kind: undefined }]), 0);
+    assert.equal(asRations([{ ...item, ration: undefined }]), 0);
+    assert.equal(asRations([item, { ...item, id: 'other' }]), 2);
   });
 
   test('two rations made without an id get different ones', () => {
