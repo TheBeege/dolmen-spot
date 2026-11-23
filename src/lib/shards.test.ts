@@ -77,6 +77,13 @@ describe('spendCast', () => {
     assert.equal(s.castsLeft, 0);
   });
 
+  test('a count that is not a number spends nothing rather than turning into NaN', () => {
+    const bad = shard({ castsLeft: Number.NaN, castsPerCharge: 2 });
+    assert.equal(spendCast(bad).castsLeft, 0);
+    const notANumber = shard({ castsLeft: 'two' as unknown as number, castsPerCharge: 2 });
+    assert.equal(spendCast(notANumber).castsLeft, 0);
+  });
+
   test('leaves everything else alone', () => {
     const before = shard({ castsLeft: 1, castsPerCharge: 2, spell: DWEO, leyLineId: 'line-1' });
     assert.deepEqual(spendCast(before), { ...before, castsLeft: 0 });
@@ -96,6 +103,12 @@ describe('withCastsPerCharge', () => {
 
   test('a number that is not one keeps the least a charge can give', () => {
     assert.equal(withCastsPerCharge(shard(), Number.NaN).castsPerCharge, 1);
+    assert.equal(withCastsPerCharge(shard(), Number.POSITIVE_INFINITY).castsPerCharge, 1);
+  });
+
+  test('a casts-left count that is not a number comes out as none', () => {
+    const bad = shard({ castsLeft: Number.NaN });
+    assert.equal(withCastsPerCharge(bad, 3).castsLeft, 0);
   });
 
   test('brings the casts left down with it, so a shard never shows more than a charge gives', () => {

@@ -60,10 +60,10 @@ test.describe('on the Inventory tab', () => {
     await openTab(page, INVENTORY_TAB);
 
     // The kitchen-sink character's four spell books hold eleven spells between
-    // them, and its two scrolls one each. Every one of them has a button, and
-    // every button's name is its own.
+    // them, its two scrolls one each and its Dwemer shard one. Every one of
+    // them has a button, and every button's name is its own.
     const buttons = infoButtons(page);
-    await expect(buttons).toHaveCount(13);
+    await expect(buttons).toHaveCount(14);
     const names = await buttons.evaluateAll((els) => els.map((el) => el.getAttribute('aria-label')));
     expect(names, 'every info button is named').not.toContain(null);
     expect(new Set(names).size, 'no two buttons share a name').toBe(names.length);
@@ -87,6 +87,17 @@ test.describe('on the Inventory tab', () => {
     // beside the picker that names it.
     const shield = page.getByRole('button', { name: 'What Shield of Force does (in a spell book)' });
     await expect(shield).toBeVisible();
+    // A shard's spell gets one too, named for where it is, and opening it shows
+    // that spell's summary the same way.
+    const shardRow = page.locator('[data-spell-row="shard"]').filter({
+      has: page.getByLabel(/^Spell held by /),
+    });
+    await expect(shardRow, 'the shard’s row has the button').toHaveCount(1);
+    await expectOpensSummary(
+      shardRow.getByRole('button', { name: 'What Dweomerlight does (on a Dwemer shard)' }),
+      'Dweomerlight',
+    );
+
     const shieldRow = page.locator('[data-spell-row="spell-book"]').filter({ has: shield });
     await expect(shieldRow, 'the button is in the spell’s row').toHaveCount(1);
     await expect(shieldRow.getByRole('combobox'), 'the row’s picker names that spell').toHaveValue('Shield of Force');
@@ -108,7 +119,7 @@ test.describe('on the Inventory tab', () => {
     // number at all.
     await page.getByRole('button', { name: /^Collapse Oliphan's Folio/ }).click();
     await settle(page);
-    await expect(infoButtons(page)).toHaveCount(10);
+    await expect(infoButtons(page)).toHaveCount(11);
     await expect(
       page.getByRole('button', { name: 'What Crystal Resonance does (in a spell book)' }),
     ).toHaveCount(1);
@@ -123,7 +134,7 @@ test.describe('on the Inventory tab', () => {
     });
     await grimoireRow.getByRole('combobox').selectOption('');
     await settle(page);
-    await expect(infoButtons(page)).toHaveCount(9);
+    await expect(infoButtons(page)).toHaveCount(10);
     // The row is still there, with no button and no bare <span data-spell-info>
     // either: SpellInfo renders that span whenever it's mounted, so the guard
     // has to keep it from mounting at all, or the hover card would take it for
@@ -151,7 +162,7 @@ test.describe('on the Inventory tab', () => {
     const backpackHeader = page.locator('div.cursor-pointer').filter({ hasText: 'Backpack' });
     await backpackHeader.getByText('Backpack').click();
     await settle(page);
-    await expect(infoButtons(page)).toHaveCount(3);
+    await expect(infoButtons(page)).toHaveCount(4);
     await expect(
       page.getByRole('button', { name: 'What Web does (scroll)' }),
       'the collapsed Backpack took its scroll',

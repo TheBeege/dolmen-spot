@@ -21,9 +21,12 @@ function characterWithShard(): Character {
     kind: 'shard',
     shard: { spell: SHARD_SPELL, castsLeft: 2, castsPerCharge: 3, leyLineId: SHARD_LINE.id },
   };
+  // Named for what it looks like, not for its spell: if the item's own name
+  // held the spell, the assertion about a scroll's spell would pass whether or
+  // not the spell itself reached the font probe.
   const scroll: InventoryItem = {
     id: 'scroll-1',
-    name: 'Scroll of Dweomerlight',
+    name: 'Bent scroll',
     slots: 0,
     weight: 1,
     notes: '',
@@ -67,7 +70,9 @@ describe('sheetText', () => {
   });
 
   test('a scroll’s spell still counts: it prints on the sheet', () => {
-    assert.ok(sheetText(characterWithShard()).includes('Dweomerlight'), 'the scroll’s spell name is text the sheet prints');
+    const printed = JSON.parse(sheetText(characterWithShard()));
+    assert.equal(printed.equippedItems[1].scrollSpell.name, 'Dweomerlight', 'the scroll’s spell reaches the probe');
+    assert.ok(sheetText(characterWithShard()).includes('Dweomerlight'), 'and no other field of the character names it');
   });
 
   test('the notes, the journal, the NPCs and the map are still left out', () => {

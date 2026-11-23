@@ -2140,7 +2140,7 @@ function LeyLineEditor({
         <button
           type="button"
           onClick={onDelete}
-          aria-label={`Delete ley line ${leyLine.name || 'unnamed'}`}
+          aria-label={`Delete ${leyLine.kind === 'leyLine' ? 'ley line' : 'path'} ${label}`}
           className={DELETE_BUTTON}
         >
           Delete
@@ -2164,17 +2164,14 @@ function LeyLineEditor({
       </div>
       <div className="text-[10px] text-[#9c948b] truncate">{leyLine.hexes.join(' → ')}</div>
 
-      {/* Dwemer shards: a house feature, so nothing shows when the character
-          carries none. */}
-      {shards.length > 0 && (
+      {/* A ley line's own spell: what charging a shard on it teaches. Shown for
+          a ley line only — a road, a ward or a fairy road holds no spell — and
+          whether or not the character carries a shard, so it can always be
+          corrected. */}
+      {leyLine.kind === 'leyLine' && (
         <div className="border-t border-[#5a3a28]/40 pt-1 space-y-1">
           <div className="flex flex-wrap items-center gap-1">
             <span aria-hidden="true" className="text-[10px] text-[#a1988f]">Holds</span>
-            {/* The line's own spell, learned by charging a shard on it.
-                Editable, so one recorded wrongly (or recorded on the wrong
-                line) can be put right: every charge copies it to the shard, so
-                it is the copy that matters. Clearing it asks for a spell again
-                on the next charge. */}
             <select
               value={leyLine.spell?.name ?? ''}
               onChange={(e) => {
@@ -2185,7 +2182,13 @@ function LeyLineEditor({
               className={`${INPUT_ON_ITEM} min-w-[8rem] max-w-full flex-1 text-xs`}
             >
               <option value="">-- No spell --</option>
-              {/* Arcane spells only, as the scroll and spell book pickers offer. */}
+              {/* Arcane spells only, as the scroll and spell book pickers offer.
+                  A spell it does not list (a divine spell, a glamour, a name from
+                  an imported save) still shows as the value rather than being
+                  drawn as "-- No spell --". */}
+              {leyLine.spell && !ARCANE_SPELLS.some((s) => s.name === leyLine.spell!.name) && (
+                <option value={leyLine.spell.name}>{leyLine.spell.name}</option>
+              )}
               {[1, 2, 3, 4, 5, 6].map((rank) => (
                 <optgroup key={rank} label={`Rank ${rank}`}>
                   {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
@@ -2198,79 +2201,96 @@ function LeyLineEditor({
               <span className="text-[10px] text-[#c4a35a] shrink-0">Rank {leyLine.spell.rank}</span>
             )}
           </div>
-          {!onLine && (
-            <div className="text-[10px] text-[#a1988f] italic">
-              The party is not on this line: move it to one of its hexes to charge a shard here.
-            </div>
-          )}
-          <div className="flex flex-wrap items-center gap-1">
-            {shards.map((shard) => (
-              <button
-                key={`${shard.equipped ? 'eq' : 'st'}:${shard.item.id}`}
-                type="button"
-                onClick={() => pressCharge(shard)}
-                disabled={!onLine}
-                data-focus-key={focusKeyFor(shard.item.id)}
-                aria-label={`Charge ${shard.label} on ${label}`}
-                title={onLine ? undefined : `Move the party to a hex of ${label} to charge a shard`}
-                className={`${CHARGE_BUTTON} max-w-full break-words hyphens-auto text-left text-xs px-2 py-1 rounded disabled:opacity-40`}
-              >
-                Charge {shard.label}
-              </button>
-            ))}
-          </div>
-          {pendingShard && (
-            <div
-              className="flex flex-wrap items-center gap-1"
-              role="group"
-              aria-label={`Spell ${label} holds`}
-              onKeyDown={(e) => {
-                if (e.key !== 'Escape') return;
-                e.stopPropagation();
-                closePicker();
-              }}
-            >
-              <select
-                ref={spellPicker}
-                value={chosen?.name ?? ''}
-                onChange={(e) => {
-                  const spell = ARCANE_SPELLS.find((s) => s.name === e.target.value);
-                  setChosen(spell ? { name: spell.name, rank: spell.rank } : null);
-                }}
-                aria-label={`Spell that charging a shard on ${label} teaches`}
-                className={`${INPUT_ON_ITEM} flex-1 min-w-[8rem] text-xs`}
-              >
-                <option value="">-- Spell this line holds --</option>
-                {[1, 2, 3, 4, 5, 6].map((rank) => (
-                  <optgroup key={rank} label={`Rank ${rank}`}>
-                    {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
-                      <option key={s.name} value={s.name}>{s.name}</option>
+
+          {/* Dwemer shards: a house feature, so nothing shows when the
+              character carries none. */}
+          {shards.length > 0 && (
+            <>
+              {leyLine.hexes.length === 0 ? (
+                // A line can be recorded before any of its hexes are found, so
+                // there is nowhere to stand on it and nothing to disable.
+                <div className="text-[10px] text-[#a1988f] italic">
+                  No hexes recorded on this line yet, so there is nowhere to charge a shard.
+                </div>
+              ) : (
+                <>
+                  {!onLine && (
+                    <div className="text-[10px] text-[#a1988f] italic">
+                      The party is not on this line: move it to one of its hexes to charge a shard here.
+                    </div>
+                  )}
+                  <div className="flex flex-wrap items-center gap-1">
+                    {shards.map((shard) => (
+                      <button
+                        key={`${shard.equipped ? 'eq' : 'st'}:${shard.item.id}`}
+                        type="button"
+                        onClick={() => pressCharge(shard)}
+                        disabled={!onLine}
+                        data-focus-key={focusKeyFor(shard.item.id)}
+                        aria-label={`Charge ${shard.label} on ${label}`}
+                        title={onLine ? undefined : `Move the party to a hex of ${label} to charge a shard`}
+                        className={`${CHARGE_BUTTON} max-w-full break-words hyphens-auto text-left text-xs px-2 py-1 rounded disabled:opacity-40`}
+                      >
+                        Charge {shard.label}
+                      </button>
                     ))}
-                  </optgroup>
-                ))}
-              </select>
-              <button
-                type="button"
-                disabled={!chosen}
-                onClick={() => {
-                  if (chosen) charge(pendingShard, chosen);
-                }}
-                aria-label={`Record & charge: ${chosen?.name ?? 'the spell'} on ${pendingShard.label}`}
-                className={`${CHARGE_BUTTON} text-xs px-2 py-1 rounded disabled:opacity-40`}
-              >
-                Record &amp; charge
-              </button>
-              <button
-                type="button"
-                onClick={closePicker}
-                aria-label={`Cancel charging on ${label}`}
-                className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] px-1"
-              >
-                Cancel
-              </button>
-            </div>
+                  </div>
+                  {pendingShard && (
+                    <div
+                      className="flex flex-wrap items-center gap-1"
+                      role="group"
+                      aria-label={`Spell ${label} holds`}
+                      onKeyDown={(e) => {
+                        if (e.key !== 'Escape') return;
+                        e.stopPropagation();
+                        closePicker();
+                      }}
+                    >
+                      <select
+                        ref={spellPicker}
+                        value={chosen?.name ?? ''}
+                        onChange={(e) => {
+                          const spell = ARCANE_SPELLS.find((s) => s.name === e.target.value);
+                          setChosen(spell ? { name: spell.name, rank: spell.rank } : null);
+                        }}
+                        aria-label={`Spell that charging a shard on ${label} teaches`}
+                        className={`${INPUT_ON_ITEM} flex-1 min-w-[8rem] text-xs`}
+                      >
+                        <option value="">-- Spell this line holds --</option>
+                        {[1, 2, 3, 4, 5, 6].map((rank) => (
+                          <optgroup key={rank} label={`Rank ${rank}`}>
+                            {ARCANE_SPELLS.filter((s) => s.rank === rank).map((s) => (
+                              <option key={s.name} value={s.name}>{s.name}</option>
+                            ))}
+                          </optgroup>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!chosen}
+                        onClick={() => {
+                          if (chosen) charge(pendingShard, chosen);
+                        }}
+                        aria-label={`Record & charge: ${chosen?.name ?? 'the spell'} on ${pendingShard.label}`}
+                        className={`${CHARGE_BUTTON} text-xs px-2 py-1 rounded disabled:opacity-40`}
+                      >
+                        Record &amp; charge
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closePicker}
+                        aria-label={`Cancel charging on ${label}`}
+                        className="text-xs text-[#f5e6c8]/60 hover:text-[#f5e6c8] px-1"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+              <span role="status" className="block text-[10px] text-[#a1988f]">{status}</span>
+            </>
           )}
-          <span role="status" className="block text-[10px] text-[#a1988f]">{status}</span>
         </div>
       )}
     </div>

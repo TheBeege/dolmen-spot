@@ -22,28 +22,33 @@ export function newShardState(): ShardState {
   return { castsLeft: 0, castsPerCharge: 1 };
 }
 
+/** `value` as a whole number of at least `min`, whatever a save holds. */
+function wholeAtLeast(value: number, min: number): number {
+  return Number.isFinite(value) ? Math.max(min, Math.floor(value)) : min;
+}
+
 /**
  * The shard with one cast spent. Never below none: a spent shard stays spent
- * until it is charged again on a ley line.
+ * until it is charged again on a ley line. A count that is not a number (a
+ * hand-edited save, or one written by a newer release) spends nothing rather
+ * than turning into NaN.
  */
 export function spendCast(shard: ShardState): ShardState {
-  return { ...shard, castsLeft: Math.max(0, Math.floor(shard.castsLeft) - 1) };
+  return { ...shard, castsLeft: Math.max(0, wholeAtLeast(shard.castsLeft, 0) - 1) };
 }
 
 /**
  * `castsPerCharge` as a whole number of at least one: a charge that gave no
- * casts would be no charge at all. The casts left come down with it, so a
- * shard never shows more left than a charge gives: lowering what a charge
- * gives is not a way to keep casts the player has already spent a charge on.
- * (Loading still tolerates more left than a charge gives, for a save written
- * before this clamped and for one written by a newer release.)
+ * casts would be no charge at all. The casts left come down with it, so the row
+ * never reads "3 of 1". Loading tolerates more left than a charge gives, for a
+ * save written before this or by a newer release; the tab does not produce it.
  */
 export function withCastsPerCharge(shard: ShardState, value: number): ShardState {
-  const castsPerCharge = Math.max(1, Math.floor(value) || 1);
+  const castsPerCharge = wholeAtLeast(value, 1);
   return {
     ...shard,
     castsPerCharge,
-    castsLeft: Math.min(shard.castsLeft, castsPerCharge),
+    castsLeft: Math.min(wholeAtLeast(shard.castsLeft, 0), castsPerCharge),
   };
 }
 
@@ -61,7 +66,7 @@ export function chargeShard(shard: ShardState, leyLineId: string, spell: Spellbo
   return {
     ...shard,
     spell,
-    castsLeft: Math.max(1, Math.floor(shard.castsPerCharge) || 1),
+    castsLeft: wholeAtLeast(shard.castsPerCharge, 1),
     leyLineId,
   };
 }

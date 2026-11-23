@@ -120,12 +120,14 @@ function WholeNumberField({
 // spellRowContexts).
 const SPELL_BOOK_CONTEXT = 'in a spell book';
 const SCROLL_CONTEXT = 'scroll';
+const SHARD_CONTEXT = 'on a Dwemer shard';
 
 // A spell book's list of spells is marked data-spell-list, so the summary card
-// keeps off the spells in that book. A scroll's row has no list to mark: its
-// row sits among ordinary items in the equipped or stowed list, so there's no
-// element holding the scrolls alone. Its own row is marked data-spell-row
-// instead, which keeps the card off that row's picker, rank and Use button.
+// keeps off the spells in that book. A scroll's or a shard's row has no list to
+// mark: its row sits among ordinary items in the equipped or stowed list, so
+// there's no element holding the scrolls or shards alone. Its own row is marked
+// data-spell-row instead, which keeps the card off that row's picker and
+// controls.
 
 // The name a spell book's row goes by in the disclosure state. Its spells have
 // no ids of their own, so it's the book's id and the spell's place in it.
@@ -177,6 +179,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   // for the books' spells and one for the scrolls.
   const bookSpellInfo = useSpellDisclosures();
   const scrollSpellInfo = useSpellDisclosures();
+  const shardSpellInfo = useSpellDisclosures();
   // The rows the page shows, in the order it shows them: the equipped items,
   // then the stowed ones container by container, then the loose ones. A
   // collapsed container's items are left out, since it hides them.
@@ -212,6 +215,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const scrollContextById = new Map<string, string>(
     spellRowContexts('arcane', scrollRows.map((item) => item.scrollSpell?.name ?? ''), SCROLL_CONTEXT).map(
       (context, i): [string, string] => [scrollRows[i].id, context],
+    ),
+  );
+  const shardRows = rowsInRowOrder.filter((item) => item.kind === 'shard');
+  const shardContextById = new Map<string, string>(
+    spellRowContexts('arcane', shardRows.map((item) => item.shard?.spell?.name ?? ''), SHARD_CONTEXT).map(
+      (context, i): [string, string] => [shardRows[i].id, context],
     ),
   );
 
@@ -898,6 +907,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
         key={item.id}
         role="group"
         aria-label={shardLabel}
+        data-spell-row="shard"
         className="bg-[#1a1a2e] border border-[#5a3a28]/60 rounded mb-1"
       >
         <div className={`flex flex-wrap items-start gap-2 ${BORDERED_ROW_PADDING}`}>
@@ -951,40 +961,57 @@ export default function Inventory({ character, onChange }: InventoryProps) {
             spending one, what a charge gives, and the line it was last
             charged on. */}
         <div className="border-t border-[#5a3a28]/40 px-3 py-2 flex flex-wrap items-end gap-x-4 gap-y-2">
-          <label className="flex flex-col gap-0.5 flex-1 basis-40 min-w-0">
+          <div className="flex flex-col gap-0.5 flex-1 basis-40 min-w-0">
             {stateLabel('Spell')}
-            <select
-              value={spellName}
-              onChange={(e) => {
-                const value = e.target.value;
-                const matched = findArcaneSpell(value);
-                handleShardUpdate(equipped, item.id, (s) => {
-                  if (!value) {
-                    // Leaving the spell unset drops it: the type has it absent
-                    // until the player learns which spell the shard holds.
-                    const { spell: _drop, ...rest } = s;
-                    return rest;
-                  }
-                  return { ...s, spell: { name: value, rank: matched?.rank ?? s.spell?.rank ?? 1 } };
-                });
-              }}
-              aria-label={`Spell held by ${shardLabel}`}
-              className={`${inputClasses} w-full text-sm`}
-            >
-              <option value="">-- No spell --</option>
-              {spellOptions()}
-            </select>
-          </label>
+            <span className="flex items-center gap-1 min-w-0">
+              <select
+                value={spellName}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  const matched = findArcaneSpell(value);
+                  handleShardUpdate(equipped, item.id, (s) => {
+                    if (!value) {
+                      // Leaving the spell unset drops it: the type has it absent
+                      // until the player learns which spell the shard holds.
+                      const { spell: _drop, ...rest } = s;
+                      return rest;
+                    }
+                    return { ...s, spell: { name: value, rank: matched?.rank ?? s.spell?.rank ?? 1 } };
+                  });
+                }}
+                aria-label={`Spell held by ${shardLabel}`}
+                className={`${inputClasses} min-w-0 flex-1 text-sm`}
+              >
+                <option value="">-- No spell --</option>
+                {/* A spell the arcane list does not hold (a divine spell, a
+                    glamour, a name from an imported save) still shows as the
+                    value rather than being drawn as "-- No spell --". */}
+                {spellName && !ARCANE_SPELLS.some((s) => s.name === spellName) && (
+                  <option value={spellName}>{spellName}</option>
+                )}
+                {spellOptions()}
+              </select>
+              <SpellPickerInfo
+                name={spellName}
+                context={shardContextById.get(item.id) ?? SHARD_CONTEXT}
+                info={shardSpellInfo(item.id)}
+              />
+            </span>
+          </div>
+          <SpellSummaryPanel
+            spellType="arcane"
+            name={spellName}
+            {...shardSpellInfo(item.id)}
+            className={SPELL_PANEL_CLASSES}
+          />
           <div className="flex flex-wrap items-center gap-2">
             {stateLabel('Casts')}
             {/* Announced when a cast is spent, since the button keeps focus. The
-                name is there because a shard's row reads "2 of 3" on its own,
-                which says nothing about what is being counted. */}
-            <span
-              aria-live="polite"
-              aria-label={`Casts left on ${shardLabel}: ${castsLabel(shard)}`}
-              className="text-[#f5e6c8] text-sm tabular-nums"
-            >
+                shard's name is inside the region rather than in an aria-label:
+                a label that changes is not announced, and "2 of 3" says nothing
+                about what is being counted. */}
+            <span aria-live="polite" className="text-[#f5e6c8] text-sm tabular-nums">
+              <span className="sr-only">{`Casts left on ${shardLabel}: `}</span>
               {castsLabel(shard)}
             </span>
             <button

@@ -20,6 +20,9 @@ const MAP_TAB = TABS.find((tab) => tab.id === 'map')!;
 // none, so charging on it asks the player what it holds.
 const ANTLER_LINE = 'The Antler Line';
 const WHISPERING_LEY = 'The Whispering Ley';
+// A path of another kind (kind 'other'), which holds no spell and recharges no
+// shard: it is a road.
+const DRUNE_ROAD = 'Old Drune Road';
 // A hex of The Antler Line, and the hex The Whispering Ley runs through.
 const ANTLER_HEX = '0909';
 const WHISPERING_HEX = '1309';
@@ -53,13 +56,14 @@ async function movePartyTo(page: Page, hex: string): Promise<void> {
  * book or a scroll, and name it so the rest of the test can find it.
  */
 async function addShard(page: Page): Promise<Locator> {
-  const shardRows = page.getByRole('group', { name: /^.+ \(equipped item \d+\)$/ });
+  const shardRows = page.locator('[data-spell-row="shard"]');
   const before = await shardRows.count();
   await page.getByRole('button', { name: 'Add magical item to Equipped Items' }).click();
   await page.getByRole('button', { name: /Dwemer Shard/ }).click();
 
-  // One more shard row than there was, and it is the one the field below edits:
-  // a row is a group named for the item, and its name field says where it is.
+  // One more shard row than there was, and it is the one renamed below: a row
+  // is marked data-spell-row="shard" (as a scroll's is), and its name field
+  // says where it is.
   await expect(shardRows, 'the shard was added').toHaveCount(before + 1);
   const added = shardRows.nth(before);
   await added.getByRole('textbox', { name: /^Name of equipped item \d+$/ }).fill(NEW_SHARD);
@@ -118,6 +122,12 @@ test.describe('at 1280px', () => {
     await expect(antler.getByRole('button', { name: `Charge ${NEW_SHARD} on ${ANTLER_LINE}` })).toBeDisabled();
     await expect(antler).toContainText('The party is not on this line');
     await expect(whispering).not.toContainText('The party is not on this line');
+
+    // A road is not a ley line, so it holds no spell to learn and recharges no
+    // shard: it offers neither control.
+    const road = leyLineEditor(page, DRUNE_ROAD);
+    await expect(road.getByRole('combobox')).toHaveCount(0);
+    await expect(road.getByRole('button', { name: /^Charge / })).toHaveCount(0);
 
     // ── Charged on The Antler Line, which knows its spell: one press ──
     await movePartyTo(page, ANTLER_HEX);
@@ -195,6 +205,16 @@ test.describe('at 1280px', () => {
     await whispering.getByRole('button', { name: `Charge ${NEW_SHARD} on ${WHISPERING_LEY}` }).click();
     await openTab(page, INVENTORY_TAB);
     await expect(shardSpell(row)).toHaveValue('Dweomerlight');
+
+    // ── Clearing the line's spell asks for it again on the next charge ──
+    await openTab(page, MAP_TAB);
+    await lineSpell(whispering).selectOption('');
+    await expect(lineSpell(whispering)).toHaveValue('');
+    await expect(whispering).not.toContainText('Rank 3');
+    await whispering.getByRole('button', { name: `Charge ${NEW_SHARD} on ${WHISPERING_LEY}` }).click();
+    await expect(whispering.getByRole('combobox', { name: /teaches$/ })).toBeVisible();
+    await whispering.getByRole('button', { name: `Cancel charging on ${WHISPERING_LEY}` }).click();
+    await expect(whispering.getByRole('combobox', { name: /teaches$/ })).toHaveCount(0);
 
     // ── The line is deleted: the shard survives it, and says so ──
     await openTab(page, MAP_TAB);
