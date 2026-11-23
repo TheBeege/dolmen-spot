@@ -97,8 +97,8 @@ export default function CombatStats({ character, onChange }: CombatStatsProps) {
             set that item's width and pushed a button onto a line by itself. The
             numbers also step down and the gaps close up below 15rem across — a
             big default font on a phone (320px is 13.3rem at 24px), and nothing
-            else — so 35 + 12 + 116 + 12 + 47 = 221px fits the 228px card there,
-            where the full-size row needs 251px. */}
+            else — so 35 + 12 + 116 + 12 + 47 = 222px fits the 228px card there
+            (221.4px measured), where the full-size row needs 251px. */}
         <div className="flex flex-wrap items-center justify-center gap-x-3 max-[15rem]:gap-x-2 gap-y-2 mb-4">
           <button
             type="button"
