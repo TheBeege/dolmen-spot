@@ -770,11 +770,18 @@ describe('Scenario 24: a v12 save from main, with Fairy time and old map pins', 
     assert.deepEqual(migrated.currentDate, saved.currentDate);
     assert.deepEqual(migrated.journalEntries, saved.journalEntries);
   });
-  test('nothing else changes, besides an empty list of NPCs (v15)', () => {
-    const { schemaVersion: _version, otherNotes: _notes, mapData: _map, currentLocationHex: _hex, npcs, ...rest } = migrated;
-    const { schemaVersion: _savedVersion, otherNotes: _savedNotes, ...savedRest } = saved;
+  test('nothing else changes, besides an empty list of NPCs (v15) and the ration fields (v16)', () => {
+    // v16 turns the ration counters into items (none here: both were 0) and
+    // replaces the counters with `dankConditions`.
+    const {
+      schemaVersion: _version, otherNotes: _notes, mapData: _map, currentLocationHex: _hex, npcs,
+      rations: _rations, dankConditions, ...rest
+    } = migrated as unknown as AnyData;
+    const { schemaVersion: _savedVersion, otherNotes: _savedNotes, rations: _savedRations, ...savedRest } = saved;
     assert.deepEqual(rest, savedRest);
     assert.deepEqual(npcs, []);
+    assert.equal(dankConditions, false);
+    assert.deepEqual(migrated.stowedItems, [], 'its counters were both 0, so no rations were made into items');
   });
   test('a second load changes nothing', () => {
     assert.deepEqual(migrateCharacter(clone(migrated) as never), migrated);

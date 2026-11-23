@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "id": "fixture-default",
   "name": "New Adventurer",
   "kindred": "",
@@ -99,10 +99,6 @@
   "exhaustionLevel": 0,
   "hungerDays": 0,
   "thirstDays": 0,
-  "rations": {
-    "fresh": 0,
-    "preserved": 0
-  },
   "activeLightSources": [],
   "travelDaysWithoutRest": 0,
   "forcedMarchActive": false,
@@ -112,5 +108,6 @@
     "day": 1,
     "month": 0,
     "year": 1
-  }
+  },
+  "dankConditions": false
 }

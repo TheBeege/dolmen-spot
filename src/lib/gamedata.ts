@@ -1,4 +1,4 @@
-import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile, SpellSummary, SpellType } from './types';
+import { KindredInfo, ClassInfo, Character, CalendarDate, KindredId, ClassId, AbilityScores as AbilityScoresType, AdvancementRow, ClassAdvancementTable, SkillProgressionTable, Coins, FeatureProfile, SpellSummary, SpellType, RationFreshness } from './types';
 import { CURRENT_SCHEMA_VERSION } from './migrations';
 import { newId } from './ids';
 import { pluralize } from './grammar';
@@ -891,6 +891,9 @@ export interface EquipmentEntry {
   category: 'container' | 'light' | 'camping' | 'tool' | 'clothing' | 'holy' | 'ammunition' | 'herb';
   capacity?: number;     // containers only, max weight in coins
   notes?: string;
+  // Rations only: adding one from the catalog makes a ration item (see
+  // src/lib/rations.ts) rather than a plain item, so its spoilage is tracked.
+  ration?: RationFreshness;
 }
 
 export const EQUIPMENT_CATALOG: EquipmentEntry[] = [
@@ -921,8 +924,8 @@ export const EQUIPMENT_CATALOG: EquipmentEntry[] = [
   { name: 'Cooking pots', cost: 3, weight: 100, slots: 1, category: 'camping' },
   { name: 'Firewood (bundle, 8hr)', cost: 1, weight: 200, slots: 2, category: 'camping' },
   { name: 'Fishing rod and tackle', cost: 4, weight: 50, slots: 1, category: 'camping' },
-  { name: 'Rations (preserved, 1 day)', cost: 2, weight: 20, slots: 1, category: 'camping', notes: 'Lasts 2 months (1 week dank)' },
-  { name: 'Rations (fresh, 1 day)', cost: 1, weight: 20, slots: 1, category: 'camping', notes: 'Lasts 1 week (1 day dank)' },
+  { name: 'Rations (preserved, 1 day)', cost: 2, weight: 20, slots: 2, category: 'camping', notes: 'Lasts 2 months (1 week dank)', ration: 'preserved' },
+  { name: 'Rations (fresh, 1 day)', cost: 1, weight: 20, slots: 1, category: 'camping', notes: 'Lasts 1 week (1 day dank)', ration: 'fresh' },
   { name: 'Tent', cost: 20, weight: 20, slots: 1, category: 'camping' },
 
   // ── Miscellaneous Tools ──
@@ -1011,6 +1014,30 @@ export const EQUIPMENT_CATEGORIES: { id: EquipmentEntry['category']; label: stri
   { id: 'ammunition', label: 'Ammo' },
   { id: 'herb', label: 'Herbs' },
 ];
+
+/**
+ * A day's rations (Player's Book p116), the only two kinds there are. A day's
+ * rations is one item, whatever the count: preserved ones take 2 slots, fresh
+ * ones 1, and both weigh 20 coins (10 coins = 1 pound).
+ *
+ * Spoilage (p116, p186): preserved rations keep 2 months and fresh ones 1 week,
+ * or 1 week and 1 day in dank conditions (a dungeon, a fungal forest). Months in
+ * Dolmenwood run 28 to 31 days, so 2 months is counted as 60 days.
+ */
+export const RATIONS: Record<RationFreshness, {
+  name: string;
+  slots: number;
+  weight: number;      // in coins (10 coins = 1 pound)
+  cost: number;        // in gp
+  keepsDays: number;   // in ordinary conditions
+  keepsDaysDank: number; // in dank conditions
+}> = {
+  fresh: { name: 'Rations (fresh, 1 day)', slots: 1, weight: 20, cost: 1, keepsDays: 7, keepsDaysDank: 1 },
+  preserved: { name: 'Rations (preserved, 1 day)', slots: 2, weight: 20, cost: 2, keepsDays: 60, keepsDaysDank: 7 },
+};
+
+/** The two kinds of ration, in the order the sheet offers them. */
+export const RATION_FRESHNESS: readonly RationFreshness[] = ['fresh', 'preserved'];
 
 // ──────────────────────────────────────────────────────────
 // Coin Constants & Helpers
@@ -3321,7 +3348,7 @@ export function createDefaultCharacter(): Character {
     exhaustionLevel: 0,
     hungerDays: 0,
     thirstDays: 0,
-    rations: { fresh: 0, preserved: 0 },
+    dankConditions: false,
     activeLightSources: [],
     travelDaysWithoutRest: 0,
     forcedMarchActive: false,

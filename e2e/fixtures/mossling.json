@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "id": "fixture-mossling",
   "name": "Puddock Underbough",
   "kindred": "mossling",
@@ -106,6 +106,58 @@
         "castsLeft": 0,
         "castsPerCharge": 1
       }
+    },
+    {
+      "id": "cbd89d7d-c3cf-4f18-9612-2ef2f3830917",
+      "name": "Rations (fresh, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "fresh",
+        "acquiredLivedDay": 0
+      }
+    },
+    {
+      "id": "5307c1f2-d341-4314-82b4-9670079eb147",
+      "name": "Rations (fresh, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "fresh",
+        "acquiredLivedDay": 0
+      }
+    },
+    {
+      "id": "5823b066-5e46-4bf4-87e6-773db36890ac",
+      "name": "Rations (fresh, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "fresh",
+        "acquiredLivedDay": 0
+      }
+    },
+    {
+      "id": "41add0cf-57f6-41b6-b986-8b6fd0191cec",
+      "name": "Rations (fresh, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "fresh",
+        "acquiredLivedDay": 0
+      }
     }
   ],
   "containers": [
@@ -179,10 +231,6 @@
   "exhaustionLevel": 0,
   "hungerDays": 0,
   "thirstDays": 0,
-  "rations": {
-    "fresh": 4,
-    "preserved": 0
-  },
   "activeLightSources": [],
   "travelDaysWithoutRest": 0,
   "forcedMarchActive": false,
@@ -192,5 +240,6 @@
     "day": 1,
     "month": 0,
     "year": 1
-  }
+  },
+  "dankConditions": false
 }

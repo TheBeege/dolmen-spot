@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 15,
+  "schemaVersion": 16,
   "id": "fixture-kitchen-sink",
   "name": "Wendeline Ashgrove-Thistlecombe",
   "kindred": "human",
@@ -207,11 +207,16 @@
     {
       "id": "ks-st-03",
       "name": "Rations (preserved, 1 day)",
-      "slots": 1,
+      "slots": 2,
       "weight": 20,
       "notes": "Eat the oldest first",
       "equipped": false,
-      "containerId": "ks-backpack"
+      "containerId": "ks-backpack",
+      "kind": "ration",
+      "ration": {
+        "freshness": "preserved",
+        "acquiredLivedDay": 53
+      }
     },
     {
       "id": "ks-st-04",
@@ -274,6 +279,97 @@
       "weight": 120,
       "notes": "",
       "equipped": false
+    },
+    {
+      "id": "a40beb17-9bdc-4732-acc9-ca67f131786b",
+      "name": "Rations (fresh, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "fresh",
+        "acquiredLivedDay": 53
+      }
+    },
+    {
+      "id": "03e1a465-7e8d-4ce8-98a6-f2248f98ba23",
+      "name": "Rations (fresh, 1 day)",
+      "slots": 1,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "fresh",
+        "acquiredLivedDay": 53
+      }
+    },
+    {
+      "id": "3e069d94-8023-48c8-b775-6e951b26a8e6",
+      "name": "Rations (preserved, 1 day)",
+      "slots": 2,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "preserved",
+        "acquiredLivedDay": 53
+      }
+    },
+    {
+      "id": "2fae8e5b-3f00-4ee1-bcc8-dc28cd415148",
+      "name": "Rations (preserved, 1 day)",
+      "slots": 2,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "preserved",
+        "acquiredLivedDay": 53
+      }
+    },
+    {
+      "id": "5f5a8ef5-646f-4006-bfd7-e216077442c7",
+      "name": "Rations (preserved, 1 day)",
+      "slots": 2,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "preserved",
+        "acquiredLivedDay": 53
+      }
+    },
+    {
+      "id": "ac432f59-42f1-4fc7-af09-0d0b3251d1c8",
+      "name": "Rations (preserved, 1 day)",
+      "slots": 2,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "preserved",
+        "acquiredLivedDay": 53
+      }
+    },
+    {
+      "id": "8d0a5a2b-0829-4c2a-9066-3a9f9c627440",
+      "name": "Rations (preserved, 1 day)",
+      "slots": 2,
+      "weight": 20,
+      "notes": "",
+      "equipped": false,
+      "kind": "ration",
+      "ration": {
+        "freshness": "preserved",
+        "acquiredLivedDay": 53
+      }
     }
   ],
   "containers": [
@@ -1066,10 +1162,6 @@
   "exhaustionLevel": 1,
   "hungerDays": 1,
   "thirstDays": 0,
-  "rations": {
-    "fresh": 2,
-    "preserved": 5
-  },
   "activeLightSources": [
     {
       "id": "ks-ls-01",
@@ -1110,5 +1202,6 @@
     "day": 1,
     "month": 0,
     "year": 1
-  }
+  },
+  "dankConditions": false
 }

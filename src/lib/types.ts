@@ -29,7 +29,10 @@ export interface SkillTargets {
   [key: string]: number;
 }
 
-export type InventoryItemKind = 'spellbook' | 'scroll' | 'shard';
+export type InventoryItemKind = 'spellbook' | 'scroll' | 'shard' | 'ration';
+
+/** A day's rations, fresh or preserved (Player's Book p116). */
+export type RationFreshness = 'fresh' | 'preserved';
 
 export interface SpellbookEntry {
   name: string;
@@ -45,6 +48,17 @@ export interface ShardState {
   leyLineId?: string;      // the ley line (LeyLine.id) it was last charged on; that line may since have been deleted
 }
 
+// A day's rations (an item of kind 'ration'). Its slots, weight and shelf life
+// come from RATIONS (gamedata.ts): the rules give them, so the item doesn't
+// carry a player's own numbers, and loading stamps them from the state.
+export interface RationState {
+  freshness: RationFreshness; // fresh: 1 slot; preserved: 2 slots
+  // The lived day the ration was acquired (see src/lib/livedTime.ts), which is
+  // what spoilage is measured from: it survives the calendar moving, a Fairy
+  // visit, and a corrected return date unchanged.
+  acquiredLivedDay: number;
+}
+
 export interface InventoryItem {
   id: string;
   name: string;
@@ -57,6 +71,7 @@ export interface InventoryItem {
   spellbookContents?: SpellbookEntry[];  // present when kind === 'spellbook'; max 3 (Player's Book p78)
   scrollSpell?: SpellbookEntry;           // present when kind === 'scroll'
   shard?: ShardState;                     // present when kind === 'shard'
+  ration?: RationState;                   // present when kind === 'ration'
   isStartingBook?: boolean;               // stamped by ApplyStartingBookButton so a rename doesn't reopen the dropdown
 }
 
@@ -350,7 +365,10 @@ export interface Character {
   exhaustionLevel: number;
   hungerDays: number;
   thirstDays: number;
-  rations: { fresh: number; preserved: number };
+  // The food is being kept in dank conditions (a dungeon, a fungal forest):
+  // fresh rations keep 1 day and preserved rations 1 week (Player's Book p186).
+  // A condition of the whole store, not of one ration, so it's one switch.
+  dankConditions: boolean;
   activeLightSources: ActiveLightSource[];
   travelDaysWithoutRest: number;
   forcedMarchActive: boolean;
