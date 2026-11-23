@@ -14,6 +14,7 @@ import {
   EQUIPPED_SLOT_LIMIT,
   SPELLBOOK_CAPACITY,
   STOWED_SLOT_LIMIT,
+  RATION_FRESHNESS,
 } from '@/lib/gamedata';
 import GrowingTextarea from './GrowingTextarea';
 import {
@@ -749,8 +750,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
               title={`${rationFreshnessLabel(freshness)} rations`}
               className={`${inputClasses} flex-1 min-w-0 text-sm`}
             >
-              <option value="fresh">Fresh rations</option>
-              <option value="preserved">Preserved rations</option>
+              {RATION_FRESHNESS.map((option) => (
+                <option key={option} value={option}>{`${rationFreshnessLabel(option)} rations`}</option>
+              ))}
             </select>
           </span>
           {phoneControlsFor(item, equipped, rowLabel)}

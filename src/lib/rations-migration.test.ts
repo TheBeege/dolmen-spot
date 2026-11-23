@@ -152,7 +152,9 @@ describe('v15 → v16', () => {
     const cases: [unknown, [number, number]][] = [
       [{ fresh: 2.7, preserved: 0 }, [2, 0]], // floored: whole days' food
       [{ fresh: -3, preserved: 1 }, [0, 1]],
-      [{ fresh: '4', preserved: 1 }, [0, 1]], // text isn't a count
+      [{ fresh: '4', preserved: 1 }, [4, 1]], // digits saved as text spell a count
+      [{ fresh: ' 2 ', preserved: 'many' }, [2, 0]],
+      [{ fresh: '2.5', preserved: 3 }, [0, 3]], // not digits: not a count
       [{ fresh: null, preserved: true }, [0, 0]],
       [{ fresh: Number.NaN, preserved: Number.POSITIVE_INFINITY }, [0, 0]],
       [{}, [0, 0]],
@@ -164,6 +166,14 @@ describe('v15 → v16', () => {
         states.filter((state) => state === 'preserved').length,
       ];
       assert.deepEqual(counts, expected, JSON.stringify(rations));
+    }
+  });
+
+  test('a count saved as digits counts as the number it spells, as a saved schemaVersion once did', () => {
+    for (const fresh of ['4', ' 4 ', '04']) {
+      const migrated = migrateCharacter(v15({ rations: { fresh, preserved: '2' } }));
+      assert.deepEqual(rationStateOf(migrated), ['fresh', 'fresh', 'fresh', 'fresh', 'preserved', 'preserved'], JSON.stringify(fresh));
+      assert.equal((migrated as unknown as AnyData).otherNotes, '', `${JSON.stringify(fresh)}: nothing to note`);
     }
   });
 
@@ -195,6 +205,8 @@ describe('v15 → v16', () => {
     });
     assert.deepEqual(migrated.equippedItems[0].ration, { freshness: 'fresh', acquiredLivedDay: livedDayOf(v15()) });
     assert.equal(migrated.equippedItems[0].slots, 1);
+    // Its name takes the sheet's spelling, which is what makes it one kind of item.
+    assert.equal(migrated.equippedItems[0].name, 'Rations (fresh, 1 day)');
     assertStable(migrated, 'a second load changes nothing');
   });
 

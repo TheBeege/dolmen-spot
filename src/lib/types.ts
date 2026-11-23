@@ -366,7 +366,7 @@ export interface Character {
   hungerDays: number;
   thirstDays: number;
   // The food is being kept in dank conditions (a dungeon, a fungal forest):
-  // fresh rations keep 1 day and preserved rations 1 week (Player's Book p186).
+  // fresh rations keep 1 day and preserved rations 1 week (Player's Book p117, p163).
   // A condition of the whole store, not of one ration, so it's one switch.
   dankConditions: boolean;
   activeLightSources: ActiveLightSource[];

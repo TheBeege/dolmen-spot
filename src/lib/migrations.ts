@@ -752,12 +752,15 @@ function migrateAddNpcs(data: any): any {
 const MAX_CONVERTED_RATIONS = 999;
 
 /**
- * A ration counter as a whole number of days' rations to convert: a finite
- * number floored (a stray 2.5 is two days' food), and anything else none, up to
- * MAX_CONVERTED_RATIONS. Negative counts are none.
+ * A ration counter as a whole number of days' rations: a finite number floored
+ * (a stray 2.5 is two days' food), or a string of digits, which counts as the
+ * number it spells (a hand edit, as a saved `schemaVersion` once was). Negative
+ * counts and anything else count as none. Uncapped: the caller caps what it
+ * converts and notes the rest.
  */
 function rationCount(value: unknown): number {
-  return Math.min(wholeAtLeast(value, 0, 0), MAX_CONVERTED_RATIONS);
+  const spelled = typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value) : value;
+  return wholeAtLeast(spelled, 0, 0);
 }
 
 /** The note Other Notes gets for the rations a counter held beyond what was converted. */
@@ -782,19 +785,24 @@ function rationCountNote(freshness: RationFreshness, beyond: number): string {
  * which nothing in an old save records.
  *
  * A pack may also hold a plain item the catalog made before this version, named
- * exactly "Rations (preserved, 1 day)" or "Rations (fresh, 1 day)" and with the
- * catalog's slots (1 for a preserved day, where the rules say 2). Those become
- * ration items too, on the same terms (the rules' slots and weight, acquired
- * today), so an old character's food spoils and weighs as the rest does instead
- * of sitting in the pack as inert gear. Only an item with no kind and that exact
- * name is touched: nothing is renamed, and nothing the player wrote is lost.
+ * "Rations (preserved, 1 day)" or "Rations (fresh, 1 day)" and with the catalog's
+ * slots (1 for a preserved day, where the rules say 2). Those become ration items
+ * too, on the same terms (the rules' slots and weight, acquired today), so an old
+ * character's food spoils and weighs as the rest does instead of sitting in the
+ * pack as inert gear. Only an item that is no kind of its own and whose name is
+ * one of the two, case and surrounding spaces aside, is touched: it takes the
+ * sheet's spelling of the name (so " RATIONS (FRESH, 1 DAY) " becomes "Rations
+ * (fresh, 1 day)"), the rules' slots and weight and the new state, and keeps its
+ * id, its place, its notes and its equipment.
  *
  * The old `rations` field is removed, as its meaning now lives on the items.
  * A save with no rations, or with none of a kind, is left as it was apart from
  * the new fields. Nothing here throws or hangs: a counter that isn't an object
  * counts as no rations, a list that isn't a list is replaced before anything is
  * added to it, and a count beyond MAX_CONVERTED_RATIONS leaves a note in Other
- * Notes rather than thousands of items.
+ * Notes rather than thousands of items. Every count the save could hold becomes
+ * items — a number, or digits saved as text; what isn't a count at all (text
+ * that isn't digits, or a negative) never was one, so there's none to keep.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function migrateRationsToItems(data: any): any {
@@ -827,14 +835,14 @@ function migrateRationsToItems(data: any): any {
 
   const beyond: string[] = [];
   for (const freshness of states) {
-    const saved = wholeAtLeast(counters[freshness], 0, 0);
-    const count = rationCount(counters[freshness]);
+    const saved = rationCount(counters[freshness]);
+    const count = Math.min(saved, MAX_CONVERTED_RATIONS);
     for (let i = 0; i < count; i += 1) {
       data.stowedItems.push(createRationItem(freshness, today, uniqueIn(used, '')));
     }
     if (saved > count) beyond.push(rationCountNote(freshness, saved - count));
   }
-  // Nothing the player had is dropped in silence.
+  // A count too big to turn into items is written down rather than dropped.
   if (beyond.length > 0) {
     const notes = asText(data.otherNotes).trimEnd();
     const block = beyond.join('\n');

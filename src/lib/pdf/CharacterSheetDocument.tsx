@@ -85,6 +85,7 @@ import {
   isStartingBookApplied,
   rankAboveLearnableNote,
 } from '@/lib/character-sheet';
+import { rationStockSummary } from '@/lib/rations';
 import { pluralize, withIndefiniteArticle } from '@/lib/grammar';
 import type { SheetFonts } from './fonts';
 import { breakName, hasCjk } from './line-breaks';
@@ -1599,6 +1600,7 @@ function InventorySection({ c }: { c: Character }) {
   const slotsMode = c.encumbranceMethod === 'slots';
   const { coins } = c;
   const coinCount = pluralize(enc.totalCoinCount, 'coin');
+  const food = rationStockSummary(c);
 
   return (
     <>
@@ -1608,6 +1610,14 @@ function InventorySection({ c }: { c: Character }) {
           <Text style={s.bold}>Encumbrance method: </Text>
           {slotsMode ? 'Slots' : 'Weight'}
         </Text>
+        {/* One row per day's rations can't say which of them have spoiled, so
+            the food gets a line of its own, as it stands when the sheet is made. */}
+        {food ? (
+          <Text style={s.body}>
+            <Text style={s.bold}>Rations: </Text>
+            {food}
+          </Text>
+        ) : null}
         <Caption>Equipped Items</Caption>
       </KeepWithNext>
       {c.equippedItems.length > 0 ? (

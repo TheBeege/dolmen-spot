@@ -6,7 +6,7 @@
 // calculateEncumbrance (character-sheet.ts) counts it without being told about
 // rations at all.
 //
-// Spoilage (Player's Book p116, p186) is measured on the character's lived-time
+// Spoilage (Player's Book p117, p163) is measured on the character's lived-time
 // clock rather than Dolmenwood's calendar, so days spent in Fairy count as days
 // the food was carried, and a corrected Fairy return date can't make food
 // suddenly spoil or come back: src/lib/livedTime.ts explains the clock.
@@ -17,7 +17,7 @@
 // The sheet warns about a ration that has spoiled; it never deletes one. The
 // player decides whether the food is eaten, thrown away or kept, as at a table.
 
-import { RATIONS } from './gamedata';
+import { RATIONS, RATION_FRESHNESS } from './gamedata';
 import { pluralize } from './grammar';
 import { getLivedDays } from './livedTime';
 import { newId } from './ids';
@@ -60,10 +60,10 @@ export function isRationItem(item: InventoryItem): boolean {
 }
 
 /**
- * Every ration the character carries, equipped first, then stowed (in container
- * order, which is the order the Inventory shows them: containers as they were
- * added, loose items last). A character loaded from a save may hold items that
- * aren't well formed, so this only reads what it checks.
+ * Every ration the character carries, equipped first, then stowed, each in the
+ * order it's stored (the Inventory groups the stowed ones by container when it
+ * shows them). A character loaded from a save may hold items that aren't well
+ * formed, so this only reads what it checks.
  */
 export function getRationItems(character: Pick<Character, 'equippedItems' | 'stowedItems'>): InventoryItem[] {
   const equipped = Array.isArray(character.equippedItems) ? character.equippedItems : [];
@@ -159,8 +159,9 @@ export function getRationSpoilage(
 
 /**
  * The ration of this kind that will spoil soonest, which is the one to eat, or
- * null when the character has none of that kind. Ties go to the stowed one, in
- * the order the items are kept.
+ * null when the character has none of that kind. Two acquired on the same day
+ * spoil on the same day, so the first one found wins: the equipped one, and then
+ * the one stored earliest (see getRationItems).
  */
 export function findRationToSpend(
   character: Pick<Character, 'equippedItems' | 'stowedItems'>,
@@ -212,12 +213,14 @@ export function describeRationSpoilage(spoilage: RationSpoilage): string {
 }
 
 /**
- * How long a ration of this kind keeps, in a phrase: "2 months", "1 week",
+ * How long a ration of this kind keeps, in a phrase: "about 2 months", "1 week",
  * "1 day". The rules give months rather than days, so the two-month figure is
- * named rather than counted out.
+ * named rather than counted out, and it says "about" because the sheet counts it
+ * as 60 days: two Dolmenwood months run 56 to 62, so the day countdown beside it
+ * can differ from a calendar's by a couple of days. (RATIONS.keepsDays says why.)
  */
 export function rationShelfLifeLabel(freshness: RationFreshness, dank: boolean): string {
-  if (freshness === 'preserved' && !dank) return '2 months';
+  if (freshness === 'preserved' && !dank) return 'about 2 months';
   const days = dank ? RATIONS[freshness].keepsDaysDank : RATIONS[freshness].keepsDays;
   if (days === 7) return '1 week';
   if (days === 1) return '1 day';
@@ -227,4 +230,23 @@ export function rationShelfLifeLabel(freshness: RationFreshness, dank: boolean):
 /** How long this ration keeps under the conditions that apply to it. */
 export function describeRationShelfLife(spoilage: RationSpoilage): string {
   return rationShelfLifeLabel(spoilage.freshness, spoilage.dank);
+}
+
+/**
+ * The character's food in a line, for the printed sheet, which prints one row
+ * per item and no spoilage: "3 fresh, 2 preserved (1 spoiled)". Null when the
+ * character carries none. The kinds come out in the order the sheet offers them,
+ * and a kind with none is left out.
+ */
+export function rationStockSummary(
+  character: Pick<Character, 'equippedItems' | 'stowedItems' | 'currentDate' | 'fairyVisits' | 'dankConditions'>,
+): string | null {
+  const items = getRationItems(character);
+  if (items.length === 0) return null;
+  const counts = countRations(items);
+  const kinds = RATION_FRESHNESS.filter((freshness) => counts[freshness] > 0)
+    .map((freshness) => `${counts[freshness]} ${freshness}`)
+    .join(', ');
+  const spoiled = items.filter((item) => getRationSpoilage(character, item)?.spoiled).length;
+  return spoiled > 0 ? `${kinds} (${spoiled} spoiled)` : kinds;
 }

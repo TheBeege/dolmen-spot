@@ -759,6 +759,8 @@ export default function Adventuring({ character, onChange, onOpenJournal }: Adve
             <span className="block text-[#a1988f] text-xs">
               Fresh rations keep {pluralize(RATIONS.fresh.keepsDaysDank, 'day')} and preserved ones{' '}
               {pluralize(RATIONS.preserved.keepsDaysDank, 'day')}, instead of 1 week and 2 months.
+              Spoilage is worked out from where the food is kept now, so clearing this marks it
+              edible again.
             </span>
           </span>
         </label>

@@ -2,7 +2,7 @@
 // items (src/lib/rations.ts): a day's rations is fresh or preserved, and it is
 // stamped with the lived day it was acquired on, which spoilage counts from.
 //
-// The rules (Player's Book p116, p186): fresh rations keep 1 week, preserved
+// The rules (Player's Book p117, p163): fresh rations keep 1 week, preserved
 // ones 2 months, or 1 day and 1 week in dank conditions. The calendar and the
 // lived-time clock are in src/lib/livedTime.ts. Run with `npm test`.
 import { describe, test } from 'node:test';
@@ -21,6 +21,7 @@ import {
   rationItemFields,
   rationSlots,
   rationSpoilage,
+  rationStockSummary,
   rationWeight,
   removeOneRation,
   todayLivedDay,
@@ -45,7 +46,7 @@ const preserved = (acquiredLivedDay: number): InventoryItem => createRationItem(
 describe('a day\'s rations is an item with the rules\' slots and weight', () => {
   test('fresh takes 1 slot, preserved 2, and both weigh 20 coins', () => {
     // Player's Book p116: "Rations (preserved, 1 day) | 2 | 20" and
-    // "Rations (fresh, 1 day) | 1 | 20"; the slots table on p171 agrees.
+    // "Rations (fresh, 1 day) | 1 | 20".
     assert.deepEqual(rationItemFields('fresh'), { name: 'Rations (fresh, 1 day)', slots: 1, weight: 20 });
     assert.deepEqual(rationItemFields('preserved'), { name: 'Rations (preserved, 1 day)', slots: 2, weight: 20 });
     assert.equal(RATIONS.fresh.slots, 1);
@@ -183,7 +184,7 @@ describe('the calendar crossing a month and a year', () => {
     assert.equal(rationSpoilage('preserved', acquiredLivedDay, today, true).spoiled, true, 'a week in dank spoils it');
   });
 
-  test('a year ending doesn\'t reset the count: a week either side of it ages by 7 days', () => {
+  test('a year ending doesn\'t reset the count: 8 days either side of it age by 8', () => {
     // Braghold is the last month, 30 days: 25 Braghold to 3 Grimvold of year 2.
     const acquired = { day: 25, month: 11, year: 1 };
     const later = { day: 3, month: 0, year: 2 };
@@ -257,7 +258,9 @@ describe('a ration\'s spoilage, and the character\'s conditions', () => {
       describeRationShelfLife(rationSpoilage(freshness, 0, 0, dank));
     assert.equal(life('fresh', false), '1 week');
     assert.equal(life('fresh', true), '1 day');
-    assert.equal(life('preserved', false), '2 months');
+    // Two Dolmenwood months run 56 to 62 days and the sheet counts 60, so the
+    // label says "about" beside the day countdown it sits next to.
+    assert.equal(life('preserved', false), 'about 2 months');
     assert.equal(life('preserved', true), '1 week');
   });
 });
@@ -284,6 +287,19 @@ describe('counting and spending rations', () => {
     assert.equal(rationWeight(items), 4 * 20);
   });
 
+  test('two that spoil on the same day: the equipped one goes first', () => {
+    const tied: Character = {
+      ...livedDaysLater(2, {
+        equippedItems: [{ ...fresh(0), id: 'equipped' }],
+        stowedItems: [{ ...fresh(0), id: 'stowed' }],
+      }),
+    };
+    assert.deepEqual(getRationItems(tied).map((item) => item.id), ['equipped', 'stowed']);
+    assert.equal(findRationToSpend(tied, 'fresh')?.id, 'equipped');
+    const after = removeOneRation(tied.equippedItems, tied.stowedItems, 'fresh');
+    assert.deepEqual({ equipped: after.equippedItems.length, stowed: after.stowedItems.map((i) => i.id) }, { equipped: 0, stowed: ['stowed'] });
+  });
+
   test('eating one takes the one that would spoil soonest', () => {
     // Fresh: acquired on lived days 9, 2 and 5; oldest is day 2.
     assert.equal(findRationToSpend(character, 'fresh')?.ration?.acquiredLivedDay, 2);
@@ -302,6 +318,20 @@ describe('counting and spending rations', () => {
     assert.deepEqual(removeOneRation([], [], 'fresh'), { equippedItems: [], stowedItems: [] });
     const untouched = removeOneRation(onlyOne.equippedItems, onlyOne.stowedItems, 'fresh');
     assert.deepEqual(untouched.stowedItems, onlyOne.stowedItems);
+  });
+
+  test('the stock reads as a line for the printed sheet, with what has spoiled', () => {
+    // Today is lived day 10. One day's rations was acquired on day 0, the rest
+    // on day 9: in ordinary conditions only the day-0 fresh one has spoiled (a
+    // week), and in dank conditions everything has (a day, and a week preserved).
+    const mixed: Character = livedDaysLater(10, {
+      stowedItems: [fresh(0), fresh(9), fresh(9), preserved(0)],
+    });
+    assert.equal(rationStockSummary(mixed), '3 fresh, 1 preserved (1 spoiled)');
+    assert.equal(rationStockSummary({ ...mixed, dankConditions: true }), '3 fresh, 1 preserved (4 spoiled)', 'in dank conditions all four have spoiled');
+    assert.equal(rationStockSummary(livedDaysLater(0, { stowedItems: [preserved(0)] })), '1 preserved');
+    assert.equal(rationStockSummary(livedDaysLater(0, { stowedItems: [] })), null);
+    assert.equal(rationStockSummary(livedDaysLater(0, { stowedItems: [{ id: 'rope', name: 'Rope', slots: 1, weight: 200, notes: '', equipped: false }] })), null);
   });
 
   test('an empty character has nothing to eat, and so does one with only the other kind', () => {

@@ -3,7 +3,7 @@
 // fresh (1 slot) or preserved (2 slots, both weighing 20 coins), and it carries
 // the lived day it was acquired on, which is what its spoilage counts from. The
 // rules: fresh keeps 1 week, preserved 2 months, or 1 day and 1 week in dank
-// conditions (Player's Book p116, p186).
+// conditions (Player's Book p117, p163).
 //
 // The counters on Adventuring still count days' rations, but each + makes an
 // item and each − eats the one that would spoil soonest, so the Inventory shows
@@ -22,13 +22,10 @@ import { FIXTURES, loadFixture, openApp, openTab, seedCharacters, settle, tabBar
 import { findA11yProblems } from './support/a11y';
 import { findLayoutProblems } from './support/layout';
 import { newProblems } from './known-issues';
-import { expect, test, viewportAt } from './support/test';
+import { expect, test, viewportAt, WIDTHS } from './support/test';
 
 const ADVENTURING = TABS.find((tab) => tab.id === 'calendar')!;
 const INVENTORY = TABS.find((tab) => tab.id === 'inventory')!;
-
-/** The widths this spec checks the two tabs' layout and accessibility at. */
-const CHECK_WIDTHS = [320, 1280] as const;
 
 /** One of the rations card's two cells, by its kind. */
 function rationCell(page: Page, kind: 'Fresh' | 'Preserved') {
@@ -40,9 +37,13 @@ function rationTotals(page: Page) {
   return page.getByText(/^\d+ rations? · \d+ slots? · \d+ wt$/);
 }
 
-/** The Stowed Slots row of the Inventory's encumbrance summary, which counts the rations' slots. */
+/**
+ * The number in the Inventory's "Stowed Slots (items)" row, which counts the
+ * rations' slots. The row's own text is "Stowed Slots (items):24", so this reads
+ * the value cell and can be asserted whole: "24" wouldn't pass on "240".
+ */
 function stowedSlots(page: Page) {
-  return page.getByText('Stowed Slots (items):').locator('..');
+  return page.getByText('Stowed Slots (items):').locator('..').locator('span').last();
 }
 
 /** The Inventory's ration rows, found by the kind each one offers. */
@@ -96,7 +97,7 @@ test("the counter card counts the character's ration items, and the Inventory li
   await expect(rationKinds(page)).toHaveCount(8);
   // Their 14 slots are in the encumbrance summary's 24: the rest of the pack
   // (books, bedroll, rope and so on) takes the other 10.
-  await expect(stowedSlots(page)).toContainText('24');
+  await expect(stowedSlots(page)).toHaveText('24');
 });
 
 test('adding a ration makes one item, with the slots and weight the rules give it', async ({ page }) => {
@@ -118,7 +119,7 @@ test('adding a ration makes one item, with the slots and weight the rules give i
   // The same two items are on the Inventory tab, and the encumbrance counts them.
   await openTab(page, INVENTORY);
   await expect(rationKinds(page)).toHaveCount(2);
-  await expect(stowedSlots(page)).toContainText('3');
+  await expect(stowedSlots(page)).toHaveText('3');
   await expect(page.getByText('7 days left', { exact: true })).toBeVisible();
   await expect(page.getByText('60 days left', { exact: true })).toBeVisible();
 });
@@ -200,7 +201,7 @@ test('a spoiled ration is marked, not taken away', async ({ page }) => {
   await expect(page.getByText('Spoiled 3 days ago', { exact: true })).toBeVisible();
   // Still there, still counted: a warning is not a deletion.
   await expect(rationKinds(page)).toHaveCount(1);
-  await expect(stowedSlots(page)).toContainText('1');
+  await expect(stowedSlots(page)).toHaveText('1');
 
   // A preserved one from the same day still has its 2 months.
   await openTab(page, ADVENTURING);
@@ -213,11 +214,11 @@ test('a spoiled ration is marked, not taken away', async ({ page }) => {
 test('a ration can change kind, and its slots follow the rules', async ({ page }) => {
   await openCharacter(page, { ...loadFixture(FIXTURES.default), stowedItems: [createRationItem('fresh', 0, 'swapped')] });
   await openTab(page, INVENTORY);
-  await expect(stowedSlots(page)).toContainText('1');
+  await expect(stowedSlots(page)).toHaveText('1');
 
   await page.getByRole('combobox', { name: /^Kind of / }).selectOption('preserved');
   // A day's preserved rations take 2 slots, so the summary says so at once.
-  await expect(stowedSlots(page)).toContainText('2');
+  await expect(stowedSlots(page)).toHaveText('2');
   await openTab(page, ADVENTURING);
   await expect(rationCell(page, 'Preserved').getByText('1', { exact: true })).toBeVisible();
   await expect(rationTotals(page)).toHaveText('1 ration · 2 slots · 20 wt');
@@ -245,7 +246,10 @@ test('a new character has no rations, and none are invented for it', async ({ pa
   await expect(rationKinds(page)).toHaveCount(0);
 });
 
-for (const width of CHECK_WIDTHS) {
+// Every width the layout tests use: the two tabs are opened by a spec here, in
+// states the suite's own layout and accessibility tests never see (a spoiled
+// ration, a damp pack), and the fixtures with rations have 8 and 4 rows of them.
+for (const width of WIDTHS) {
   test.describe(`at ${width}px`, () => {
     test.use({ viewport: viewportAt(width) });
 
