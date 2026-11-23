@@ -30,13 +30,19 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { findSpell, getSpellSummary } from '@/lib/gamedata';
-import { HOVER_CARD_MARGIN, placeHoverCard, union, type Box } from '@/lib/hover-card';
+import { HOVER_CARD_MARGIN, intersects, placeHoverCard, roomAround, union, type Box, type Point } from '@/lib/hover-card';
 import type { SpellSummary, SpellType } from '@/lib/types';
 
 /** How long the pointer rests on a spell before its card appears, so a pointer passing over doesn't flash cards. */
 const SHOW_DELAY_MS = 250;
 /** How long the card stays after the pointer leaves the spell, the card and the space between them. */
 const HIDE_DELAY_MS = 150;
+/**
+ * The shortest a card is made when the room above or below its row is what it
+ * has to fit in: less than this scrolls too much to read. In rem, so it grows
+ * with the player's font size.
+ */
+const MIN_CARD_HEIGHT_REM = 8;
 
 const summaryTextClasses = 'text-xs leading-snug text-[#f5e6c8]/90 border-l-2 border-[#c4a35a]/60 pl-2';
 
@@ -116,13 +122,15 @@ let dismissShownCard: (() => void) | null = null;
  * the button and card keep full contrast. `context` says where the button is
  * ("known", "reference"), so screen readers can tell apart the buttons for the
  * same spell in different lists. Mark the element around a list of these with
- * `data-spell-list`, and the card keeps off the list's spells where it can;
- * `data-spell-list="whole"` keeps it off the whole element, for a menu. Mark
- * a row with `data-spell-row`, and the card keeps clear of the row's
- * controls whenever it has anywhere else to go. Of `data-spell-list`, only the
- * value `whole` means anything; every other value gets the default. Of
- * `data-spell-row`, only the attribute's presence matters, so its value is
- * free for the markup to name the row by (`data-spell-row="known"`).
+ * `data-spell-list`, and the card keeps off the list's spells where it can.
+ * `data-spell-list="whole"` keeps it off the whole element, for a menu: it goes
+ * beside the menu where there's room, and just past its end where there isn't,
+ * so the menu's rows stay reachable. Mark a row with `data-spell-row`, and the
+ * card keeps clear of the row's controls whenever it has anywhere else to go.
+ * Of `data-spell-list`, only the value `whole` means anything; every other
+ * value gets the default. Of `data-spell-row`, only the attribute's presence
+ * matters, so its value is free for the markup to name the row by
+ * (`data-spell-row="known"`).
  */
 export const SpellInfo = memo(function SpellInfo({
   spellType,
@@ -408,14 +416,35 @@ function HoverCard({
       if (!topmost || !anchor.contains(topmost)) return;
       const root = document.documentElement;
       const area = { left: 0, top: stickyHeaderBottom(), right: root.clientWidth, bottom: root.clientHeight };
-      card.style.maxHeight = `${Math.max(0, area.bottom - area.top - 2 * HOVER_CARD_MARGIN)}px`;
-      const size = { width: card.offsetWidth, height: card.offsetHeight };
-      const { left, top } = placeHoverCard(box, size, area, { avoid: spellListObstacles(anchor), keepClear: rowControls(anchor) });
-      card.style.left = `${left}px`;
-      card.style.top = `${top}px`;
+      const surroundings = { ...spellListObstacles(anchor), keepClear: rowControls(anchor) };
+      const fullCap = Math.max(0, area.bottom - area.top - 2 * HOVER_CARD_MARGIN);
+      const sizeOf = () => ({ width: card.offsetWidth, height: card.offsetHeight });
+      const boxAt = (point: Point): Box => {
+        const size = sizeOf();
+        return { left: point.left, top: point.top, right: point.left + size.width, bottom: point.top + size.height };
+      };
+
+      card.style.maxHeight = `${fullCap}px`;
+      let point = placeHoverCard(box, sizeOf(), area, surroundings);
+
+      // A card that would cover its own row goes above or below it instead,
+      // capped to whichever of the two has more room (it scrolls, so this only
+      // makes it shorter): the row's Cast, Prep and Notes stay reachable.
+      const { keepClear = [] } = surroundings;
+      if (keepClear.some((control) => intersects(boxAt(point), control))) {
+        const room = roomAround(keepClear.reduce(union, box), area);
+        const cap = Math.min(fullCap, Math.max(room.above, room.below, MIN_CARD_HEIGHT_REM * rootFontSize()));
+        if (cap > 0 && cap < fullCap) {
+          card.style.maxHeight = `${cap}px`;
+          point = placeHoverCard(box, sizeOf(), area, surroundings);
+        }
+      }
+
+      card.style.left = `${point.left}px`;
+      card.style.top = `${point.top}px`;
       card.style.visibility = 'visible';
       const spellBox = anchor.closest('[data-spell-info]')?.getBoundingClientRect() ?? box;
-      onPlace(union(spellBox, { left, top, right: left + size.width, bottom: top + size.height }));
+      onPlace(union(spellBox, boxAt(point)));
     };
     place();
     window.addEventListener('scroll', place, true);
@@ -454,14 +483,22 @@ function stickyHeaderBottom(): number {
   return Math.max(0, header.getBoundingClientRect().bottom);
 }
 
-// What the card should keep off where it can: every spell (name and button)
-// in the anchor's list, or the whole list when it's marked
-// data-spell-list="whole".
-function spellListObstacles(anchor: Element): Box[] {
+/** The browser's default font size in px, which every rem in the sheet is a multiple of. */
+function rootFontSize(): number {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+}
+
+// What the card should keep off where it can: every spell (name and button) in
+// the anchor's list. A list marked data-spell-list="whole" (the Memorise menu)
+// is one box it keeps off instead. Either way the list itself is passed too,
+// so the card can step past its end rather than cover its rows, whose buttons
+// are how the next spell is reached.
+function spellListObstacles(anchor: Element): { avoid: Box[]; list?: Box; outside?: Box } {
   const list = anchor.closest<HTMLElement>('[data-spell-list]');
-  if (!list) return [];
-  if (list.dataset.spellList === 'whole') return [list.getBoundingClientRect()];
-  return visibleBoxes(list.querySelectorAll('[data-spell-info]'));
+  if (!list) return { avoid: [] };
+  const box = list.getBoundingClientRect();
+  if (list.dataset.spellList === 'whole') return { avoid: [box], outside: box };
+  return { avoid: visibleBoxes(list.querySelectorAll('[data-spell-info]')), list: box };
 }
 
 // What the card must keep clear of whenever it can go anywhere else: the

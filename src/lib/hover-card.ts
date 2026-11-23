@@ -29,6 +29,21 @@ export interface Surroundings {
    * these as well.
    */
   keepClear?: readonly Box[];
+  /**
+   * The list the anchor is in. When nothing beside the anchor, above it or
+   * below it is clear of `avoid`, the card steps just past the nearer end of
+   * this box rather than over the list, as long as that keeps it near the
+   * anchor: the rows it would otherwise cover are the buttons the pointer has
+   * to be able to reach.
+   */
+  list?: Box;
+  /**
+   * A box the card keeps off entirely: a list too small or too narrow to go
+   * beside, such as the Memorise menu, whose every row is a button the pointer
+   * walks down. Nowhere clear nearer, the card goes just past it, above or
+   * below, however far that is; such a box is small by nature.
+   */
+  outside?: Box;
 }
 
 /** Space between the card and its anchor, or anything it steps past. */
@@ -50,10 +65,16 @@ export const intersects = (a: Box, b: Box) =>
  * with its left edge), then to its left and above or below it lined up with
  * its right edge. It takes the first of those that covers nothing in `avoid`;
  * failing that, the first that can slide sideways clear of it, rightwards
- * for the first four and leftwards for the rest; failing that, the one that
- * covers the least of it.
+ * for the first four and leftwards for the rest; failing that, just past the
+ * nearer end of `list`, as long as that leaves it within twice its own height
+ * of the anchor; failing that, the one that covers the least of it.
  */
-export function placeHoverCard(anchor: Box, card: Size, area: Box, { avoid = [], keepClear = [] }: Surroundings = {}): Point {
+export function placeHoverCard(
+  anchor: Box,
+  card: Size,
+  area: Box,
+  { avoid = [], keepClear = [], list, outside }: Surroundings = {},
+): Point {
   const minLeft = area.left + HOVER_CARD_MARGIN;
   const minTop = area.top + HOVER_CARD_MARGIN;
   const maxLeft = area.right - HOVER_CARD_MARGIN - card.width;
@@ -87,7 +108,7 @@ export function placeHoverCard(anchor: Box, card: Size, area: Box, { avoid = [],
   ] as const).filter(([p]) => fits(p));
 
   // Nowhere clear of the anchor's row: place it as if the row had no controls.
-  if (places.length === 0 && keepClear.length > 0) return placeHoverCard(anchor, card, area, { avoid });
+  if (places.length === 0 && keepClear.length > 0) return placeHoverCard(anchor, card, area, { avoid, list, outside });
 
   const clear = places.find(([p]) => covered(p).length === 0);
   if (clear) return clear[0];
@@ -108,6 +129,25 @@ export function placeHoverCard(anchor: Box, card: Size, area: Box, { avoid = [],
     const slid = slide(p, direction);
     if (slid) return slid;
   }
+
+  // Nowhere beside the anchor that is clear. Step past the nearer end of the
+  // box instead of over it, so the rows there stay reachable: always for a box
+  // the card must keep off (a menu), and for the anchor's own list while that
+  // leaves the card near it. Past a long list's far end the card would be
+  // nowhere in particular, so covering the fewest is better there.
+  const pastEnd = (box: Box, reach: number): Point | null => {
+    const ends = [
+      { top: box.top - HOVER_CARD_GAP - card.height, distance: band.top - box.top + HOVER_CARD_GAP },
+      { top: box.bottom + HOVER_CARD_GAP, distance: box.bottom - band.bottom + HOVER_CARD_GAP },
+    ].sort((a, b) => a.distance - b.distance);
+    for (const end of ends) {
+      const p = { left: fromLeftEdge, top: end.top };
+      if (end.distance <= reach && inArea(p) && !intersects(boxAt(p), box)) return p;
+    }
+    return null;
+  };
+  const past = (outside && pastEnd(outside, Infinity)) || (list && pastEnd(list, 2 * card.height));
+  if (past) return past;
 
   if (places.length > 0) {
     let [best] = places[0];
@@ -132,6 +172,19 @@ export function union(a: Box, b: Box): Box {
     top: Math.min(a.top, b.top),
     right: Math.max(a.right, b.right),
     bottom: Math.max(a.bottom, b.bottom),
+  };
+}
+
+/**
+ * The room a card has directly above and directly below `band` (an anchor's row)
+ * within `area`: what is left of the area once the gap it keeps from the band
+ * and the margin it keeps from the area's edge are taken off. Both can be
+ * negative, for a band against an edge.
+ */
+export function roomAround(band: Box, area: Box): { above: number; below: number } {
+  return {
+    above: band.top - HOVER_CARD_GAP - (area.top + HOVER_CARD_MARGIN),
+    below: area.bottom - HOVER_CARD_MARGIN - (band.bottom + HOVER_CARD_GAP),
   };
 }
 

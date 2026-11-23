@@ -2261,7 +2261,13 @@ const SpellReference = memo(function SpellReference({
       {open && (
         <div data-spell-list="" className="bg-[#1a1a2e] rounded p-3 mt-1 text-sm">
           {Array.from({ length: maxRank }, (_, i) => i + 1).map((rank) => (
-            <div key={rank} className="mb-2">
+            // A column narrower than the card, leaving it a lane of its own on
+            // the right: otherwise the card has to cover a row of names
+            // wherever it goes, and those names' buttons are how the reference
+            // is read. 21rem is the card's widest (20rem) plus the gap and
+            // margin it keeps, and 8rem stops the floor squeezing the names to
+            // nothing on a narrow window, where there's no lane anyway.
+            <div key={rank} className="mb-2 max-w-[max(8rem,calc(100%_-_21rem))]">
               <div className="text-[#c4a35a] font-semibold text-xs mb-1">Rank {rank}</div>
               {/* An open summary takes a line of its own, under its spell. */}
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[#f5e6c8]/80 text-xs">
