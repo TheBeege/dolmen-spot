@@ -759,8 +759,14 @@ const MAX_CONVERTED_RATIONS = 999;
  * converts and notes the rest.
  */
 function rationCount(value: unknown): number {
-  const spelled = typeof value === 'string' && /^\s*\d+\s*$/.test(value) ? Number(value) : value;
-  return wholeAtLeast(spelled, 0, 0);
+  if (typeof value === 'string' && /^\s*\d+\s*$/.test(value)) {
+    const spelled = Number(value);
+    // Digits can spell more than a number holds (a 400-digit count): that's a
+    // count still, so it goes down the cap-and-note path rather than vanishing
+    // the way an unreadable value would.
+    return Number.isFinite(spelled) ? Math.max(0, Math.floor(spelled)) : Number.MAX_SAFE_INTEGER;
+  }
+  return wholeAtLeast(value, 0, 0);
 }
 
 /** The note Other Notes gets for the rations a counter held beyond what was converted. */
@@ -785,15 +791,15 @@ function rationCountNote(freshness: RationFreshness, beyond: number): string {
  * which nothing in an old save records.
  *
  * A pack may also hold a plain item the catalog made before this version, named
- * "Rations (preserved, 1 day)" or "Rations (fresh, 1 day)" and with the catalog's
- * slots (1 for a preserved day, where the rules say 2). Those become ration items
- * too, on the same terms (the rules' slots and weight, acquired today), so an old
- * character's food spoils and weighs as the rest does instead of sitting in the
- * pack as inert gear. Only an item that is no kind of its own and whose name is
- * one of the two, case and surrounding spaces aside, is touched: it takes the
- * sheet's spelling of the name (so " RATIONS (FRESH, 1 DAY) " becomes "Rations
- * (fresh, 1 day)"), the rules' slots and weight and the new state, and keeps its
- * id, its place, its notes and its equipment.
+ * "Rations (preserved, 1 day)" or "Rations (fresh, 1 day)". Those become ration
+ * items too, on the same terms (the rules' slots and weight, acquired today), so
+ * an old character's food spoils like the rest instead of sitting in the pack as
+ * inert gear. Only an item that is no kind of its own — no kind at all, not null
+ * or an empty string either — and whose name is one of the two, case and
+ * surrounding spaces aside, is touched: it takes the sheet's spelling of the name
+ * (so " RATIONS (FRESH, 1 DAY) " becomes "Rations (fresh, 1 day)"), the rules'
+ * slots and weight and the new state, and keeps its id, its place, its notes and
+ * its equipment.
  *
  * The old `rations` field is removed, as its meaning now lives on the items.
  * A save with no rations, or with none of a kind, is left as it was apart from
@@ -824,7 +830,10 @@ function migrateRationsToItems(data: any): any {
   for (const items of [data.equippedItems, data.stowedItems]) {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
-      if (!isPlainObject(item) || item.kind !== undefined) continue;
+      if (!isPlainObject(item)) continue;
+      // No kind at all: absent, null or an empty string, all of which mean "no kind".
+      const kind = item.kind;
+      if (kind !== undefined && kind !== null && kind !== '') continue;
       const freshness = byName.get(asText(item.name).trim().toLowerCase());
       if (!freshness) continue;
       Object.assign(item, rationItemFields(freshness));
@@ -906,14 +915,18 @@ function sanitizeJournalEntries(data: any): void {
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 function sanitizeInventoryItems(data: any): void {
-  const today = livedDayNow(data);
+  // Working out the lived day walks the character's dates, Fairy visits and
+  // journal, so it's done at most once, and only when a ration has no usable
+  // acquisition day of its own.
+  let today: number | null = null;
+  const livedDay = () => (today ??= livedDayNow(data));
   for (const items of [data.equippedItems, data.stowedItems]) {
     if (!Array.isArray(items)) continue;
     for (const item of items) {
       if (!isPlainObject(item)) continue;
       if (item.kind === 'shard') item.shard = sanitizeShard(item.shard);
       if (item.kind === 'ration') {
-        item.ration = sanitizeRation(item.ration, today);
+        item.ration = sanitizeRation(item.ration, livedDay);
         Object.assign(item, rationItemFields(item.ration.freshness));
       }
     }
@@ -925,14 +938,15 @@ function sanitizeInventoryItems(data: any): void {
  * the shorter-lived of the two), and the lived day it was acquired on. That day
  * is what spoilage counts from, and a save with none can't mean "the start of
  * the world" without spoiling the food at once, so it becomes today: the ration
- * is kept and counted as fresh food, not thrown away.
+ * is kept and counted as fresh food, not thrown away. `todayLivedDay` is asked
+ * for only when it's needed, as working it out isn't free.
  */
-function sanitizeRation(value: unknown, today: number): RationState {
+function sanitizeRation(value: unknown, todayLivedDay: () => number): RationState {
   const r = (isPlainObject(value) ? value : {}) as Record<string, unknown>;
   const freshness: RationFreshness = r.freshness === 'preserved' ? 'preserved' : 'fresh';
   const day = typeof r.acquiredLivedDay === 'number' && Number.isFinite(r.acquiredLivedDay)
     ? Math.max(0, Math.floor(r.acquiredLivedDay))
-    : today;
+    : todayLivedDay();
   return withExtraFields({ freshness, acquiredLivedDay: day }, r);
 }
 

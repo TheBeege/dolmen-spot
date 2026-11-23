@@ -44,15 +44,19 @@ const fresh = (acquiredLivedDay: number): InventoryItem => createRationItem('fre
 const preserved = (acquiredLivedDay: number): InventoryItem => createRationItem('preserved', acquiredLivedDay, 'r-preserved');
 
 describe('a day\'s rations is an item with the rules\' slots and weight', () => {
-  test('fresh takes 1 slot, preserved 2, and both weigh 20 coins', () => {
-    // Player's Book p116: "Rations (preserved, 1 day) | 2 | 20" and
-    // "Rations (fresh, 1 day) | 1 | 20".
+  test('either kind takes 1 slot and weighs 20 coins', () => {
+    // Player's Book p116 gives cost and weight: "Rations (preserved, 1 day) | 2
+    // | 20" is 2 gp and 20 coins of weight, and "Rations (fresh, 1 day) | 1 | 20"
+    // is 1 gp and 20. Slots come from the item slot costs (08-adventuring): a
+    // general item takes 1, and a day's rations isn't one of the bulky ones.
     assert.deepEqual(rationItemFields('fresh'), { name: 'Rations (fresh, 1 day)', slots: 1, weight: 20 });
-    assert.deepEqual(rationItemFields('preserved'), { name: 'Rations (preserved, 1 day)', slots: 2, weight: 20 });
+    assert.deepEqual(rationItemFields('preserved'), { name: 'Rations (preserved, 1 day)', slots: 1, weight: 20 });
     assert.equal(RATIONS.fresh.slots, 1);
-    assert.equal(RATIONS.preserved.slots, 2);
+    assert.equal(RATIONS.preserved.slots, 1);
     assert.equal(RATIONS.fresh.weight, 20);
     assert.equal(RATIONS.preserved.weight, 20);
+    assert.equal(RATIONS.fresh.cost, 1);
+    assert.equal(RATIONS.preserved.cost, 2);
   });
 
   test('a new ration is a stowed item of kind \'ration\', acquired on the day given', () => {
@@ -60,7 +64,7 @@ describe('a day\'s rations is an item with the rules\' slots and weight', () => 
     assert.deepEqual(item, {
       id: 'id-1',
       name: 'Rations (preserved, 1 day)',
-      slots: 2,
+      slots: 1,
       weight: 20,
       notes: '',
       equipped: false,
@@ -283,7 +287,7 @@ describe('counting and spending rations', () => {
   test('they are counted by kind, and their slots and weight totalled', () => {
     const items = getRationItems(character);
     assert.deepEqual(countRations(items), { fresh: 3, preserved: 1 });
-    assert.equal(rationSlots(items), 3 * 1 + 2);
+    assert.equal(rationSlots(items), 4, 'one slot each, fresh or preserved');
     assert.equal(rationWeight(items), 4 * 20);
   });
 

@@ -50,9 +50,10 @@ export interface ShardState {
 
 // A day's rations (an item of kind 'ration'). Its slots, weight and shelf life
 // come from RATIONS (gamedata.ts): the rules give them, so the item doesn't
-// carry a player's own numbers, and loading stamps them from the state.
+// carry a player's own numbers, and loading stamps them from the state. A day's
+// rations is a general item, so either kind takes 1 slot.
 export interface RationState {
-  freshness: RationFreshness; // fresh: 1 slot; preserved: 2 slots
+  freshness: RationFreshness; // fresh or preserved: 1 slot either way, and the shelf life differs
   // The lived day the ration was acquired (see src/lib/livedTime.ts), which is
   // what spoilage is measured from: it survives the calendar moving, a Fairy
   // visit, and a corrected return date unchanged.

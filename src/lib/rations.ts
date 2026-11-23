@@ -1,10 +1,10 @@
 // Rations as inventory items, and when they spoil.
 //
 // A day's rations is one inventory item of kind 'ration' (InventoryItem.ration):
-// fresh or preserved, and stamped with the lived day it was acquired on. Because
-// it's an ordinary item, it carries slots and weight like any other, and
-// calculateEncumbrance (character-sheet.ts) counts it without being told about
-// rations at all.
+// fresh or preserved, and stamped with the lived day it was acquired on. It's a
+// general item, so it takes 1 slot and weighs 20 coins (a preserved day also
+// costs 2 gp rather than 1). Because it's an ordinary item, calculateEncumbrance
+// (character-sheet.ts) counts it without being told about rations at all.
 //
 // Spoilage (Player's Book p117, p163) is measured on the character's lived-time
 // clock rather than Dolmenwood's calendar, so days spent in Fairy count as days
@@ -161,7 +161,7 @@ export function getRationSpoilage(
  * The ration of this kind that will spoil soonest, which is the one to eat, or
  * null when the character has none of that kind. Two acquired on the same day
  * spoil on the same day, so the first one found wins: the equipped one, and then
- * the one stored earliest (see getRationItems).
+ * the one that comes first in the stowed list (see getRationItems).
  */
 export function findRationToSpend(
   character: Pick<Character, 'equippedItems' | 'stowedItems'>,
@@ -222,10 +222,12 @@ export function describeRationSpoilage(spoilage: RationSpoilage): string {
 export function rationShelfLifeLabel(freshness: RationFreshness, dank: boolean): string {
   if (freshness === 'preserved' && !dank) return 'about 2 months';
   const days = dank ? RATIONS[freshness].keepsDaysDank : RATIONS[freshness].keepsDays;
-  if (days === 7) return '1 week';
-  if (days === 1) return '1 day';
-  return `${days} days`;
+  // The guard is for a shelf life the rules don't give today: one that isn't a
+  // week or a day reads as its count of days.
+  return RATION_SHELF_LIFE_LABELS[days] ?? pluralize(days, 'day');
 }
+
+const RATION_SHELF_LIFE_LABELS: Partial<Record<number, string>> = { 1: '1 day', 7: '1 week' };
 
 /** How long this ration keeps under the conditions that apply to it. */
 export function describeRationShelfLife(spoilage: RationSpoilage): string {

@@ -10,10 +10,10 @@
 // the same food, the encumbrance summary counts its slots, and a spoiled ration
 // is marked rather than removed.
 //
-// The fixture with rations is kitchen-sink: 2 fresh (1 slot each) and 6
-// preserved (2 slots each), 14 slots in all. One of the preserved ones was a
-// plain item from the catalog before rations were items, which the migration
-// takes over too.
+// The fixture with rations is kitchen-sink: 2 fresh and 6 preserved days'
+// rations, 1 slot each (a day's rations is a general item), 8 slots in all. One
+// of the preserved ones was a plain item from the catalog before rations were
+// items, which the migration takes over too.
 import type { Page } from '@playwright/test';
 import { addDays } from '../src/lib/gamedata';
 import { createRationItem } from '../src/lib/rations';
@@ -91,13 +91,13 @@ test("the counter card counts the character's ration items, and the Inventory li
 
   await expect(rationCell(page, 'Fresh').getByText('2', { exact: true })).toBeVisible();
   await expect(rationCell(page, 'Preserved').getByText('6', { exact: true })).toBeVisible();
-  await expect(rationTotals(page)).toHaveText('8 rations · 14 slots · 160 wt');
+  await expect(rationTotals(page)).toHaveText('8 rations · 8 slots · 160 wt');
 
   await openTab(page, INVENTORY);
   await expect(rationKinds(page)).toHaveCount(8);
-  // Their 14 slots are in the encumbrance summary's 24: the rest of the pack
+  // Their 8 slots are in the encumbrance summary's 18: the rest of the pack
   // (books, bedroll, rope and so on) takes the other 10.
-  await expect(stowedSlots(page)).toHaveText('24');
+  await expect(stowedSlots(page)).toHaveText('18');
 });
 
 test('adding a ration makes one item, with the slots and weight the rules give it', async ({ page }) => {
@@ -113,13 +113,13 @@ test('adding a ration makes one item, with the slots and weight the rules give i
 
   await page.getByRole('button', { name: "Add a day's preserved rations" }).click();
   await expect(rationCell(page, 'Preserved').getByText('1', { exact: true })).toBeVisible();
-  await expect(rationTotals(page)).toHaveText('2 rations · 3 slots · 40 wt');
+  await expect(rationTotals(page)).toHaveText('2 rations · 2 slots · 40 wt');
   await expect(rationCell(page, 'Preserved')).toContainText('60 days left');
 
   // The same two items are on the Inventory tab, and the encumbrance counts them.
   await openTab(page, INVENTORY);
   await expect(rationKinds(page)).toHaveCount(2);
-  await expect(stowedSlots(page)).toHaveText('3');
+  await expect(stowedSlots(page)).toHaveText('2');
   await expect(page.getByText('7 days left', { exact: true })).toBeVisible();
   await expect(page.getByText('60 days left', { exact: true })).toBeVisible();
 });
@@ -167,7 +167,7 @@ test('dank storage shortens the time a ration keeps, on the card and in the Inve
   await openCharacter(page, character);
   await openTab(page, ADVENTURING);
   // Out of dank conditions: a week for fresh rations, 2 months for preserved.
-  await expect(rationTotals(page)).toHaveText('2 rations · 3 slots · 40 wt');
+  await expect(rationTotals(page)).toHaveText('2 rations · 2 slots · 40 wt');
   await expect(rationCell(page, 'Fresh')).toContainText('7 days left');
   await expect(rationCell(page, 'Preserved')).toContainText('60 days left');
 
@@ -186,7 +186,7 @@ test('dank storage shortens the time a ration keeps, on the card and in the Inve
   await openTab(page, ADVENTURING);
   await page.getByRole('checkbox', { name: /In dank conditions/ }).uncheck();
   await expect(rationCell(page, 'Preserved')).toContainText('60 days left');
-  await expect(rationTotals(page)).toHaveText('2 rations · 3 slots · 40 wt');
+  await expect(rationTotals(page)).toHaveText('2 rations · 2 slots · 40 wt');
 });
 
 test('a spoiled ration is marked, not taken away', async ({ page }) => {
@@ -211,17 +211,46 @@ test('a spoiled ration is marked, not taken away', async ({ page }) => {
   await expect(rationKinds(page)).toHaveCount(2);
 });
 
-test('a ration can change kind, and its slots follow the rules', async ({ page }) => {
+test('a ration can change kind, and its spoilage and its counters follow', async ({ page }) => {
   await openCharacter(page, { ...loadFixture(FIXTURES.default), stowedItems: [createRationItem('fresh', 0, 'swapped')] });
   await openTab(page, INVENTORY);
-  await expect(stowedSlots(page)).toHaveText('1');
+  await expect(page.getByText('7 days left', { exact: true })).toBeVisible();
 
   await page.getByRole('combobox', { name: /^Kind of / }).selectOption('preserved');
-  // A day's preserved rations take 2 slots, so the summary says so at once.
-  await expect(stowedSlots(page)).toHaveText('2');
+  // Preserved food keeps 2 months, and it's still one day's rations: 1 slot.
+  await expect(page.getByText('60 days left', { exact: true })).toBeVisible();
+  await expect(page.getByText('keeps about 2 months', { exact: false })).toBeVisible();
+  await expect(stowedSlots(page)).toHaveText('1');
   await openTab(page, ADVENTURING);
   await expect(rationCell(page, 'Preserved').getByText('1', { exact: true })).toBeVisible();
-  await expect(rationTotals(page)).toHaveText('1 ration · 2 slots · 20 wt');
+  await expect(rationCell(page, 'Fresh').getByText('0', { exact: true })).toBeVisible();
+  await expect(rationTotals(page)).toHaveText('1 ration · 1 slot · 20 wt');
+});
+
+test('a ration added from the equipment catalog is a ration item, and spoils', async ({ page }) => {
+  await openApp(page, FIXTURES.default);
+  await openTab(page, INVENTORY);
+
+  await page.getByRole('button', { name: 'Add item from catalog to Loose Items' }).click();
+  const catalog = page.getByRole('dialog', { name: 'Equipment Catalog' });
+  await catalog.getByRole('textbox', { name: 'Search items' }).fill('rations');
+  const row = catalog.locator('tbody tr', { hasText: 'Rations (preserved, 1 day)' });
+  await expect(row).toHaveCount(1);
+  await row.getByRole('button').click();
+  await catalog.getByRole('button', { name: 'Close equipment catalog' }).click();
+
+  // A tracked ration, not a plain item: it has a kind, it knows it's preserved,
+  // and it says how long it has.
+  await expect(rationKinds(page)).toHaveCount(1);
+  await expect(rationKinds(page)).toHaveValue('preserved');
+  await expect(page.getByText('60 days left', { exact: true })).toBeVisible();
+  await expect(stowedSlots(page)).toHaveText('1');
+
+  // And the Adventuring tab counts it, which only an item of kind 'ration' does.
+  await openTab(page, ADVENTURING);
+  await expect(rationCell(page, 'Preserved').getByText('1', { exact: true })).toBeVisible();
+  await expect(rationCell(page, 'Fresh').getByText('0', { exact: true })).toBeVisible();
+  await expect(rationTotals(page)).toHaveText('1 ration · 1 slot · 20 wt');
 });
 
 test('the rations and their acquisition days survive a reload', async ({ page }) => {
@@ -232,7 +261,7 @@ test('the rations and their acquisition days survive a reload', async ({ page })
   await page.reload();
   await expect(tabBar(page)).toBeVisible();
   await openTab(page, ADVENTURING);
-  await expect(rationTotals(page)).toHaveText('8 rations · 14 slots · 160 wt');
+  await expect(rationTotals(page)).toHaveText('8 rations · 8 slots · 160 wt');
   await expect(rationCell(page, 'Preserved')).toContainText('60 days left');
 });
 

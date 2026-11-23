@@ -52,6 +52,7 @@ import {
   getCoinGpEquivalent,
   getFighterTalentCount,
   getKindredClassLabel,
+  formatShortDate,
   getKindredName,
   getLearnableSpellRanks,
   getRuneUsageFrequency,
@@ -1610,14 +1611,6 @@ function InventorySection({ c }: { c: Character }) {
           <Text style={s.bold}>Encumbrance method: </Text>
           {slotsMode ? 'Slots' : 'Weight'}
         </Text>
-        {/* One row per day's rations can't say which of them have spoiled, so
-            the food gets a line of its own, as it stands when the sheet is made. */}
-        {food ? (
-          <Text style={s.body}>
-            <Text style={s.bold}>Rations: </Text>
-            {food}
-          </Text>
-        ) : null}
         <Caption>Equipped Items</Caption>
       </KeepWithNext>
       {c.equippedItems.length > 0 ? (
@@ -1631,7 +1624,20 @@ function InventorySection({ c }: { c: Character }) {
           key={container?.id ?? 'loose'}
           c={c}
           container={container}
-          lead={i === 0 ? <Text style={s.subTitle}>Stowed Items</Text> : undefined}
+          lead={i === 0 ? (
+            <>
+              <Text style={s.subTitle}>Stowed Items</Text>
+              {/* One row per day's rations can't say which of them have spoiled,
+                  and the food keeps changing, so its state has a line of its own,
+                  as it stood on the date the character's calendar is on. */}
+              {food ? (
+                <Text style={s.body}>
+                  <Text style={s.bold}>Rations: </Text>
+                  {food} <Text style={s.caption}>{`(as of ${formatShortDate(c.currentDate)})`}</Text>
+                </Text>
+              ) : null}
+            </>
+          ) : undefined}
         />
       ))}
 

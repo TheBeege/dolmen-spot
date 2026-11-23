@@ -61,15 +61,16 @@ describe('v15 → v16', () => {
       'Rations (preserved, 1 day)',
       'Rations (preserved, 1 day)',
     ]);
-    // The rules' own slots and weight, so the encumbrance totals count them.
+    // The rules' own slots and weight, so the encumbrance totals count them: a
+    // day's rations is a general item, so both kinds take 1 slot.
     assert.deepEqual(migrated.stowedItems.map((item) => [item.kind, item.slots, item.weight]), [
       ['ration', 1, 20],
       ['ration', 1, 20],
-      ['ration', 2, 20],
-      ['ration', 2, 20],
-      ['ration', 2, 20],
+      ['ration', 1, 20],
+      ['ration', 1, 20],
+      ['ration', 1, 20],
     ]);
-    assert.equal(rationSlots(migrated.stowedItems), 2 * 1 + 3 * 2);
+    assert.equal(rationSlots(migrated.stowedItems), 5, 'one slot per day, fresh or preserved');
     assert.equal(rationWeight(migrated.stowedItems), 5 * RATIONS.fresh.weight);
   });
 
@@ -184,9 +185,10 @@ describe('v15 → v16', () => {
     }
   });
 
-  test('a plain ration the catalog made before this version becomes a ration item, with the rules\' slots', () => {
-    // The catalog offered "Rations (preserved, 1 day)" as ordinary gear, at 1
-    // slot rather than the 2 the rules give a preserved day's rations.
+  test('a plain ration the catalog made before this version becomes a ration item, with the rules\' name and slots', () => {
+    // The catalog offered "Rations (preserved, 1 day)" as ordinary gear with no
+    // state, so it never spoiled; it's the item's kind that's missing, not its
+    // numbers (1 slot and 20 coins are what the rules give it).
     const plain = { id: 'plain', name: 'Rations (preserved, 1 day)', slots: 1, weight: 20, notes: 'From Lankshorn', equipped: false };
     const migrated = migrateCharacter(v15({
       stowedItems: [plain],
@@ -196,7 +198,7 @@ describe('v15 → v16', () => {
     assert.deepEqual(stowed, {
       id: 'plain',
       name: 'Rations (preserved, 1 day)',
-      slots: 2,
+      slots: 1,
       weight: 20,
       notes: 'From Lankshorn',
       equipped: false,
@@ -210,6 +212,15 @@ describe('v15 → v16', () => {
     assertStable(migrated, 'a second load changes nothing');
   });
 
+  test('a kind saved as null or an empty string is no kind, so the item converts', () => {
+    const plain = (kind: unknown) => ({ id: 'p', name: 'Rations (fresh, 1 day)', slots: 1, weight: 20, notes: '', equipped: false, kind });
+    for (const kind of [undefined, null, '']) {
+      const migrated = migrateCharacter(v15({ stowedItems: [plain(kind)] }));
+      assert.deepEqual(migrated.stowedItems[0].ration, { freshness: 'fresh', acquiredLivedDay: livedDayOf(v15()) }, JSON.stringify(kind));
+      assert.equal(migrated.stowedItems[0].kind, 'ration', JSON.stringify(kind));
+    }
+  });
+
   test('an item with another name, or one that is already a kind of its own, is left alone', () => {
     const others = [
       { id: 'a', name: 'Rations (preserved, 2 days)', slots: 1, weight: 20, notes: '', equipped: false },
@@ -219,6 +230,15 @@ describe('v15 → v16', () => {
     ];
     const migrated = migrateCharacter(v15({ stowedItems: clone(others) }));
     assert.deepEqual(migrated.stowedItems, others, 'well-formed ration items keep what they say');
+  });
+
+  test('a count of more digits than a number holds is capped too, not lost', () => {
+    // 401 digits parse to Infinity as a number; it's still a count, far past
+    // what becomes items, so 999 are made and the rest is written down.
+    const digits = '9'.repeat(401);
+    const migrated = migrateCharacter(v15({ rations: { fresh: digits, preserved: 0 } }));
+    assert.equal(rationStateOf(migrated).filter((state) => state === 'fresh').length, 999);
+    assert.match(migrated.otherNotes, /^Rations \(fresh\): \d+ more days' rations/);
   });
 
   test('a counter in the thousands is capped, and the rest is written into Other Notes', () => {
@@ -267,7 +287,7 @@ describe('a v16 save is repaired, not migrated', () => {
         item({ freshness: 'fresh', acquiredLivedDay: 5 }, 0, 0),
       ],
     }));
-    assert.deepEqual(loaded.stowedItems.map((i) => [i.slots, i.weight]), [[2, 20], [1, 20]]);
+    assert.deepEqual(loaded.stowedItems.map((i) => [i.slots, i.weight]), [[1, 20], [1, 20]]);
   });
 
   test('a state that isn\'t an object, or a kind that isn\'t one of the two, becomes fresh food acquired today', () => {
@@ -374,7 +394,7 @@ describe('through loading and import', () => {
     const imported = parseImportedCharacter(JSON.stringify(v15({ rations: { fresh: 4, preserved: 2 } })));
     assert.equal(imported.schemaVersion, CURRENT_SCHEMA_VERSION);
     assert.deepEqual(rationStateOf(imported), ['fresh', 'fresh', 'fresh', 'fresh', 'preserved', 'preserved']);
-    assert.equal(rationSlots(imported.stowedItems), 4 * 1 + 2 * 2);
+    assert.equal(rationSlots(imported.stowedItems), 6, 'one slot each');
   });
 
   test('a v15 file with no rations at all imports with none, and nothing invented', () => {

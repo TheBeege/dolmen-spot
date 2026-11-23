@@ -207,7 +207,7 @@
     {
       "id": "ks-st-03",
       "name": "Rations (preserved, 1 day)",
-      "slots": 2,
+      "slots": 1,
       "weight": 20,
       "notes": "Eat the oldest first",
       "equipped": false,
@@ -309,7 +309,7 @@
     {
       "id": "3e069d94-8023-48c8-b775-6e951b26a8e6",
       "name": "Rations (preserved, 1 day)",
-      "slots": 2,
+      "slots": 1,
       "weight": 20,
       "notes": "",
       "equipped": false,
@@ -322,7 +322,7 @@
     {
       "id": "2fae8e5b-3f00-4ee1-bcc8-dc28cd415148",
       "name": "Rations (preserved, 1 day)",
-      "slots": 2,
+      "slots": 1,
       "weight": 20,
       "notes": "",
       "equipped": false,
@@ -335,7 +335,7 @@
     {
       "id": "5f5a8ef5-646f-4006-bfd7-e216077442c7",
       "name": "Rations (preserved, 1 day)",
-      "slots": 2,
+      "slots": 1,
       "weight": 20,
       "notes": "",
       "equipped": false,
@@ -348,7 +348,7 @@
     {
       "id": "ac432f59-42f1-4fc7-af09-0d0b3251d1c8",
       "name": "Rations (preserved, 1 day)",
-      "slots": 2,
+      "slots": 1,
       "weight": 20,
       "notes": "",
       "equipped": false,
@@ -361,7 +361,7 @@
     {
       "id": "8d0a5a2b-0829-4c2a-9066-3a9f9c627440",
       "name": "Rations (preserved, 1 day)",
-      "slots": 2,
+      "slots": 1,
       "weight": 20,
       "notes": "",
       "equipped": false,

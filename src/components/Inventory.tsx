@@ -133,8 +133,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
   // ── Encumbrance calculations (with coins) ──
   // Rations are ordinary items, so their slots and weight are already in these
-  // totals (calculateEncumbrance, src/lib/character-sheet.ts): a day's fresh
-  // rations is 1 slot and 20 coins, a day's preserved rations 2 slots and 20.
+  // totals (calculateEncumbrance, src/lib/character-sheet.ts): a day's rations is
+  // 1 slot and 20 coins, fresh or preserved.
   const encumbrance = calculateEncumbrance(character);
   const {
     coinWeight,
@@ -172,7 +172,9 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     }
   };
 
-  const handleAddFromCatalog = (entry: EquipmentEntry | { name: string; weight: number; slots: number; notes?: string }) => {
+  const handleAddFromCatalog = (entry: EquipmentEntry | {
+    name: string; weight: number; slots: number; notes?: string; ration?: RationFreshness;
+  }) => {
     // Auto-detect blank spell books from the catalog so they get the spellbook UI.
     // Anchored to the start of the name so unrelated items containing "spellbook"
     // (e.g. a hypothetical "Anti-Spellbook Ward") aren't misclassified.
@@ -180,7 +182,7 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     // A ration from the catalog becomes a ration item, so the sheet knows its
     // kind and when it was acquired. Its slots and weight are the rules' own
     // (RATIONS), stamped from the kind rather than taken from the catalog line.
-    const ration = 'ration' in entry && entry.ration ? entry.ration : null;
+    const ration = entry.ration ?? null;
     const { slots, weight } = ration ? rationItemFields(ration) : { slots: entry.slots, weight: entry.weight };
     const newItem: InventoryItem = {
       id: newId(),
@@ -288,8 +290,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   };
 
   // Changing a ration's kind restamps the name, slots and weight the rules give
-  // it (a day's preserved rations take 2 slots, fresh ones 1), so its load in
-  // the encumbrance totals follows. It keeps the day it was acquired on.
+  // it, so the shelf life and the totals follow (both kinds take 1 slot). It
+  // keeps the day it was acquired on.
   const handleRationFreshness = (equipped: boolean, itemId: string, freshness: RationFreshness) => {
     updateInventoryItem(equipped, itemId, (item) => ({
       ...item,
@@ -382,7 +384,13 @@ export default function Inventory({ character, onChange }: InventoryProps) {
   const containerCatalogEntries = EQUIPMENT_CATALOG.filter((e) => e.category === 'container' && e.capacity && e.capacity > 0);
 
   const getFilteredCatalog = () => {
-    const allItems: { name: string; cost: number; costUnit?: string; weight: number; slots: number; notes?: string; source: string }[] = [];
+    // `ration` is carried through for the two ration lines: adding one of those
+    // makes a ration item (with its kind and acquisition day) rather than a
+    // plain item, so dropping it here would lose the whole point of the entry.
+    const allItems: {
+      name: string; cost: number; costUnit?: string; weight: number; slots: number;
+      notes?: string; source: string; ration?: RationFreshness;
+    }[] = [];
 
     // Add armour entries
     ARMOUR_TABLE.filter(a => a.name !== 'Unarmoured').forEach((a) => {
@@ -396,7 +404,16 @@ export default function Inventory({ character, onChange }: InventoryProps) {
 
     // Add equipment catalog entries
     EQUIPMENT_CATALOG.forEach((e) => {
-      allItems.push({ name: e.name, cost: e.cost, costUnit: e.costUnit, weight: e.weight, slots: e.slots, notes: e.notes, source: e.category });
+      allItems.push({
+        name: e.name,
+        cost: e.cost,
+        costUnit: e.costUnit,
+        weight: e.weight,
+        slots: e.slots,
+        notes: e.notes,
+        source: e.category,
+        ...(e.ration ? { ration: e.ration } : {}),
+      });
     });
 
     let filtered = allItems;
@@ -722,14 +739,12 @@ export default function Inventory({ character, onChange }: InventoryProps) {
     // Laid out like an item row, from sm up on the columns: the kind where the
     // name goes, then the rules' Slots and Weight, then the Notes. On phones
     // each value keeps its little label, as the fields do.
-    const derived = (label: string, value: number) => (
+    const derived = (label: string, width: string, value: number) => (
       <span className="flex flex-col gap-0.5 shrink-0">
         {phoneLabel(label)}
         <span
           title={label}
-          className={`text-[#f5e6c8] text-sm text-center ${ONE_LINE_FIELD_HEIGHT} flex items-center justify-center ${
-            label === 'Slots' ? 'w-16' : 'w-20'
-          }`}
+          className={`text-[#f5e6c8] text-sm text-center ${ONE_LINE_FIELD_HEIGHT} flex items-center justify-center ${width}`}
         >
           {/* The column headers are hidden on phones, and no field names these
               values, so each says what it is to a screen reader. */}
@@ -757,8 +772,8 @@ export default function Inventory({ character, onChange }: InventoryProps) {
           </span>
           {phoneControlsFor(item, equipped, rowLabel)}
           <div className="flex flex-wrap items-end gap-2 w-full sm:w-auto sm:flex-1 sm:min-w-0 sm:flex-nowrap sm:items-start">
-            {derived('Slots', item.slots)}
-            {derived('Weight', item.weight)}
+            {derived('Slots', 'w-16', item.slots)}
+            {derived('Weight', 'w-20', item.weight)}
             <label className="flex flex-col gap-0.5 grow basis-full min-w-0 sm:basis-0">
               {phoneLabel('Notes')}
               <GrowingTextarea
